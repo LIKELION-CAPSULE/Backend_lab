@@ -952,7 +952,7 @@ GET /api/me/memories?date=2026-11-12
 
 > 2026-11-04: 동작 이벤트 3종(`DROWSY` · `YAWN` · `WAVE`) 추가. 프론트가 졸음 · 하품 · 손 흔들기를 감지할 수 있게 됨
 
-> 2026-11-04 (2차): 이름 '공부 상태 기록' → '공부 상태 기록'. 동작 이벤트는 같은 type 1분에 한 번(프론트 · 서버 둘 다), 서버는 1분 안에 다시 오면 무시. 시간 · 상태 판단은 상태 이벤트 4종만(공부 종료 정산 · 세션 이어하기 · heartbeat 포함). 타입은 서버 enum `STATE` / `MOTION`
+> 2026-11-04 (2차): 이름 '상태 변화 전송' → '공부 상태 기록'. 동작 이벤트는 같은 type 1분에 한 번(프론트 · 서버 둘 다), 서버는 1분 안에 다시 오면 무시. 시간 · 상태 판단은 상태 이벤트 4종만(공부 종료 정산 · 세션 이어하기 · heartbeat 포함). 타입은 서버 enum `STATE` / `MOTION`
 
 | type | 종류 | 언제 | 시간 분류 | 호감도 (예시, 기획 확정 필요) |
 | --- | --- | --- | --- | --- |
@@ -1135,15 +1135,16 @@ GET /api/me/memories?date=2026-11-12
 
 > ✅ **200 OK**
 
-> ❌ **404** SESSION_NOT_FOUND · EVENT_NOT_FOUND · **409** SESSION_ENDED
+> ❌ **400** INVALID_REQUEST (`AWAY`인데 `intensity`가 1~3 밖) · **404** SESSION_NOT_FOUND · EVENT_NOT_FOUND · **409** SESSION_ENDED
 
 #### 서버가 하는 일
 
-1. 이벤트 타입 + 직전 상태 이벤트로 trigger 결정 (응답에는 넣지 않음): 첫 FOCUS = `GREETING`, 휴식 뒤 FOCUS = `BREAK_END`, `AWAY` · `RETURN` · `BREAK`, 동작은 type 그대로(`DROWSY` · `YAWN` · `WAVE`)
+1. 이벤트 타입 + 직전 상태 이벤트로 trigger 결정 (응답에는 넣지 않음): 첫 FOCUS = `GREETING`, 휴식 뒤 FOCUS = `BREAK_END`, `AWAY` · `RETURN` · `BREAK`, 동작은 type 그대로(`DROWSY` · `YAWN` · `WAVE`). 휴식 뒤가 아닌 FOCUS는 정상 흐름에서 생기지 않고, 와도 `BREAK_END`로 본다
 2. LLM으로 대사 + 감정 생성. 감정은 그 캐릭터의 반응 매핑(`live2d_reaction_maps`)에 있는 감정 목록 중에서 고르게 한다 (5초 넘으면 trigger별 고정 대사)
 3. 감정에 맞는 모션 · 표정을 `live2d_reaction_maps`에서 하나 고름 (같은 감정의 행이 여러 개면 같은 확률)
 4. `tts: true`면 음성 생성
 - 호감도는 바꾸지 않음 (18번에서 끝남). 같은 `eventId`로 intensity를 올려 다시 불러도 마찬가지
+- ⚠️ 확정 필요 (J-04): 모션 · 표정을 감정으로 고르게 되면서 `intensity` 2 · 3은 대사(와 감정)에만 쓰인다. `live2d_reaction_maps`의 `AWAY` 강도 2 · 3 행은 지금 고르는 곳이 없다 (18은 강도 1). 강도별 동작을 어디에 쓸지 정하기
 
 #### 프론트 참고
 
@@ -1276,7 +1277,7 @@ GET /api/me/memories?date=2026-11-12
 
 > ✅ **204 No Content**
 
-> ❌ **400** INVALID_STUDY_TIME (본문이 없거나 공부 종료와 같은 검사에 걸림: 0 ≤ `presentSeconds` ≤ `studySeconds` ≤ 시작부터 지난 시간) · **409** SESSION_ENDED → 이미 끝난 세션. 리포트 조회로
+> ❌ **400** INVALID_STUDY_TIME (본문이 없거나 공부 종료와 같은 검사에 걸림: 0 ≤ `presentSeconds` ≤ `studySeconds` ≤ 시작부터 지난 시간) · **404** SESSION_NOT_FOUND · **409** SESSION_ENDED → 이미 끝난 세션. 리포트 조회로
 
 - 400이어도 **생존 신호(`last_heartbeat_at`)는 갱신**하고, 값만 저장하지 않음 (시계 차이로 1초 넘쳐도 끊긴 세션이 되지 않게)
 - 이어하기(17)를 하면 저장된 값을 이어하기 응답의 `studySeconds` 기준으로 맞춤 (다음 heartbeat 전에 또 끊겨도 옛 값으로 마감되지 않게)

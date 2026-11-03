@@ -15,11 +15,11 @@
 8. 룸 상세 (H04) → `GET /api/rooms/1` → 채린, Lv.1 · 0초
 9. 시험 일정 (H06) → `POST /api/me/memories` (EXAM) → 201, `dDay`
 10. 공부 시작 (H06 → H07) → `POST /api/sessions` → 201, `sessionId`
-11. 시작 직후 → `FOCUS` 전송 → `eventId` → 반응 → `trigger: GREETING`, 호감도 +5 (FIRST_MEET, J-01 Fake)
-12. 1분마다 → heartbeat → 204
-13. 자리 비움 (H09) → `AWAY` 전송 → 반응(`intensity: 1`) → `trigger: AWAY`, 호감도 −1
-14. 같은 `AWAY`를 다시 보냄 → 200 + 같은 `eventId` (재전송 안전)
-15. 복귀 → `RETURN` 전송 → 반응 → 호감도 +1
+11. 시작 직후 → `FOCUS` 전송 → `eventId`, `characters[].affinity` +5 (FIRST_MEET, J-01 Fake) → 반응(19) → 인사 대사
+12. 1분마다 → heartbeat (지금까지의 `studySeconds` · `presentSeconds`) → 204
+13. 자리 비움 (H09) → `AWAY` 전송 → `characters[].affinity` −1 → 반응(`intensity: 1`) → 대사
+14. 같은 `AWAY`를 다시 보냄 → 200 + 기존 응답 (같은 `eventId`, 호감도는 다시 안 바뀜)
+15. 복귀 → `RETURN` 전송 → `characters[].affinity` +1 → 반응
 16. 채팅 (H20) → 메시지 전송 → Fake 답장. 같은 `requestId`로 다시 보내면 한 번만 처리
 17. 새로고침 → `GET /api/me` → `activeSession` 있음 (H18 근거)
 18. 공부 끝내기 (H17) → `POST .../end` → `returnCount: 1`, `pointsAfter > pointsBefore`, `closingLine`
