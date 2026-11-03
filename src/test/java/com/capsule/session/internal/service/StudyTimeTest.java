@@ -1,8 +1,9 @@
-package com.capsule.session.internal;
+package com.capsule.session.internal.service;
 
 import static java.time.temporal.ChronoUnit.MINUTES;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.capsule.session.internal.domain.SessionEvent;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -14,7 +15,7 @@ class StudyTimeTest {
     @Test
     void eachStateLastsUntilNextEvent() {
         SessionEvent falseAway = event("AWAY", 20);
-        falseAway.falsePositive = true;
+        falseAway.markFalsePositive();
         List<SessionEvent> events = List.of(
                 event("FOCUS", 5),
                 event("AWAY", 10),

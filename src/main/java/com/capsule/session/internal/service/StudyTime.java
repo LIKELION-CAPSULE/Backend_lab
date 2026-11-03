@@ -1,5 +1,6 @@
-package com.capsule.session.internal;
+package com.capsule.session.internal.service;
 
+import com.capsule.session.internal.domain.SessionEvent;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -17,13 +18,13 @@ record StudyTime(int presentSeconds, int awaySeconds, int breakSeconds) {
         int state = 0; // 첫 이벤트 전 구간은 자리 지킴
         Instant from = startedAt;
         for (SessionEvent e : events) {
-            Instant to = e.occurredAt.isBefore(end) ? e.occurredAt : end;
+            Instant to = e.occurredAt().isBefore(end) ? e.occurredAt() : end;
             if (to.isAfter(from)) {
                 millis[state] += Duration.between(from, to).toMillis();
                 from = to;
             }
-            state = switch (e.type) {
-                case SessionEvent.AWAY -> e.falsePositive ? 0 : 1; // '아니야' 버튼이면 자리 지킴
+            state = switch (e.type()) {
+                case SessionEvent.AWAY -> e.falsePositive() ? 0 : 1; // '아니야' 버튼이면 자리 지킴
                 case SessionEvent.BREAK -> 2;
                 default -> 0; // FOCUS · RETURN
             };

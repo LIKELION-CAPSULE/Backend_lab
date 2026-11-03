@@ -1,5 +1,6 @@
-package com.capsule.session.internal;
+package com.capsule.session.internal.repository;
 
+import com.capsule.session.internal.domain.StudySession;
 import jakarta.persistence.LockModeType;
 import java.time.Instant;
 import java.util.List;
@@ -8,7 +9,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 
-interface StudySessionRepository extends JpaRepository<StudySession, Long> {
+public interface StudySessionRepository extends JpaRepository<StudySession, Long> {
 
     Optional<StudySession> findByUserIdAndEndedAtIsNull(long userId);
 

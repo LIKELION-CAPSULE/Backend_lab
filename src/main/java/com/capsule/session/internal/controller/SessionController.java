@@ -1,15 +1,16 @@
-package com.capsule.session.internal;
+package com.capsule.session.internal.controller;
 
 import com.capsule.common.security.LoginUser;
-import com.capsule.session.internal.SessionDtos.EndRequest;
-import com.capsule.session.internal.SessionDtos.EventRequest;
-import com.capsule.session.internal.SessionDtos.EventResponse;
-import com.capsule.session.internal.SessionDtos.HomeResponse;
-import com.capsule.session.internal.SessionDtos.ReportResponse;
-import com.capsule.session.internal.SessionDtos.ResumeResponse;
-import com.capsule.session.internal.SessionDtos.RoomDetail;
-import com.capsule.session.internal.SessionDtos.StartRequest;
-import com.capsule.session.internal.SessionDtos.StartResponse;
+import com.capsule.session.internal.dto.EndRequest;
+import com.capsule.session.internal.dto.EventRequest;
+import com.capsule.session.internal.dto.EventResponse;
+import com.capsule.session.internal.dto.HomeResponse;
+import com.capsule.session.internal.dto.ReportResponse;
+import com.capsule.session.internal.dto.ResumeResponse;
+import com.capsule.session.internal.dto.RoomDetail;
+import com.capsule.session.internal.dto.StartRequest;
+import com.capsule.session.internal.dto.StartResponse;
+import com.capsule.session.internal.service.SessionService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;

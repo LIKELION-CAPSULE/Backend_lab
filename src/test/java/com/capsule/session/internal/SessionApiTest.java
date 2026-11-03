@@ -37,6 +37,7 @@ import com.capsule.session.api.SessionQuery;
 import com.capsule.session.api.SessionTypes.SessionClosing;
 import com.capsule.session.api.SessionTypes.SessionEventInfo;
 import com.capsule.session.api.SessionTypes.SessionInfo;
+import com.capsule.session.internal.service.SessionService;
 import com.capsule.user.api.ActiveSessionLookup;
 import com.capsule.user.api.UserQuery;
 import com.capsule.user.api.UserTypes.ActiveSessionSummary;
