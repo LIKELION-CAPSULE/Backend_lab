@@ -17,6 +17,11 @@ public interface StudySessionRepository extends JpaRepository<StudySession, Long
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<StudySession> findWithLockById(long id);
 
+    /** 이 기간에 끝난 세션의 공부 시간(자리 지킴 + 자리 비움) 합 */
+    @Query("select coalesce(sum(s.focusSeconds + s.distractSeconds), 0) from StudySession s"
+            + " where s.userId = :userId and s.endedAt >= :from and s.endedAt < :to")
+    int studySecondsEndedBetween(long userId, Instant from, Instant to);
+
     @Query("select s.id from StudySession s where s.endedAt is null"
             + " and coalesce(s.lastHeartbeatAt, s.startedAt) < :cutoff")
     List<Long> findStaleIds(Instant cutoff);

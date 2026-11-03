@@ -579,6 +579,7 @@ H02에서 닉네임과 아바타를 한 번에 저장합니다. 저장하면 `on
 
 | 이름 | 타입 | 설명 |
 | --- | --- | --- |
+| todayStudySeconds | Integer | 오늘(한국 날짜) 끝낸 세션의 공부 시간 합(초). 진행 중 세션은 빠짐 (2026-11-03 추가: 설명의 '오늘 공부 시간') |
 | activeSession | Object | 진행 중 세션 (내 정보 조회와 같은 형태). 없으면 null |
 | rooms[] | Array | 들어갈 수 있는 룸 (지금은 1개) |
 | rooms[].id · name · thumbnailUrl |  | 포스터 카드 |
@@ -586,6 +587,7 @@ H02에서 닉네임과 아바타를 한 번에 저장합니다. 저장하면 `on
 
 ```json
 {
+  "todayStudySeconds": 3300,
   "activeSession": null,
   "rooms": [
     { "id": 1, "name": "쌀쌀맞은 갸루짝꿍이 나에게만 친절하다!", "thumbnailUrl": "https://cdn.../room1.png",

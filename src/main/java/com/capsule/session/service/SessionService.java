@@ -11,6 +11,7 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
 import static org.springframework.http.HttpStatus.UNAUTHORIZED;
 
 import com.capsule.common.error.ApiException;
+import com.capsule.common.time.ClockConfig;
 import com.capsule.content.api.AvatarQuery;
 import com.capsule.content.api.CharacterQuery;
 import com.capsule.content.api.ContentTypes.AvatarInfo;
@@ -52,6 +53,7 @@ import com.capsule.user.api.UserTypes.UserProfile;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
@@ -126,7 +128,12 @@ public class SessionService {
                                 .map(c -> new CharacterBrief(c.id(), c.name(), c.profileImageUrl()))
                                 .toList()))
                 .toList();
-        return new HomeResponse(activeSessions.find(userId).orElse(null), list);
+        LocalDate today = LocalDate.ofInstant(now(), ClockConfig.KST);
+        int todayStudySeconds = sessions.studySecondsEndedBetween(
+                userId,
+                today.atStartOfDay(ClockConfig.KST).toInstant(),
+                today.plusDays(1).atStartOfDay(ClockConfig.KST).toInstant());
+        return new HomeResponse(todayStudySeconds, activeSessions.find(userId).orElse(null), list);
     }
 
     @Transactional(readOnly = true)

@@ -86,6 +86,7 @@ class FlowE2ETest {
         MvcResult home = call(get("/api/home"), token, null, 200);
         assertThat((Object) JsonPath.read(body(home), "$.activeSession")).isNull();
         assertThat((Integer) JsonPath.read(body(home), "$.rooms[0].id")).isEqualTo(1);
+        assertThat((Integer) JsonPath.read(body(home), "$.todayStudySeconds")).isZero();
         MvcResult room = call(get("/api/rooms/1"), token, null, 200);
         assertThat((Integer) JsonPath.read(body(room), "$.characters[0].relation.level"))
                 .isEqualTo(1);
@@ -154,6 +155,9 @@ class FlowE2ETest {
         assertThat(body(report)).isEqualTo(body(end));
         MvcResult roomAfter = call(get("/api/rooms/1"), token, null, 200);
         assertThat((Integer) JsonPath.read(body(roomAfter), "$.characters[0].relation.totalStudySeconds"))
+                .isEqualTo(60);
+        MvcResult homeAfter = call(get("/api/home"), token, null, 200);
+        assertThat((Integer) JsonPath.read(body(homeAfter), "$.todayStudySeconds"))
                 .isEqualTo(60);
 
         // 21~22 갱신 (만료된 액세스 토큰이 헤더에 붙어 있어도 됨, 옛 리프레시는 401) → 로그아웃
