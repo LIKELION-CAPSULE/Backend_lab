@@ -36,6 +36,6 @@ AI 캐릭터와 함께 공부하는 웹서비스의 백엔드. Spring Boot + Pos
 
 ## 하지 말 것
 - `.env`·`.env.local` 등 비밀값 파일 읽기(변수 이름은 `.env.example`에서), 실제 LLM API 키 사용
-- develop/main 직접 push. 조직 플랜상 GitHub 브랜치 보호가 없어 이 규칙으로만 막힘 → 항상 PR로
+- develop/main 직접 push. 조직 플랜상 GitHub 브랜치 보호가 없어 bash_guard가 대신 막음 → 항상 PR로
 - 셸로 파일 내용 쓰기(`sed -i`, `>`, `tee` 등). 구역 훅은 Edit/Write만 보므로 파일 수정은 항상 Edit/Write로 (`scripts/`의 명령은 예외)
 - 훅이 막았을 때 우회. 막힌 이유를 해결하거나 사람에게 묻는다

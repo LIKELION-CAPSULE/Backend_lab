@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 개발자 1명당 1번 (클론 직후, 새 worktree마다는 필요 없음)
-# git hook은 쓰지 않음: develop/main 보호는 GitHub 브랜치 보호, 로컬 파일은 .gitignore가 맡음
+# git hook은 쓰지 않음 (ADR 0010)
 #   scripts/setup.sh            # 대화형
 #   scripts/setup.sh --me seonguk
 set -uo pipefail
@@ -14,16 +14,23 @@ echo "▶ 필수 도구 확인"
 # 실제 python으로 연결하는 ~/bin/python3를 만든다. 관리자 권한 불필요, Git Bash와 Claude Code 훅은 PATH 맨 앞에 ~/bin을 둠
 if ! python3 -c 'import sys' 2>/dev/null; then
   real="$(command -v python || true)"
+  # PATH의 python도 바로가기거나 없으면 py 런처로 찾는다
+  "$real" -c 'import sys' 2>/dev/null || real="$(py -3 -c 'import sys;print(sys.executable)' 2>/dev/null | tr -d '\r')"
+  [ -n "$real" ] && real="$(cygpath -u "$real" 2>/dev/null || printf '%s' "$real")"
   if [ -n "$real" ] && "$real" -c 'import sys' 2>/dev/null; then
     mkdir -p "$HOME/bin"
     printf '#!/usr/bin/env bash\nexec "%s" "$@"\n' "$real" > "$HOME/bin/python3"
     chmod +x "$HOME/bin/python3"
+    case ":$PATH:" in
+      *":$HOME/bin:"*) ;;
+      *) warn "~/bin이 PATH에 없어 훅이 이 연결을 못 찾음. Windows 사용자 환경 변수 PATH에 %USERPROFILE%\\bin 추가" ;;
+    esac
     export PATH="$HOME/bin:$PATH"; hash -r
     ok "python3 연결 생성: ~/bin/python3 → $real"
   fi
 fi
-python3 -c 'import sys' 2>/dev/null && ok "python3 $(python3 -c 'import sys;print(sys.version.split()[0])')" \
-  || warn "python3가 실행되지 않음 (훅이 전부 꺼짐). Python 3 설치 후 다시 실행 (docs/HARNESS.md 11장)"
+python3 -c 'import sys; sys.exit(sys.version_info < (3, 9))' 2>/dev/null && ok "python3 $(python3 -c 'import sys;print(sys.version.split()[0])')" \
+  || warn "python3(3.9 이상)가 실행되지 않음 (훅이 전부 꺼짐). Python 3 설치 후 다시 실행 (docs/HARNESS.md 11장)"
 gv="$(git --version | awk '{print $3}')"
 ok "git $gv"
 command -v docker >/dev/null && ok "docker" || warn "docker 없음 (Testcontainers, 로컬 DB에 필요)"

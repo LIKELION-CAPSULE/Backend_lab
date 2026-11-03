@@ -17,7 +17,7 @@ def native(p: str) -> str:
     return re.sub(r"^/([a-zA-Z])/", r"\1:/", p) if os.name == "nt" else p
 
 
-ROOT = native(os.environ.get("CLAUDE_PROJECT_DIR") or os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+ROOT = os.environ.get("CLAUDE_PROJECT_DIR") or os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(ROOT, ".harness"))
 
 
@@ -31,7 +31,8 @@ def main() -> int:
     if not path:
         return 0
     path = native(path)
-    abs_path = os.path.realpath(path if os.path.isabs(path) else os.path.join(data.get("cwd") or ROOT, path))
+    # stdin JSON의 cwd는 Git Bash가 변환해주지 않으므로 같이 바꾼다 (환경변수 ROOT는 Git Bash가 이미 변환함)
+    abs_path = os.path.realpath(path if os.path.isabs(path) else os.path.join(native(data.get("cwd") or ROOT), path))
     root = os.path.realpath(ROOT)
     if not abs_path.startswith(root + os.sep):
         return 0  # 레포 밖 파일은 관여하지 않음

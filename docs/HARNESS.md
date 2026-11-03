@@ -44,7 +44,7 @@
 | PR 3단 리뷰 | 작업 맥락은 작성자 세션에만 있어서 PR 본문으로 옮겨야 하고, 상대 맥락은 리뷰어 세션에만 있음 | CI 리뷰만 / 사람 리뷰만 |
 | Claude 자동 리뷰는 위험한 PR만 | 비용 | 모든 PR 자동 리뷰 |
 | 충돌 예측 자동화는 안 함 | 구역 분리·짧은 브랜치·공용 PR 우선으로 대부분 예방되고, 남는 충돌은 rebase와 PR 화면에서 git이 알려줌. 자동 예측은 push마다 fetch 비용과 경고 소음만 늘림 | push·세션 시작 때 merge-tree로 상대 브랜치와 미리 합쳐보기 |
-| git·GitHub가 하는 일은 다시 만들지 않음 | develop/main 보호는 GitHub 브랜치 보호, 로컬 파일 제외는 .gitignore, 리뷰어 지정은 PR 생성 때 `--reviewer`, 뒤처짐은 git status가 이미 함. 같은 규칙을 두 군데서 관리하면 한쪽만 바뀌는 일이 생김 | pre-commit·pre-push 훅, 셸 명령 차단으로 push 규칙 재구현 |
+| git·GitHub가 하는 일은 다시 만들지 않음 | develop/main 보호는 GitHub 브랜치 보호, 로컬 파일 제외는 .gitignore, 리뷰어 지정은 PR 생성 때 `--reviewer`, 뒤처짐은 git status가 이미 함. 같은 규칙을 두 군데서 관리하면 한쪽만 바뀌는 일이 생김. 예외: 브랜치 보호를 못 쓰는 동안 Claude의 develop/main push는 bash_guard가 막음(2-3장) | pre-commit·pre-push 훅, 셸 명령 차단으로 push 규칙 재구현 |
 | 명세 원본은 노션, 레포엔 스냅샷 | 기획은 노션에서 쓰고 고치는 게 편함. 하지만 두 에이전트·CI·리뷰어가 같은 버전을 봐야 하고, 명세 변경이 PR diff로 보여야 함. CI는 노션을 못 읽음 | 에이전트가 매번 노션 직접 읽기, 레포에서 명세 작성 |
 
 ### 앱 스택
@@ -147,7 +147,7 @@ setup.sh가 하는 일: 도구 확인(python3 연결, git, docker, java 21, gh) 
 - **기본 브랜치**: `develop` (설정 완료 2026-11-03)
 - **브랜치 보호: 못 씀 → 약속으로 대신함** (확인 2026-11-03: 조직이 Free 플랜이고 저장소가 private이라 API가 403. Student Pack Pro는 개인 계정용이라 조직 저장소엔 안 됨)
   - 약속: 빨간 PR은 머지 안 함 / develop·main에 직접 push 안 함 / 상대 승인 후 머지
-  - Claude 쪽은 로컬 zone_guard가 develop·main에서의 파일 수정을 막음
+  - Claude 쪽은 훅이 막음: develop·main에서의 파일 수정(zone_guard), develop·main으로의 push(bash_guard, ADR 0010 예외)
   - 나중에 조직을 Team 플랜으로 올리거나 저장소를 public으로 바꾸면: `develop`·`main`에 PR 필수, 승인 1명, 상태 체크 `verify`·`zones` 필수, 직접 push·force push 금지
 - **Claude 자동 리뷰 켜기** (7장, 승희가 한 번)
   1. Claude GitHub App 설치: https://github.com/apps/claude → Install → `LIKELION-CAPSULE` → `Backend_lab`만 선택 (조직 Owner 권한 필요)
@@ -264,7 +264,7 @@ skeleton 스킬이 하는 일:
 - **확인 질문(ask)**: Claude Code가 멈추고 사람에게 승인 여부를 물음. 사유는 사람 화면에만 보임
 - **차단(deny)**: 실행 안 됨. 사유가 Claude에게 전달돼 Claude가 다른 방법을 찾음
 
-셸 명령 차단 (`bash_guard`): 마이그레이션 삭제·이동, `.env` 읽기 두 가지만. push 규칙(force push, develop/main 직접 push)은 GitHub 브랜치 보호가 막고, 그 밖의 위험한 명령은 Claude Code 기본 권한 확인이 물어봄
+셸 명령 차단 (`bash_guard`): 마이그레이션 삭제·이동, `.env` 읽기, develop/main으로 push(대상이 develop/main이거나 지금 develop/main 브랜치일 때). push 차단은 원래 GitHub 브랜치 보호의 일이라 그걸 못 쓰는 동안만 둠(2-3장, ADR 0010 예외). 그 밖의 위험한 명령은 Claude Code 기본 권한 확인이 물어봄
 
 ---
 
@@ -328,7 +328,7 @@ skeleton 스킬이 하는 일:
 | `.claude/settings.json` | 권한(.env 읽기 금지, 자주 쓰는 명령 허용) + 훅 등록 | Claude Code 실행 시 |
 | `.claude/hooks/session_start.py` | 나·내 모듈·단계·브랜치(develop/main이면 경고)·명세 스냅샷 시각을 Claude에게 알려줌 | 세션 시작 |
 | `.claude/hooks/zone_guard.py` | 파일 수정 직전 구역 판정 | Edit/Write 직전 |
-| `.claude/hooks/bash_guard.py` | 마이그레이션 삭제·`.env` 읽기 차단 | Bash 직전 |
+| `.claude/hooks/bash_guard.py` | 마이그레이션 삭제·`.env` 읽기·develop/main push 차단 | Bash 직전 |
 | `.claude/hooks/stop_verify.sh` | `verify.sh --quick`, 실패하면 Claude가 계속 고치게 (연속 3회까지) | Claude가 멈추기 직전 |
 | `.claude/agents/reviewer.md` | 읽기 전용 셀프 리뷰 | pr-write가 호출 |
 | `.claude/skills/spec-sync/` | 노션 API 명세·DB → `docs/specs` 스냅샷 | Phase A 시작, 명세 변경 시 |
@@ -387,7 +387,8 @@ skeleton 스킬이 하는 일:
 |---|---|---|
 | 세션 시작 때 하네스 상태가 안 뜨고, 훅이 아무것도 안 막음 (Windows) | `python3`가 Microsoft Store 바로가기라 실행하면 exit 49. 훅은 exit 2만 차단이라 경고만 남기고 통과 | `scripts/setup.sh`를 다시 실행 → 실제 파이썬으로 연결하는 `~/bin/python3`를 자동으로 만듦 (Git Bash와 Claude Code 훅의 PATH 맨 앞이 `~/bin`). 직접 하려면 그 파일에 `#!/usr/bin/env bash`와 `exec /c/Python313/python "$@"` 두 줄 |
 | 훅이 계속 "누구인지 모름" | HARNESS_ME 미설정, git 이메일이 zones.conf와 다름 | `scripts/setup.sh --me <키>` |
-| 모든 파일에 확인 질문이 뜸 | develop에 있음 / domain 단계에서 공용 파일 작업 중 | feature 브랜치 생성 / 공용 변경은 원래 확인 대상 |
+| 모든 파일 수정이 차단됨 | develop/main 브랜치에 있음 | `git switch -c feature/<모듈>-<설명>` |
+| 확인 질문이 자주 뜸 | domain 단계에서 공용·계약·남의 모듈 작업 중 / 하네스 파일을 `harness/*` 밖에서 수정 | 원래 확인 대상. 하네스는 `harness/<설명>` 브랜치에서 |
 | Claude가 끝내지 않고 계속 고침 | Stop 훅이 verify 실패를 돌려보낸 것 (정상) | 연속 3번까지만 막고, 그래도 실패하면 멈추고 사람에게 넘김. 그때 오류를 보고 방향 지시 |
 | `Could not find a valid Docker environment` | Docker 꺼짐 | Docker Desktop 실행 |
 | 로컬에서 Flyway `Detected applied migration not resolved locally` | 다른 브랜치에서 적용한 마이그레이션이 로컬 DB에 남아 있음(브랜치 전환) | `scripts/run-local.sh --reset` |
@@ -403,7 +404,7 @@ skeleton 스킬이 하는 일:
 
 - 훅은 Claude의 Edit/Write 도구만 봄. 셸로 파일을 쓰면(`sed -i`, `cat >`) 구역 판정을 거치지 않음 → CLAUDE.md에서 금지, CI(라벨·리뷰)가 뒤에서 잡음
 - 확인 질문(ask)의 사유는 사람 화면에만 보임. Claude는 승인/거절 결과만 앎
-- develop/main 보호: 지금은 GitHub 브랜치 보호를 못 써서(Free 플랜 조직의 private 저장소) 사람은 약속으로만 막힘. Claude는 로컬 훅이 develop/main에서의 수정을 막음 (2-3장)
+- develop/main 보호: 지금은 GitHub 브랜치 보호를 못 써서(Free 플랜 조직의 private 저장소) 사람은 약속으로만 막힘. Claude는 훅이 develop/main에서의 파일 수정과 develop/main으로의 push를 막음. `git -C <경로> push`처럼 형태가 다른 명령까지는 못 잡음 (2-3장)
 - 확인한 것 (2026-11-03, Windows 11 + Git Bash): Claude Code 안 훅 호출(SessionStart 상태 출력, zone_guard가 develop 수정을 실제로 차단), 한글·Windows 경로 판정, GitHub Actions `verify` 첫 실행(setup-java cache 실패를 찾아 고침)
 - 아직 확인 못 한 것: 실제 Gradle 빌드, spec-sync의 노션 읽기 → 뼈대 단계에서 확인
 - 대화 품질(LLM) 평가는 아직 없음 → Phase C

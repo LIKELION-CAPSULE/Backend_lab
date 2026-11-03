@@ -22,8 +22,8 @@ import sys
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
-# Windows 콘솔 기본 인코딩(cp949)에서 ✔ 같은 문자 출력으로 죽지 않게. 훅 출력도 Claude Code가 UTF-8로 읽음
-for _stream in (sys.stdout, sys.stderr):
+# Windows 기본 인코딩(cp949) 대신 UTF-8로: ✔ 출력으로 죽거나, stdin의 한글(PR 본문 등)이 깨지지 않게. 훅 출력도 Claude Code가 UTF-8로 읽음
+for _stream in (sys.stdin, sys.stdout, sys.stderr):
     _stream.reconfigure(encoding="utf-8")
 
 HARNESS_DIR = os.path.dirname(os.path.abspath(__file__))
