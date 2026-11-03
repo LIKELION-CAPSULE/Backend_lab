@@ -10,9 +10,20 @@ ok()   { printf '  ✔ %s\n' "$*"; }
 warn() { printf '  ⚠ %s\n' "$*"; }
 
 echo "▶ 필수 도구 확인"
-# command -v만 보면 Windows의 Microsoft Store 바로가기(실행하면 exit 49)도 통과하므로 실제로 실행해본다
+# Windows: python3가 Microsoft Store 바로가기(실행하면 exit 49)면 훅이 전부 꺼진다(command -v로는 못 걸러냄).
+# 실제 python으로 연결하는 ~/bin/python3를 만든다. 관리자 권한 불필요, Git Bash와 Claude Code 훅은 PATH 맨 앞에 ~/bin을 둠
+if ! python3 -c 'import sys' 2>/dev/null; then
+  real="$(command -v python || true)"
+  if [ -n "$real" ] && "$real" -c 'import sys' 2>/dev/null; then
+    mkdir -p "$HOME/bin"
+    printf '#!/usr/bin/env bash\nexec "%s" "$@"\n' "$real" > "$HOME/bin/python3"
+    chmod +x "$HOME/bin/python3"
+    export PATH="$HOME/bin:$PATH"; hash -r
+    ok "python3 연결 생성: ~/bin/python3 → $real"
+  fi
+fi
 python3 -c 'import sys' 2>/dev/null && ok "python3 $(python3 -c 'import sys;print(sys.version.split()[0])')" \
-  || warn "python3가 실행되지 않음 (훅이 전부 꺼짐). Windows: Python 폴더의 python.exe를 python3.exe로 복사 (관리자 권한이 없으면 docs/HARNESS.md 11장의 ~/bin/python3 방법)"
+  || warn "python3가 실행되지 않음 (훅이 전부 꺼짐). Python 3 설치 후 다시 실행 (docs/HARNESS.md 11장)"
 gv="$(git --version | awk '{print $3}')"
 ok "git $gv"
 command -v docker >/dev/null && ok "docker" || warn "docker 없음 (Testcontainers, 로컬 DB에 필요)"

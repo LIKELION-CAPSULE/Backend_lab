@@ -137,21 +137,24 @@
 git clone https://github.com/LIKELION-CAPSULE/Backend_lab.git && cd Backend_lab
 scripts/setup.sh --me seonguk
 ```
-setup.sh가 하는 일: 도구 확인(python3, git, docker, java 21, gh) → 내가 누구인지 `.claude/settings.local.json`에 저장(커밋 안 됨) → `.env.local` 생성 → Notion MCP 연결 여부 확인
+둘 다 Windows(Git Bash). `python3`가 Microsoft Store 바로가기면 setup.sh가 실제 파이썬으로 연결하는 `~/bin/python3`를 자동으로 만든다(관리자 권한 불필요, 11장).
+
+setup.sh가 하는 일: 도구 확인(python3 연결, git, docker, java 21, gh) → 내가 누구인지 `.claude/settings.local.json`에 저장(커밋 안 됨) → `.env.local` 생성 → Notion MCP 연결 여부 확인
 
 둘 다 Claude Code에 Notion MCP를 한 번 연결 (spec-sync용): `claude mcp add --transport http notion https://mcp.notion.com/mcp` → Claude Code에서 `/mcp`로 노션 로그인
 
 ### 2-3. GitHub 저장소 설정 (승희, 한 번)
-- **기본 브랜치**: `develop`
-- **브랜치 보호** (`develop`, `main`): PR 필수, 승인 1명, 상태 체크 `verify`·`zones` 필수, 직접 push·force push 금지. **develop/main 보호는 하네스가 따로 하지 않고 이 설정에 맡김**
-  - GitHub 무료 플랜의 비공개 저장소는 브랜치 보호를 쓸 수 없음 (Pro/Team 필요). 학생이면 GitHub Student Developer Pack으로 개인 계정 Pro 가능. Settings → Branches에서 직접 확인
-  - 못 쓰면: CI 실패 표시 + "빨간 PR은 머지 안 함, develop에 직접 push 안 함" 약속으로 대신함
-- **Claude 자동 리뷰 켜기** (선택, 7장)
-  1. Claude Code에서 `/install-github-app` (Claude GitHub App 설치)
-  2. 시크릿 하나 등록 (Settings → Secrets → Actions)
-     - 구독(Pro/Max)으로 돌리기: 터미널에서 `claude setup-token` → `CLAUDE_CODE_OAUTH_TOKEN`
-     - API 키로 돌리기: `ANTHROPIC_API_KEY`, 그리고 `.github/workflows/claude-*.yml`에서 해당 줄 주석 해제
-  3. 시크릿이 없으면 claude-review 워크플로만 실패하고 나머지는 정상 동작함
+- **기본 브랜치**: `develop` (설정 완료 2026-11-03)
+- **브랜치 보호: 못 씀 → 약속으로 대신함** (확인 2026-11-03: 조직이 Free 플랜이고 저장소가 private이라 API가 403. Student Pack Pro는 개인 계정용이라 조직 저장소엔 안 됨)
+  - 약속: 빨간 PR은 머지 안 함 / develop·main에 직접 push 안 함 / 상대 승인 후 머지
+  - Claude 쪽은 로컬 zone_guard가 develop·main에서의 파일 수정을 막음
+  - 나중에 조직을 Team 플랜으로 올리거나 저장소를 public으로 바꾸면: `develop`·`main`에 PR 필수, 승인 1명, 상태 체크 `verify`·`zones` 필수, 직접 push·force push 금지
+- **Claude 자동 리뷰 켜기** (7장, 승희가 한 번)
+  1. Claude GitHub App 설치: https://github.com/apps/claude → Install → `LIKELION-CAPSULE` → `Backend_lab`만 선택 (조직 Owner 권한 필요)
+  2. 토큰 만들기: 터미널에서 `claude setup-token` (브라우저 로그인 후 토큰이 출력됨, 구독 Pro/Max 사용)
+  3. 시크릿 등록: `gh secret set CLAUDE_CODE_OAUTH_TOKEN -R LIKELION-CAPSULE/Backend_lab` → 토큰 붙여넣기 (토큰을 채팅·파일에 남기지 않음)
+  - API 키로 돌리려면 `ANTHROPIC_API_KEY` 시크릿 + `.github/workflows/claude-*.yml`에서 해당 줄 주석 해제
+  - 시크릿이 없으면 claude-review(위험 라벨 PR)와 `@claude`만 실패하고 나머지는 정상 동작함
 
 ---
 
@@ -382,7 +385,7 @@ skeleton 스킬이 하는 일:
 
 | 증상 | 원인 | 해결 |
 |---|---|---|
-| 세션 시작 때 하네스 상태가 안 뜨고, 훅이 아무것도 안 막음 (Windows) | `python3`가 Microsoft Store 바로가기라 실행하면 exit 49. 훅은 exit 2만 차단이라 경고만 남기고 통과 | 관리자 권한이 있으면 Python 폴더의 `python.exe`를 `python3.exe`로 복사. 없으면 `~/bin/python3` 파일에 `#!/usr/bin/env bash`와 `exec /c/Python313/python "$@"` 두 줄 (Git Bash PATH 맨 앞이 `~/bin`, Claude Code 훅도 Git Bash로 돎). `setup.sh`가 경고함 |
+| 세션 시작 때 하네스 상태가 안 뜨고, 훅이 아무것도 안 막음 (Windows) | `python3`가 Microsoft Store 바로가기라 실행하면 exit 49. 훅은 exit 2만 차단이라 경고만 남기고 통과 | `scripts/setup.sh`를 다시 실행 → 실제 파이썬으로 연결하는 `~/bin/python3`를 자동으로 만듦 (Git Bash와 Claude Code 훅의 PATH 맨 앞이 `~/bin`). 직접 하려면 그 파일에 `#!/usr/bin/env bash`와 `exec /c/Python313/python "$@"` 두 줄 |
 | 훅이 계속 "누구인지 모름" | HARNESS_ME 미설정, git 이메일이 zones.conf와 다름 | `scripts/setup.sh --me <키>` |
 | 모든 파일에 확인 질문이 뜸 | develop에 있음 / domain 단계에서 공용 파일 작업 중 | feature 브랜치 생성 / 공용 변경은 원래 확인 대상 |
 | Claude가 끝내지 않고 계속 고침 | Stop 훅이 verify 실패를 돌려보낸 것 (정상) | 연속 3번까지만 막고, 그래도 실패하면 멈추고 사람에게 넘김. 그때 오류를 보고 방향 지시 |
@@ -400,7 +403,7 @@ skeleton 스킬이 하는 일:
 
 - 훅은 Claude의 Edit/Write 도구만 봄. 셸로 파일을 쓰면(`sed -i`, `cat >`) 구역 판정을 거치지 않음 → CLAUDE.md에서 금지, CI(라벨·리뷰)가 뒤에서 잡음
 - 확인 질문(ask)의 사유는 사람 화면에만 보임. Claude는 승인/거절 결과만 앎
-- develop/main 보호는 GitHub 브랜치 보호에만 맡김. 저장소 플랜에 따라 못 쓸 수 있음 (2-3장)
+- develop/main 보호: 지금은 GitHub 브랜치 보호를 못 써서(Free 플랜 조직의 private 저장소) 사람은 약속으로만 막힘. Claude는 로컬 훅이 develop/main에서의 수정을 막음 (2-3장)
 - 확인한 것 (2026-11-03, Windows 11 + Git Bash): Claude Code 안 훅 호출(SessionStart 상태 출력, zone_guard가 develop 수정을 실제로 차단), 한글·Windows 경로 판정, GitHub Actions `verify` 첫 실행(setup-java cache 실패를 찾아 고침)
 - 아직 확인 못 한 것: 실제 Gradle 빌드, spec-sync의 노션 읽기 → 뼈대 단계에서 확인
 - 대화 품질(LLM) 평가는 아직 없음 → Phase C
