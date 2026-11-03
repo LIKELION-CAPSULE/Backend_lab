@@ -13,8 +13,10 @@ import com.capsule.dialogue.client.LlmClient;
 import com.capsule.dialogue.domain.ChatMessage;
 import com.capsule.dialogue.domain.Conversation;
 import com.capsule.dialogue.dto.ChatLine;
+import com.capsule.dialogue.dto.LlmReaction;
 import com.capsule.dialogue.dto.LlmReply;
 import com.capsule.dialogue.dto.MessageResponse;
+import com.capsule.dialogue.dto.ReactionCharacter;
 import com.capsule.dialogue.dto.ReactionResponse;
 import com.capsule.dialogue.dto.ReplyContext;
 import com.capsule.dialogue.repository.ChatMessageRepository;
@@ -23,7 +25,6 @@ import com.capsule.relation.api.RelationCommands;
 import com.capsule.relation.api.RelationQuery;
 import com.capsule.relation.api.RelationTypes.AffinityChange;
 import com.capsule.relation.api.RelationTypes.RelationView;
-import com.capsule.relation.api.RelationTypes.SessionEventRef;
 import com.capsule.session.api.SessionQuery;
 import com.capsule.session.api.SessionTypes.SessionClosing;
 import com.capsule.session.api.SessionTypes.SessionEventInfo;
@@ -108,22 +109,24 @@ public class DialogueService {
             throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_REQUEST");
         }
 
+        // 호감도는 상태 변화 전송(18)이 반영하고 그 응답으로 돌려준다. 여기서는 다루지 않음
         Reaction reaction = reactions.pick(characterId, trigger, awayLevel);
-        // 호감도는 상태 변화 전송(18) 때 이미 반영됨. 여기서는 읽기만
-        AffinityChange affinity = relationQuery.changeOf(new SessionEventRef(
-                userId, characterId, sessionId, eventId, event.type(), event.firstFocusOfSession()));
         CharacterInfo character = character(characterId);
-        Optional<String> line = callLlm(() -> llm.reactionLine(character, trigger, awayLevel));
+        Optional<LlmReaction> generated = callLlm(() -> llm.reaction(character, trigger, awayLevel));
 
+        // 뼈대는 세션당 캐릭터 1명
         return new ReactionResponse(
                 requestId,
-                trigger,
-                line.orElseGet(() -> LlmClient.FIXED_REACTION_LINES.get(trigger)),
-                reaction.motion(),
-                reaction.expression(),
-                affinity,
-                line.isEmpty(),
-                audio(tts));
+                List.of(new ReactionCharacter(
+                        characterId,
+                        generated
+                                .map(LlmReaction::content)
+                                .orElseGet(() -> LlmClient.FIXED_REACTION_LINES.get(trigger)),
+                        generated.map(LlmReaction::emotion).orElse(null),
+                        reaction.motion(),
+                        reaction.expression(),
+                        generated.isEmpty(),
+                        audio(tts))));
     }
 
     // ponytail: LLM을 기다리는 동안(최대 5초) DB 커넥션을 잡고 있음. 동시 사용자가 많아지면 LLM 호출을 트랜잭션 밖으로 뺄 것

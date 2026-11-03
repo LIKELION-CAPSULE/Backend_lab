@@ -10,6 +10,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -28,7 +29,6 @@ import com.capsule.relation.api.RelationCommands;
 import com.capsule.relation.api.RelationQuery;
 import com.capsule.relation.api.RelationTypes.AffinityChange;
 import com.capsule.relation.api.RelationTypes.RelationView;
-import com.capsule.relation.api.RelationTypes.SessionEventRef;
 import com.capsule.session.api.SessionClosingHandler;
 import com.capsule.session.api.SessionQuery;
 import com.capsule.session.api.SessionTypes.SessionClosing;
@@ -111,7 +111,6 @@ class DialogueTest {
                 .thenReturn(
                         Optional.of(new CharacterInfo(CHARACTER_ID, 1, "채린", null, List.of("츤데레"), "짝꿍", true, null)));
         when(reactionQuery.pick(anyLong(), anyString(), any())).thenReturn(Reaction.NONE);
-        when(relationQuery.changeOf(any())).thenReturn(new AffinityChange(-1, 79, 1, false));
         when(relationQuery.view(userId, CHARACTER_ID))
                 .thenReturn(new RelationView(CHARACTER_ID, 1, "아는 사이", 80, 0, 100));
     }
@@ -125,21 +124,23 @@ class DialogueTest {
                 .thenReturn(new Reaction(
                         new MotionRef("TapBody", "motions/wave.motion3.json"),
                         new ExpressionRef("웃음", "exp/smile.exp3.json")));
-        when(relationQuery.changeOf(any())).thenReturn(new AffinityChange(5, 5, 1, false));
         UUID requestId = UUID.randomUUID();
 
         react(10, "{\"requestId\":\"" + requestId + "\",\"tts\":true}")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.requestId").value(requestId.toString()))
-                .andExpect(jsonPath("$.trigger").value("GREETING"))
-                .andExpect(jsonPath("$.content").value("왔구나. 오늘도 같이 해볼까?"))
-                .andExpect(jsonPath("$.motion.group").value("TapBody"))
-                .andExpect(jsonPath("$.expression.file").value("exp/smile.exp3.json"))
-                .andExpect(jsonPath("$.affinity.delta").value(5))
-                .andExpect(jsonPath("$.affinity.points").value(5))
-                .andExpect(jsonPath("$.fallback").value(false))
-                .andExpect(jsonPath("$.audioBase64").value(nullValue()));
-        verify(relationQuery).changeOf(new SessionEventRef(userId, CHARACTER_ID, sessionId, 10, "FOCUS", true));
+                .andExpect(jsonPath("$.trigger").doesNotExist())
+                .andExpect(jsonPath("$.characters.length()").value(1))
+                .andExpect(jsonPath("$.characters[0].characterId").value(CHARACTER_ID))
+                .andExpect(jsonPath("$.characters[0].content").value("왔구나. 오늘도 같이 해볼까?"))
+                .andExpect(jsonPath("$.characters[0].emotion").value("HAPPY"))
+                .andExpect(jsonPath("$.characters[0].motion.group").value("TapBody"))
+                .andExpect(jsonPath("$.characters[0].expression.file").value("exp/smile.exp3.json"))
+                .andExpect(jsonPath("$.characters[0].affinity").doesNotExist())
+                .andExpect(jsonPath("$.characters[0].fallback").value(false))
+                .andExpect(jsonPath("$.characters[0].audioBase64").value(nullValue()));
+        verify(reactionQuery).pick(CHARACTER_ID, "GREETING", null);
+        verifyNoInteractions(relationQuery); // 호감도는 18이 맡는다
     }
 
     @Test
@@ -148,10 +149,9 @@ class DialogueTest {
 
         react(11, "{\"requestId\":\"" + UUID.randomUUID() + "\",\"intensity\":2}")
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.trigger").value("AWAY"))
-                .andExpect(jsonPath("$.content").value("잠깐 자리 비운 거야?"))
-                .andExpect(jsonPath("$.motion").value(nullValue()))
-                .andExpect(jsonPath("$.affinity.delta").value(-1));
+                .andExpect(jsonPath("$.characters[0].content").value("잠깐 자리 비운 거야?"))
+                .andExpect(jsonPath("$.characters[0].emotion").value("SAD"))
+                .andExpect(jsonPath("$.characters[0].motion").value(nullValue()));
         verify(reactionQuery).pick(CHARACTER_ID, "AWAY", 2);
     }
 
@@ -161,9 +161,25 @@ class DialogueTest {
 
         react(12, "{\"requestId\":\"" + UUID.randomUUID() + "\",\"intensity\":3}")
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.trigger").value("BREAK_END"))
-                .andExpect(jsonPath("$.content").value("다시 시작해볼까?"));
+                .andExpect(jsonPath("$.characters[0].content").value("다시 시작해볼까?"));
         verify(reactionQuery).pick(CHARACTER_ID, "BREAK_END", null);
+    }
+
+    @Test
+    void slowLlmReactionFallsBackToFixedLineWithoutEmotion() throws Exception {
+        event(13, "RETURN", false, false);
+        doAnswer(invocation -> {
+                    Thread.sleep(6_000);
+                    return invocation.callRealMethod();
+                })
+                .when(llm)
+                .reaction(any(), anyString(), any());
+
+        react(13, "{\"requestId\":\"" + UUID.randomUUID() + "\"}")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.characters[0].content").value("왔네. 이어서 하자."))
+                .andExpect(jsonPath("$.characters[0].emotion").value(nullValue()))
+                .andExpect(jsonPath("$.characters[0].fallback").value(true));
     }
 
     @Test

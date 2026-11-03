@@ -2,6 +2,7 @@ package com.capsule.dialogue.client;
 
 import com.capsule.content.api.ContentTypes.CharacterInfo;
 import com.capsule.dialogue.dto.ChatLine;
+import com.capsule.dialogue.dto.LlmReaction;
 import com.capsule.dialogue.dto.LlmReply;
 import com.capsule.dialogue.dto.ReplyContext;
 import java.util.List;
@@ -10,8 +11,8 @@ import java.util.Map;
 /** 대화 LLM 자리. 뼈대는 {@link FakeLlmClient}만 있고, 실제 어댑터(capsule.llm.mode=real)는 도메인 단계에서 붙인다. */
 public interface LlmClient {
 
-    /** 이벤트 반응 말풍선 대사 (2줄 이내). intensity는 AWAY일 때만 있음 */
-    String reactionLine(CharacterInfo character, String trigger, Integer intensity);
+    /** 이벤트 반응 말풍선 대사 (2줄 이내)와 감정. intensity는 AWAY일 때만 있음 */
+    LlmReaction reaction(CharacterInfo character, String trigger, Integer intensity);
 
     LlmReply reply(ReplyContext context);
 

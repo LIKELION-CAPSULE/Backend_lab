@@ -1,16 +1,7 @@
 package com.capsule.dialogue.dto;
 
-import com.capsule.content.api.ContentTypes.ExpressionRef;
-import com.capsule.content.api.ContentTypes.MotionRef;
-import com.capsule.relation.api.RelationTypes.AffinityChange;
+import java.util.List;
 import java.util.UUID;
 
-public record ReactionResponse(
-        UUID requestId,
-        String trigger,
-        String content,
-        MotionRef motion,
-        ExpressionRef expression,
-        AffinityChange affinity,
-        boolean fallback,
-        String audioBase64) {}
+/** 이벤트 반응(api.md 19). 호감도는 상태 변화 전송(18) 응답에 있다 */
+public record ReactionResponse(UUID requestId, List<ReactionCharacter> characters) {}

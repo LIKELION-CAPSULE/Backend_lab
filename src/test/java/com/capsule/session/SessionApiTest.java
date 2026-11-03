@@ -6,6 +6,7 @@ import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.clearInvocations;
@@ -24,11 +25,16 @@ import com.capsule.content.api.CharacterQuery;
 import com.capsule.content.api.ContentTypes.AvatarInfo;
 import com.capsule.content.api.ContentTypes.BackgroundInfo;
 import com.capsule.content.api.ContentTypes.CharacterInfo;
+import com.capsule.content.api.ContentTypes.ExpressionRef;
 import com.capsule.content.api.ContentTypes.ModelInfo;
+import com.capsule.content.api.ContentTypes.MotionRef;
+import com.capsule.content.api.ContentTypes.Reaction;
 import com.capsule.content.api.ContentTypes.RoomInfo;
+import com.capsule.content.api.ReactionQuery;
 import com.capsule.content.api.RoomQuery;
 import com.capsule.relation.api.RelationCommands;
 import com.capsule.relation.api.RelationQuery;
+import com.capsule.relation.api.RelationTypes.AffinityChange;
 import com.capsule.relation.api.RelationTypes.RelationView;
 import com.capsule.relation.api.RelationTypes.SessionEventRef;
 import com.capsule.relation.api.RelationTypes.StudySettlement;
@@ -94,6 +100,8 @@ class SessionApiTest {
             new ModelInfo("https://cdn.capsule.invalid/live2d/avatar1/v1/avatar1.model3.json", 1.0, 0, 0));
     static final StudySettlement SETTLEMENT = new StudySettlement(1, 1, "아는 사이", 0, 55, 100, false);
     static final String CLOSING_LINE = "오늘도 같이 공부해서 좋았어.";
+    static final Reaction GREETING_REACTION = new Reaction(
+            new MotionRef("TapBody", "motions/wave.motion3.json"), new ExpressionRef("smile", "exp/smile.exp3.json"));
 
     @Autowired
     MockMvc mvc;
@@ -123,6 +131,9 @@ class SessionApiTest {
     CharacterQuery characterQuery;
 
     @MockitoBean
+    ReactionQuery reactionQuery;
+
+    @MockitoBean
     RelationQuery relationQuery;
 
     @MockitoBean
@@ -150,6 +161,7 @@ class SessionApiTest {
         given(relationCommands.settleStudyTime(anyLong(), anyLong(), anyLong(), anyInt()))
                 .willReturn(SETTLEMENT);
         given(closingHandler.close(any())).willReturn(CLOSING_LINE);
+        given(reactionQuery.pick(anyLong(), anyString(), any())).willReturn(Reaction.NONE);
     }
 
     // ---- 16 공부 시작
@@ -206,6 +218,43 @@ class SessionApiTest {
     // ---- 18 상태 변화 + SessionQuery.findEvent
 
     @Test
+    void eventReturnsCharacterMotionAndAffinity() throws Exception {
+        long sessionId = start(userId);
+        Instant t0 = startedAt(sessionId);
+        given(reactionQuery.pick(1L, "GREETING", null)).willReturn(GREETING_REACTION);
+        given(relationCommands.applySessionEvent(any())).willReturn(new AffinityChange(5, 5, 1, false));
+        given(relationQuery.changeOf(any())).willReturn(new AffinityChange(5, 5, 1, false));
+
+        String first = postEvent(userId, sessionId, "FOCUS", t0)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.characters.length()").value(1))
+                .andExpect(jsonPath("$.characters[0].characterId").value(1))
+                .andExpect(jsonPath("$.characters[0].motion.file").value("motions/wave.motion3.json"))
+                .andExpect(jsonPath("$.characters[0].expression.name").value("smile"))
+                .andExpect(jsonPath("$.characters[0].affinity.delta").value(5))
+                .andExpect(jsonPath("$.characters[0].affinity.points").value(5))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        long focus = ((Number) JsonPath.read(first, "$.eventId")).longValue();
+
+        // 재전송: 호감도는 다시 반영하지 않고 기록된 변화를 읽어서 같은 모양으로
+        postEvent(userId, sessionId, "FOCUS", t0)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.eventId").value(focus))
+                .andExpect(jsonPath("$.characters[0].affinity.delta").value(5));
+        SessionEventRef ref = new SessionEventRef(userId, 1, sessionId, focus, "FOCUS", true);
+        verify(relationCommands, times(1)).applySessionEvent(any());
+        verify(relationQuery).changeOf(ref);
+
+        event(sessionId, "AWAY", t0.plusSeconds(60), 201);
+        verify(reactionQuery).pick(1L, "AWAY", 1); // 18에서는 강도 1
+        event(sessionId, "BREAK", t0.plusSeconds(120), 201);
+        event(sessionId, "FOCUS", t0.plusSeconds(180), 201);
+        verify(reactionQuery).pick(1L, "BREAK_END", null);
+    }
+
+    @Test
     void eventsAreSavedOnceAndIgnoredDuringBreak() throws Exception {
         long sessionId = start(userId);
         Instant t0 = startedAt(sessionId);
@@ -217,7 +266,8 @@ class SessionApiTest {
         event(sessionId, "BREAK", t0.plusSeconds(60), 201);
         postEvent(userId, sessionId, "AWAY", t0.plusSeconds(70))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.eventId").value(nullValue()));
+                .andExpect(jsonPath("$.eventId").value(nullValue()))
+                .andExpect(jsonPath("$.characters").isEmpty());
         long focusAfterBreak = event(sessionId, "FOCUS", t0.plusSeconds(120), 201);
         verify(relationCommands, times(3)).applySessionEvent(any()); // 중복·휴식 중 무시는 반영 안 함
 
@@ -271,18 +321,70 @@ class SessionApiTest {
     }
 
     @Test
-    void heartbeatRefreshesLastHeartbeat() throws Exception {
+    void heartbeatRefreshesLastHeartbeatAndStoresStudyTime() throws Exception {
         long sessionId = start(userId);
-        jdbc.update("UPDATE study_sessions SET last_heartbeat_at = NULL WHERE id = ?", sessionId);
+        jdbc.update(
+                "UPDATE study_sessions SET started_at = started_at - interval '1 hour', last_heartbeat_at = NULL"
+                        + " WHERE id = ?",
+                sessionId);
 
-        mvc.perform(post("/api/sessions/{id}/heartbeat", sessionId).with(login(userId)))
-                .andExpect(status().isNoContent());
+        heartbeat(sessionId, 1800, 1620).andExpect(status().isNoContent());
 
-        assertThat(jdbc.queryForObject(
-                        "SELECT last_heartbeat_at IS NOT NULL FROM study_sessions WHERE id = ?",
-                        Boolean.class,
+        assertThat(jdbc.queryForMap(
+                        "SELECT last_heartbeat_at IS NOT NULL AS beat, heartbeat_study_seconds, heartbeat_present_seconds"
+                                + " FROM study_sessions WHERE id = ?",
                         sessionId))
-                .isTrue();
+                .containsEntry("beat", true)
+                .containsEntry("heartbeat_study_seconds", 1800)
+                .containsEntry("heartbeat_present_seconds", 1620);
+
+        // 값이 틀리면 400이지만 생존 신호는 갱신하고, 저장된 값은 그대로
+        jdbc.update("UPDATE study_sessions SET last_heartbeat_at = NULL WHERE id = ?", sessionId);
+        expectError(heartbeat(sessionId, 3700, 100), 400, "INVALID_STUDY_TIME"); // 경과 시간(1시간) 초과
+        expectError(heartbeat(sessionId, 1800, 1900), 400, "INVALID_STUDY_TIME");
+        expectError(heartbeat(sessionId, 1800, -1), 400, "INVALID_STUDY_TIME");
+        expectError(
+                mvc.perform(post("/api/sessions/{id}/heartbeat", sessionId)
+                        .with(login(userId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}")),
+                400,
+                "INVALID_STUDY_TIME");
+        expectError(
+                mvc.perform(post("/api/sessions/{id}/heartbeat", sessionId).with(login(userId))),
+                400,
+                "INVALID_STUDY_TIME"); // 본문 없음
+        assertThat(jdbc.queryForMap(
+                        "SELECT last_heartbeat_at IS NOT NULL AS beat, heartbeat_study_seconds, heartbeat_present_seconds"
+                                + " FROM study_sessions WHERE id = ?",
+                        sessionId))
+                .containsEntry("beat", true)
+                .containsEntry("heartbeat_study_seconds", 1800)
+                .containsEntry("heartbeat_present_seconds", 1620);
+    }
+
+    @Test
+    void resumeRefreshesStoredStudyTimeSoAutoCloseMatchesResume() throws Exception {
+        long sessionId = start(userId);
+        event(sessionId, "FOCUS", startedAt(sessionId), 201);
+        // 30분 전 시작, 10분 공부 뒤 끊김. 끊기기 전 마지막 heartbeat 값은 0초로 남아 있음
+        jdbc.update(
+                "UPDATE study_sessions SET started_at = started_at - interval '30 minutes',"
+                        + " last_heartbeat_at = started_at - interval '20 minutes',"
+                        + " heartbeat_study_seconds = 0, heartbeat_present_seconds = 0 WHERE id = ?",
+                sessionId);
+        jdbc.update(
+                "UPDATE session_events SET occurred_at = occurred_at - interval '30 minutes' WHERE session_id = ?",
+                sessionId);
+
+        mvc.perform(post("/api/sessions/{id}/resume", sessionId).with(login(userId)))
+                .andExpect(jsonPath("$.studySeconds").value(600));
+
+        assertThat(jdbc.queryForMap(
+                        "SELECT heartbeat_study_seconds, heartbeat_present_seconds FROM study_sessions WHERE id = ?",
+                        sessionId))
+                .containsEntry("heartbeat_study_seconds", 600)
+                .containsEntry("heartbeat_present_seconds", 600);
     }
 
     // ---- 22 공부 종료 · 23 리포트
@@ -324,8 +426,7 @@ class SessionApiTest {
                 .containsEntry("return_count", 1)
                 .containsEntry("closing_line", CLOSING_LINE);
 
-        expectError(
-                mvc.perform(post("/api/sessions/{id}/heartbeat", sessionId).with(login(userId))), 409, "SESSION_ENDED");
+        expectError(heartbeat(sessionId, 10, 10), 409, "SESSION_ENDED");
         expectError(
                 mvc.perform(post("/api/sessions/{id}/resume", sessionId).with(login(userId))), 409, "SESSION_ENDED");
         expectError(postEvent(userId, sessionId, "FOCUS", Instant.now()), 409, "SESSION_ENDED");
@@ -418,6 +519,31 @@ class SessionApiTest {
         assertThat(sessionQuery.find(freshSessionId)).get().matches(SessionInfo::inProgress);
     }
 
+    @Test
+    void autoCloseUsesLastHeartbeatStudyTime() throws Exception {
+        long sessionId = start(userId);
+        event(sessionId, "FOCUS", startedAt(sessionId), 201);
+        jdbc.update(
+                "UPDATE study_sessions SET started_at = started_at - interval '8 hours',"
+                        + " last_heartbeat_at = started_at - interval '7 hours',"
+                        + " heartbeat_study_seconds = 3000, heartbeat_present_seconds = 2700 WHERE id = ?",
+                sessionId);
+        jdbc.update(
+                "UPDATE session_events SET occurred_at = occurred_at - interval '8 hours' WHERE session_id = ?",
+                sessionId);
+
+        service.autoCloseStale();
+
+        // 이벤트로 계산하면 3600초지만, 마지막 heartbeat가 보낸 값으로 기록
+        assertThat(jdbc.queryForMap(
+                        "SELECT end_type, focus_seconds, distract_seconds FROM study_sessions WHERE id = ?", sessionId))
+                .containsEntry("end_type", "AUTO_CLOSED")
+                .containsEntry("focus_seconds", 2700)
+                .containsEntry("distract_seconds", 300);
+        verify(relationCommands).settleStudyTime(userId, 1L, sessionId, 3000);
+        verify(closingHandler).close(new SessionClosing(sessionId, userId, 1L, "채린", "AUTO_CLOSED", 3000));
+    }
+
     // ---- 도우미
 
     long newUser() {
@@ -466,6 +592,13 @@ class SessionApiTest {
                 .getResponse()
                 .getContentAsString();
         return ((Number) JsonPath.read(body, "$.eventId")).longValue();
+    }
+
+    ResultActions heartbeat(long sessionId, int studySeconds, int presentSeconds) throws Exception {
+        return mvc.perform(post("/api/sessions/{id}/heartbeat", sessionId)
+                .with(login(userId))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"studySeconds\":" + studySeconds + ",\"presentSeconds\":" + presentSeconds + "}"));
     }
 
     ResultActions end(long sessionId, int studySeconds, int presentSeconds) throws Exception {

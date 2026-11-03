@@ -103,26 +103,31 @@ class FlowE2ETest {
         long sessionId = ((Number) JsonPath.read(body(start), "$.sessionId")).longValue();
         String s = "/api/sessions/" + sessionId;
 
-        long focusId = event(token, s, "FOCUS", Instant.now().toString(), 201);
-        MvcResult greeting = call(post(s + "/events/" + focusId + "/reaction"), token, reactionBody(null), 200);
-        assertThat((String) JsonPath.read(body(greeting), "$.trigger")).isEqualTo("GREETING");
-        assertThat((Integer) JsonPath.read(body(greeting), "$.affinity.delta")).isEqualTo(5);
+        MvcResult focus = eventCall(token, s, "FOCUS", Instant.now().toString(), 201);
+        assertThat(affinityDelta(focus)).isEqualTo(5);
+        MvcResult greeting = call(post(s + "/events/" + eventId(focus) + "/reaction"), token, reactionBody(null), 200);
+        assertThat((String) JsonPath.read(body(greeting), "$.characters[0].content"))
+                .isEqualTo("왔구나. 오늘도 같이 해볼까?");
 
         // 12 heartbeat
-        call(post(s + "/heartbeat"), token, null, 204);
+        call(post(s + "/heartbeat"), token, "{\"studySeconds\":0,\"presentSeconds\":0}", 204);
 
         // 13~14 자리 비움 → 반응 → 같은 이벤트 재전송
         String awayAt = Instant.now().toString();
-        long awayId = event(token, s, "AWAY", awayAt, 201);
+        MvcResult awayEvent = eventCall(token, s, "AWAY", awayAt, 201);
+        assertThat(affinityDelta(awayEvent)).isEqualTo(-1);
+        long awayId = eventId(awayEvent);
         MvcResult away = call(post(s + "/events/" + awayId + "/reaction"), token, reactionBody(1), 200);
-        assertThat((String) JsonPath.read(body(away), "$.trigger")).isEqualTo("AWAY");
-        assertThat((Integer) JsonPath.read(body(away), "$.affinity.delta")).isEqualTo(-1);
-        assertThat(event(token, s, "AWAY", awayAt, 200)).isEqualTo(awayId);
+        assertThat((String) JsonPath.read(body(away), "$.characters[0].content"))
+                .isEqualTo("잠깐 자리 비운 거야?");
+        MvcResult awayAgain = eventCall(token, s, "AWAY", awayAt, 200);
+        assertThat(eventId(awayAgain)).isEqualTo(awayId);
+        assertThat(affinityDelta(awayAgain)).isEqualTo(-1); // 재전송은 다시 반영하지 않고 같은 변화
 
         // 15 복귀
-        long returnId = event(token, s, "RETURN", Instant.now().toString(), 201);
-        MvcResult back = call(post(s + "/events/" + returnId + "/reaction"), token, reactionBody(null), 200);
-        assertThat((Integer) JsonPath.read(body(back), "$.affinity.delta")).isEqualTo(1);
+        MvcResult returned = eventCall(token, s, "RETURN", Instant.now().toString(), 201);
+        assertThat(affinityDelta(returned)).isEqualTo(1);
+        call(post(s + "/events/" + eventId(returned) + "/reaction"), token, reactionBody(null), 200);
 
         // 16 채팅 → 같은 requestId 재전송은 한 번만
         String requestId = UUID.randomUUID().toString();
@@ -225,7 +230,7 @@ class FlowE2ETest {
         long sessionId = ((Number) JsonPath.read(body(start), "$.sessionId")).longValue();
         String s = "/api/sessions/" + sessionId;
         event(token, s, "FOCUS", Instant.now().toString(), 201);
-        call(post(s + "/heartbeat"), token, null, 204);
+        call(post(s + "/heartbeat"), token, "{\"studySeconds\":0,\"presentSeconds\":0}", 204);
 
         // 탭이 닫혀 3분 동안 heartbeat가 없었던 것으로 만든다
         jdbc.update(
@@ -245,12 +250,24 @@ class FlowE2ETest {
     }
 
     private long event(String token, String session, String type, String occurredAt, int status) throws Exception {
-        MvcResult r = call(
+        return eventId(eventCall(token, session, type, occurredAt, status));
+    }
+
+    private MvcResult eventCall(String token, String session, String type, String occurredAt, int status)
+            throws Exception {
+        return call(
                 post(session + "/events"),
                 token,
                 "{\"type\":\"" + type + "\",\"occurredAt\":\"" + occurredAt + "\"}",
                 status);
+    }
+
+    private static long eventId(MvcResult r) throws Exception {
         return ((Number) JsonPath.read(body(r), "$.eventId")).longValue();
+    }
+
+    private static int affinityDelta(MvcResult r) throws Exception {
+        return JsonPath.read(body(r), "$.characters[0].affinity.delta");
     }
 
     private static String reactionBody(Integer intensity) {

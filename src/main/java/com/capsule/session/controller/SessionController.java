@@ -4,6 +4,7 @@ import com.capsule.common.security.LoginUser;
 import com.capsule.session.dto.EndRequest;
 import com.capsule.session.dto.EventRequest;
 import com.capsule.session.dto.EventResponse;
+import com.capsule.session.dto.HeartbeatRequest;
 import com.capsule.session.dto.HomeResponse;
 import com.capsule.session.dto.ReportResponse;
 import com.capsule.session.dto.ResumeResponse;
@@ -68,8 +69,12 @@ class SessionController {
 
     @PostMapping("/api/sessions/{sessionId}/heartbeat")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    void heartbeat(@LoginUser long userId, @PathVariable long sessionId) {
-        service.heartbeat(userId, sessionId);
+    void heartbeat(
+            @LoginUser long userId, @PathVariable long sessionId, @RequestBody(required = false) HeartbeatRequest req) {
+        // 본문이 없거나 값이 틀려도 생존 신호는 서비스가 갱신한 뒤라, 커밋 후에 400을 돌려준다
+        if (!service.heartbeat(userId, sessionId, req)) {
+            throw SessionService.invalidStudyTime();
+        }
     }
 
     @PostMapping("/api/sessions/{sessionId}/end")
