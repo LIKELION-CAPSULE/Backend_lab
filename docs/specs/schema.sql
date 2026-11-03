@@ -26,7 +26,7 @@
 --
 -- 2026-11-04 변경
 --   - session_events.type에 동작 이벤트 DROWSY · YAWN · WAVE 추가 (졸음 · 하품 · 손 흔들기. 상태를 바꾸지 않음)
---   - 주석: 동작 이벤트 서버 쿨다운(같은 type 1분), live2d_reaction_maps.trigger_type에 감정 6종 (API 19 · 20의 감정 동작)
+--   - 주석: 동작 이벤트 서버 쿨다운(같은 type 1분), live2d_reaction_maps.trigger_type에 감정 이름 (API 19 · 20의 감정 동작. 목록은 데이터, 디자이너 에셋에 따라 바뀜)
 -- =====================================================================
 
 BEGIN;
@@ -131,7 +131,7 @@ CREATE TABLE live2d_expressions (
 CREATE TABLE live2d_reaction_maps (
     id            bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     model_id      bigint   NOT NULL REFERENCES live2d_models (id) ON DELETE CASCADE,
-    trigger_type  text     NOT NULL,   -- 허용 값은 서버 enum으로 관리 (지금: GREETING, AWAY, RETURN, BREAK, BREAK_END, DROWSY, YAWN, WAVE = API 18의 '알아채는' 동작용 trigger / HAPPY, SHY, ANGRY, SAD, SURPRISED, NEUTRAL = API 19 · 20의 감정 동작. 늘어날 수 있음)
+    trigger_type  text     NOT NULL,   -- 허용 값은 서버 enum으로 관리 (지금: GREETING, AWAY, RETURN, BREAK, BREAK_END, DROWSY, YAWN, WAVE = API 18의 '알아채는' 동작용 trigger / 감정 이름(예: HAPPY, SAD) = API 19 · 20의 감정 동작. 감정 목록은 서버 enum이 아니라 이 테이블의 데이터로 정함(디자이너 에셋에 따라 바뀜))
     intensity     smallint CHECK (intensity BETWEEN 1 AND 3),   -- AWAY의 눈치 / 말 걸기 / 서운함. NULL이면 강도 무관 (그 강도 행이 없을 때도 씀)
     motion_id     bigint,
     expression_id bigint,
