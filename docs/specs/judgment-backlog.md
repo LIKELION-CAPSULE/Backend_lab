@@ -6,10 +6,10 @@
 
 | ID | 모듈 | 담당 | 무엇이 미정인가 | 코드 위치 | 지금 Fake 동작 | 근거 명세 | 상태 |
 |---|---|---|---|---|---|---|---|
-| J-01 | relation | seunghee | 상태 이벤트별 호감도 변화량 | `relation/service/AffinityPolicy.java` | 명세 예시값: 처음 만난 날 첫 FOCUS +5(FIRST_MEET), AWAY −1, RETURN +1, BREAK 0 | api.md 18 "예시, 기획 확정 필요" | 미정 (#14) |
+| J-01 | relation | seunghee | 상태 이벤트별 호감도 변화량 (동작 이벤트 DROWSY · YAWN · WAVE 포함, 2026-11-04 추가) | `relation/service/AffinityPolicy.java` | 명세 예시값: 처음 만난 날 첫 FOCUS +5(FIRST_MEET), AWAY −1, RETURN +1, BREAK 0. 동작 이벤트 3종은 0 | api.md 18 "예시, 기획 확정 필요" | 미정 (#14) |
 | J-02 | relation | seunghee | 공부 시간 → STUDY_TIME 점수 공식 | `relation/service/AffinityPolicy.java` | 공부 1분당 +1 | api.md 22 | 미정 (#14) |
 | J-03 | relation | seunghee | 레벨 기준 포인트·레벨 이름 | `relation/service/AffinityPolicy.java` | Lv.1 0점 '아는 사이', Lv.2 100점 '친한 사이', Lv.3 300점 'Lv.3' | api.md 12, 22 | 미정 (#14) |
-| J-04 | dialogue | seunghee | 이벤트 반응 대사(LLM)와 trigger별 고정 대사(5초 초과) | `dialogue/client/FakeLlmClient.java`, `LlmClient.java`(고정 대사 표) | trigger별 고정 문장 1개 | api.md 19 | 미정 (#11) |
+| J-04 | dialogue | seunghee | 이벤트 반응 대사(LLM)와 trigger별 고정 대사(5초 초과) | `dialogue/client/FakeLlmClient.java`, `LlmClient.java`(고정 대사 표) | trigger별 고정 문장 1개. 동작 이벤트 3종(DROWSY · YAWN · WAVE)은 아직 없음 → 대사 null | api.md 19 | 미정 (#11, 동작 이벤트 #27) |
 | J-05 | dialogue | seunghee | 대화 답장 생성 (캐릭터 설정·요약·대화·일정, 답 길이) | `dialogue/client/FakeLlmClient.java`, `LlmClient.java`(대체 대사) | 고정 문장 + 입력 일부 | api.md 20 | 미정 (#11, 휴식 여부 계약 #8) |
 | J-06 | dialogue | seunghee | 대화 호감도 판정 (−5~5) | `dialogue/client/FakeLlmClient.java` | 항상 +1 | api.md 20 | 미정 (#11, 점수는 기획 #7) |
 | J-07 | dialogue | seunghee | 답장 감정 → 모션·표정 고르는 규칙 | `dialogue/service/DialogueService.java` | 모션·표정 없음 | api.md 20 | 미정 (#11, 데이터 #9) |

@@ -934,8 +934,8 @@ GET /api/me/memories?date=2026-11-12
 
 ## 18. POST /api/sessions/{sessionId}/events — 상태 변화 전송
 - 분류: 공부 세션
-- 설명: 상태가 바뀔 때마다 1건씩 전송 → 저장 + 호감도 반영 → eventId
-- 와이어프레임: H07 자리 감지 · H08 쉬는 시간 · H19 일시정지
+- 설명: 상태가 바뀌거나 동작(졸음 · 하품 · 손 흔들기)이 감지될 때마다 1건씩 전송 → 저장 + 호감도 반영 → eventId
+- 와이어프레임: H07 자리 감지 · 동작 감지 · H08 쉬는 시간 · H19 일시정지
 - 백엔드: Not started
 - 프론트: Not started
 - 노션: https://app.notion.com/p/7d3b9a07e59282318ed48104d03bd4c9
@@ -944,11 +944,13 @@ GET /api/me/memories?date=2026-11-12
 
 ![image.png](notion-file-block://b74b9a07-e592-82d0-a789-010ebef8cbd1/3bf86178-a4f3-4541-a33a-9e890e79dd3b?space_id=838cb83b-0307-45ee-872a-9da44a7ba809&name=image.png)
 
-공부 중 상태가 바뀌면 **그때마다 1건씩** 보냅니다. 서버는 이벤트를 저장하고 **그 이벤트로 바뀌는 호감도를 바로 반영**한 뒤 `eventId`를 돌려줍니다. 캐릭터 반응은 이 `eventId`로 '이벤트 반응 받기'를 불러서 받습니다.
+공부 중 상태가 바뀌거나 동작(졸음 · 하품 · 손 흔들기)이 감지되면 **그때마다 1건씩** 보냅니다. 서버는 이벤트를 저장하고 **그 이벤트로 바뀌는 호감도를 바로 반영**한 뒤 `eventId`를 돌려줍니다. 캐릭터 반응은 이 `eventId`로 '이벤트 반응 받기'를 불러서 받습니다.
 
-> 📏 측정은 **자리에 있다 / 없다**뿐입니다. 시선 이탈은 판정하지 않습니다 (DB에서도 GAZE_AWAY 제거).
+> 📏 시간 계산(자리 지킴 · 자리 비움)은 **자리에 있다 / 없다**뿐입니다. 졸음 · 하품 · 손 흔들기는 캐릭터 반응을 위한 **동작 이벤트**라 시간 계산에 쓰지 않습니다. 시선 이탈은 판정하지 않습니다 (DB에서도 GAZE_AWAY 제거).
 
-#### 이벤트 4종
+#### 이벤트 7종
+
+> 2026-11-04: 동작 이벤트 3종(`DROWSY` · `YAWN` · `WAVE`) 추가. 프론트가 졸음 · 하품 · 손 흔들기를 감지할 수 있게 됨
 
 | type | 언제 보내나 | 시간 분류 | 호감도 (예시, 기획 확정 필요) |
 | --- | --- | --- | --- |
@@ -956,9 +958,14 @@ GET /api/me/memories?date=2026-11-12
 | `AWAY` | **10초 이상 연속**으로 사람이 안 보임 | 자리 비움 | −1 |
 | `RETURN` | 자리 비움 뒤 다시 보임 (복귀 횟수 +1) | 자리 지킴 | +1 |
 | `BREAK` | 쉬는 시간 시작 | 휴식 (공부 시간에서 제외) | 0 |
+| `DROWSY` | 졸음이 감지됨 (동작 이벤트) | 상태를 바꾸지 않음 | 미정 (확정 전까지 0) |
+| `YAWN` | 하품이 감지됨 (동작 이벤트) | 상태를 바꾸지 않음 | 미정 (확정 전까지 0) |
+| `WAVE` | 카메라를 보고 손을 흔듦 (동작 이벤트) | 상태를 바꾸지 않음 | 미정 (확정 전까지 0) |
 
 - `AWAY`의 `occurredAt`은 **안 보이기 시작한 시각** (10초 기다린 시각이 아님)
 - 10초 안에 다시 보이면 아무것도 안 보냄 (고개 숙임 · 조명으로 잠깐 끊기는 것 무시)
+- 동작 이벤트(`DROWSY` · `YAWN` · `WAVE`)는 감지된 순간 1건만 보냄. `occurredAt`은 감지 시각. 상태(자리 지킴 · 자리 비움 · 휴식)는 그대로라 공부 시간 · 자리 비움 시간 · 복귀 횟수에 영향이 없음
+- ⚠️ 프론트와 확정 필요: 같은 동작이 연달아 감지될 때 다시 보내는 간격 (제안: 같은 type은 1분에 한 번)
 - 호감도 0인 이벤트는 기록하지 않음 (DB `delta <> 0`)
 
 #### 와이어프레임 대조
@@ -970,6 +977,7 @@ GET /api/me/memories?date=2026-11-12
 | H07 다시 얼굴 확인됨 (H09 '복귀 n회') | `RETURN` |
 | H08 쉬는 시간 시작 / '목표 정하고 공부 이어가기' | `BREAK` / `FOCUS` |
 | H19 '일시정지' / '계속하기' | `BREAK` / `FOCUS` |
+| H07 졸음 · 하품 · 손 흔들기 감지 (와이어프레임에 아직 없음) | `DROWSY` · `YAWN` · `WAVE` |
 
 - 테이블: `session_events`, `relation_logs`(SESSION_EVENT · FIRST_MEET), `user_character_relations` · 인증: 필요
 
@@ -979,7 +987,7 @@ GET /api/me/memories?date=2026-11-12
 
 | 이름 | 타입 | 필수 | 설명 |
 | --- | --- | --- | --- |
-| type | String | O | `FOCUS` / `AWAY` / `RETURN` / `BREAK` |
+| type | String | O | `FOCUS` / `AWAY` / `RETURN` / `BREAK` / `DROWSY` / `YAWN` / `WAVE` |
 | occurredAt | String | O | 발생 시각 |
 
 ```json
@@ -990,7 +998,7 @@ GET /api/me/memories?date=2026-11-12
 
 | 이름 | 타입 | 설명 |
 | --- | --- | --- |
-| eventId | Long | 저장된 이벤트 id → '이벤트 반응 받기'에 사용. 휴식 중이라 무시된 `AWAY` · `RETURN`이면 null (반응 받기를 부르지 않음) |
+| eventId | Long | 저장된 이벤트 id → '이벤트 반응 받기'에 사용. 휴식 중이라 무시된 `AWAY` · `RETURN` · 동작 이벤트면 null (반응 받기를 부르지 않음) |
 
 ```json
 { "eventId": 12344 }
@@ -1002,10 +1010,12 @@ GET /api/me/memories?date=2026-11-12
 
 #### 규칙
 
-- 휴식(`BREAK`) 중에 온 `AWAY` · `RETURN`은 서버가 무시: 저장하지 않고 **200** `{"eventId": null}`
+- 휴식(`BREAK`) 중에 온 `AWAY` · `RETURN` · 동작 이벤트(`DROWSY` · `YAWN` · `WAVE`)는 서버가 무시: 저장하지 않고 **200** `{"eventId": null}`
 - `occurredAt`이 세션 시작보다 이르면 거절하지 않고 시작 시각으로 맞춤 (프론트 시계가 조금 늦어도 시작 직후 FOCUS가 실패하지 않게)
 - ⚠️ 기획 확인 필요 (J-01): 지금은 `AWAY` 없이 온 `RETURN`도 +1. RETURN만 반복하면 호감도가 계속 오름. "직전이 AWAY일 때만 점수" 같은 규칙이 필요한지 정하기
 - 휴식 끝은 `FOCUS`, 자리 비움에서 돌아오면 `RETURN` (복귀 횟수가 휴식 때문에 부풀지 않게)
+- 동작 이벤트는 상태를 바꾸지 않음: 휴식 판정, 휴식 끝 판정, 공부 시간 · 자리 비움 계산은 상태 이벤트(`FOCUS` · `AWAY` · `RETURN` · `BREAK`)만 봄
+- ⚠️ 기획 확인 필요 (J-01): 동작 이벤트 3종의 호감도 (지금은 0)
 - 전송 실패 시 같은 내용으로 재시도 → 서버가 (타입, 시각)으로 중복을 걸러 같은 `eventId`를 돌려줌
 - 카메라를 끄면 자리 판정을 할 수 없으므로 `AWAY`를 보내지 않음 (끈 동안은 자리 지킴으로 계산)
 - 영상 · 얼굴 좌표는 보내지 않음
@@ -1024,12 +1034,15 @@ GET /api/me/memories?date=2026-11-12
 
 #### 언제 부르나
 
+> 2026-11-04: 동작 이벤트 3종(`DROWSY` · `YAWN` · `WAVE`)의 반응 추가. trigger 이름은 이벤트 타입 그대로
+
 | 상황 | 부르는 방법 |
 | --- | --- |
 | 공부 시작 직후 (`FOCUS`) | `eventId`만 → 인사 반응. 이어하기 직후에는 부르지 않음 (17: 반응 없이 바로 재개) |
 | 자리 비움 (`AWAY`) | `eventId`  • `intensity: 1` → 1분 지나도 안 오면 같은 `eventId`로 `intensity: 2`, 5분이면 `3` |
 | 복귀 (`RETURN`) | `eventId`만 → 반겨주는 반응 |
 | 쉬는 시간 · 일시정지 (`BREAK`) | `eventId`만 |
+| 졸음 · 하품 · 손 흔들기 (`DROWSY` · `YAWN` · `WAVE`) | `eventId`만 → 그 동작에 맞는 반응 |
 | H07 '☾ 조용히 집중' 모드 | 부르지 않음 (호감도는 상태 변화 전송에서 이미 반영됨) |
 
 #### 와이어프레임 대조
@@ -1063,7 +1076,7 @@ GET /api/me/memories?date=2026-11-12
 | 이름 | 타입 | 설명 |
 | --- | --- | --- |
 | requestId | String | 요청의 `requestId` 그대로 |
-| trigger | String | 서버가 판단한 상황: `GREETING`(세션 첫 FOCUS) · `AWAY` · `RETURN` · `BREAK` · `BREAK_END`(세션 첫 FOCUS가 아닌 FOCUS = 쉬는 시간 · 일시정지 뒤) |
+| trigger | String | 서버가 판단한 상황: `GREETING`(세션 첫 FOCUS) · `AWAY` · `RETURN` · `BREAK` · `BREAK_END`(세션 첫 FOCUS가 아닌 FOCUS = 쉬는 시간 · 일시정지 뒤) · `DROWSY` · `YAWN` · `WAVE`(동작 이벤트, 타입 이름 그대로) |
 | content | String | 말풍선 대사 (2줄 이내). 대사 없는 반응이면 null |
 | motion | Object | `group`, `file` — 바로 재생 (없으면 null) |
 | expression | Object | `name`, `file` — 모션 위에 겹쳐 적용 (없으면 null) |
