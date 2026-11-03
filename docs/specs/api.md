@@ -1135,16 +1135,16 @@ GET /api/me/memories?date=2026-11-12
 
 > ✅ **200 OK**
 
-> ❌ **400** INVALID_REQUEST (`AWAY`인데 `intensity`가 1~3 밖) · **404** SESSION_NOT_FOUND · EVENT_NOT_FOUND · **409** SESSION_ENDED
+> ❌ **400** INVALID_REQUEST (`requestId`가 없음, `AWAY`인데 `intensity`가 1~3 밖) · **404** SESSION_NOT_FOUND · EVENT_NOT_FOUND · **409** SESSION_ENDED
 
 #### 서버가 하는 일
 
-1. 이벤트 타입 + 직전 상태 이벤트로 trigger 결정 (응답에는 넣지 않음): 첫 FOCUS = `GREETING`, 휴식 뒤 FOCUS = `BREAK_END`, `AWAY` · `RETURN` · `BREAK`, 동작은 type 그대로(`DROWSY` · `YAWN` · `WAVE`). 휴식 뒤가 아닌 FOCUS는 정상 흐름에서 생기지 않고, 와도 `BREAK_END`로 본다
+1. 이벤트 타입 + 직전 상태 이벤트로 trigger 결정 (응답에는 넣지 않음): 첫 FOCUS = `GREETING`, 휴식 뒤 FOCUS = `BREAK_END`, `AWAY` · `RETURN` · `BREAK`, 동작은 type 그대로(`DROWSY` · `YAWN` · `WAVE`)
 2. LLM으로 대사 + 감정 생성. 감정은 그 캐릭터의 반응 매핑(`live2d_reaction_maps`)에 있는 감정 목록 중에서 고르게 한다 (5초 넘으면 trigger별 고정 대사)
 3. 감정에 맞는 모션 · 표정을 `live2d_reaction_maps`에서 하나 고름 (같은 감정의 행이 여러 개면 같은 확률)
 4. `tts: true`면 음성 생성
 - 호감도는 바꾸지 않음 (18번에서 끝남). 같은 `eventId`로 intensity를 올려 다시 불러도 마찬가지
-- ⚠️ 확정 필요 (J-04): 모션 · 표정을 감정으로 고르게 되면서 `intensity` 2 · 3은 대사(와 감정)에만 쓰인다. `live2d_reaction_maps`의 `AWAY` 강도 2 · 3 행은 지금 고르는 곳이 없다 (18은 강도 1). 강도별 동작을 어디에 쓸지 정하기
+- ⚠️ 확정 필요 (J-04): 위 3번처럼 모션 · 표정을 감정으로 고르면 `intensity` 2 · 3은 대사(와 감정)에만 쓰인다. 그러면 `live2d_reaction_maps`의 `AWAY` 강도 2 · 3 행을 고르는 곳이 없다 (18은 강도 1). 강도별 동작을 어디에 쓸지 정하기
 
 #### 프론트 참고
 
