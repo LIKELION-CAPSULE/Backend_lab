@@ -23,6 +23,9 @@
 -- 2026-11-03 변경
 --   - study_sessions.closing_line 추가 (완료 대사 저장. 리포트 새로고침 · 카드에서 같은 문장)
 --   - 주석만 정리 (구조 변경 없음): live2d_reaction_maps trigger_type · intensity, study_sessions 시간 컬럼 저장 방식, chat_messages 삭제 조건
+--
+-- 2026-11-04 변경
+--   - session_events.type에 동작 이벤트 DROWSY · YAWN · WAVE 추가 (졸음 · 하품 · 손 흔들기. 상태를 바꾸지 않음)
 -- =====================================================================
 
 BEGIN;
@@ -127,7 +130,7 @@ CREATE TABLE live2d_expressions (
 CREATE TABLE live2d_reaction_maps (
     id            bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     model_id      bigint   NOT NULL REFERENCES live2d_models (id) ON DELETE CASCADE,
-    trigger_type  text     NOT NULL,   -- 허용 값은 서버 enum으로 관리 (지금: GREETING, AWAY, RETURN, BREAK, BREAK_END = API 19의 trigger. 늘어날 수 있음)
+    trigger_type  text     NOT NULL,   -- 허용 값은 서버 enum으로 관리 (지금: GREETING, AWAY, RETURN, BREAK, BREAK_END, DROWSY, YAWN, WAVE = API 19의 trigger. 늘어날 수 있음)
     intensity     smallint CHECK (intensity BETWEEN 1 AND 3),   -- AWAY의 눈치 / 말 걸기 / 서운함. NULL이면 강도 무관 (그 강도 행이 없을 때도 씀)
     motion_id     bigint,
     expression_id bigint,
@@ -314,13 +317,15 @@ CREATE TABLE session_characters (
 );
 CREATE INDEX idx_session_characters_character ON session_characters (character_id);
 
--- 상태가 바뀔 때만 한 줄씩. 각 상태는 다음 이벤트가 올 때 끝남
+-- 상태 이벤트는 상태가 바뀔 때만 한 줄씩. 각 상태는 다음 상태 이벤트가 올 때 끝남
 --   FOCUS: 시작·쉬는 시간 종료 / AWAY: 자리 비움 / RETURN: 딴짓에서 복귀 / BREAK: 쉬는 시간
---   쉬는 시간 중에는 감지 이벤트를 남기지 않음 (서버가 무시)
+-- 동작 이벤트는 감지된 순간 한 줄. 상태를 바꾸지 않고 시간 계산에 쓰지 않음 (캐릭터 반응 · 호감도용)
+--   DROWSY: 졸음 / YAWN: 하품 / WAVE: 손 흔들기
+--   쉬는 시간 중에는 감지 이벤트(AWAY · RETURN · 동작 이벤트)를 남기지 않음 (서버가 무시)
 CREATE TABLE session_events (
     id             bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     session_id     bigint      NOT NULL REFERENCES study_sessions (id) ON DELETE CASCADE,
-    type           text        NOT NULL CHECK (type IN ('FOCUS', 'AWAY', 'RETURN', 'BREAK')),
+    type           text        NOT NULL CHECK (type IN ('FOCUS', 'AWAY', 'RETURN', 'BREAK', 'DROWSY', 'YAWN', 'WAVE')),
     false_positive boolean     NOT NULL DEFAULT false,   -- '아니야' 버튼 (오탐이면 집중으로 계산)
     occurred_at    timestamptz NOT NULL DEFAULT now()
 );

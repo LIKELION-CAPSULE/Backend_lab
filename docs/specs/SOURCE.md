@@ -8,4 +8,4 @@
 | `schema.sql` | DB: https://app.notion.com/p/40db9a07e59280abad14da2dde00c864 | 페이지의 SQL 코드 블록 그대로 |
 | `flow.md` (선택) | 없음 | 사람이 쓰거나, skeleton이 API 순서·와이어프레임 번호로 초안을 만들고 확인받음 |
 
-동기화 시각: 2026-11-03 (spec-sync 6차: API 11번 todayStudySeconds. 5차: 공통 규칙 404·405·형 변환, API 4·13·14·16·19·20·24번. 4차: 명세 충돌 정리. 공통 규칙, API 6·7·12·14·16~20·22번, schema.sql 주석. 3차: API 19·20번. 2차: API 1·4·6·23번, schema.sql `study_sessions.closing_line`)
+동기화 시각: 2026-11-04 (spec-sync 7차: 동작 이벤트 3종 DROWSY · YAWN · WAVE. API 18·19번, schema.sql `session_events.type`·주석. 6차(11-03): API 11번 todayStudySeconds. 5차: 공통 규칙 404·405·형 변환, API 4·13·14·16·19·20·24번. 4차: 명세 충돌 정리. 공통 규칙, API 6·7·12·14·16~20·22번, schema.sql 주석. 3차: API 19·20번. 2차: API 1·4·6·23번, schema.sql `study_sessions.closing_line`)
