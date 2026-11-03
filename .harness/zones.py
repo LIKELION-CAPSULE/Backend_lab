@@ -35,7 +35,9 @@ MIGRATION_DIR = "src/main/resources/db/migration"
 MIGRATION_RE = re.compile(r"^V(\d{8})_(\d{6})__([a-z0-9]+)_[a-z0-9_]+\.sql$")
 PROTECTED_BRANCHES = ("develop", "main")
 ZONES = ("local", "harness", "migration", "contract", "module", "shared")
-PR_SECTIONS = ["목적", "결정과 이유", "시도했다 버린 것", "일부러 안 한 것", "검증", "리뷰 포인트"]
+# PR 본문 양식은 .github/PULL_REQUEST_TEMPLATE.md (2026-11-04 성욱 템플릿). CI는 '작업 내용'만 필수로 본다
+PR_TEMPLATE_PATH = os.path.join(REPO_ROOT, ".github", "PULL_REQUEST_TEMPLATE.md")
+PR_REQUIRED_SECTIONS = ["작업 내용"]
 
 
 # ---------------------------------------------------------------- 설정 읽기
@@ -290,13 +292,22 @@ def classify_labels(paths: list[str], cfg: Config, author_key: str | None) -> li
 
 def check_pr_body(body: str) -> list[str]:
     body = re.sub(r"<!--.*?-->", "", body or "", flags=re.S)
+    # 템플릿의 안내 문구(> 로 시작하는 줄)를 그대로 두면 내용이 없는 것으로 본다
+    guides = set()
+    if os.path.exists(PR_TEMPLATE_PATH):
+        with open(PR_TEMPLATE_PATH, encoding="utf-8") as f:
+            guides = {l.strip() for l in f if l.strip().startswith(">")}
     problems = []
-    for title in PR_SECTIONS:
-        m = re.search(rf"^##\s*{re.escape(title)}\s*$(.*?)(?=^##\s|\Z)", body, flags=re.M | re.S)
+    for title in PR_REQUIRED_SECTIONS:
+        # 제목 앞 이모지(📝 등)는 있어도 없어도 됨. ### 하위 제목(스크린샷)은 같은 섹션으로 친다
+        m = re.search(rf"^##[^\S\n]*[^\w\n]*{re.escape(title)}[^\n]*$(.*?)(?=^##[^#]|\Z)", body, flags=re.M | re.S)
         if not m:
-            problems.append(f"'## {title}' 섹션이 없음")
-        elif not m.group(1).strip():
-            problems.append(f"'## {title}' 섹션이 비어 있음 (해당 없으면 '없음'이라고 쓸 것)")
+            problems.append(f"'## {title}' 섹션이 없음 (.github/PULL_REQUEST_TEMPLATE.md 양식)")
+            continue
+        content = [l for l in m.group(1).splitlines()
+                   if l.strip() and l.strip() not in guides and not l.strip().startswith("#")]
+        if not content:
+            problems.append(f"'## {title}' 섹션이 비어 있음 (템플릿 안내 문구만 있음)")
     return problems
 
 
