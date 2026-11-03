@@ -2,9 +2,11 @@ package com.capsule.dialogue.client;
 
 import com.capsule.content.api.ContentTypes.CharacterInfo;
 import com.capsule.dialogue.dto.ChatLine;
+import com.capsule.dialogue.dto.LlmReaction;
 import com.capsule.dialogue.dto.LlmReply;
 import com.capsule.dialogue.dto.ReplyContext;
 import java.util.List;
+import java.util.Map;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
@@ -14,10 +16,18 @@ import org.springframework.stereotype.Component;
 class FakeLlmClient implements LlmClient {
 
     @Override
-    public String reactionLine(CharacterInfo character, String trigger, Integer intensity) {
+    public LlmReaction reaction(CharacterInfo character, String trigger, Integer intensity) {
         // TODO(judgment): J-04 이벤트 반응 대사를 LLM으로 생성 (캐릭터 말투·intensity 반영). 지금은 trigger별 고정 대사
-        return FIXED_REACTION_LINES.get(trigger);
+        // TODO(judgment): J-12 반응 감정(emotion) 값 목록과 정하는 기준. 지금은 trigger별 고정 값
+        return new LlmReaction(FIXED_REACTION_LINES.get(trigger), FAKE_EMOTIONS.get(trigger));
     }
+
+    private static final Map<String, String> FAKE_EMOTIONS = Map.of(
+            "GREETING", "HAPPY",
+            "AWAY", "SAD",
+            "RETURN", "HAPPY",
+            "BREAK", "NEUTRAL",
+            "BREAK_END", "NEUTRAL");
 
     @Override
     public LlmReply reply(ReplyContext context) {

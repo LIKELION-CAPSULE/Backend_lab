@@ -29,6 +29,8 @@ public class StudySession {
     Instant endedAt;
     String endType;
     Instant lastHeartbeatAt;
+    Integer heartbeatStudySeconds;
+    Integer heartbeatPresentSeconds;
     int focusSeconds;
     int distractSeconds;
     int breakSeconds;
@@ -60,8 +62,16 @@ public class StudySession {
         return characters.getFirst().characterId();
     }
 
+    /** 생존 신호만. 공부 시간 값이 잘못된 heartbeat용 (저장된 값은 그대로 둠) */
     public void heartbeat(Instant now) {
         this.lastHeartbeatAt = now;
+    }
+
+    /** heartbeat(api.md 21)가 보낸 그 시점까지의 공부 시간. 자동 마감 때 이 값으로 기록한다 */
+    public void heartbeat(Instant now, int studySeconds, int presentSeconds) {
+        heartbeat(now);
+        this.heartbeatStudySeconds = studySeconds;
+        this.heartbeatPresentSeconds = presentSeconds;
     }
 
     /** 공부 종료 기록. 완료 대사는 대화 쪽 마무리가 끝난 뒤 {@link #recordClosingLine(String)}로 남긴다 */
@@ -113,6 +123,14 @@ public class StudySession {
 
     public Instant lastHeartbeatAt() {
         return lastHeartbeatAt;
+    }
+
+    public Integer heartbeatStudySeconds() {
+        return heartbeatStudySeconds;
+    }
+
+    public Integer heartbeatPresentSeconds() {
+        return heartbeatPresentSeconds;
     }
 
     public int focusSeconds() {

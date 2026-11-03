@@ -69,6 +69,9 @@ Content-Type: application/json
 ### 11. heartbeat (1분마다)
 POST {{host}}/api/sessions/{{sessionId}}/heartbeat
 Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "studySeconds": 0, "presentSeconds": 0 }
 
 ### 12. 자리 비움 (H09)
 POST {{host}}/api/sessions/{{sessionId}}/events

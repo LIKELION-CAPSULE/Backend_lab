@@ -17,10 +17,13 @@ import com.capsule.content.api.CharacterQuery;
 import com.capsule.content.api.ContentTypes.AvatarInfo;
 import com.capsule.content.api.ContentTypes.BackgroundInfo;
 import com.capsule.content.api.ContentTypes.CharacterInfo;
+import com.capsule.content.api.ContentTypes.Reaction;
 import com.capsule.content.api.ContentTypes.RoomInfo;
+import com.capsule.content.api.ReactionQuery;
 import com.capsule.content.api.RoomQuery;
 import com.capsule.relation.api.RelationCommands;
 import com.capsule.relation.api.RelationQuery;
+import com.capsule.relation.api.RelationTypes.AffinityChange;
 import com.capsule.relation.api.RelationTypes.RelationView;
 import com.capsule.relation.api.RelationTypes.SessionEventRef;
 import com.capsule.relation.api.RelationTypes.StudySettlement;
@@ -31,9 +34,11 @@ import com.capsule.session.domain.StudySession;
 import com.capsule.session.dto.CharacterBrief;
 import com.capsule.session.dto.CharacterRef;
 import com.capsule.session.dto.EndRequest;
+import com.capsule.session.dto.EventCharacter;
 import com.capsule.session.dto.EventRequest;
 import com.capsule.session.dto.EventResponse;
 import com.capsule.session.dto.Figure;
+import com.capsule.session.dto.HeartbeatRequest;
 import com.capsule.session.dto.HomeResponse;
 import com.capsule.session.dto.HomeRoom;
 import com.capsule.session.dto.Me;
@@ -78,6 +83,7 @@ public class SessionService {
     private final AvatarQuery avatars;
     private final RoomQuery rooms;
     private final CharacterQuery characters;
+    private final ReactionQuery reactions;
     private final RelationQuery relationQuery;
     private final RelationCommands relationCommands;
     private final SessionClosingHandler closingHandler;
@@ -93,6 +99,7 @@ public class SessionService {
             AvatarQuery avatars,
             RoomQuery rooms,
             CharacterQuery characters,
+            ReactionQuery reactions,
             RelationQuery relationQuery,
             RelationCommands relationCommands,
             SessionClosingHandler closingHandler,
@@ -106,6 +113,7 @@ public class SessionService {
         this.avatars = avatars;
         this.rooms = rooms;
         this.characters = characters;
+        this.reactions = reactions;
         this.relationQuery = relationQuery;
         this.relationCommands = relationCommands;
         this.closingHandler = closingHandler;
@@ -224,9 +232,10 @@ public class SessionService {
             list.add(events.save(new SessionEvent(s.id(), BREAK, breakAt)));
         }
         list.add(events.save(new SessionEvent(s.id(), FOCUS, now)));
-        s.heartbeat(now);
         // 서버가 넣은 두 이벤트는 호감도에 반영하지 않는다 (api.md 17)
         StudyTime time = StudyTime.of(s.startedAt(), list, now);
+        // 끊기기 전 heartbeat 값이 남아 있으면, 다음 heartbeat 전에 또 끊길 때 자동 마감이 옛 값으로 기록한다 → 이어하기 응답과 같은 값으로 맞춤
+        s.heartbeat(now, time.studySeconds(), time.presentSeconds());
 
         UserProfile user = user(userId);
         AvatarInfo avatar = avatar(user);
@@ -262,7 +271,10 @@ public class SessionService {
                 .filter(e -> e.type().equals(type) && e.occurredAt().equals(at))
                 .findFirst();
         if (duplicate.isPresent()) {
-            return new EventResponse(duplicate.get().id(), false);
+            // 재전송: 호감도는 다시 반영하지 않고 처음 반영된 변화를 돌려준다
+            SessionEvent e = duplicate.get();
+            SessionEventRef ref = eventRef(s, e.id(), type, firstFocus(list, e.id(), type, at));
+            return new EventResponse(e.id(), eventCharacters(ref, relationQuery.changeOf(ref)), false);
         }
         SessionEvent stateAt = null; // 이 이벤트 시각의 상태 (늦게 도착한 이벤트도 제자리에서 판단)
         for (SessionEvent e : list) {
@@ -272,22 +284,34 @@ public class SessionService {
         }
         if (stateAt != null && BREAK.equals(stateAt.type()) && (AWAY.equals(type) || RETURN.equals(type))) {
             // 명세는 "서버가 무시"뿐이라 저장하지 않고 eventId null로 돌려준다
-            return new EventResponse(null, false);
+            return EventResponse.ignored();
         }
 
         SessionEvent saved = events.save(new SessionEvent(s.id(), type, at));
-        boolean firstFocus = FOCUS.equals(type)
-                && list.stream()
-                        .noneMatch(
-                                e -> FOCUS.equals(e.type()) && !e.occurredAt().isAfter(at));
-        relationCommands.applySessionEvent(
-                new SessionEventRef(userId, s.characterId(), s.id(), saved.id(), type, firstFocus));
-        return new EventResponse(saved.id(), true);
+        SessionEventRef ref = eventRef(s, saved.id(), type, firstFocus(list, saved.id(), type, at));
+        return new EventResponse(saved.id(), eventCharacters(ref, relationCommands.applySessionEvent(ref)), true);
     }
 
+    /**
+     * 생존 신호는 값이 잘못돼도 항상 갱신한다 (아니면 공부 중인데 끊긴 세션이 됨). 값은 맞을 때만 저장.
+     * 400을 여기서 던지면 갱신까지 롤백되므로, 값이 맞았는지만 돌려주고 컨트롤러가 400으로 바꾼다
+     */
     @Transactional
-    public void heartbeat(long userId, long sessionId) {
-        inProgress(userId, sessionId).heartbeat(now());
+    public boolean heartbeat(long userId, long sessionId, HeartbeatRequest req) {
+        StudySession s = inProgress(userId, sessionId);
+        Instant now = now();
+        Integer study = req == null ? null : req.studySeconds();
+        Integer present = req == null ? null : req.presentSeconds();
+        if (!validStudyTime(s, study, present, now)) {
+            s.heartbeat(now);
+            return false;
+        }
+        s.heartbeat(now, study, present);
+        return true;
+    }
+
+    public static ApiException invalidStudyTime() {
+        return new ApiException(BAD_REQUEST, "INVALID_STUDY_TIME");
     }
 
     // ---- 22 공부 종료 · 23 리포트 · 자동 마감
@@ -301,13 +325,7 @@ public class SessionService {
         Instant now = now();
         Integer study = req.studySeconds();
         Integer present = req.presentSeconds();
-        if (study == null
-                || present == null
-                || present < 0
-                || present > study
-                || study > Duration.between(s.startedAt(), now).toSeconds()) {
-            throw new ApiException(BAD_REQUEST, "INVALID_STUDY_TIME");
-        }
+        validateStudyTime(s, study, present, now);
         List<SessionEvent> list = events.findBySessionIdOrderByOccurredAtAscIdAsc(s.id());
         StudyTime time = StudyTime.of(s.startedAt(), list, now);
         // TODO(judgment): J-11 프론트 값이 서버 계산값(time)과 "크게" 다를 때의 기준 미정. 지금은 부등식 검증만 하고 프론트 값을 그대로 씀
@@ -345,7 +363,14 @@ public class SessionService {
         }
         List<SessionEvent> list = events.findBySessionIdOrderByOccurredAtAscIdAsc(s.id());
         StudyTime time = StudyTime.of(s.startedAt(), list, end);
-        close(s, end, "AUTO_CLOSED", time.presentSeconds(), time.awaySeconds(), time.breakSeconds(), list);
+        // 마지막 heartbeat가 보낸 프론트 값으로 기록 (api.md 21). 값을 받은 적이 없으면 이벤트로 계산
+        Integer study = s.heartbeatStudySeconds();
+        Integer present = s.heartbeatPresentSeconds();
+        if (study != null && present != null) {
+            close(s, end, "AUTO_CLOSED", present, study - present, time.breakSeconds(), list);
+        } else {
+            close(s, end, "AUTO_CLOSED", time.presentSeconds(), time.awaySeconds(), time.breakSeconds(), list);
+        }
     }
 
     private ReportResponse close(
@@ -383,6 +408,43 @@ public class SessionService {
     }
 
     // ---- 도우미
+
+    /** 공부 종료(22)·heartbeat(21)의 프론트 공부 시간 검사: 0 ≤ present ≤ study ≤ 시작부터 지난 시간 */
+    private static void validateStudyTime(StudySession s, Integer study, Integer present, Instant now) {
+        if (!validStudyTime(s, study, present, now)) {
+            throw invalidStudyTime();
+        }
+    }
+
+    private static boolean validStudyTime(StudySession s, Integer study, Integer present, Instant now) {
+        return study != null
+                && present != null
+                && present >= 0
+                && present <= study
+                && study <= Duration.between(s.startedAt(), now).toSeconds();
+    }
+
+    /** 이 이벤트 시각까지(자기 자신 빼고) FOCUS가 없으면 세션 첫 FOCUS */
+    private static boolean firstFocus(List<SessionEvent> list, long eventId, String type, Instant at) {
+        return FOCUS.equals(type)
+                && list.stream()
+                        .noneMatch(e -> e.id() != eventId
+                                && FOCUS.equals(e.type())
+                                && !e.occurredAt().isAfter(at));
+    }
+
+    private static SessionEventRef eventRef(StudySession s, long eventId, String type, boolean firstFocus) {
+        return new SessionEventRef(s.userId(), s.characterId(), s.id(), eventId, type, firstFocus);
+    }
+
+    /** 18 응답의 캐릭터별 모션·표정·호감도. 뼈대는 세션당 캐릭터 1명 */
+    private List<EventCharacter> eventCharacters(SessionEventRef ref, AffinityChange affinity) {
+        // 이벤트 반응 받기(19)와 같은 trigger 규칙. 여기서는 강도를 받지 않으므로 AWAY는 1
+        String type = ref.eventType();
+        String trigger = FOCUS.equals(type) ? (ref.firstFocusOfSession() ? "GREETING" : "BREAK_END") : type;
+        Reaction reaction = reactions.pick(ref.characterId(), trigger, AWAY.equals(trigger) ? 1 : null);
+        return List.of(new EventCharacter(ref.characterId(), reaction.motion(), reaction.expression(), affinity));
+    }
 
     /** 남의 세션도 없는 세션과 똑같이 404 */
     private static StudySession owned(Optional<StudySession> found, long userId) {
