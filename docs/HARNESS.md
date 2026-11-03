@@ -102,13 +102,13 @@
 
 `.harness/phase` 파일 한 줄이 단계를 정함. 단계에 따라 훅의 구역 판정이 달라짐(5장).
 
-### 모듈과 담당 (제안안, 뼈대 설계 브리핑에서 확정)
+### 모듈과 담당 (확정, skeleton-plan.md 1장)
 
 | 모듈 | 담당 | 테이블 | API (노션 순서) |
 |---|---|---|---|
 | user | 성욱 | users, user_social_accounts, terms, term_versions, user_terms, user_memories | 1~8, 10, 13, 14, 24 |
-| content | 성욱 | live2d_*, avatars, study_rooms, room_backgrounds, characters, character_contents | 9, 12 |
-| session | 성욱 | study_sessions, session_characters, session_events | 11, 16~18, 21~23 |
+| content | 성욱 | live2d_*, avatars, study_rooms, room_backgrounds, characters, character_contents | 9 |
+| session | 성욱 | study_sessions, session_characters, session_events | 11, 12(룸 상세), 16~18, 21~23 |
 | relation | 승희 | user_character_relations, relation_logs, user_unlocked_contents, user_unlocked_backgrounds | (18, 22에서 호출됨) |
 | dialogue | 승희 | conversations, chat_messages, llm_usages | 19, 20 |
 

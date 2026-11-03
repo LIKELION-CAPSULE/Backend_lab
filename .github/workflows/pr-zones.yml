@@ -27,7 +27,8 @@ jobs:
 
       - name: 구역 분류 → 라벨
         run: |
-          changed="$(git diff --name-only "origin/$BASE" HEAD)"
+          # 점 세 개: 갈라진 지점부터의 변경만. 점 두 개면 실행 전에 develop이 앞서간 만큼 남의 변경까지 잡힘 (#16)
+          changed="$(git diff --name-only "origin/$BASE...HEAD")"
           labels="$(printf '%s\n' "$changed" | python3 .harness/zones.py classify --author "$AUTHOR") $(printf '%s\n' "$changed" | python3 .harness/zones.py adr-hint)"
           labels="$(echo $labels)"
           echo "라벨: ${labels:-없음}"

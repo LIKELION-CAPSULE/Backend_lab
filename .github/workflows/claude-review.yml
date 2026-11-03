@@ -25,7 +25,8 @@ jobs:
           AUTHOR: ${{ github.event.pull_request.user.login }}
           BASE: ${{ github.base_ref }}
         run: |
-          labels="$(git diff --name-only "origin/$BASE" HEAD | python3 .harness/zones.py classify --author "$AUTHOR")"
+          # 점 세 개: 이 PR의 변경만 (pr-zones.yml과 같은 이유, #16)
+          labels="$(git diff --name-only "origin/$BASE...HEAD" | python3 .harness/zones.py classify --author "$AUTHOR")"
           echo "labels=$labels" >> "$GITHUB_OUTPUT"
           if echo " $labels " | grep -Eq ' (zone:contract|zone:shared|zone:migration|cross-module) '; then
             echo "run=true" >> "$GITHUB_OUTPUT"
