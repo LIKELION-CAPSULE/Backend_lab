@@ -6,7 +6,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.capsule.TestcontainersConfiguration;
 import com.capsule.content.api.AvatarQuery;
 import com.capsule.user.api.ActiveSessionLookup;
-import com.capsule.user.internal.client.FakeEmailSender;
+import com.capsule.user.client.FakeEmailSender;
 import com.jayway.jsonpath.JsonPath;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
