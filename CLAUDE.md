@@ -33,7 +33,7 @@ AI 캐릭터와 함께 공부하는 웹서비스의 백엔드. Spring Boot + Pos
 - `main`(배포) ← `develop`(통합) ← `feature/<모듈>-<설명>`. 하네스 변경은 `harness/<설명>`
 - develop/main에서 직접 수정·push 금지. feature 브랜치는 1~2일 안에 머지, 매일 `git rebase origin/develop`
 - 기능 PR에 공용 변경(`common`, `build.gradle`, `application*.yml`)을 섞지 않는다 → 작은 공용 PR로 먼저
-- PR은 pr-write 스킬로(본문 6개 섹션은 CI가 검사). 상대 PR 리뷰는 review-pr 스킬
+- PR은 pr-write 스킬로(본문 6개 섹션은 CI가 검사). CI(verify·zones)가 초록이면 작성자가 머지한다. 상대 리뷰는 필수가 아니다(원하면 review-pr 스킬)
 
 ## 하지 말 것
 - `.env`·`.env.local` 등 비밀값 파일 읽기(변수 이름은 `.env.example`에서), 실제 LLM API 키 사용

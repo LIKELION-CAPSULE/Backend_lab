@@ -1,4 +1,4 @@
-# PR에 구역 라벨을 붙이고, PR 본문 필수 섹션을 검사한다. (리뷰어 지정은 pr-write가 PR 생성 때 GitHub 기본 기능으로)
+# PR에 구역 라벨을 붙이고, PR 본문 필수 섹션을 검사한다. (사람 리뷰는 필수가 아니다. 머지 조건은 verify·zones 초록)
 # 빌드·모듈 구성을 바꿨는데 docs/decisions에 ADR이 없으면 needs-adr 라벨 (원칙: 이유 먼저)
 # 판정은 로컬 훅과 같은 .harness/zones.py 를 쓰므로 기준이 어긋나지 않는다.
 name: pr-zones

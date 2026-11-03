@@ -48,6 +48,8 @@ jobs:
           fetch-depth: 0
 
       - uses: anthropics/claude-code-action@v1
+        # 의견만 남기는 리뷰라 실패해도(토큰 만료·사용량 한도 등) PR을 빨갛게 만들지 않는다. 머지 조건은 verify·zones
+        continue-on-error: true
         with:
           # 둘 중 하나만 설정 (docs/HARNESS.md '자동 리뷰 켜기' 참고)
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}

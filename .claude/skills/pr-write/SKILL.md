@@ -1,6 +1,6 @@
 ---
 name: pr-write
-description: 지금 세션의 작업 맥락으로 PR 본문을 쓰고 draft PR을 연다. 작업을 마치고 "PR 올려", "PR 써줘", "푸시하고 PR", "리뷰 요청하자"라고 할 때 반드시 사용. 리뷰어(사람과 CI의 Claude)는 이 세션 대화를 볼 수 없으므로, 맥락을 PR 본문으로 옮기는 것이 이 스킬의 목적이다.
+description: 지금 세션의 작업 맥락으로 PR 본문을 쓰고 PR을 연다. 작업을 마치고 "PR 올려", "PR 써줘", "푸시하고 PR", "리뷰 요청하자"라고 할 때 반드시 사용. 리뷰어(사람과 CI의 Claude)는 이 세션 대화를 볼 수 없으므로, 맥락을 PR 본문으로 옮기는 것이 이 스킬의 목적이다.
 ---
 
 # PR 쓰기
@@ -23,8 +23,9 @@ description: 지금 세션의 작업 맥락으로 PR 본문을 쓰고 draft PR�
 5. 문체: 짧은 한국어 문장. "~하는 것이 중요합니다", "다양한", "효율적인", 습관적인 세 개 나열, 문장마다 볼드를 쓰지 않는다. 근거 없는 "완벽하게/반드시 안전" 같은 단정도 쓰지 않는다.
 6. 제목: `[모듈] 한 줄 요약` (여러 모듈이면 주 모듈)
 7. 본문 초안을 사람에게 보여주고 확인받은 뒤:
-   `git push -u origin HEAD` → `gh pr create --base develop --draft --title "<제목>" --body-file <파일> --reviewer "$(python3 .harness/zones.py other-reviewer --author "$(gh api user -q .login)")"`
-8. 사람에게 안내: 준비되면 GitHub에서 'Ready for review' → 위험 라벨이면 Claude 자동 리뷰.
+   `git push -u origin HEAD` → `gh pr create --base develop --title "<제목>" --body-file <파일>`
+   (draft로 만들지 않고 리뷰어도 지정하지 않는다. 상대 리뷰는 필수가 아니다)
+8. 사람에게 안내: CI(verify·zones)가 초록이면 작성자가 머지한다(squash 권장). 위험 라벨(계약·공용·마이그레이션·남의 모듈)이면 Claude 자동 리뷰가 의견을 남기지만 머지를 막지는 않는다. 상대에게 한 줄 공유.
 
 ## 하네스 변경 PR
 브랜치가 `harness/*`면 '리뷰 포인트'에 "이 변경 후 두 사람의 에이전트 동작이 어떻게 달라지는지"를 적는다.
