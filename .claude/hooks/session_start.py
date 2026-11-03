@@ -43,9 +43,10 @@ def main() -> int:
     source = os.path.join(ROOT, "docs", "specs", "SOURCE.md")
     if os.path.exists(source):
         with open(source, encoding="utf-8") as f:
-            synced = next((l.split(":", 1)[1].strip() for l in f if l.startswith("동기화 시각")), "")
+            line = next((l.split(":", 1)[1].strip() for l in f if l.startswith("노션 사본 반영")), "")
+            synced = line.split(". ")[0]  # 첫 문장(날짜·커밋·차수)만
         if synced:
-            lines.append(f"- 명세 스냅샷: {synced} (원본은 노션. 바뀌었으면 spec-sync)")
+            lines.append(f"- 명세: 원본은 docs/specs (고칠 때는 명세 PR 먼저) | 노션 사본 반영: {synced} (명세 PR 머지 뒤 spec-sync)")
 
     backlog = os.path.join(ROOT, "docs", "specs", "judgment-backlog.md")
     if phase == "domain" and os.path.exists(backlog):

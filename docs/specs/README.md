@@ -1,14 +1,14 @@
 # 명세
 
-원본은 노션이다 (`SOURCE.md`). 기획을 고칠 때는 노션을 고치고, 레포에는 spec-sync 스킬로 가져온다.
+원본은 이 폴더다 (`SOURCE.md`, ADR 0013). 명세를 바꿀 때는 `api.md`·`schema.sql`을 고치는 작은 명세 PR을 먼저 머지하고, spec-sync 스킬로 노션 사본(프론트·기획용, 읽기 전용)에 반영한다.
 
-| 파일 | 누가 만드나 | 용도 |
+| 파일 | 누가 고치나 | 용도 |
 |---|---|---|
-| `SOURCE.md` | 사람 (노션 페이지가 바뀌면 링크 수정) | 원본 위치, 마지막 동기화 시각 |
-| `api.md` | spec-sync | API 명세 스냅샷 |
-| `schema.sql` | spec-sync | DB 스키마 스냅샷 |
+| `SOURCE.md` | 사람 (노션 위치가 바뀌면), spec-sync (반영 커밋) | 노션 사본 위치, 마지막 반영 커밋, 이력 |
+| `api.md` | 명세 PR | API 명세 원본 |
+| `schema.sql` | 명세 PR | DB 스키마 설계 원본 (실제 DB 변경은 Flyway 마이그레이션) |
 | `flow.md` | 사람 또는 skeleton 초안 | 핵심 흐름 → 전체 플로우 E2E 테스트 |
-| `skeleton-plan.md` | skeleton | 설계 브리핑, 모듈 지도, 단순/판단 분류, API↔DB 불일치 |
-| `judgment-backlog.md` | skeleton | 자리만 만든 판단 영역 → 도메인 단계에서 각자 가져감 |
+| `skeleton-plan.md` | skeleton | 설계 브리핑, 모듈 지도, 단순/판단 분류, API↔DB 불일치 (뼈대 단계 기록) |
+| `judgment-backlog.md` | 담당자 | 자리만 만든 판단 영역 → 도메인 단계에서 각자 가져감 |
 
-왜 노션을 직접 읽지 않고 스냅샷을 두나: 에이전트, CI, 리뷰어가 같은 버전을 봐야 하고, 명세가 바뀐 내용이 PR diff로 보여야 해서 (`docs/decisions/0008`).
+왜 노션이 아니라 레포가 원본인가: 여러 사람과 세션이 노션을 동시에 고치면서 꼬였고, 노션에는 리뷰·충돌 표시·변경 이유가 남지 않는다. 레포에서는 명세 변경도 PR로 리뷰되고 diff로 보인다 (`docs/decisions/0013`).
