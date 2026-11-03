@@ -1,0 +1,16 @@
+# 로컬 실행용 (scripts/run-local.sh가 SPRING_DATASOURCE_URL을 worktree별로 넘김). 비밀값 없음
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/capsule}
+    username: capsule
+    password: capsule
+  flyway:
+    locations: classpath:db/migration,classpath:db/seed # 예시값 시드는 로컬·테스트 전용 (A6)
+
+capsule:
+  fake-integrations: true
+  auth:
+    jwt-secret: ${CAPSULE_JWT_SECRET:local-dev-only-secret-0123456789abcdef}
+    refresh-cookie-secure: false
+  cors:
+    allowed-origins: http://localhost:3000,http://localhost:5173
