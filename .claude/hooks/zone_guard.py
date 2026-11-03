@@ -8,9 +8,16 @@
 """
 import json
 import os
+import re
 import sys
 
-ROOT = os.environ.get("CLAUDE_PROJECT_DIR") or os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+def native(p: str) -> str:
+    """Windows에서 Git Bash 형식(/c/Users/...)을 C:/Users/...로. 안 하면 C:\\c\\Users로 읽혀 판정 없이 통과함."""
+    return re.sub(r"^/([a-zA-Z])/", r"\1:/", p) if os.name == "nt" else p
+
+
+ROOT = native(os.environ.get("CLAUDE_PROJECT_DIR") or os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 sys.path.insert(0, os.path.join(ROOT, ".harness"))
 
 
@@ -23,6 +30,7 @@ def main() -> int:
     path = tool_input.get("file_path") or tool_input.get("notebook_path")
     if not path:
         return 0
+    path = native(path)
     abs_path = os.path.realpath(path if os.path.isabs(path) else os.path.join(data.get("cwd") or ROOT, path))
     root = os.path.realpath(ROOT)
     if not abs_path.startswith(root + os.sep):
