@@ -1,4 +1,4 @@
-package com.capsule.dialogue.internal.llm;
+package com.capsule.dialogue.internal.client;
 
 import com.capsule.content.api.ContentTypes.CharacterInfo;
 import java.util.List;

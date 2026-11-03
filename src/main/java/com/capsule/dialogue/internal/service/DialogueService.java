@@ -1,20 +1,24 @@
-package com.capsule.dialogue.internal;
+package com.capsule.dialogue.internal.service;
 
-import static com.capsule.dialogue.internal.ChatMessage.CHARACTER;
-import static com.capsule.dialogue.internal.ChatMessage.USER;
+import static com.capsule.dialogue.internal.domain.ChatMessage.CHARACTER;
+import static com.capsule.dialogue.internal.domain.ChatMessage.USER;
 
 import com.capsule.common.error.ApiException;
 import com.capsule.common.ratelimit.RateLimiter;
 import com.capsule.content.api.CharacterQuery;
 import com.capsule.content.api.ContentTypes.CharacterInfo;
-import com.capsule.content.api.ContentTypes.ExpressionRef;
-import com.capsule.content.api.ContentTypes.MotionRef;
 import com.capsule.content.api.ContentTypes.Reaction;
 import com.capsule.content.api.ReactionQuery;
-import com.capsule.dialogue.internal.llm.LlmClient;
-import com.capsule.dialogue.internal.llm.LlmClient.Line;
-import com.capsule.dialogue.internal.llm.LlmClient.Reply;
-import com.capsule.dialogue.internal.llm.LlmClient.ReplyContext;
+import com.capsule.dialogue.internal.client.LlmClient;
+import com.capsule.dialogue.internal.client.LlmClient.Line;
+import com.capsule.dialogue.internal.client.LlmClient.Reply;
+import com.capsule.dialogue.internal.client.LlmClient.ReplyContext;
+import com.capsule.dialogue.internal.domain.ChatMessage;
+import com.capsule.dialogue.internal.domain.Conversation;
+import com.capsule.dialogue.internal.dto.MessageResponse;
+import com.capsule.dialogue.internal.dto.ReactionResponse;
+import com.capsule.dialogue.internal.repository.ChatMessageRepository;
+import com.capsule.dialogue.internal.repository.ConversationRepository;
 import com.capsule.relation.api.RelationCommands;
 import com.capsule.relation.api.RelationQuery;
 import com.capsule.relation.api.RelationTypes.AffinityChange;
@@ -45,7 +49,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /** 이벤트 반응(api.md 19), 메시지(20), 공부 종료 때 대화 마무리(22, session이 부름) */
 @Service
-class DialogueService {
+public class DialogueService {
 
     private static final Logger log = LoggerFactory.getLogger(DialogueService.class);
 
@@ -92,26 +96,8 @@ class DialogueService {
         this.clock = clock;
     }
 
-    record ReactionResponse(
-            UUID requestId,
-            String trigger,
-            String content,
-            MotionRef motion,
-            ExpressionRef expression,
-            AffinityChange affinity,
-            boolean fallback,
-            String audioBase64) {}
-
-    record MessageResponse(
-            UUID requestId,
-            String content,
-            MotionRef motion,
-            ExpressionRef expression,
-            AffinityChange affinity,
-            boolean fallback,
-            String audioBase64) {}
-
-    ReactionResponse react(long userId, long sessionId, long eventId, UUID requestId, Integer intensity, Boolean tts) {
+    public ReactionResponse react(
+            long userId, long sessionId, long eventId, UUID requestId, Integer intensity, Boolean tts) {
         SessionInfo session = openSession(userId, sessionId);
         SessionEventInfo event = sessions.findEvent(sessionId, eventId)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "EVENT_NOT_FOUND"));
@@ -140,7 +126,7 @@ class DialogueService {
     // ponytail: LLM을 기다리는 동안(최대 5초) DB 커넥션을 잡고 있음. 동시 사용자가 많아지면 LLM 호출을 트랜잭션 밖으로 뺄 것
     // ponytail: 같은 requestId가 동시에 두 번 오면 두 번째는 UNIQUE 위반(500). 필요하면 잡아서 저장된 답장을 다시 읽기
     @Transactional
-    MessageResponse send(long userId, long sessionId, UUID requestId, String content, Boolean tts) {
+    public MessageResponse send(long userId, long sessionId, UUID requestId, String content, Boolean tts) {
         SessionInfo session = openSession(userId, sessionId);
         long characterId = session.characterId();
         Conversation conversation = conversation(userId, characterId);

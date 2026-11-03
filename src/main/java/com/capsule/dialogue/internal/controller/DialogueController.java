@@ -1,15 +1,12 @@
-package com.capsule.dialogue.internal;
+package com.capsule.dialogue.internal.controller;
 
 import com.capsule.common.security.LoginUser;
-import com.capsule.dialogue.internal.DialogueService.MessageResponse;
-import com.capsule.dialogue.internal.DialogueService.ReactionResponse;
+import com.capsule.dialogue.internal.dto.MessageRequest;
+import com.capsule.dialogue.internal.dto.MessageResponse;
+import com.capsule.dialogue.internal.dto.ReactionRequest;
+import com.capsule.dialogue.internal.dto.ReactionResponse;
+import com.capsule.dialogue.internal.service.DialogueService;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Size;
-import java.util.UUID;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -25,25 +22,6 @@ class DialogueController {
     DialogueController(DialogueService dialogue) {
         this.dialogue = dialogue;
     }
-
-    /** intensity는 AWAY일 때만 쓰고 다른 이벤트는 무시 (범위 밖이면 이벤트와 상관없이 400) */
-    record ReactionRequest(
-            @NotNull UUID requestId, @Min(1) @Max(3) Integer intensity, Boolean tts) {}
-
-    /** inputType은 검증만 한다 (저장할 컬럼 없음) */
-    enum InputType {
-        TEXT,
-        QUICK
-    }
-
-    record MessageRequest(
-            @NotNull UUID requestId,
-
-            @NotBlank(message = "EMPTY_MESSAGE") @Size(max = 300)
-            String content,
-
-            @NotNull InputType inputType,
-            Boolean tts) {}
 
     @PostMapping("/events/{eventId}/reaction")
     ReactionResponse react(

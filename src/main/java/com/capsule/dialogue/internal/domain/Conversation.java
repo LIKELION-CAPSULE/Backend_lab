@@ -1,4 +1,4 @@
-package com.capsule.dialogue.internal;
+package com.capsule.dialogue.internal.domain;
 
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -10,7 +10,7 @@ import java.time.Instant;
 /** 사용자 × 캐릭터 대화방. 세션을 넘어 남는 건 요약뿐 */
 @Entity
 @Table(name = "conversations")
-class Conversation {
+public class Conversation {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -24,21 +24,21 @@ class Conversation {
 
     protected Conversation() {}
 
-    Conversation(long userId, long characterId, Instant now) {
+    public Conversation(long userId, long characterId, Instant now) {
         this.userId = userId;
         this.characterId = characterId;
         this.createdAt = now;
     }
 
-    long id() {
+    public long id() {
         return id;
     }
 
-    String summary() {
+    public String summary() {
         return summary;
     }
 
-    void updateSummary(String summary, Instant now) {
+    public void updateSummary(String summary, Instant now) {
         this.summary = summary;
         this.summaryUpdatedAt = now;
     }

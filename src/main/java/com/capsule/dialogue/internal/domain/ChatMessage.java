@@ -1,4 +1,4 @@
-package com.capsule.dialogue.internal;
+package com.capsule.dialogue.internal.domain;
 
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -11,10 +11,10 @@ import java.util.UUID;
 /** 진행 중 세션의 메시지. 세션이 끝나면 요약에 합치고 지운다 */
 @Entity
 @Table(name = "chat_messages")
-class ChatMessage {
+public class ChatMessage {
 
-    static final String USER = "USER";
-    static final String CHARACTER = "CHARACTER";
+    public static final String USER = "USER";
+    public static final String CHARACTER = "CHARACTER";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -29,7 +29,8 @@ class ChatMessage {
 
     protected ChatMessage() {}
 
-    ChatMessage(long conversationId, long sessionId, UUID requestId, String sender, String content, Instant now) {
+    public ChatMessage(
+            long conversationId, long sessionId, UUID requestId, String sender, String content, Instant now) {
         this.conversationId = conversationId;
         this.sessionId = sessionId;
         this.requestId = requestId;
@@ -38,11 +39,11 @@ class ChatMessage {
         this.createdAt = now;
     }
 
-    String sender() {
+    public String sender() {
         return sender;
     }
 
-    String content() {
+    public String content() {
         return content;
     }
 }

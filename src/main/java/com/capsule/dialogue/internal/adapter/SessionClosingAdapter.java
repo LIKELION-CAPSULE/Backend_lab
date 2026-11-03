@@ -1,5 +1,6 @@
-package com.capsule.dialogue.internal;
+package com.capsule.dialogue.internal.adapter;
 
+import com.capsule.dialogue.internal.service.DialogueService;
 import com.capsule.session.api.SessionClosingHandler;
 import com.capsule.session.api.SessionTypes.SessionClosing;
 import org.springframework.stereotype.Component;
