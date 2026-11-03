@@ -240,7 +240,7 @@ def decide(relpath: str, cfg: Config, me: str | None, phase: str, branch: str,
             return "ask", f"[하네스] 마이그레이션의 모듈 '{mod}'이 zones.conf에 없음."
         if owner == me:
             return "allow", "내 모듈 마이그레이션"
-        return "ask", f"[하네스] {mod} 모듈({owner} 담당)의 테이블을 바꾸는 마이그레이션. 승인하면 PR에 cross-module이 붙고 {owner} 리뷰가 필요함."
+        return "ask", f"[하네스] {mod} 모듈({owner} 담당)의 테이블을 바꾸는 마이그레이션. 승인하면 PR에 cross-module이 붙음. {owner}에게 한 줄 공유."
 
     if zone == "harness":
         if branch.startswith("harness/"):
@@ -257,8 +257,8 @@ def decide(relpath: str, cfg: Config, me: str | None, phase: str, branch: str,
         owner = cfg.modules.get(module or "")
         if owner == me:
             return "allow", "내 모듈"
-        return "ask", (f"[하네스] {module} 모듈은 {owner} 담당. 승인하면 PR에 cross-module 라벨이 붙고 "
-                       f"{owner} 리뷰가 필요함. 고친 뒤 {owner}에게 한 줄 공유.")
+        return "ask", (f"[하네스] {module} 모듈은 {owner} 담당. 승인하면 PR에 cross-module 라벨이 붙음. "
+                       f"고친 뒤 {owner}에게 한 줄 공유.")
 
     if zone == "contract":
         owner = cfg.modules.get(module or "")

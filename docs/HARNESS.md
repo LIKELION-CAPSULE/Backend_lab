@@ -41,10 +41,10 @@
 | 구역표 단일 원천 (`zones.conf`) | 로컬 훅과 CI 판정이 어긋나지 않음 | 훅과 CI에 규칙을 따로 작성 |
 | 계약 변경은 확장 → 이전 → 제거 | 어느 단계도 상대 브랜치를 깨뜨리지 않음 | 시그니처 제자리 변경 |
 | 타임스탬프 마이그레이션 + 모든 환경 out-of-order | 둘이 동시에 만들어도 번호가 안 겹침. 파일명으로 소유 모듈 판정. 만든 순서와 머지 순서가 달라도 배포 DB에 적용되게 out-of-order를 공용 설정에서 켬 | V1, V2 순번 / out-of-order는 로컬만 켜고 rebase 때 파일명 다시 짓기 |
-| PR 3단 리뷰 | 작업 맥락은 작성자 세션에만 있어서 PR 본문으로 옮겨야 하고, 상대 맥락은 리뷰어 세션에만 있음 | CI 리뷰만 / 사람 리뷰만 |
+| CI가 초록이면 작성자가 머지, 사람 리뷰는 선택 (2026-11-03 합의) | 2인 팀이라 상대 리뷰를 기다리면 둘 다 멈춤. 작업 맥락은 PR 본문에 남기고(pr-write), 위험한 PR은 Claude 자동 리뷰가 의견을 남김. 궁금하면 review-pr로 언제든 리뷰 | 상대 승인 필수 (처음 설계였으나 뺌) |
 | Claude 자동 리뷰는 위험한 PR만 | 비용 | 모든 PR 자동 리뷰 |
 | 충돌 예측 자동화는 안 함 | 구역 분리·짧은 브랜치·공용 PR 우선으로 대부분 예방되고, 남는 충돌은 rebase와 PR 화면에서 git이 알려줌. 자동 예측은 push마다 fetch 비용과 경고 소음만 늘림 | push·세션 시작 때 merge-tree로 상대 브랜치와 미리 합쳐보기 |
-| git·GitHub가 하는 일은 다시 만들지 않음 | develop/main 보호는 GitHub 브랜치 보호, 로컬 파일 제외는 .gitignore, 리뷰어 지정은 PR 생성 때 `--reviewer`, 뒤처짐은 git status가 이미 함. 같은 규칙을 두 군데서 관리하면 한쪽만 바뀌는 일이 생김. 예외: 브랜치 보호를 못 쓰는 동안 Claude의 develop/main push는 bash_guard가 막음(2-3장) | pre-commit·pre-push 훅, 셸 명령 차단으로 push 규칙 재구현 |
+| git·GitHub가 하는 일은 다시 만들지 않음 | develop/main 보호는 GitHub 브랜치 보호, 로컬 파일 제외는 .gitignore, 리뷰 요청은 필요할 때 PR 화면에서, 뒤처짐은 git status가 이미 함. 같은 규칙을 두 군데서 관리하면 한쪽만 바뀌는 일이 생김. 예외: 브랜치 보호를 못 쓰는 동안 Claude의 develop/main push는 bash_guard가 막음(2-3장) | pre-commit·pre-push 훅, 셸 명령 차단으로 push 규칙 재구현 |
 | 명세 원본은 노션, 레포엔 스냅샷 | 기획은 노션에서 쓰고 고치는 게 편함. 하지만 두 에이전트·CI·리뷰어가 같은 버전을 봐야 하고, 명세 변경이 PR diff로 보여야 함. CI는 노션을 못 읽음 | 에이전트가 매번 노션 직접 읽기, 레포에서 명세 작성 |
 
 ### 앱 스택
@@ -88,7 +88,7 @@
   (spec-sync → api.md, schema.sql)            feature/<모듈>-<설명> 브랜치                   (골든 대화 회귀 테스트)
       ↓                                      내 모듈 안에서 개발                            → dialogue 담당(승희)이
  "뼈대 만들어" → skeleton 스킬                계약 변경은 확장→이전→제거                       실제 LLM 붙일 때 추가
-      ↓                                      PR(pr-write) → 자동 라벨·리뷰어·Claude 리뷰
+      ↓                                      PR(pr-write) → 자동 라벨·Claude 의견 → CI 초록이면 머지
  계획 확인(skeleton-plan.md)                  상대 PR은 review-pr로 내 맥락 반영해 리뷰
       ↓                                      머지 → 다음 칸
  단순=구현 / 판단·LLM=Fake+백로그
@@ -146,9 +146,9 @@ setup.sh가 하는 일: 도구 확인(python3 연결, git, docker, java 21, gh) 
 ### 2-3. GitHub 저장소 설정 (승희, 한 번)
 - **기본 브랜치**: `develop` (설정 완료 2026-11-03)
 - **브랜치 보호: 못 씀 → 약속으로 대신함** (확인 2026-11-03: 조직이 Free 플랜이고 저장소가 private이라 API가 403. Student Pack Pro는 개인 계정용이라 조직 저장소엔 안 됨)
-  - 약속: 빨간 PR은 머지 안 함 / develop·main에 직접 push 안 함 / 상대 승인 후 머지
+  - 약속: 빨간 PR은 머지 안 함 / develop·main에 직접 push 안 함 / CI가 초록이면 작성자가 머지 (상대 리뷰는 선택, 2026-11-03 합의)
   - Claude 쪽은 훅이 막음: develop·main에서의 파일 수정(zone_guard), develop·main으로의 push(bash_guard, ADR 0010 예외)
-  - 나중에 조직을 Team 플랜으로 올리거나 저장소를 public으로 바꾸면: `develop`·`main`에 PR 필수, 승인 1명, 상태 체크 `verify`·`zones` 필수, 직접 push·force push 금지
+  - 나중에 조직을 Team 플랜으로 올리거나 저장소를 public으로 바꾸면: `develop`·`main`에 PR 필수, 상태 체크 `verify`·`zones` 필수(승인 수는 0), 직접 push·force push 금지
 - **Claude 자동 리뷰 켜기** (7장, 승희가 한 번)
   1. Claude GitHub App 설치: https://github.com/apps/claude → Install → `LIKELION-CAPSULE` → `Backend_lab`만 선택 (조직 Owner 권한 필요)
   2. 토큰 만들기: 터미널에서 `claude setup-token` (브라우저 로그인 후 토큰이 출력됨, 구독 Pro/Max 사용)
@@ -197,8 +197,8 @@ skeleton 스킬이 하는 일:
 뼈대 단계(`phase=skeleton`)에서는 훅이 모듈·계약·공용 구역을 막지 않음. 혼자 전체를 까는 단계라서. 단, develop 직접 수정, 규칙 위반 마이그레이션, 하네스 파일 수정은 그대로 막거나 물어봄.
 
 ### 3-3. 마무리
-1. `PR 올려` → pr-write 스킬 → draft PR
-2. 성욱이 리뷰 (특히 `skeleton-plan.md`의 모듈 지도와 계약, `judgment-backlog.md`의 담당 배분)
+1. `PR 올려` → pr-write 스킬 → PR
+2. 성욱이 훑어보기 (선택. 특히 `skeleton-plan.md`의 모듈 지도와 계약, `judgment-backlog.md`의 담당 배분)
 3. 머지 후 단계 전환 PR:
    ```bash
    git switch develop && git pull && git switch -c harness/phase-domain
@@ -218,8 +218,8 @@ skeleton 스킬이 하는 일:
 5. **내 모듈 밖이 필요해지면**: 훅이 멈추고 물어봄 → 6장 표대로 판단
 6. **수시로**: Claude가 멈출 때마다 Stop 훅이 `verify.sh --quick` → 실패하면 Claude가 계속 고침
 7. **작게 자주 커밋, 하루 1번 이상 push, 작업 시작하면 draft PR** (상대가 내 진행 상황을 GitHub에서 볼 수 있게)
-8. **끝나면**: `PR 올려` → pr-write → draft PR → 준비되면 Ready for review
-9. **상대 PR 리뷰**: `PR 12 리뷰해줘` → review-pr 스킬 → 승인은 GitHub에서 사람이
+8. **끝나면**: `PR 올려` → pr-write → PR → CI(verify·zones)가 초록이면 내가 머지(squash) → 상대에게 한 줄 공유
+9. **상대 PR 리뷰 (선택)**: 내 작업과 겹치거나 궁금하면 `PR 12 리뷰해줘` → review-pr 스킬. 머지 조건은 아님
 10. feature 브랜치는 1~2일 안에 머지
 
 ### 4-2. 세션을 열면 Claude가 먼저 아는 것 (SessionStart 훅)
@@ -306,15 +306,15 @@ skeleton 스킬이 하는 일:
 
 | 단계 | 누가/어디서 | 무엇을 |
 |---|---|---|
-| 1. 셀프 리뷰 + PR 작성 | 작성자 세션 | reviewer 서브에이전트 → pr-write가 본문 6개 섹션 작성 → draft PR (상대를 리뷰어로 지정) |
+| 1. 셀프 리뷰 + PR 작성 | 작성자 세션 | reviewer 서브에이전트 → pr-write가 본문 6개 섹션 작성 → PR (draft·리뷰어 지정 없음) |
 | 2. 자동 검사 | CI | `verify` (합친 결과로 전체 검증, 마이그레이션 불변) / `zones` (구역 라벨, 본문 섹션 검사) / `claude-review` (위험한 PR만: 계약·공용·마이그레이션·남의 모듈) |
-| 3. 사람 리뷰 | 리뷰어 세션 + GitHub | review-pr로 "내 작업 기준" 리뷰 → GitHub에서 승인 |
+| 3. 사람 리뷰 (선택) | 리뷰어 세션 + GitHub | 원할 때 review-pr로 "내 작업 기준" 의견. 머지 조건 아님 |
 
 - PR 본문 필수 섹션: 목적 / 결정과 이유 / 시도했다 버린 것 / 일부러 안 한 것 / 검증 / 리뷰 포인트 (비면 CI 실패, 해당 없으면 "없음")
-- Claude 자동 리뷰는 의견만. 승인은 항상 사람
+- 머지 조건은 CI(verify·zones) 초록뿐. Claude 자동 리뷰는 의견만 남기고 머지를 막지 않음
 - 그 외 PR에서 Claude 의견이 필요하면 PR 댓글에 `@claude`
-- 비용: 자동 리뷰는 위험 라벨이 붙은 PR이 Ready가 될 때만 돎. 리뷰어 로컬의 review-pr는 각자 플랜 안에서 돎
-- 리뷰어 지정은 GitHub 기본 기능: pr-write가 PR을 만들 때 `--reviewer`로 상대를 지정. CODEOWNERS는 2인 팀에서 자기 모듈만 건드린 PR이면 작성자 본인만 오너로 잡혀 상대가 지정되지 않아 안 씀
+- 비용: 자동 리뷰는 위험 라벨이 붙은 PR이 열릴 때(또는 draft에서 Ready가 될 때)만 돎. review-pr는 각자 플랜 안에서 돎
+- 리뷰어는 자동으로 지정하지 않음. 상대 의견이 필요하면 PR 화면에서 직접 요청
 
 ---
 
@@ -334,7 +334,7 @@ skeleton 스킬이 하는 일:
 | `.claude/skills/spec-sync/` | 노션 API 명세·DB → `docs/specs` 스냅샷 | Phase A 시작, 명세 변경 시 |
 | `.claude/skills/skeleton/` | 명세 → 뼈대 | Phase A |
 | `.claude/skills/verify/` | 검증 실행과 실패 해석 | 실패 시 |
-| `.claude/skills/pr-write/` | 세션 맥락 → PR 본문 → draft PR | PR 올릴 때 |
+| `.claude/skills/pr-write/` | 세션 맥락 → PR 본문 → PR | PR 올릴 때 |
 | `.claude/skills/review-pr/` | 상대 PR을 내 맥락으로 리뷰 | 리뷰할 때 |
 | `.claude/skills/contract-change/` | 확장→이전→제거 절차 | 계약 변경 시 |
 | `scripts/verify.sh` | **유일한 검증 명령** | 사람·Stop 훅·CI |
@@ -357,7 +357,7 @@ skeleton 스킬이 하는 일:
 1. `git switch develop && git pull && git switch -c harness/<설명>`
 2. 수정 (이 브랜치에선 하네스 파일 수정이 확인 없이 허용됨)
 3. `scripts/verify.sh` → PR. 본문 '리뷰 포인트'에 "이 변경 후 두 사람의 에이전트 동작이 어떻게 달라지는지"
-4. 상대 승인 후 머지 → 각자 `git pull`하면 다음 세션부터 적용
+4. CI가 초록이면 머지하고 상대에게 공유 → 각자 `git pull`하면 다음 세션부터 적용
 
 자주 바꿀 것
 - 모듈 추가/담당 변경: `zones.conf [modules]`
