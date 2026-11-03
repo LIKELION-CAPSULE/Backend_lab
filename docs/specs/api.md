@@ -1158,7 +1158,7 @@ GET /api/me/memories?date=2026-11-12
 
 #### 한 줄 요약
 
-캐릭터와 대화합니다. **답장 · 감정 모션 · 호감도 변화**를 한 번에 받습니다. 응답 모양은 19번과 같고(`characters[]`), 채팅으로 바뀐 호감도(`affinity`)가 추가됩니다. `eventId`는 없습니다 (채팅은 `session_events`에 저장되지 않음). 크레딧이 빠져서 횟수 제한은 없고, 남용 방지용 속도 제한만 있습니다.
+캐릭터 1명을 골라 대화합니다. **답장 · 감정 모션 · 호감도 변화**를 한 번에 받습니다. 응답은 그 캐릭터 1명의 답장이고(필드는 19번 `characters[]` 한 칸과 같음), 채팅으로 바뀐 호감도(`affinity`)가 추가됩니다. `eventId`는 없습니다 (채팅은 `session_events`에 저장되지 않음). 크레딧이 빠져서 횟수 제한은 없고, 남용 방지용 속도 제한만 있습니다.
 
 #### 와이어프레임 대조
 
@@ -1166,9 +1166,9 @@ GET /api/me/memories?date=2026-11-12
 | --- | --- |
 | H08 · H20 '친구와 대화' 패널 '메시지 입력 ↑' | `content`, `inputType = TEXT` |
 | H08 · H20 빠른 답장 '파이팅' · '졸려' · '이거 어려워' | `inputType = QUICK` |
-| H08 · H20 '[친구 메시지]' · '입력 중…' | `characters[].content` (기다리는 동안 입력 중 표시) |
-| H07 캐릭터 칸 (답장할 때 동작 · 얼굴) | `characters[].motion`, `characters[].expression` |
-| H08 · H20 캐릭터 탭 채린 · 수아 · 다희 | 세션 캐릭터 1명만 실제, 나머지 목업 |
+| H08 · H20 '[친구 메시지]' · '입력 중…' | `content` (기다리는 동안 입력 중 표시) |
+| H07 캐릭터 칸 (답장할 때 동작 · 얼굴) | `motion`, `expression` |
+| H08 · H20 캐릭터 탭 채린 · 수아 · 다희 | 요청 `characterId`. 세션 캐릭터 1명만 실제, 나머지 목업 |
 | H08 · H20 '하드코딩 / llm' 토글, '옵션 올리기', '베이직 하루 3회' | **제거** |
 
 - 테이블: `conversations`, `chat_messages`, `relation_logs`(CHAT), `llm_usages` · 인증: 필요
@@ -1177,15 +1177,18 @@ GET /api/me/memories?date=2026-11-12
 
 #### 🛫 Request
 
+> 2026-11-04: 대화할 캐릭터 `characterId` 추가
+
 | 이름 | 타입 | 필수 | 설명 |
 | --- | --- | --- | --- |
 | requestId | String (UUID) | O | 재전송돼도 한 번만 처리 |
+| characterId | Long | O | 대화할 캐릭터 (그 세션 캐릭터만 가능) |
 | content | String | O | 1~300자 |
 | inputType | String | O | `TEXT` 직접 입력 / `QUICK` 빠른 답장 |
 | tts | Boolean | X | true면 답장 음성도 받음 (기본 false) |
 
 ```json
-{ "requestId": "9c3a...", "content": "이거 너무 어려워", "inputType": "QUICK", "tts": false }
+{ "requestId": "9c3a...", "characterId": 1, "content": "이거 너무 어려워", "inputType": "QUICK", "tts": false }
 ```
 
 #### 🛬 Response
@@ -1194,34 +1197,32 @@ GET /api/me/memories?date=2026-11-12
 
 > 2026-11-04: 19번과 같은 캐릭터별 배열 `characters[]`로 바꿈. 캐릭터마다 `emotion` 추가, `affinity`는 캐릭터 안으로
 
+> 2026-11-04 (2차): 요청에서 캐릭터 1명을 고르므로 `characters[]` 배열을 없애고 그 캐릭터의 필드를 맨 위로 올림 (`characterId` 포함)
+
 | 이름 | 타입 | 설명 |
 | --- | --- | --- |
 | requestId | String | 요청 id 그대로 (늦게 온 답 걸러내기) |
-| characters | Array | 답하는 캐릭터 (1:1 룸이면 1개) |
-| characters[].characterId · content · emotion · motion · expression · fallback · audioBase64 | | 19번과 같음 |
-| characters[].affinity | Object | 이 대화로 바뀐 호감도 (−5~+5): `delta`(0이면 변화 없음), `points`, `level`, `levelUp`. `fallback`이면 `delta` 0 |
+| characterId | Long | 요청의 `characterId` 그대로 |
+| content · emotion · motion · expression · fallback · audioBase64 | | 19번 `characters[]` 한 칸과 같음 |
+| affinity | Object | 이 대화로 바뀐 호감도 (−5~+5): `delta`(0이면 변화 없음), `points`, `level`, `levelUp`. `fallback`이면 `delta` 0 |
 
 ```json
 {
   "requestId": "9c3a...",
-  "characters": [
-    {
-      "characterId": 1,
-      "content": "어렵다고 포기할 거야? 한 문제만 더 풀어봐.",
-      "emotion": "ANGRY",
-      "motion": { "group": "TapBody", "file": "motions/arms_crossed.motion3.json" },
-      "expression": { "name": "pout", "file": "exp/pout.exp3.json" },
-      "affinity": { "delta": 1, "points": 81, "level": 1, "levelUp": false },
-      "fallback": false,
-      "audioBase64": null
-    }
-  ]
+  "characterId": 1,
+  "content": "어렵다고 포기할 거야? 한 문제만 더 풀어봐.",
+  "emotion": "ANGRY",
+  "motion": { "group": "TapBody", "file": "motions/arms_crossed.motion3.json" },
+  "expression": { "name": "pout", "file": "exp/pout.exp3.json" },
+  "affinity": { "delta": 1, "points": 81, "level": 1, "levelUp": false },
+  "fallback": false,
+  "audioBase64": null
 }
 ```
 
 > ✅ **200 OK**
 
-> ❌ **400** EMPTY_MESSAGE · INVALID_REQUEST (300자 초과) · **404** SESSION_NOT_FOUND · **409** SESSION_ENDED · **429** TOO_MANY_REQUESTS (1분에 10번)
+> ❌ **400** EMPTY_MESSAGE · INVALID_REQUEST (300자 초과) · CHARACTER_NOT_IN_SESSION · **404** SESSION_NOT_FOUND · **409** SESSION_ENDED · **429** TOO_MANY_REQUESTS (1분에 10번)
 
 #### 서버가 하는 일
 
