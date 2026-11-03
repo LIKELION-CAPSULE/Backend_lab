@@ -1,11 +1,11 @@
-package com.capsule.content.internal.adapter;
+package com.capsule.content.adapter;
 
 import com.capsule.content.api.ContentTypes.AvatarInfo;
 import com.capsule.content.api.ContentTypes.CharacterInfo;
 import com.capsule.content.api.ContentTypes.ModelInfo;
-import com.capsule.content.internal.domain.Avatar;
-import com.capsule.content.internal.domain.CharacterEntity;
-import com.capsule.content.internal.domain.Live2dModel;
+import com.capsule.content.domain.Avatar;
+import com.capsule.content.domain.CharacterEntity;
+import com.capsule.content.domain.Live2dModel;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 

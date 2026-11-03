@@ -1,12 +1,12 @@
-package com.capsule.content.internal.adapter;
+package com.capsule.content.adapter;
 
 import com.capsule.content.api.ContentTypes.ExpressionRef;
 import com.capsule.content.api.ContentTypes.MotionRef;
 import com.capsule.content.api.ContentTypes.Reaction;
 import com.capsule.content.api.ReactionQuery;
-import com.capsule.content.internal.domain.ReactionMap;
-import com.capsule.content.internal.repository.CharacterRepository;
-import com.capsule.content.internal.repository.ReactionMapRepository;
+import com.capsule.content.domain.ReactionMap;
+import com.capsule.content.repository.CharacterRepository;
+import com.capsule.content.repository.ReactionMapRepository;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 import org.springframework.stereotype.Service;

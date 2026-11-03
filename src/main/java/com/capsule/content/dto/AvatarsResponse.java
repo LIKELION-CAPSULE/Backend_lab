@@ -1,4 +1,4 @@
-package com.capsule.content.internal.dto;
+package com.capsule.content.dto;
 
 import java.util.List;
 

@@ -1,6 +1,6 @@
-package com.capsule.content.internal.repository;
+package com.capsule.content.repository;
 
-import com.capsule.content.internal.domain.Avatar;
+import com.capsule.content.domain.Avatar;
 import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 

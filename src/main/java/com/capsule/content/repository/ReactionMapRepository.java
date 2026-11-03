@@ -1,6 +1,6 @@
-package com.capsule.content.internal.repository;
+package com.capsule.content.repository;
 
-import com.capsule.content.internal.domain.ReactionMap;
+import com.capsule.content.domain.ReactionMap;
 import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 

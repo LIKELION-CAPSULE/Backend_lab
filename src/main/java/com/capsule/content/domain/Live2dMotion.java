@@ -1,4 +1,4 @@
-package com.capsule.content.internal.domain;
+package com.capsule.content.domain;
 
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -7,18 +7,18 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
 @Entity
-@Table(name = "live2d_expressions")
-public class Live2dExpression {
+@Table(name = "live2d_motions")
+public class Live2dMotion {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     Long id;
 
-    String name;
+    String groupName;
     String filePath;
 
-    public String name() {
-        return name;
+    public String groupName() {
+        return groupName;
     }
 
     public String filePath() {

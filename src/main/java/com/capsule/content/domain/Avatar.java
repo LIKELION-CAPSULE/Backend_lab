@@ -1,21 +1,26 @@
-package com.capsule.content.internal.domain;
+package com.capsule.content.domain;
 
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 
 @Entity
-@Table(name = "study_rooms")
-public class StudyRoom {
+@Table(name = "avatars")
+public class Avatar {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     Long id;
 
+    @ManyToOne
+    @JoinColumn(name = "model_id")
+    Live2dModel model;
+
     String name;
-    String description;
     String thumbnailUrl;
     int sortOrder;
     boolean isActive;
@@ -24,12 +29,12 @@ public class StudyRoom {
         return id;
     }
 
-    public String name() {
-        return name;
+    public Live2dModel model() {
+        return model;
     }
 
-    public String description() {
-        return description;
+    public String name() {
+        return name;
     }
 
     public String thumbnailUrl() {

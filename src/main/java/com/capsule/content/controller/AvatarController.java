@@ -1,8 +1,8 @@
-package com.capsule.content.internal.controller;
+package com.capsule.content.controller;
 
 import com.capsule.content.api.AvatarQuery;
-import com.capsule.content.internal.dto.AvatarItem;
-import com.capsule.content.internal.dto.AvatarsResponse;
+import com.capsule.content.dto.AvatarItem;
+import com.capsule.content.dto.AvatarsResponse;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 

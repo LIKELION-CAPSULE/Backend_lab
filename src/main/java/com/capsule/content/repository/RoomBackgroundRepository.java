@@ -1,6 +1,6 @@
-package com.capsule.content.internal.repository;
+package com.capsule.content.repository;
 
-import com.capsule.content.internal.domain.RoomBackground;
+import com.capsule.content.domain.RoomBackground;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 

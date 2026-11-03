@@ -1,8 +1,8 @@
-package com.capsule.content.internal.adapter;
+package com.capsule.content.adapter;
 
 import com.capsule.content.api.CharacterQuery;
 import com.capsule.content.api.ContentTypes.CharacterInfo;
-import com.capsule.content.internal.repository.CharacterRepository;
+import com.capsule.content.repository.CharacterRepository;
 import java.util.Optional;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

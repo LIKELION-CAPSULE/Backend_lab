@@ -1,4 +1,4 @@
-package com.capsule.content.internal.domain;
+package com.capsule.content.domain;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

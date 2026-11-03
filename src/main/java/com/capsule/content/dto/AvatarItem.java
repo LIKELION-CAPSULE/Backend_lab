@@ -1,4 +1,4 @@
-package com.capsule.content.internal.dto;
+package com.capsule.content.dto;
 
 import com.capsule.content.api.ContentTypes.ModelInfo;
 

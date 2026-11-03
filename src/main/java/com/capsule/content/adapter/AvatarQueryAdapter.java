@@ -1,8 +1,8 @@
-package com.capsule.content.internal.adapter;
+package com.capsule.content.adapter;
 
 import com.capsule.content.api.AvatarQuery;
 import com.capsule.content.api.ContentTypes.AvatarInfo;
-import com.capsule.content.internal.repository.AvatarRepository;
+import com.capsule.content.repository.AvatarRepository;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Service;

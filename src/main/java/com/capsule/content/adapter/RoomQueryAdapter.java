@@ -1,13 +1,13 @@
-package com.capsule.content.internal.adapter;
+package com.capsule.content.adapter;
 
 import com.capsule.content.api.ContentTypes.BackgroundInfo;
 import com.capsule.content.api.ContentTypes.RoomInfo;
 import com.capsule.content.api.RoomQuery;
-import com.capsule.content.internal.domain.RoomBackground;
-import com.capsule.content.internal.domain.StudyRoom;
-import com.capsule.content.internal.repository.CharacterRepository;
-import com.capsule.content.internal.repository.RoomBackgroundRepository;
-import com.capsule.content.internal.repository.StudyRoomRepository;
+import com.capsule.content.domain.RoomBackground;
+import com.capsule.content.domain.StudyRoom;
+import com.capsule.content.repository.CharacterRepository;
+import com.capsule.content.repository.RoomBackgroundRepository;
+import com.capsule.content.repository.StudyRoomRepository;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Service;

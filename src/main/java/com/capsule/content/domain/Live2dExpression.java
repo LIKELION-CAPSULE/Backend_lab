@@ -1,4 +1,4 @@
-package com.capsule.content.internal.domain;
+package com.capsule.content.domain;
 
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -7,31 +7,21 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
 @Entity
-@Table(name = "room_backgrounds")
-public class RoomBackground {
+@Table(name = "live2d_expressions")
+public class Live2dExpression {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     Long id;
 
-    long roomId;
     String name;
-    String imageUrl;
-    boolean isDefault;
-
-    public Long id() {
-        return id;
-    }
-
-    public long roomId() {
-        return roomId;
-    }
+    String filePath;
 
     public String name() {
         return name;
     }
 
-    public String imageUrl() {
-        return imageUrl;
+    public String filePath() {
+        return filePath;
     }
 }
