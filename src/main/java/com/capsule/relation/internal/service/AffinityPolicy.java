@@ -1,4 +1,4 @@
-package com.capsule.relation.internal;
+package com.capsule.relation.internal.service;
 
 /** 호감도 공식 (판단 백로그 J-01~J-03). 기획이 정해지면 이 클래스만 바꾼다. */
 final class AffinityPolicy {

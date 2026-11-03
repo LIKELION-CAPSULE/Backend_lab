@@ -1,12 +1,13 @@
-package com.capsule.relation.internal;
+package com.capsule.relation.internal.repository;
 
+import com.capsule.relation.internal.domain.RelationLog;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
-interface RelationLogRepository extends JpaRepository<RelationLog, Long> {
+public interface RelationLogRepository extends JpaRepository<RelationLog, Long> {
 
     boolean existsByRelationIdAndReason(long relationId, String reason);
 

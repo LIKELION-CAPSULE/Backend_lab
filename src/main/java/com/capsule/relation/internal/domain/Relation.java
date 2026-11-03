@@ -1,4 +1,4 @@
-package com.capsule.relation.internal;
+package com.capsule.relation.internal.domain;
 
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -12,7 +12,7 @@ import org.hibernate.annotations.DynamicUpdate;
 @Entity
 @Table(name = "user_character_relations")
 @DynamicUpdate // level만 올릴 때 relation_points를 읽은 값으로 덮어쓰지 않게
-class Relation {
+public class Relation {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -28,24 +28,24 @@ class Relation {
 
     protected Relation() {}
 
-    long id() {
+    public long id() {
         return id;
     }
 
-    int points() {
+    public int points() {
         return relationPoints;
     }
 
-    int level() {
+    public int level() {
         return level;
     }
 
-    int totalStudySeconds() {
+    public int totalStudySeconds() {
         return totalStudySeconds;
     }
 
     /** 이미 오른 단계는 내리지 않는다 (DB 주석) */
-    void raiseLevel(int computed) {
+    public void raiseLevel(int computed) {
         level = Math.max(level, computed);
     }
 }

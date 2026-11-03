@@ -1,4 +1,4 @@
-package com.capsule.relation.internal;
+package com.capsule.relation.internal.domain;
 
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -10,7 +10,7 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "relation_logs")
-class RelationLog {
+public class RelationLog {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -26,7 +26,7 @@ class RelationLog {
 
     protected RelationLog() {}
 
-    RelationLog(
+    public RelationLog(
             long relationId,
             String reason,
             int delta,
@@ -43,11 +43,11 @@ class RelationLog {
         this.createdAt = createdAt;
     }
 
-    long id() {
+    public long id() {
         return id;
     }
 
-    int delta() {
+    public int delta() {
         return delta;
     }
 }

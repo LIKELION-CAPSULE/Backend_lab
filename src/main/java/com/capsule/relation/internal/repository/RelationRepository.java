@@ -1,5 +1,6 @@
-package com.capsule.relation.internal;
+package com.capsule.relation.internal.repository;
 
+import com.capsule.relation.internal.domain.Relation;
 import jakarta.persistence.LockModeType;
 import java.time.Instant;
 import java.util.Optional;
@@ -8,7 +9,7 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 
-interface RelationRepository extends JpaRepository<Relation, Long> {
+public interface RelationRepository extends JpaRepository<Relation, Long> {
 
     Optional<Relation> findByUserIdAndCharacterId(long userId, long characterId);
 

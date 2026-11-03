@@ -1,8 +1,8 @@
-package com.capsule.relation.internal;
+package com.capsule.relation.internal.service;
 
-import static com.capsule.relation.internal.AffinityPolicy.levelName;
-import static com.capsule.relation.internal.AffinityPolicy.levelOf;
-import static com.capsule.relation.internal.AffinityPolicy.nextLevelPoints;
+import static com.capsule.relation.internal.service.AffinityPolicy.levelName;
+import static com.capsule.relation.internal.service.AffinityPolicy.levelOf;
+import static com.capsule.relation.internal.service.AffinityPolicy.nextLevelPoints;
 
 import com.capsule.relation.api.RelationCommands;
 import com.capsule.relation.api.RelationQuery;
@@ -10,6 +10,10 @@ import com.capsule.relation.api.RelationTypes.AffinityChange;
 import com.capsule.relation.api.RelationTypes.RelationView;
 import com.capsule.relation.api.RelationTypes.SessionEventRef;
 import com.capsule.relation.api.RelationTypes.StudySettlement;
+import com.capsule.relation.internal.domain.Relation;
+import com.capsule.relation.internal.domain.RelationLog;
+import com.capsule.relation.internal.repository.RelationLogRepository;
+import com.capsule.relation.internal.repository.RelationRepository;
 import jakarta.persistence.EntityManager;
 import java.time.Clock;
 import java.time.Instant;
