@@ -12,7 +12,7 @@ warn() { printf '  ⚠ %s\n' "$*"; }
 echo "▶ 필수 도구 확인"
 # command -v만 보면 Windows의 Microsoft Store 바로가기(실행하면 exit 49)도 통과하므로 실제로 실행해본다
 python3 -c 'import sys' 2>/dev/null && ok "python3 $(python3 -c 'import sys;print(sys.version.split()[0])')" \
-  || warn "python3가 실행되지 않음 (훅이 전부 꺼짐). Windows: Python 폴더의 python.exe를 python3.exe로 복사하거나, 설정 > 앱 > 앱 실행 별칭에서 python3 끄기"
+  || warn "python3가 실행되지 않음 (훅이 전부 꺼짐). Windows: Python 폴더의 python.exe를 python3.exe로 복사 (관리자 권한이 없으면 docs/HARNESS.md 11장의 ~/bin/python3 방법)"
 gv="$(git --version | awk '{print $3}')"
 ok "git $gv"
 command -v docker >/dev/null && ok "docker" || warn "docker 없음 (Testcontainers, 로컬 DB에 필요)"

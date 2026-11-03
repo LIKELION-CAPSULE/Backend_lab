@@ -40,7 +40,7 @@
 | 규칙은 구조(훅·CI)에 | 프롬프트로만 지시한 규칙은 모델이 그때그때 판단해서 안 지킬 수 있음 | CLAUDE.md에만 적기 |
 | 구역표 단일 원천 (`zones.conf`) | 로컬 훅과 CI 판정이 어긋나지 않음 | 훅과 CI에 규칙을 따로 작성 |
 | 계약 변경은 확장 → 이전 → 제거 | 어느 단계도 상대 브랜치를 깨뜨리지 않음 | 시그니처 제자리 변경 |
-| 타임스탬프 마이그레이션 | 둘이 동시에 만들어도 번호가 안 겹침. 파일명으로 소유 모듈 판정 | V1, V2 순번 |
+| 타임스탬프 마이그레이션 + 모든 환경 out-of-order | 둘이 동시에 만들어도 번호가 안 겹침. 파일명으로 소유 모듈 판정. 만든 순서와 머지 순서가 달라도 배포 DB에 적용되게 out-of-order를 공용 설정에서 켬 | V1, V2 순번 / out-of-order는 로컬만 켜고 rebase 때 파일명 다시 짓기 |
 | PR 3단 리뷰 | 작업 맥락은 작성자 세션에만 있어서 PR 본문으로 옮겨야 하고, 상대 맥락은 리뷰어 세션에만 있음 | CI 리뷰만 / 사람 리뷰만 |
 | Claude 자동 리뷰는 위험한 PR만 | 비용 | 모든 PR 자동 리뷰 |
 | 충돌 예측 자동화는 안 함 | 구역 분리·짧은 브랜치·공용 PR 우선으로 대부분 예방되고, 남는 충돌은 rebase와 PR 화면에서 git이 알려줌. 자동 예측은 push마다 fetch 비용과 경고 소음만 늘림 | push·세션 시작 때 merge-tree로 상대 브랜치와 미리 합쳐보기 |
@@ -117,6 +117,8 @@
 ## 2. 처음 한 번 하는 세팅
 
 ### 2-1. 승희: 저장소 만들기
+저장소: https://github.com/LIKELION-CAPSULE/Backend_lab (2026-11-03, 아래 1~3 완료)
+
 1. 이 하네스 파일들을 새 저장소 루트에 복사
 2. `.harness/zones.conf`의 `[team]`에 둘의 GitHub 아이디·git 이메일 채우기 (`git config user.email`과 같아야 함), `[modules]` 담당 확인
 3. 첫 커밋과 브랜치 생성 (브랜치 보호를 켜기 전에)
@@ -124,7 +126,7 @@
    git init && git add -A
    git add --chmod=+x scripts/*.sh .claude/hooks/* .harness/zones.py   # Windows는 실행 비트를 기록하지 않음 → 안 하면 CI·Mac에서 Permission denied
    git commit -m "chore: 하네스 초기 설정"
-   git branch -M main && git remote add origin <저장소 URL>
+   git branch -M main && git remote add origin https://github.com/LIKELION-CAPSULE/Backend_lab.git
    git push -u origin main
    git switch -c develop && git push -u origin develop
    ```
@@ -132,7 +134,7 @@
 
 ### 2-2. 성욱: 클론 후
 ```bash
-git clone <저장소 URL> && cd <저장소>
+git clone https://github.com/LIKELION-CAPSULE/Backend_lab.git && cd Backend_lab
 scripts/setup.sh --me seonguk
 ```
 setup.sh가 하는 일: 도구 확인(python3, git, docker, java 21, gh) → 내가 누구인지 `.claude/settings.local.json`에 저장(커밋 안 됨) → `.env.local` 생성 → Notion MCP 연결 여부 확인
@@ -340,6 +342,7 @@ skeleton 스킬이 하는 일:
 | `.github/workflows/pr-zones.yml` | 구역 라벨, `needs-adr`, PR 본문 검사 | PR |
 | `.github/workflows/claude-review.yml` | 위험한 PR 자동 리뷰 | PR Ready |
 | `.github/workflows/claude.yml` | `@claude` 댓글 응답 | 댓글 |
+| `.gitattributes` | 텍스트 파일 LF 고정 (Windows에서 받아도 `.sh`·`gradlew`가 CRLF로 깨지지 않게) | checkout 시 |
 | `CLAUDE.md` | 에이전트 상시 컨텍스트 (짧게, 상세는 링크) | 매 요청 |
 | `docs/decisions/` | 스택·설계 결정 이유 (ADR) | 에이전트가 엉뚱한 대안 제안 방지 |
 | `docs/specs/` | 노션 명세 스냅샷(api.md, schema.sql, SOURCE.md), 뼈대 계획, 판단 백로그 | Phase A·B |
@@ -379,7 +382,7 @@ skeleton 스킬이 하는 일:
 
 | 증상 | 원인 | 해결 |
 |---|---|---|
-| 세션 시작 때 하네스 상태가 안 뜨고, 훅이 아무것도 안 막음 (Windows) | `python3`가 Microsoft Store 바로가기라 실행하면 exit 49. 훅은 exit 2만 차단이라 경고만 남기고 통과 | Python 폴더의 `python.exe`를 `python3.exe`로 복사(PATH에서 WindowsApps보다 앞일 때) 또는 설정 > 앱 > 앱 실행 별칭에서 python3 끄기. `setup.sh`가 경고함 |
+| 세션 시작 때 하네스 상태가 안 뜨고, 훅이 아무것도 안 막음 (Windows) | `python3`가 Microsoft Store 바로가기라 실행하면 exit 49. 훅은 exit 2만 차단이라 경고만 남기고 통과 | 관리자 권한이 있으면 Python 폴더의 `python.exe`를 `python3.exe`로 복사. 없으면 `~/bin/python3` 파일에 `#!/usr/bin/env bash`와 `exec /c/Python313/python "$@"` 두 줄 (Git Bash PATH 맨 앞이 `~/bin`, Claude Code 훅도 Git Bash로 돎). `setup.sh`가 경고함 |
 | 훅이 계속 "누구인지 모름" | HARNESS_ME 미설정, git 이메일이 zones.conf와 다름 | `scripts/setup.sh --me <키>` |
 | 모든 파일에 확인 질문이 뜸 | develop에 있음 / domain 단계에서 공용 파일 작업 중 | feature 브랜치 생성 / 공용 변경은 원래 확인 대상 |
 | Claude가 끝내지 않고 계속 고침 | Stop 훅이 verify 실패를 돌려보낸 것 (정상) | 연속 3번까지만 막고, 그래도 실패하면 멈추고 사람에게 넘김. 그때 오류를 보고 방향 지시 |
@@ -398,5 +401,6 @@ skeleton 스킬이 하는 일:
 - 훅은 Claude의 Edit/Write 도구만 봄. 셸로 파일을 쓰면(`sed -i`, `cat >`) 구역 판정을 거치지 않음 → CLAUDE.md에서 금지, CI(라벨·리뷰)가 뒤에서 잡음
 - 확인 질문(ask)의 사유는 사람 화면에만 보임. Claude는 승인/거절 결과만 앎
 - develop/main 보호는 GitHub 브랜치 보호에만 맡김. 저장소 플랜에 따라 못 쓸 수 있음 (2-3장)
-- 실제 Gradle 빌드, GitHub Actions, Claude Code 안 훅 호출, spec-sync의 노션 읽기는 첫 저장소에서 확인 필요 (샌드박스에선 가짜 gradlew와 로컬 git 원격으로만 검증함)
+- 확인한 것 (2026-11-03, Windows 11 + Git Bash): Claude Code 안 훅 호출(SessionStart 상태 출력, zone_guard가 develop 수정을 실제로 차단), 한글·Windows 경로 판정, GitHub Actions `verify` 첫 실행(setup-java cache 실패를 찾아 고침)
+- 아직 확인 못 한 것: 실제 Gradle 빌드, spec-sync의 노션 읽기 → 뼈대 단계에서 확인
 - 대화 품질(LLM) 평가는 아직 없음 → Phase C
