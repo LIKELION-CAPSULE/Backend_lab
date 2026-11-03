@@ -41,4 +41,12 @@ jobs:
         if: github.event.pull_request.draft == false
         env:
           BODY: ${{ github.event.pull_request.body }}
-        run: printf '%s' "$BODY" | python3 .harness/zones.py check-pr-body
+        run: |
+          # api.md를 바꿨으면 본문에 '### 코드 반영'(기능 PR·이슈·브랜치 또는 '없음')도 있어야 함 (ADR 0015)
+          flag=""
+          if git diff --name-only "origin/$BASE...HEAD" | grep -qx 'docs/specs/api.md'; then
+            flag="--spec-changed"
+            echo "api.md 변경 → 영향받는 API:"
+            python3 .harness/zones.py spec-impact --base "origin/$BASE"
+          fi
+          printf '%s' "$BODY" | python3 .harness/zones.py check-pr-body $flag

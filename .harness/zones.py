@@ -10,7 +10,8 @@ Claude Code 훅과 CI(PR 검사·리뷰 게이트)가 전부 이 파일 하나�
   python3 .harness/zones.py explain <경로>          # 이 파일의 구역/담당/판정
   python3 .harness/zones.py check [--strict]       # zones.conf 검사 (--strict: TODO 남으면 실패)
   python3 .harness/zones.py new-migration <모듈> <설명>
-CI/훅용 명령: classify, other-reviewer, check-pr-body, check-pr-title, frozen-migrations, changed-modules, adr-hint
+  python3 .harness/zones.py spec-impact            # api.md에서 바뀐 API → 컨트롤러·모듈·담당
+CI/훅용 명령: classify, other-reviewer, check-pr-body [--spec-changed], check-pr-title, frozen-migrations, changed-modules, adr-hint
 """
 from __future__ import annotations
 
@@ -146,7 +147,9 @@ def validate(cfg: Config, strict: bool = False) -> list[str]:
 # ---------------------------------------------------------------- 환경 정보
 def git(*args: str, cwd: str = REPO_ROOT) -> tuple[int, str]:
     try:
-        p = subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, timeout=20)
+        # Windows 기본(cp949) 대신 UTF-8로 읽음: 한글이 든 diff(api.md 등)에서 깨지지 않게
+        p = subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True,
+                           encoding="utf-8", errors="replace", timeout=20)
         return p.returncode, p.stdout.strip()
     except Exception:
         return 1, ""
@@ -327,6 +330,97 @@ def check_pr_title(title: str) -> list[str]:
             f"(type: {' · '.join(PR_TITLE_TYPES)}, 범위는 모듈·specs·harness 등 소문자. 예: feat(session): 공부 시작 API)"]
 
 
+# ---------------------------------------------------------------- 명세 → 코드 (ADR 0015)
+SPEC_API_PATH = "docs/specs/api.md"
+SPEC_SECTION_RE = re.compile(r"^## (\d+)\. (GET|POST|PUT|PATCH|DELETE) (\S+)")
+MAPPING_RE = re.compile(r'@(Get|Post|Put|Patch|Delete|Request)Mapping(?:\(\s*(?:(?:value|path)\s*=\s*)?"([^"]*)")?')
+CODE_SYNC_RE = re.compile(r"^###[^\S\n]*코드 반영[^\n]*$(.*?)(?=^##|\Z)", re.M | re.S)
+
+
+def _norm_path(path: str) -> str:
+    return re.sub(r"\{[^}]*\}", "{}", path.rstrip("/") or "/")
+
+
+def changed_spec_sections(base: str) -> list[str]:
+    """api.md에서 base 이후 바뀐 줄이 속한 섹션 머리('## 20. POST ...' 또는 '## 공통 규칙 ...')."""
+    _, diff = git("diff", "-U0", f"{base}...HEAD", "--", SPEC_API_PATH)
+    lines = []
+    for m in re.finditer(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@", diff, flags=re.M):
+        start, count = int(m.group(1)), int(m.group(2) or 1)
+        lines.extend(range(start, start + max(count, 1)))  # 지운 줄만 있으면 그 위치
+    path = os.path.join(REPO_ROOT, SPEC_API_PATH)
+    if not lines or not os.path.exists(path):
+        return []
+    with open(path, encoding="utf-8") as f:
+        text = f.read().splitlines()
+    headers, current = [], None
+    for i, line in enumerate(text, start=1):
+        if line.startswith("## "):
+            current = line[3:].strip()
+        if i in lines and current and current not in headers:
+            headers.append(current)
+    return headers
+
+
+def controller_endpoints() -> dict[tuple[str, str], str]:
+    """(메서드, 정규화한 주소) → '파일:줄'. 클래스 @RequestMapping과 메서드 @XxxMapping을 합친다."""
+    result: dict[tuple[str, str], str] = {}
+    src = os.path.join(REPO_ROOT, "src", "main", "java")
+    for root, _, files in os.walk(src):
+        for name in files:
+            if not name.endswith("Controller.java"):
+                continue
+            full = os.path.join(root, name)
+            rel = os.path.relpath(full, REPO_ROOT).replace(os.sep, "/")
+            with open(full, encoding="utf-8") as f:
+                lines = f.read().splitlines()
+            prefix, seen_class = "", False
+            for no, line in enumerate(lines, start=1):
+                if re.search(r"\bclass\b", line):
+                    seen_class = True
+                m = MAPPING_RE.search(line)
+                if not m:
+                    continue
+                kind, value = m.group(1), m.group(2) or ""
+                if kind == "Request":
+                    if not seen_class:
+                        prefix = value
+                    continue
+                result[(kind.upper(), _norm_path(prefix + value))] = f"{rel}:{no}"
+    return result
+
+
+def spec_impact(cfg: Config, base: str) -> list[str]:
+    endpoints = controller_endpoints()
+    out = []
+    for header in changed_spec_sections(base):
+        m = SPEC_SECTION_RE.match("## " + header)
+        if not m:
+            out.append(f"{header} → 공통 규칙·기타 섹션. 영향 범위는 사람이 확인")
+            continue
+        where = endpoints.get((m.group(2), _norm_path(m.group(3))))
+        if not where:
+            out.append(f"{header} → 구현 없음 (새 API면 담당 모듈에서 새로 만듦)")
+            continue
+        zone, module = classify(where.split(":")[0], cfg)
+        owner = cfg.modules.get(module or "") or "담당 없음"
+        out.append(f"{header} → {where} (모듈 {module}, 담당 {owner})")
+    return out
+
+
+def check_code_sync(body: str) -> list[str]:
+    """api.md를 바꾼 PR이면 본문에 '### 코드 반영'이 있어야 한다: 기능 PR·이슈 번호, 브랜치, 또는 '없음'."""
+    body = re.sub(r"<!--.*?-->", "", body or "", flags=re.S)
+    m = CODE_SYNC_RE.search(body)
+    if not m:
+        return ["api.md를 바꿨는데 '### 코드 반영'이 없음. `python3 .harness/zones.py spec-impact`로 영향받는 API를 보고, "
+                "코드를 고칠 기능 PR·이슈 번호(#12), 브랜치(feature/...), 또는 '없음'과 이유를 적을 것"]
+    content = m.group(1)
+    if not re.search(r"#\d+|feature/|없음", content):
+        return ["'### 코드 반영'에 기능 PR·이슈 번호(#12), 브랜치(feature/...), '없음' 중 하나가 없음"]
+    return []
+
+
 def working_changed_paths() -> list[str]:
     paths: set[str] = set()
     for args in (("diff", "--name-only", "HEAD"), ("ls-files", "--others", "--exclude-standard")):
@@ -373,8 +467,9 @@ def main() -> int:
     p = sub.add_parser("explain"); p.add_argument("paths", nargs="+")
     p = sub.add_parser("classify"); p.add_argument("--author", default=""); p.add_argument("paths", nargs="*")
     p = sub.add_parser("other-reviewer"); p.add_argument("--author", required=True)
-    sub.add_parser("check-pr-body")
+    p = sub.add_parser("check-pr-body"); p.add_argument("--spec-changed", action="store_true")
     sub.add_parser("check-pr-title")
+    p = sub.add_parser("spec-impact"); p.add_argument("--base", default="origin/develop")
     p = sub.add_parser("frozen-migrations"); p.add_argument("--base", default="origin/develop")
     sub.add_parser("changed-modules")
     sub.add_parser("adr-hint")
@@ -427,13 +522,24 @@ def main() -> int:
         return 0
 
     if args.cmd == "check-pr-body":
-        problems = check_pr_body(sys.stdin.read())
+        body = sys.stdin.read()
+        problems = check_pr_body(body)
+        if args.spec_changed:
+            problems += check_code_sync(body)
         for prob in problems:
             print(f"✖ PR 본문: {prob}", file=sys.stderr)
         if problems:
             print("  → 작성자 세션에서 pr-write 스킬로 본문을 채우면 됨", file=sys.stderr)
             return 1
         print("✔ PR 본문 필수 섹션 확인")
+        return 0
+
+    if args.cmd == "spec-impact":
+        impact = spec_impact(cfg, args.base)
+        if not impact:
+            print(f"api.md 변경 없음 ({args.base}...HEAD)")
+        for line in impact:
+            print(line)
         return 0
 
     if args.cmd == "check-pr-title":
