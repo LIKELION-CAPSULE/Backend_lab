@@ -64,8 +64,8 @@
 |---|---|---|---|
 | A1 | `users.nickname`은 NOT NULL인데, 가입 때는 닉네임을 받지 않음(이메일·카카오 둘 다) | API 4·6, DB 1 | **결정(11/03): 닉네임은 가입할 때 받음.** DB `NOT NULL` 유지, 노션 API 4번에 `nickname` 추가함. 카카오 신규 가입자는 카카오 프로필 닉네임으로 저장(동의 항목 '닉네임' 필수, 노션 API 6번 반영). 프로필 설정(10)은 그대로(닉네임 필수, H02에서 가입 때 값을 채워 보여줌). `onboardingRequired`는 사실상 "아바타를 아직 안 고름" |
 | A2 | 완료 대사 `closingLine`을 새로고침해도 같게 보여줄 저장 자리가 없음 | API 22·23 | **결정(11/03): `study_sessions.closing_line text` 추가.** 노션 DB·API 23번 반영함. 생성은 dialogue, 저장은 session(종료 때) |
-| A3 | 메시지 전송(20) 응답: 설명은 "답장 + 모션·표정 + 바뀐 호감도"인데 응답 표는 `requestId`·`content`·`eventId`뿐. `eventId`가 무엇인지 불명확 | API 20 | **응답을 이벤트 반응(19)과 같은 모양으로**: `requestId`, `content`, `motion`, `expression`, `affinity`, `fallback`(+`audioBase64`). `eventId`는 뺌 |
-| A4 | 이벤트 반응(19): 표는 `content`, JSON은 `line`. `requestId`는 JSON에만 있음. `intensity`를 보내는 방법이 없음 | API 19 | **요청 본문 `{ "requestId": "...", "intensity": 1 }`**(`intensity`는 AWAY에서만, 기본 1), 응답 필드 이름은 `content` |
+| A3 | 메시지 전송(20) 응답: 설명은 "답장 + 모션·표정 + 바뀐 호감도"인데 응답 표는 `requestId`·`content`·`eventId`뿐. `eventId`가 무엇인지 불명확 | API 20 | **결정(11/03): 이벤트 반응(19)과 같은 모양.** `requestId`, `content`, `motion`, `expression`, `affinity`, `fallback`, `audioBase64`(tts일 때). `eventId`는 뺌. 노션 API 20번 반영함 |
+| A4 | 이벤트 반응(19): 표는 `content`, JSON은 `line`. `requestId`는 JSON에만 있음. `intensity`를 보내는 방법이 없음 | API 19 | **결정(11/03): 요청 본문 `{ requestId, intensity, tts }`**(`intensity`는 AWAY에서만, 기본 1. `tts` 기본 false), 대사 필드는 `content`, 응답에 `requestId` 그대로. 노션 API 19번 반영함 |
 | A5 | 약관 `contentUrl`: DB에는 본문(`term_versions.content`)만 있고 URL이 없음 | API 1 | **결정(11/03): 응답에 `content`(본문)를 그대로 넣음.** 노션 API 1번 반영함 |
 | A6 | 시드 데이터: 룸 1개, 캐릭터 채린, 기본 아바타, Live2D 모델·모션·표정·반응 매핑, 약관 2종(본문 포함)의 실제 값이 명세에 예시로만 있음 | 전체 | **명세 예시값으로 `content` 시드 마이그레이션을 만듦**. 약관 본문은 "(약관 본문 준비 중)"으로 두고, 실제 값은 나중에 새 마이그레이션으로 교체 |
 

@@ -1006,7 +1006,7 @@ GET /api/me/memories?date=2026-11-12
 
 | 화면 요소 | 응답 필드 |
 | --- | --- |
-| H07 캐릭터 칸 말풍선 '잠깐 자리 비운 거야?' · '채린 · 말 거는 중' | `line` |
+| H07 캐릭터 칸 말풍선 '잠깐 자리 비운 거야?' · '채린 · 말 거는 중' | `content` |
 | H07 캐릭터 칸 Live2D 동작 · 얼굴 | `motion`, `expression` |
 | H09 관계 막대가 공부 중에도 바뀌는 근거 | `affinity` |
 
@@ -1014,28 +1014,43 @@ GET /api/me/memories?date=2026-11-12
 
 #### [POST] /api/sessions/{sessionId}/events/{eventId}/reaction
 
+#### 🛫 Request
+
+> 2026-11-03: 요청 본문(requestId · intensity · tts) 추가, 대사 필드 이름은 `content`로 통일 (메시지 전송과 같음)
+
+| 이름 | 타입 | 필수 | 설명 |
+| --- | --- | --- | --- |
+| requestId | String (UUID) | O | 프론트가 만든 요청 id. 응답에 그대로 돌아옴 (늦게 온 응답 걸러내기) |
+| intensity | Integer | X | `AWAY`일 때만: 1 눈치 · 2 말 걸기(1분) · 3 서운함(5분). 없으면 1, 다른 이벤트는 무시 |
+| tts | Boolean | X | true면 대사 음성도 받음 (기본 false) |
+
+```json
+{ "requestId": "5b1f...", "intensity": 1, "tts": false }
+```
+
 #### 🛬 Response
 
 | 이름 | 타입 | 설명 |
 | --- | --- | --- |
+| requestId | String | 요청의 `requestId` 그대로 |
 | trigger | String | 서버가 판단한 상황: `GREETING`(세션 첫 FOCUS) · `AWAY` · `RETURN` · `BREAK` · `BREAK_END`(휴식 뒤 FOCUS) |
 | content | String | 말풍선 대사 (2줄 이내). 대사 없는 반응이면 null |
 | motion | Object | `group`, `file` — 바로 재생 (없으면 null) |
 | expression | Object | `name`, `file` — 모션 위에 겹쳐 적용 (없으면 null) |
 | affinity | Object | 이 이벤트로 바뀐 호감도: `delta`(0이면 변화 없음), `points`, `level`, `levelUp` |
 | fallback | Boolean | LLM이 5초 안에 대사를 못 만들어 고정 대사를 썼는지 |
-| audioBase64 | String | 답장 음성 (mp3). |
+| audioBase64 | String | 대사 음성 (mp3). 요청에 `tts: true`일 때만, 아니면 null |
 
 ```json
 {
   "requestId": "5b1f...",
   "trigger": "AWAY",
-  "line": "잠깐 자리 비운 거야?",
+  "content": "잠깐 자리 비운 거야?",
   "motion": { "group": "Idle", "file": "motions/look_around.motion3.json" },
   "expression": { "name": "pout", "file": "exp/pout.exp3.json" },
   "affinity": { "delta": -1, "points": 79, "level": 1, "levelUp": false },
-  "fallback": false
-  "audioBase64" : "adflasf"
+  "fallback": false,
+  "audioBase64": null
 }
 ```
 
@@ -1047,13 +1062,13 @@ GET /api/me/memories?date=2026-11-12
 
 1. 이벤트 타입과 세션 상황으로 `trigger`를 정함
 2. `live2d_reaction_maps`에서 (trigger, intensity)에 맞는 행 중 **하나를 같은 확률로** 골라 모션 · 표정 결정
-3. LLM으로 대사 생성 (5초 넘으면 trigger별 고정 대사)
+3. LLM으로 대사 생성 (5초 넘으면 trigger별 고정 대사). `tts: true`면 음성도 생성
 4. 이 이벤트의 호감도 변화(상태 변화 전송 때 이미 기록)를 같이 돌려줌. 같은 `eventId`로 intensity를 올려 다시 불러도 **호감도는 다시 바뀌지 않음**
 
 #### 프론트 참고
 
-- 응답이 오면 `motion` 재생 → `expression` 적용 → `line`을 말풍선 · 채팅 로그에 표시하며 입 모션
-- 응답의 `requestId`가 지금 기다리는 요청이 아니면 버림 (복귀했는데 늦게 도착한 '자리 비웠어?' 방지)
+- 응답이 오면 `motion` 재생 → `expression` 적용 → `content`를 말풍선 · 채팅 로그에 표시하며 입 모션
+- 응답의 `requestId`가 지금 기다리는 요청(마지막으로 보낸 `requestId`)이 아니면 버림 (복귀했는데 늦게 도착한 '자리 비웠어?' 방지)
 
 ## 20. POST /api/sessions/{sessionId}/messages — 메시지 전송
 - 분류: 대화
@@ -1073,8 +1088,8 @@ GET /api/me/memories?date=2026-11-12
 | --- | --- |
 | H08 · H20 '친구와 대화' 패널 '메시지 입력 ↑' | `content`, `inputType = TEXT` |
 | H08 · H20 빠른 답장 '파이팅' · '졸려' · '이거 어려워' | `inputType = QUICK` |
-| H08 · H20 '[친구 메시지]' · '입력 중…' | `reply.content` (기다리는 동안 입력 중 표시) |
-| H07 캐릭터 칸 (답장할 때 동작 · 얼굴) | `reply.motion`, `reply.expression` |
+| H08 · H20 '[친구 메시지]' · '입력 중…' | `content` (기다리는 동안 입력 중 표시) |
+| H07 캐릭터 칸 (답장할 때 동작 · 얼굴) | `motion`, `expression` |
 | H08 · H20 캐릭터 탭 채린 · 수아 · 다희 | 세션 캐릭터 1명만 실제, 나머지 목업 |
 | H08 · H20 '하드코딩 / llm' 토글, '옵션 올리기', '베이직 하루 3회' | **제거** |
 
@@ -1097,17 +1112,27 @@ GET /api/me/memories?date=2026-11-12
 
 #### 🛬 Response
 
+> 2026-11-03: 응답을 '이벤트 반응 받기'와 같은 모양으로 맞춤 (모션 · 표정 · 호감도 · fallback · 음성). `eventId`는 뺌 (채팅은 상태 이벤트가 아니라 DB `session_events`에 없음)
+
 | 이름 | 타입 | 설명 |
 | --- | --- | --- |
 | requestId | String | 요청 id 그대로 (늦게 온 답 걸러내기) |
 | content | String | 캐릭터 답장 |
-| eventId | Long | 저장된 이벤트 id → '이벤트 반응 받기'에 사용 |
+| motion | Object | `group`, `file` — 답장에 맞는 모션 (없으면 null) |
+| expression | Object | `name`, `file` — 모션 위에 겹쳐 적용 (없으면 null) |
+| affinity | Object | 이 대화로 바뀐 호감도: `delta`(0이면 변화 없음), `points`, `level`, `levelUp` |
+| fallback | Boolean | LLM이 5초 안에 답을 못 만들어 대체 대사를 썼는지 (true면 호감도 변화 없음) |
+| audioBase64 | String | 답장 음성 (mp3). 요청에 `tts: true`일 때만, 아니면 null |
 
 ```json
 {
   "requestId": "9c3a...",
   "content": "어렵다고 포기할 거야? 한 문제만 더 풀어봐.",
-  "eventId": "1"
+  "motion": { "group": "...", "file": "..." },
+  "expression": { "name": "...", "file": "..." },
+  "affinity": { "delta": 1, "points": 81, "level": 1, "levelUp": false },
+  "fallback": false,
+  "audioBase64": null
 }
 ```
 
