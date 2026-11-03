@@ -48,7 +48,7 @@
 | 화면 요소 | 이 API가 하는 일 |
 | --- | --- |
 | H01 회원가입 '[필수] 이용약관' · '[필수] 개인정보 처리방침' 체크 | 약관 이름 · 필수 여부 · 버전 id |
-| H01 '전문 보기' | `contentUrl` |
+| H01 '전문 보기' | `content` (본문을 그대로 표시) |
 
 - 테이블: `terms`, `term_versions` · 인증: 불필요
 
@@ -62,13 +62,13 @@
 | terms[].code | String | SERVICE / PRIVACY |
 | terms[].name | String | 화면 표시 이름 |
 | terms[].required | Boolean | 필수 여부 |
-| terms[].contentUrl | String | 전문 보기 링크 |
+| terms[].content | String | 약관 전문 (`term_versions.content`). 별도 링크 없음 |
 
 ```json
 {
   "terms": [
-    { "termVersionId": 3, "code": "SERVICE", "name": "이용약관", "required": true, "contentUrl": "https://.../terms/service/v1" },
-    { "termVersionId": 4, "code": "PRIVACY", "name": "개인정보 처리방침", "required": true, "contentUrl": "https://.../terms/privacy/v1" }
+    { "termVersionId": 3, "code": "SERVICE", "name": "이용약관", "required": true, "content": "제1조 (목적) ..." },
+    { "termVersionId": 4, "code": "PRIVACY", "name": "개인정보 처리방침", "required": true, "content": "1. 수집하는 개인정보 ..." }
   ]
 }
 ```
@@ -164,7 +164,7 @@
 
 ## 4. POST /api/auth/email/signup — 회원가입
 - 분류: 인증
-- 설명: 이메일 · 비밀번호 · 약관 동의로 가입, 바로 로그인 토큰 발급
+- 설명: 이메일 · 비밀번호 · 닉네임 · 약관 동의로 가입, 바로 로그인 토큰 발급
 - 와이어프레임: H01 회원가입 폼
 - 백엔드: Not started
 - 프론트: Not started
@@ -172,7 +172,7 @@
 
 #### 설명
 
-이메일 · 비밀번호 · 약관 동의로 가입하고 바로 로그인 토큰을 발급합니다. 닉네임은 다음 화면(H02)에서 받습니다.
+이메일 · 비밀번호 · 닉네임 · 약관 동의로 가입하고 바로 로그인 토큰을 발급합니다. 닉네임은 가입할 때 받습니다.
 
 #### 와이어프레임 대조
 
@@ -181,10 +181,11 @@
 | H01 '이메일' | `verificationToken` 안에 들어 있음 |
 | H01 '비밀번호' (8자 이상) | `password` |
 | H01 '비밀번호 확인' | 프론트에서만 일치 검사, 서버로 안 보냄 |
+| H01 '닉네임' (추가 필요) | `nickname` |
 | H01 [필수] 약관 2개 | `agreedTermVersionIds` |
 | H01 '회원가입' 버튼 | 가입 → H02로 |
 
-- 테이블: `users` (email, bcrypt 해시), `user_terms` · 인증: 불필요
+- 테이블: `users` (email, bcrypt 해시, nickname), `user_terms` · 인증: 불필요
 
 #### [POST] /api/auth/email/signup
 
@@ -194,10 +195,11 @@
 | --- | --- | --- | --- |
 | verificationToken | String | O | 이메일 인증 확인에서 받은 토큰 |
 | password | String | O | 8자 이상 |
+| nickname | String | O | 1~20자 (프로필 설정과 같은 규칙) |
 | agreedTermVersionIds | Array | O | 필수 약관이 빠지면 가입 불가 |
 
 ```json
-{ "verificationToken": "vt_9f2...", "password": "capsule1234", "agreedTermVersionIds": [3, 4] }
+{ "verificationToken": "vt_9f2...", "password": "capsule1234", "nickname": "승희", "agreedTermVersionIds": [3, 4] }
 ```
 
 #### 🛬 Response
@@ -214,9 +216,9 @@
 
 > ✅ **201 Created**
 
-> ❌ **400** INVALID_PASSWORD · TERMS_REQUIRED · VERIFICATION_EXPIRED · **409** EMAIL_ALREADY_USED
+> ❌ **400** INVALID_PASSWORD · INVALID_NICKNAME · TERMS_REQUIRED · VERIFICATION_EXPIRED · **409** EMAIL_ALREADY_USED
 
-> ⚠️ DB의 `users.nickname`이 NOT NULL인데 가입 화면에는 닉네임 칸이 없음. 가입 시점엔 NULL 허용으로 바꾸거나, 가입 화면에 닉네임 칸을 추가해야 함
+> ⚠️ 닉네임은 가입할 때 받기로 함 (2026-11-03 결정, DB `users.nickname` NOT NULL 유지). 현재 H01 회원가입 화면에 닉네임 칸 추가 필요
 
 ## 5. POST /api/auth/email/login — 이메일 로그인
 - 분류: 인증
@@ -326,9 +328,9 @@
 
 #### 서버가 하는 일
 
-1. 인가 코드를 카카오에 보내 카카오 회원번호를 받음
+1. 인가 코드를 카카오에 보내 카카오 회원번호와 닉네임을 받음
 2. `user_social_accounts`에서 (KAKAO, 회원번호) 조회
-3. 있으면 그 사용자로 로그인, 없으면 `users` + `user_social_accounts` + `user_terms`를 한 트랜잭션으로 생성
+3. 있으면 그 사용자로 로그인, 없으면 `users` + `user_social_accounts` + `user_terms`를 한 트랜잭션으로 생성. 닉네임은 카카오 프로필 닉네임으로 저장 (DB `users.nickname` NOT NULL, 프로필 설정에서 변경 가능)
 4. 이메일이 같아도 이메일 가입 계정과 자동으로 합치지 않음 (다른 계정으로 취급)
 
 #### 프론트 참고
@@ -336,6 +338,7 @@
 - 카카오로 이동하기 전에 체크한 약관은 sessionStorage에 두었다가 리다이렉트로 돌아온 뒤 같이 보냄
 - **시연은 공용 기기**라, 로그아웃할 때 카카오 계정 로그아웃까지 같이 해야 다음 체험자가 이전 사람 계정으로 자동 로그인되지 않음
 - 카카오 디벨로퍼스에 시연 도메인의 리다이렉트 URI를 미리 등록해야 함
+- 카카오 디벨로퍼스 동의 항목에서 '닉네임'(profile_nickname)을 **필수 동의**로 설정해야 함 (가입 닉네임으로 씀)
 
 ## 7. POST /api/auth/refresh — 토큰 갱신
 - 분류: 인증
@@ -1273,7 +1276,7 @@ json
 
 > ❌ **404** SESSION_NOT_FOUND · **409** SESSION_IN_PROGRESS
 
-> ⚠️ 새로고침해도 같은 `closingLine`이 나오려면 저장 자리가 필요함. DB 최종본에는 없으므로 `study_sessions.closing_line` 추가, 또는 캐릭터별 고정 문구를 세션 id로 골라 항상 같은 문구가 나오게 해야 함
+> ⚠️ 새로고침해도 같은 `closingLine`이 나오려면 저장 자리가 필요함. DB 최종본에는 없으므로 `study_sessions.closing_line` 추가하기로 함 (2026-11-03 결정, 노션 DB 반영). 공부 종료 때 저장하고, 리포트 조회는 저장된 문장을 그대로 돌려줌
 
 ## 24. POST /api/auth/logout — 로그아웃
 - 분류: 인증

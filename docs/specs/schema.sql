@@ -19,6 +19,9 @@
 --   - study_sessions: detect_mode 제거
 --   - session_events: type에서 GAZE_AWAY 제거
 --   - relation_logs: session_event_id, reason 'SESSION_EVENT' 추가 (이벤트별 호감도 반영)
+--
+-- 2026-11-03 변경
+--   - study_sessions.closing_line 추가 (완료 대사 저장. 리포트 새로고침 · 카드에서 같은 문장)
 -- =====================================================================
 
 BEGIN;
@@ -286,6 +289,7 @@ CREATE TABLE study_sessions (
     distract_seconds  int         NOT NULL DEFAULT 0,
     break_seconds     int         NOT NULL DEFAULT 0,
     return_count      int         NOT NULL DEFAULT 0,
+    closing_line      text,                               -- 완료 대사 (종료 때 저장, 리포트 · 카드 공용)
     CHECK (ended_at IS NULL OR ended_at >= started_at),
     CHECK ((ended_at IS NULL) = (end_type IS NULL)),
     UNIQUE (id, room_id),                                 -- session_characters 복합 FK용
