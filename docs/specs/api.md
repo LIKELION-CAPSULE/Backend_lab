@@ -1032,7 +1032,7 @@ GET /api/me/memories?date=2026-11-12
   - 같은 동작 type이 1분 안에 다시 옴 (서버 쿨다운)
 - 시간 · 상태 판단은 상태 이벤트 4종(`FOCUS` · `AWAY` · `RETURN` · `BREAK`)만 봄: 공부 종료 정산, 세션 이어하기, heartbeat의 '마지막 이벤트'는 모두 이 4종 중 마지막. 동작 이벤트는 사이에 끼어도 구간을 끊지 않음
 - 타입 검증은 서버 enum (상태 `STATE` / 동작 `MOTION` 구분). 모르는 type은 **400** INVALID_EVENT
-- 18의 모션 · 표정은 `live2d_reaction_maps`에서 trigger 기준으로 서버가 고름 (trigger 규칙은 19와 같음, `AWAY`는 강도 1)
+- 18의 모션 · 표정은 `live2d_reaction_maps`에서 trigger 기준으로 서버가 고름 (trigger 규칙은 19와 같음, `AWAY`는 강도 1). 어떤 trigger에 어떤 동작이 있는지는 디자이너 에셋에 따라 바뀜. 없으면 null이고 프론트는 재생하지 않음
 - `occurredAt`이 세션 시작보다 이르면 거절하지 않고 시작 시각으로 맞춤 (프론트 시계가 조금 늦어도 시작 직후 FOCUS가 실패하지 않게)
 - 휴식 끝은 `FOCUS`, 자리 비움에서 돌아오면 `RETURN` (복귀 횟수가 휴식 때문에 부풀지 않게)
 - ⚠️ 기획 확인 필요 (J-01): 직전이 `AWAY`가 아닌 `RETURN`에도 +1을 줄지 (지금은 줌. RETURN만 반복하면 계속 오름), 동작 이벤트 3종의 호감도
@@ -1100,7 +1100,9 @@ GET /api/me/memories?date=2026-11-12
 
 > 2026-11-04: 캐릭터별 배열 `characters`로 바꿈. `trigger`는 뺌, 호감도는 18번 응답으로 옮김, 캐릭터마다 `emotion` 추가 (노션 반영 전, 레포에서 먼저 수정)
 
-> 2026-11-04 (2차): `characters`는 이번에 말하는 캐릭터만, `emotion`은 6종 고정, 모션 · 표정은 감정 기준으로 고름 (18의 '알아채는' 동작과 역할이 다름)
+> 2026-11-04 (3차): 감정 · 동작 목록은 고정하지 않음. 디자이너가 만든 에셋에 따라 바뀌므로 데이터(`live2d_reaction_maps`)로 정함
+
+> 2026-11-04 (2차): `characters`는 이번에 말하는 캐릭터만, 모션 · 표정은 감정 기준으로 고름 (18의 '알아채는' 동작과 역할이 다름)
 
 | 이름 | 타입 | 설명 |
 | --- | --- | --- |
@@ -1108,7 +1110,7 @@ GET /api/me/memories?date=2026-11-12
 | characters | Array | 이번에 말하는 캐릭터만 (1:1 룸이면 1개) |
 | characters[].characterId | Long | 캐릭터 id |
 | characters[].content | String | 말풍선 대사 (2줄 이내) |
-| characters[].emotion | String | `HAPPY` · `SHY` · `ANGRY` · `SAD` · `SURPRISED` · `NEUTRAL`. ⚠️ 고정 대사(`fallback: true`)일 때 값은 확정 필요 (지금 구현은 null) |
+| characters[].emotion | String | 대사의 감정 이름 (예: `HAPPY` · `SAD`). **목록은 고정이 아니다**: 캐릭터의 Live2D 에셋(디자이너가 만든 표정 · 모션)에 따라 정해지고 바뀔 수 있다 (지금 후보: `HAPPY` · `SHY` · `ANGRY` · `SAD` · `SURPRISED` · `NEUTRAL`). 서버는 그 캐릭터의 반응 매핑에 있는 감정 중에서만 고른다. ⚠️ 고정 대사(`fallback: true`)일 때 값은 확정 필요 (지금 구현은 null) |
 | characters[].motion | Object | `group`, `file` — 감정에 맞는 모션 (없으면 null → 18 동작 유지) |
 | characters[].expression | Object | `name`, `file` — 감정에 맞는 표정 (없으면 null) |
 | characters[].fallback | Boolean | LLM 5초 초과로 고정 대사를 썼는지 |
@@ -1138,7 +1140,7 @@ GET /api/me/memories?date=2026-11-12
 #### 서버가 하는 일
 
 1. 이벤트 타입 + 직전 상태 이벤트로 trigger 결정 (응답에는 넣지 않음): 첫 FOCUS = `GREETING`, 휴식 뒤 FOCUS = `BREAK_END`, `AWAY` · `RETURN` · `BREAK`, 동작은 type 그대로(`DROWSY` · `YAWN` · `WAVE`)
-2. LLM으로 대사 + 감정 생성 (5초 넘으면 trigger별 고정 대사)
+2. LLM으로 대사 + 감정 생성. 감정은 그 캐릭터의 반응 매핑(`live2d_reaction_maps`)에 있는 감정 목록 중에서 고르게 한다 (5초 넘으면 trigger별 고정 대사)
 3. 감정에 맞는 모션 · 표정을 `live2d_reaction_maps`에서 하나 고름 (같은 감정의 행이 여러 개면 같은 확률)
 4. `tts: true`면 음성 생성
 - 호감도는 바꾸지 않음 (18번에서 끝남). 같은 `eventId`로 intensity를 올려 다시 불러도 마찬가지
@@ -1147,6 +1149,7 @@ GET /api/me/memories?date=2026-11-12
 
 - 응답의 `requestId`가 마지막으로 보낸 것이 아니면 버림 (복귀했는데 늦게 도착한 '자리 비웠어?' 방지)
 - `motion` 재생 → `expression` 적용 → `content`를 말풍선 · 채팅 로그에 표시 → 입 모션
+- `emotion`은 표시 · 기록용 문자열이다. 목록이 디자이너 에셋에 따라 바뀌므로 고정 enum으로 분기하지 말고, 화면은 서버가 준 `motion` · `expression` 파일로 그린다 (null이면 재생하지 않음)
 
 ## 20. POST /api/sessions/{sessionId}/messages — 메시지 전송
 - 분류: 대화
