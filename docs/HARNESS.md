@@ -308,11 +308,11 @@ skeleton 스킬이 하는 일:
 
 | 단계 | 누가/어디서 | 무엇을 |
 |---|---|---|
-| 1. 셀프 리뷰 + PR 작성 | 작성자 세션 | reviewer 서브에이전트 → pr-write가 본문 6개 섹션 작성 → PR (draft·리뷰어 지정 없음) |
+| 1. 셀프 리뷰 + PR 작성 | 작성자 세션 | reviewer 서브에이전트 → pr-write가 PR 템플릿 양식으로 본문 작성 → PR (draft·리뷰어 지정 없음) |
 | 2. 자동 검사 | CI | `verify` (합친 결과로 전체 검증, 마이그레이션 불변) / `zones` (구역 라벨, 본문 섹션 검사) / `claude-review` (위험한 PR만: 계약·공용·마이그레이션·남의 모듈) |
 | 3. 사람 리뷰 (선택) | 리뷰어 세션 + GitHub | 원할 때 review-pr로 "내 작업 기준" 의견. 머지 조건 아님 |
 
-- PR 본문 필수 섹션: 목적 / 결정과 이유 / 시도했다 버린 것 / 일부러 안 한 것 / 검증 / 리뷰 포인트 (비면 CI 실패, 해당 없으면 "없음")
+- PR 본문 양식: `.github/PULL_REQUEST_TEMPLATE.md` (연관된 이슈 / 작업 내용 / 스크린샷 / 리뷰 요구사항, 2026-11-04부터). CI는 '작업 내용'만 검사(없거나 안내 문구뿐이면 실패). 결정과 이유·버린 것·안 한 것·검증은 pr-write가 '작업 내용' 안에 짧게 적음
 - 머지 조건은 CI(verify·zones) 초록뿐. Claude 자동 리뷰는 의견만 남기고 머지를 막지 않음
 - 그 외 PR에서 Claude 의견이 필요하면 PR 댓글에 `@claude`
 - 비용: 자동 리뷰는 위험 라벨이 붙은 PR이 열릴 때(또는 draft에서 Ready가 될 때)만 돎. review-pr는 각자 플랜 안에서 돎
@@ -358,7 +358,7 @@ skeleton 스킬이 하는 일:
 
 1. `git switch develop && git pull && git switch -c harness/<설명>`
 2. 수정 (이 브랜치에선 하네스 파일 수정이 확인 없이 허용됨)
-3. `scripts/verify.sh` → PR. 본문 '리뷰 포인트'에 "이 변경 후 두 사람의 에이전트 동작이 어떻게 달라지는지"
+3. `scripts/verify.sh` → PR. 본문 '리뷰 요구사항'에 "이 변경 후 두 사람의 에이전트 동작이 어떻게 달라지는지"
 4. CI가 초록이면 머지하고 상대에게 공유 → 각자 `git pull`하면 다음 세션부터 적용
 
 자주 바꿀 것
@@ -396,7 +396,7 @@ skeleton 스킬이 하는 일:
 | 로컬에서 Flyway `Detected applied migration not resolved locally` | 다른 브랜치에서 적용한 마이그레이션이 로컬 DB에 남아 있음(브랜치 전환) | `scripts/run-local.sh --reset` |
 | `Migration checksum mismatch` | 적용된 마이그레이션 파일이 바뀜 | 되돌리고 새 마이그레이션 |
 | CI `zones.conf 엄격 검사` 실패 | `[team]`에 TODO 남음 | GitHub 아이디·이메일 채우는 harness PR |
-| CI `PR 본문` 실패 | 6개 섹션 중 빈 곳 | pr-write로 다시 쓰거나 '없음' 기입 |
+| CI `PR 본문` 실패 | '작업 내용' 섹션이 없거나 템플릿 안내 문구뿐 | pr-write로 다시 쓰거나 '작업 내용'을 채움 |
 | `claude-review` 실패 | 시크릿 없음 | 2-3장. 안 쓸 거면 무시해도 다른 체크엔 영향 없음 |
 | spec-sync가 노션을 못 읽음 | Claude Code에 Notion MCP 미연결·미로그인 | 2-2장 Notion MCP 연결 |
 

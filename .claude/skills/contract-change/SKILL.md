@@ -12,7 +12,7 @@ description: 모듈 계약(각 모듈의 api 패키지: 인터페이스, DTO, �
 - 기존 것에 `@Deprecated(forRemoval = true)` + Javadoc `@deprecated <대체 메서드> 사용. 제거 예정 PR: (2단계 후)`.
 - DTO(record)에 필드를 더할 때는 기존 생성자를 유지하는 보조 생성자를 둔다.
 - DB: 새 컬럼 추가(nullable 또는 기본값). 기존 컬럼 유지. `scripts/new-migration.sh`.
-- PR 본문 '리뷰 포인트'에 "계약 확장: 옛 X는 Y로 대체 예정" 명시.
+- PR 본문 '리뷰 요구사항'에 "계약 확장: 옛 X는 Y로 대체 예정" 명시.
 
 ## 2단계 이전
 - 호출하는 쪽을 새 계약으로 옮긴다. 내 모듈 호출부는 내가, **상대 모듈 호출부는 상대에게 요청**(또는 합의 후 cross-module PR, 상대에게 공유).
