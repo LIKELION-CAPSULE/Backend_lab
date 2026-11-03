@@ -64,6 +64,7 @@
 | 하네스 직접 구성 | 위 표 | `docs/decisions/0006`, `0007`, `0010` |
 | 명세 원본 레포, 노션 사본 (레포 → 노션) | 위 표 | `docs/decisions/0013` (0008 대체) |
 | PR 제목 커밋 규칙, 라벨 없음 | 위 표 | `docs/decisions/0014` |
+| 명세가 바뀌면 코드 반영까지 추적 | 명세만 바뀌고 코드가 남는 일을 막음. 영향 범위는 자동으로 찾고, 반영할 PR · 이슈가 본문에 없으면 CI 실패 | `docs/decisions/0015` |
 
 ### 이 원칙은 앞으로도 적용됨
 - 프레임워크·라이브러리·구조·파이프라인을 새로 고르거나 바꿀 때는 **코드보다 이유 설명이 먼저**: 무엇을 / 왜 / 버린 대안 → 확인 → `docs/decisions/`에 ADR 추가
@@ -283,7 +284,7 @@ skeleton 스킬이 하는 일:
 | 계약(api) 변경 | 확인 질문 → PR 본문에 적고 Claude 자동 리뷰가 봄 | contract-change 스킬: 확장→이전→제거, 각각 별도 PR |
 | 공용 수정 (`common`, gradle, yml, 문서) | 확인 없이 통과(2026-11-04부터), PR 본문에 적고 Claude 자동 리뷰가 봄 | 기능 PR에 섞지 말고 작은 공용 PR로 먼저 머지, 상대는 rebase |
 | DB 변경 | 기존 파일 수정 차단, 남의 테이블은 확인 | `schema.sql` 명세 PR → `scripts/new-migration.sh`, 컬럼 변경도 확장→이전→제거 |
-| API 명세가 바뀜 | 명세 PR에서 바뀐 부분이 diff로 보임, 머지 뒤 spec-sync가 노션 사본 갱신 | 작은 명세 PR을 먼저 머지, 영향받는 모듈 담당자가 구현 |
+| API 명세가 바뀜 | `zones.py spec-impact`가 바뀐 API의 컨트롤러 · 담당을 찾음. api.md를 바꾼 PR은 본문 `### 코드 반영`(기능 PR · 이슈 번호)이 없으면 CI 실패. 머지 뒤 spec-sync가 노션 사본 갱신 | 작은 명세 PR을 먼저 머지. 이어서 기능 PR (남의 모듈도 직접 고치고 담당자에게 공유, ADR 0015) |
 | 로컬 전용 설정·비밀값 | .gitignore로 커밋 제외, Claude의 `.env` 읽기 차단 | `.env.local`, `*.local.*`에 둠 |
 | 아직 커밋 안 한 작업 | 상대에게 안 보임 | 작게 자주 커밋, 하루 1번 push, 작업 시작하면 draft PR |
 | 내 병렬 세션끼리 (worktree) | worktree별 DB·포트 자동 분리 (`run-local.sh`) | 세션당 worktree 하나, 동시 3개 이하 |
