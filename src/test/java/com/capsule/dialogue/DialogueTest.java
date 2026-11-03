@@ -217,7 +217,9 @@ class DialogueTest {
         send(requestId, "이거 너무 어려워")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.requestId").value(requestId.toString()))
+                .andExpect(jsonPath("$.characterId").value(CHARACTER_ID))
                 .andExpect(jsonPath("$.content").value("「이거 너무 어려워」… 그렇구나. 한 문제만 더 해보자."))
+                .andExpect(jsonPath("$.emotion").value(nullValue())) // Fake LLM은 감정을 안 정함 (J-07)
                 .andExpect(jsonPath("$.motion").value(nullValue()))
                 .andExpect(jsonPath("$.expression").value(nullValue()))
                 .andExpect(jsonPath("$.affinity.delta").value(1))
@@ -252,6 +254,16 @@ class DialogueTest {
         send(UUID.randomUUID(), "가".repeat(301))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+    }
+
+    @Test
+    void messageToCharacterOutsideSessionIsRejected() throws Exception {
+        UUID requestId = UUID.randomUUID();
+        send(requestId, CHARACTER_ID + 1, "파이팅")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("CHARACTER_NOT_IN_SESSION"));
+        verify(llm, never()).reply(any());
+        assertThat(rows(requestId)).isZero();
     }
 
     @Test
@@ -320,11 +332,15 @@ class DialogueTest {
     }
 
     private ResultActions send(UUID requestId, String content) throws Exception {
+        return send(requestId, CHARACTER_ID, content);
+    }
+
+    private ResultActions send(UUID requestId, long characterId, String content) throws Exception {
         return mvc.perform(post("/api/sessions/{sessionId}/messages", sessionId)
                 .with(jwt().jwt(j -> j.subject(String.valueOf(userId))))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"requestId\":\"" + requestId + "\",\"content\":\"" + content
-                        + "\",\"inputType\":\"QUICK\"}"));
+                .content("{\"requestId\":\"" + requestId + "\",\"characterId\":" + characterId + ",\"content\":\""
+                        + content + "\",\"inputType\":\"QUICK\"}"));
     }
 
     private int rows(UUID requestId) {

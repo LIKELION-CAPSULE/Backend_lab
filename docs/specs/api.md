@@ -1238,7 +1238,7 @@ GET /api/me/memories?date=2026-11-12
 #### 규칙
 
 - 답 길이: 공부 중 1\~2문장, 쉬는 시간 2\~4문장
-- 같은 `requestId`를 다시 보내면 저장된 답장을 그대로 돌려줌. 속도 제한(1분에 10번) 횟수에 세지 않음. 이때 `affinity.delta`는 0, `motion` · `expression`은 null (처음 응답의 값은 다시 주지 않음). 첫 요청이 아직 처리 중일 때 온 재전송은 첫 요청이 끝날 때까지 기다렸다가 같은 답장을 받음
+- 같은 `requestId`를 다시 보내면 저장된 답장을 그대로 돌려줌. 속도 제한(1분에 10번) 횟수에 세지 않음. 이때 `affinity.delta`는 0, `emotion` · `motion` · `expression`은 null (처음 응답의 값은 다시 주지 않음). 첫 요청이 아직 처리 중일 때 온 재전송은 첫 요청이 끝날 때까지 기다렸다가 같은 답장을 받음
 - 일시정지 중에는 프론트가 입력을 막음
 
 ## 21. POST /api/sessions/{sessionId}/heartbeat — heartbeat

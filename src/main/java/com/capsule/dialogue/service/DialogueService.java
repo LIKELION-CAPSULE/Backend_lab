@@ -131,9 +131,9 @@ public class DialogueService {
 
     // ponytail: LLM을 기다리는 동안(최대 5초) DB 커넥션을 잡고 있음. 동시 사용자가 많아지면 LLM 호출을 트랜잭션 밖으로 뺄 것
     @Transactional
-    public MessageResponse send(long userId, long sessionId, UUID requestId, String content, Boolean tts) {
-        SessionInfo session = openSession(userId, sessionId);
-        long characterId = session.characterId();
+    public MessageResponse send(
+            long userId, long sessionId, UUID requestId, long characterId, String content, Boolean tts) {
+        requireSessionCharacter(openSession(userId, sessionId), characterId);
         Conversation conversation = conversation(userId, characterId);
 
         // 재전송은 한도 검사 전에 돌려준다: 응답을 못 받아 다시 보낸 요청이 429가 되면 안 됨
@@ -165,7 +165,22 @@ public class DialogueService {
         // TODO(judgment): J-07 답장 감정(LlmReply.emotion) → 모션·표정 고르는 규칙. 지금은 없음
         Reaction reaction = Reaction.NONE;
         return new MessageResponse(
-                requestId, answer, reaction.motion(), reaction.expression(), affinity, reply.isEmpty(), audio(tts));
+                requestId,
+                characterId,
+                answer,
+                reply.map(LlmReply::emotion).orElse(null),
+                reaction.motion(),
+                reaction.expression(),
+                affinity,
+                reply.isEmpty(),
+                audio(tts));
+    }
+
+    /** 명세 20: 대화할 캐릭터는 그 세션 캐릭터만 (뼈대는 세션당 1명) */
+    private static void requireSessionCharacter(SessionInfo session, long characterId) {
+        if (session.characterId() != characterId) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "CHARACTER_NOT_IN_SESSION");
+        }
     }
 
     /**
@@ -173,8 +188,9 @@ public class DialogueService {
      * 막힌 트랜잭션은 이미 끝났으므로 새 트랜잭션에서 읽는다
      */
     @Transactional(readOnly = true)
-    public Optional<MessageResponse> answeredAfterConflict(long userId, long sessionId, UUID requestId, Boolean tts) {
-        long characterId = openSession(userId, sessionId).characterId();
+    public Optional<MessageResponse> answeredAfterConflict(
+            long userId, long sessionId, UUID requestId, long characterId, Boolean tts) {
+        requireSessionCharacter(openSession(userId, sessionId), characterId);
         return conversations
                 .findByUserIdAndCharacterId(userId, characterId)
                 .flatMap(c -> answered(c.id(), userId, characterId, requestId, tts));
@@ -186,7 +202,15 @@ public class DialogueService {
         // ponytail: 재전송 때 원래 delta(와 모션·표정·fallback)는 다시 보여주지 않음. 필요하면 chat_messages에 같이 저장
         return messages.findByConversationIdAndRequestIdAndSender(conversationId, requestId, CHARACTER)
                 .map(m -> new MessageResponse(
-                        requestId, m.content(), null, null, unchanged(userId, characterId), false, audio(tts)));
+                        requestId,
+                        characterId,
+                        m.content(),
+                        null,
+                        null,
+                        null,
+                        unchanged(userId, characterId),
+                        false,
+                        audio(tts)));
     }
 
     /**
