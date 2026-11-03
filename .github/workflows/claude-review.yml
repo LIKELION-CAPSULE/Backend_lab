@@ -58,7 +58,7 @@ jobs:
           prompt: |
             저장소 ${{ github.repository }} 의 PR #${{ github.event.pull_request.number }} 를 리뷰한다.
             작성자: ${{ github.event.pull_request.user.login }}
-            이 PR의 구역 라벨: ${{ needs.gate.outputs.labels }}
+            이 PR의 구역 판정 (zones.py classify 결과. PR 라벨로는 붙이지 않음): ${{ needs.gate.outputs.labels }}
 
             먼저 읽을 것:
             1. CLAUDE.md, docs/HARNESS.md 의 '구역 규칙', .harness/zones.conf (누가 어느 모듈 담당인지)
@@ -66,7 +66,7 @@ jobs:
             3. diff (gh pr diff)
             4. 열린 다른 PR 목록 (gh pr list --state open). 상대방이 지금 하고 있는 작업과 겹치거나 깨뜨리는지 확인
 
-            라벨별로 특히 볼 것:
+            구역별로 특히 볼 것:
             - zone:contract: 기존 시그니처를 바로 바꾸거나 지웠는가? 확장→이전→제거 절차를 지켰는가? 이 계약을 쓰는 다른 모듈 코드가 깨지는가?
             - cross-module: 남의 모듈을 고친 이유가 PR 본문에 있는가? 담당자가 알아야 할 변경이 무엇인가?
             - zone:migration: 기존 마이그레이션 수정이 없는가? 남의 테이블을 바꾸는가? 컬럼 삭제·이름 변경을 한 번에 했는가?

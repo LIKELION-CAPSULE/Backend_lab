@@ -45,6 +45,7 @@
 | Claude 자동 리뷰는 위험한 PR만 | 비용 | 모든 PR 자동 리뷰 |
 | 충돌 예측 자동화는 안 함 | 구역 분리·짧은 브랜치·공용 PR 우선으로 대부분 예방되고, 남는 충돌은 rebase와 PR 화면에서 git이 알려줌. 자동 예측은 push마다 fetch 비용과 경고 소음만 늘림 | push·세션 시작 때 merge-tree로 상대 브랜치와 미리 합쳐보기 |
 | git·GitHub가 하는 일은 다시 만들지 않음 | develop/main 보호는 GitHub 브랜치 보호, 로컬 파일 제외는 .gitignore, 리뷰 요청은 필요할 때 PR 화면에서, 뒤처짐은 git status가 이미 함. 같은 규칙을 두 군데서 관리하면 한쪽만 바뀌는 일이 생김. 예외: 브랜치 보호를 못 쓰는 동안 Claude의 develop/main push는 bash_guard가 막음(2-3장) | pre-commit·pre-push 훅, 셸 명령 차단으로 push 규칙 재구현 |
+| PR 제목은 커밋 규칙(`feat(session): ...`), PR 라벨은 안 붙임 (2026-11-04) | squash 머지하면 PR 제목이 develop 커밋 메시지가 되므로 커밋 규칙과 맞춤. 라벨은 붙기만 하고 읽는 곳이 없었고 뜻을 몰라 소음이 됨. 위험 구역 표시는 PR 본문(pr-write)과 Claude 자동 리뷰가 함 | `[모듈] 요약` 제목, 구역 라벨 자동 부착 |
 | 명세 원본은 레포, 노션은 읽기 전용 사본 | 처음엔 노션이 원본(0008)이었지만 여러 사람·세션이 동시에 고치며 꼬였고 리뷰·충돌 표시·변경 이유가 안 남음. 레포에선 명세 변경도 PR로 리뷰되고 diff로 보임. 프론트·기획은 계속 노션에서 봄 | 노션 원본 유지(0008), 노션 보관 + GitHub 링크, OpenAPI를 원본으로(구현 기록으로만 쓸 예정) |
 
 ### 앱 스택
@@ -62,11 +63,12 @@
 | Spotless | 포맷 논쟁 제거, Stop 훅이 자동 정리 | - |
 | 하네스 직접 구성 | 위 표 | `docs/decisions/0006`, `0007`, `0010` |
 | 명세 원본 레포, 노션 사본 (레포 → 노션) | 위 표 | `docs/decisions/0013` (0008 대체) |
+| PR 제목 커밋 규칙, 라벨 없음 | 위 표 | `docs/decisions/0014` |
 
 ### 이 원칙은 앞으로도 적용됨
 - 프레임워크·라이브러리·구조·파이프라인을 새로 고르거나 바꿀 때는 **코드보다 이유 설명이 먼저**: 무엇을 / 왜 / 버린 대안 → 확인 → `docs/decisions/`에 ADR 추가
 - skeleton 스킬은 계획 맨 앞에 "설계 브리핑"을 먼저 쓰고 확인받음 (3-2장)
-- PR에서 `build.gradle`, `settings.gradle`, `zones.conf`를 바꿨는데 ADR이 없으면 CI가 `needs-adr` 라벨을 붙임
+- PR에서 `build.gradle`, `settings.gradle`, `zones.conf`를 바꿨는데 ADR이 없으면 CI가 `needs-adr` 경고를 남김 (Checks 탭의 노란 경고, 머지는 막지 않음)
 
 ---
 
@@ -90,7 +92,7 @@
   (spec-sync → api.md, schema.sql)            feature/<모듈>-<설명> 브랜치                   (골든 대화 회귀 테스트)
       ↓                                      내 모듈 안에서 개발                            → dialogue 담당(승희)이
  "뼈대 만들어" → skeleton 스킬                계약 변경은 확장→이전→제거                       실제 LLM 붙일 때 추가
-      ↓                                      PR(pr-write) → 자동 라벨·Claude 의견 → CI 초록이면 머지
+      ↓                                      PR(pr-write) → 제목·본문 검사·Claude 의견 → CI 초록이면 머지
  계획 확인(skeleton-plan.md)                  상대 PR은 review-pr로 내 맥락 반영해 리뷰
       ↓                                      머지 → 다음 칸
  단순=구현 / 판단·LLM=Fake+백로그
@@ -156,7 +158,7 @@ setup.sh가 하는 일: 도구 확인(python3 연결, git, docker, java 21, gh) 
   2. 토큰 만들기: 터미널에서 `claude setup-token` (브라우저 로그인 후 토큰이 출력됨, 구독 Pro/Max 사용)
   3. 시크릿 등록: `gh secret set CLAUDE_CODE_OAUTH_TOKEN -R LIKELION-CAPSULE/Backend_lab` → 토큰 붙여넣기 (토큰을 채팅·파일에 남기지 않음)
   - API 키로 돌리려면 `ANTHROPIC_API_KEY` 시크릿 + `.github/workflows/claude-*.yml`에서 해당 줄 주석 해제
-  - 시크릿이 없으면 claude-review(위험 라벨 PR)와 `@claude`만 실패하고 나머지는 정상 동작함
+  - 시크릿이 없으면 claude-review(위험 구역 PR)와 `@claude`만 실패하고 나머지는 정상 동작함
 
 ---
 
@@ -254,7 +256,7 @@ skeleton 스킬이 하는 일:
 | 내 모듈 | `<base>/dialogue/**` (내가 담당) | 허용 | 허용 |
 | 상대 모듈 | `<base>/user/**` (성욱 담당) | 허용 | **확인 질문** |
 | 계약 | `<base>/*/api/**` | 허용 | **확인 질문** (내 모듈이어도) |
-| 공용 | `common/**`, `build.gradle`, `application*.yml`, `docs/specs/**` | 허용 | 허용 (PR에 `zone:shared` 라벨로 알림. 2026-11-04 전에는 확인 질문) |
+| 공용 | `common/**`, `build.gradle`, `application*.yml`, `docs/specs/**` | 허용 | 허용 (PR에서 Claude 자동 리뷰가 봄. 2026-11-04 전에는 확인 질문) |
 | 마이그레이션 | `db/migration/**` | 규칙 맞으면 허용 | 내 모듈 허용 / 남의 모듈 확인 |
 | 하네스 | `.claude/`, `.harness/`, `scripts/`, `.github/`, `CLAUDE.md` | `harness/*` 브랜치만 허용, 그 외 확인 | 같음 |
 
@@ -277,9 +279,9 @@ skeleton 스킬이 하는 일:
 | 상황 | 하네스가 하는 일 | 사람이 할 일 |
 |---|---|---|
 | 내 모듈 안 수정 | 통과, Stop 훅이 검증 | 없음 |
-| 상대 모듈 내부를 고쳐야 함 (버그 발견 등) | 확인 질문 → 승인 시 PR에 `cross-module` 라벨 | 원칙은 상대에게 요청. 급하면 승인하고 고친 뒤 카톡 한 줄 |
-| 계약(api) 변경 | 확인 질문, PR에 `zone:contract`, Claude 자동 리뷰 | contract-change 스킬: 확장→이전→제거, 각각 별도 PR |
-| 공용 수정 (`common`, gradle, yml, 문서) | 확인 없이 통과(2026-11-04부터), PR에 `zone:shared`, Claude 자동 리뷰 | 기능 PR에 섞지 말고 작은 공용 PR로 먼저 머지, 상대는 rebase |
+| 상대 모듈 내부를 고쳐야 함 (버그 발견 등) | 확인 질문 → 승인 시 PR 본문에 이유를 적고 Claude 자동 리뷰가 봄 | 원칙은 상대에게 요청. 급하면 승인하고 고친 뒤 카톡 한 줄 |
+| 계약(api) 변경 | 확인 질문 → PR 본문에 적고 Claude 자동 리뷰가 봄 | contract-change 스킬: 확장→이전→제거, 각각 별도 PR |
+| 공용 수정 (`common`, gradle, yml, 문서) | 확인 없이 통과(2026-11-04부터), PR 본문에 적고 Claude 자동 리뷰가 봄 | 기능 PR에 섞지 말고 작은 공용 PR로 먼저 머지, 상대는 rebase |
 | DB 변경 | 기존 파일 수정 차단, 남의 테이블은 확인 | `schema.sql` 명세 PR → `scripts/new-migration.sh`, 컬럼 변경도 확장→이전→제거 |
 | API 명세가 바뀜 | 명세 PR에서 바뀐 부분이 diff로 보임, 머지 뒤 spec-sync가 노션 사본 갱신 | 작은 명세 PR을 먼저 머지, 영향받는 모듈 담당자가 구현 |
 | 로컬 전용 설정·비밀값 | .gitignore로 커밋 제외, Claude의 `.env` 읽기 차단 | `.env.local`, `*.local.*`에 둠 |
@@ -287,7 +289,7 @@ skeleton 스킬이 하는 일:
 | 내 병렬 세션끼리 (worktree) | worktree별 DB·포트 자동 분리 (`run-local.sh`) | 세션당 worktree 하나, 동시 3개 이하 |
 | 브랜치를 오래 끔 | 없음 (뒤처짐·충돌은 git status, rebase, PR 화면이 알려줌) | feature 1~2일, 매일 rebase |
 | 텍스트 충돌은 없는데 합치면 깨짐 | CI가 "develop에 합친 결과"로 verify (ModularityTests + E2E) | 빨간 PR은 머지 안 함 |
-| 하네스 자체 변경 | `harness/*` 아니면 확인 질문, PR에 `zone:harness` | 둘 다 리뷰. 이 문서도 같이 수정 |
+| 하네스 자체 변경 | `harness/*` 아니면 확인 질문, PR 본문 리뷰 요구사항에 에이전트 동작 변화 (pr-write) | 둘 다 리뷰. 이 문서도 같이 수정 |
 
 ### 계약 변경 예시: `UserQuery`에 닉네임이 필요해짐
 | PR | 내용 | 상대 브랜치 영향 |
@@ -311,13 +313,13 @@ skeleton 스킬이 하는 일:
 | 단계 | 누가/어디서 | 무엇을 |
 |---|---|---|
 | 1. 셀프 리뷰 + PR 작성 | 작성자 세션 | reviewer 서브에이전트 → pr-write가 PR 템플릿 양식으로 본문 작성 → PR (draft·리뷰어 지정 없음) |
-| 2. 자동 검사 | CI | `verify` (합친 결과로 전체 검증, 마이그레이션 불변) / `zones` (구역 라벨, 본문 섹션 검사) / `claude-review` (위험한 PR만: 계약·공용·마이그레이션·남의 모듈) |
+| 2. 자동 검사 | CI | `verify` (합친 결과로 전체 검증, 마이그레이션 불변) / `zones` (제목 커밋 규칙, 본문 섹션 검사, ADR 경고) / `claude-review` (위험한 PR만: 계약·공용·마이그레이션·남의 모듈) |
 | 3. 사람 리뷰 (선택) | 리뷰어 세션 + GitHub | 원할 때 review-pr로 "내 작업 기준" 의견. 머지 조건 아님 |
 
 - PR 본문 양식: `.github/PULL_REQUEST_TEMPLATE.md` (연관된 이슈 / 작업 내용 / 스크린샷 / 리뷰 요구사항, 2026-11-04부터). CI는 '작업 내용'만 검사(없거나 안내 문구뿐이면 실패). 결정과 이유·버린 것·안 한 것·검증은 pr-write가 '작업 내용' 안에 짧게 적음
 - 머지 조건은 CI(verify·zones) 초록뿐. Claude 자동 리뷰는 의견만 남기고 머지를 막지 않음
 - 그 외 PR에서 Claude 의견이 필요하면 PR 댓글에 `@claude`
-- 비용: 자동 리뷰는 위험 라벨이 붙은 PR이 열릴 때(또는 draft에서 Ready가 될 때)만 돎. review-pr는 각자 플랜 안에서 돎
+- 비용: 자동 리뷰는 위험 구역(계약·공용·마이그레이션·남의 모듈)을 건드린 PR이 열릴 때(또는 draft에서 Ready가 될 때)만 돎. review-pr는 각자 플랜 안에서 돎
 - 리뷰어는 자동으로 지정하지 않음. 상대 의견이 필요하면 PR 화면에서 직접 요청
 
 ---
@@ -346,7 +348,7 @@ skeleton 스킬이 하는 일:
 | `scripts/run-local.sh` | worktree별 DB·포트로 로컬 실행 (`--reset`, `--info`) | 로컬 확인 |
 | `scripts/setup.sh` | 1인 1회 세팅 | 클론 직후 |
 | `.github/workflows/verify.yml` | 합친 결과로 verify, 마이그레이션 불변, zones 엄격 검사 | PR, develop push |
-| `.github/workflows/pr-zones.yml` | 구역 라벨, `needs-adr`, PR 본문 검사 | PR |
+| `.github/workflows/pr-zones.yml` | PR 제목·본문 검사, `needs-adr` 경고 (라벨은 안 붙임) | PR |
 | `.github/workflows/claude-review.yml` | 위험한 PR 자동 리뷰 | PR Ready |
 | `.github/workflows/claude.yml` | `@claude` 댓글 응답 | 댓글 |
 | `.gitattributes` | 텍스트 파일 LF 고정 (Windows에서 받아도 `.sh`·`gradlew`가 CRLF로 깨지지 않게) | checkout 시 |
@@ -406,7 +408,7 @@ skeleton 스킬이 하는 일:
 
 ## 12. 알려진 한계
 
-- 훅은 Claude의 Edit/Write 도구만 봄. 셸로 파일을 쓰면(`sed -i`, `cat >`) 구역 판정을 거치지 않음 → CLAUDE.md에서 금지, CI(라벨·리뷰)가 뒤에서 잡음
+- 훅은 Claude의 Edit/Write 도구만 봄. 셸로 파일을 쓰면(`sed -i`, `cat >`) 구역 판정을 거치지 않음 → CLAUDE.md에서 금지, CI(Claude 자동 리뷰)가 뒤에서 잡음
 - 확인 질문(ask)의 사유는 사람 화면에만 보임. Claude는 승인/거절 결과만 앎
 - develop/main 보호: 지금은 GitHub 브랜치 보호를 못 써서(Free 플랜 조직의 private 저장소) 사람은 약속으로만 막힘. Claude는 훅이 develop/main에서의 파일 수정과 develop/main으로의 push를 막음. `git -C <경로> push`처럼 형태가 다른 명령까지는 못 잡음 (2-3장)
 - 확인한 것 (2026-11-03, Windows 11 + Git Bash): Claude Code 안 훅 호출(SessionStart 상태 출력, zone_guard가 develop 수정을 실제로 차단), 한글·Windows 경로 판정, GitHub Actions `verify` 첫 실행(setup-java cache 실패를 찾아 고침)
