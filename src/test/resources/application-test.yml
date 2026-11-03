@@ -1,0 +1,10 @@
+# 테스트용. DB·Redis는 Testcontainers(@ServiceConnection)가 채운다
+spring:
+  flyway:
+    locations: classpath:db/migration,classpath:db/seed
+
+capsule:
+  fake-integrations: true
+  auth:
+    jwt-secret: test-only-secret-0123456789abcdef0123
+    refresh-cookie-secure: false

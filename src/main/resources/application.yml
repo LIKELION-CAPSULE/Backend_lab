@@ -1,0 +1,26 @@
+# 공용 설정 (비밀값 없음). 비밀값은 환경변수로만 받는다.
+spring:
+  application.name: capsule
+  jpa:
+    open-in-view: false
+    hibernate.ddl-auto: validate # 스키마는 Flyway만 바꾼다
+  flyway:
+    enabled: true
+    out-of-order: true # 타임스탬프 버전이라 만든 순서 ≠ 머지 순서 (ADR 0002)
+
+capsule:
+  llm:
+    mode: fake # fake | real (real은 dialogue 담당이 도메인 단계에서 구현)
+  # 외부 연동(카카오·메일) Fake. local/test에서만 true. 운영에서 켜면 아무 코드로나 로그인되므로 절대 켜지 않는다
+  fake-integrations: false
+  cdn:
+    base-url: ${CAPSULE_CDN_BASE_URL:https://cdn.capsule.invalid}
+  auth:
+    jwt-secret: ${CAPSULE_JWT_SECRET} # 32바이트 이상
+    refresh-token-ttl: 14d
+    refresh-cookie-secure: true
+    refresh-cookie-same-site: Lax # 프론트와 백엔드 도메인이 다르면 None (B12)
+  cors:
+    allowed-origins: ${CAPSULE_CORS_ORIGINS:}
+  session:
+    auto-close-after: 6h
