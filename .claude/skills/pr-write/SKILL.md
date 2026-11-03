@@ -14,7 +14,7 @@ description: 지금 세션의 작업 맥락으로 PR 본문을 쓰고 PR을 연�
    - `git log --oneline origin/develop..HEAD`, `git diff --stat origin/develop...HEAD`
    - 구역: `git diff --name-only origin/develop...HEAD | python3 .harness/zones.py classify --author "$(gh api user -q .login)"`
 4. 본문 작성: `.github/PULL_REQUEST_TEMPLATE.md` 양식 그대로(제목 줄을 바꾸지 않는다). CI는 '작업 내용'만 검사한다(없거나 안내 문구뿐이면 실패)
-   - **#️⃣연관된 이슈**: 이슈 번호, `J-xx` 백로그 ID, 관련 명세 번호. 없으면 '없음'
+   - **#️⃣연관된 이슈**: 이슈 번호, `J-xx` 백로그 ID, 관련 명세 번호. 없으면 '없음'. 이 PR로 이슈의 To-Do가 다 끝나면 `Closes #번호`(머지 때 자동으로 닫힘), 일부만 하면 `#번호`만 쓴다. 이슈 하나가 J 항목 여러 개를 묶고 있어서 일찍 닫히지 않게
    - **📝작업 내용**: 무엇을 왜. 리뷰어는 diff만 보므로 세션에만 있는 맥락을 아래 항목으로 짧게 (해당 없는 항목은 뺀다)
      - 결정과 이유: 코드만 봐서는 모를 선택. "무엇"이 아니라 "왜". 이 세션에서 사람과 합의한 내용 포함
      - 시도했다 버린 것: 되돌린 접근과 이유. 리뷰어의 "이렇게 하면 되잖아?"를 미리 막음

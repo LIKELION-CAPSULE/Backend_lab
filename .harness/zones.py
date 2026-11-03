@@ -420,7 +420,8 @@ def main() -> int:
         return 0
 
     if args.cmd == "frozen-migrations":
-        _, out = git("diff", "--name-status", "--no-renames", args.base, "HEAD", "--", MIGRATION_DIR)
+        # 점 세 개: 갈라진 지점부터 이 PR이 바꾼 것만. 점 두 개면 develop에 새로 머지된 마이그레이션이 'D'로 잡혀 잘못 실패함 (#16)
+        _, out = git("diff", "--name-status", "--no-renames", f"{args.base}...HEAD", "--", MIGRATION_DIR)
         bad = [line for line in out.splitlines() if line[:1] in ("M", "D")]
         for line in bad:
             print(f"✖ 이미 머지된 마이그레이션을 수정/삭제함: {line}", file=sys.stderr)
