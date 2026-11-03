@@ -13,7 +13,7 @@
 #### 스택·구조 (새로 정하지 않음, 링크만)
 | 항목 | 선택 | 근거 |
 |---|---|---|
-| 앱 | Spring Boot (Java 21) + Spring Modulith, 모듈 = `api`(계약) + `internal`(구현) | [0001](../decisions/0001-modular-monolith.md) |
+| 앱 | Spring Boot (Java 21) + Spring Modulith, 모듈 = `api`(계약) + 레이어 패키지(구현, ADR 0012) | [0001](../decisions/0001-modular-monolith.md) |
 | DB | PostgreSQL + Flyway (타임스탬프 버전, 모든 환경 out-of-order), `ddl-auto: validate` | [0002](../decisions/0002-postgresql-flyway.md) |
 | 짧은 값 | Redis: 리프레시 토큰, 이메일 인증번호, 가입 토큰, 로그인 잠금, 요청 횟수 제한 | [0009](../decisions/0009-redis.md) |
 | 테스트 | Testcontainers (PostgreSQL 16, Redis 7). H2 안 씀 | [0003](../decisions/0003-testcontainers.md) |
