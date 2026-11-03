@@ -22,6 +22,7 @@
 --
 -- 2026-11-03 변경
 --   - study_sessions.closing_line 추가 (완료 대사 저장. 리포트 새로고침 · 카드에서 같은 문장)
+--   - 주석만 정리 (구조 변경 없음): live2d_reaction_maps trigger_type · intensity, study_sessions 시간 컬럼 저장 방식, chat_messages 삭제 조건
 -- =====================================================================
 
 BEGIN;
@@ -126,8 +127,8 @@ CREATE TABLE live2d_expressions (
 CREATE TABLE live2d_reaction_maps (
     id            bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     model_id      bigint   NOT NULL REFERENCES live2d_models (id) ON DELETE CASCADE,
-    trigger_type  text     NOT NULL,   -- 허용 값은 서버 enum으로 관리 (GREETING, FOCUS, GAZE_AWAY, AWAY, RETURN, BREAK, LONG_FOCUS ...)
-    intensity     smallint CHECK (intensity BETWEEN 1 AND 3),   -- 눈치 / 말 걸기 / 서운함
+    trigger_type  text     NOT NULL,   -- 허용 값은 서버 enum으로 관리 (지금: GREETING, AWAY, RETURN, BREAK, BREAK_END = API 19의 trigger. 늘어날 수 있음)
+    intensity     smallint CHECK (intensity BETWEEN 1 AND 3),   -- AWAY의 눈치 / 말 걸기 / 서운함. NULL이면 강도 무관 (그 강도 행이 없을 때도 씀)
     motion_id     bigint,
     expression_id bigint,
     CHECK (motion_id IS NOT NULL OR expression_id IS NOT NULL),  -- 모션이나 표정 중 하나는 있어야 함
@@ -285,7 +286,7 @@ CREATE TABLE study_sessions (
     ended_at          timestamptz,                        -- NULL이면 진행 중
     end_type          text        CHECK (end_type IN ('NORMAL', 'AUTO_CLOSED')),
     last_heartbeat_at timestamptz,                        -- 1분에 한 번 정도만 갱신
-    focus_seconds     int         NOT NULL DEFAULT 0,     -- 아래 넷은 종료 시 session_events로 계산해 저장
+    focus_seconds     int         NOT NULL DEFAULT 0,     -- 아래 넷은 종료 때 저장. focus · distract는 정상 종료면 프론트 값(API 22), 자동 마감이면 session_events로 계산. break · return_count는 항상 session_events로 계산
     distract_seconds  int         NOT NULL DEFAULT 0,
     break_seconds     int         NOT NULL DEFAULT 0,
     return_count      int         NOT NULL DEFAULT 0,
@@ -363,7 +364,7 @@ CREATE TABLE conversations (
     UNIQUE (user_id, character_id)
 );
 
--- 현재 세션의 메시지만 보관. 세션이 끝나면 요약에 합친 뒤 한 트랜잭션에서 삭제
+-- 현재 세션의 메시지만 보관. 세션이 끝나면 요약에 합친 뒤 한 트랜잭션에서 삭제 (요약에 실패하면 남김)
 -- 음성(TTS)은 저장하지 않고 응답으로 바로 전달
 CREATE TABLE chat_messages (
     id              bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,

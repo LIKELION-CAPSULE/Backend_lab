@@ -18,7 +18,7 @@ CREATE TABLE conversations (
     UNIQUE (user_id, character_id)
 );
 
--- 현재 세션의 메시지만 보관. 세션이 끝나면 요약에 합친 뒤 한 트랜잭션에서 삭제
+-- 현재 세션의 메시지만 보관. 세션이 끝나면 요약에 합친 뒤 한 트랜잭션에서 삭제 (요약에 실패하면 남김)
 -- 음성(TTS)은 저장하지 않고 응답으로 바로 전달
 CREATE TABLE chat_messages (
     id              bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,

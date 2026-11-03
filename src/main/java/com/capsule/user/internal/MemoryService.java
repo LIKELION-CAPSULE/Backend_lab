@@ -92,7 +92,9 @@ class MemoryService {
                 .filter(m -> type == null || m.type() == type)
                 .toList();
         List<MemoryResponse> listed = mine.stream()
-                .filter(m -> date != null ? date.equals(m.dueDate()) : inRange(m.dueDate(), from, to))
+                // 날짜 없는 목표는 기간과 상관없이 넣고, status에서 '전체'만 남긴다 (api.md 14 규칙)
+                .filter(m ->
+                        date != null ? date.equals(m.dueDate()) : m.dueDate() == null || inRange(m.dueDate(), from, to))
                 .filter(m -> inStatus(status, m.dueDate(), today))
                 .sorted(status == Status.PAST ? LATEST_FIRST : NEAREST_FIRST)
                 .map(m -> toResponse(m, today))

@@ -177,6 +177,9 @@ class ProfileAndMemoryApiTest extends UserApiTestSupport {
                         "to",
                         today.plusDays(20).toString())
                 .andExpect(jsonPath("$.memories").value(empty()));
+        // 날짜 없는 목표는 기간과 상관없이 '전체'의 맨 아래
+        listMemories(auth, "from", today.toString(), "to", today.plusDays(3).toString(), "status", "ALL")
+                .andExpect(jsonPath("$.memories[*].title").value(contains("같이 공부하기", "도서관", "토익 900")));
 
         listMemories(auth, "from", today.toString(), "to", today.minusDays(1).toString())
                 .andExpect(status().isBadRequest())

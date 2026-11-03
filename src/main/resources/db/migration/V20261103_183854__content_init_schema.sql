@@ -41,8 +41,8 @@ CREATE TABLE live2d_expressions (
 CREATE TABLE live2d_reaction_maps (
     id            bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     model_id      bigint   NOT NULL REFERENCES live2d_models (id) ON DELETE CASCADE,
-    trigger_type  text     NOT NULL,   -- 허용 값은 서버 enum으로 관리 (GREETING, FOCUS, GAZE_AWAY, AWAY, RETURN, BREAK, LONG_FOCUS ...)
-    intensity     smallint CHECK (intensity BETWEEN 1 AND 3),   -- 눈치 / 말 걸기 / 서운함
+    trigger_type  text     NOT NULL,   -- 허용 값은 서버 enum으로 관리 (지금: GREETING, AWAY, RETURN, BREAK, BREAK_END = API 19의 trigger. 늘어날 수 있음)
+    intensity     smallint CHECK (intensity BETWEEN 1 AND 3),   -- AWAY의 눈치 / 말 걸기 / 서운함. NULL이면 강도 무관 (그 강도 행이 없을 때도 씀)
     motion_id     bigint,
     expression_id bigint,
     CHECK (motion_id IS NOT NULL OR expression_id IS NOT NULL),  -- 모션이나 표정 중 하나는 있어야 함

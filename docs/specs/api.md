@@ -31,6 +31,26 @@
 
 순서 15는 노션에 없음 (번호 비어 있음).
 
+## 공통 규칙 (모든 API)
+- 노션: https://app.notion.com/p/40cb9a07e5928153a1a9cc534c62d0b7 (상위 페이지의 '공통 규칙' 섹션)
+
+- 인증: `Authorization: Bearer <accessToken>`. '인증: 불필요' API는 이 헤더를 보지 않음
+- 시각(`startedAt` 등)은 UTC ISO-8601 (예: `2026-11-07T05:00:02Z`). 날짜 · 시간(`dueDate` · `dueTime`)은 한국 날짜 · 시간 그대로
+- 에러 응답 모양 (2026-11-03 결정). `code`로 분기하고, `detail`은 보통 `{}` (409 SESSION_ALREADY_IN_PROGRESS는 `detail.sessionId`)
+
+```json
+{ "code": "SESSION_ENDED", "message": "SESSION_ENDED", "detail": {} }
+```
+
+| 상태 | code | 언제 |
+| --- | --- | --- |
+| 400 | INVALID_REQUEST | JSON 형식이나 타입이 틀림 (예: 숫자 자리에 문자열). 각 API의 검증 코드보다 먼저 걸림 |
+| 401 | UNAUTHORIZED | 토큰 없이 인증 필요 API 호출 |
+| 401 | AUTH_TOKEN_EXPIRED | 토큰이 만료됐거나 잘못됨 → '토큰 갱신' 후 다시 요청 |
+| 404 | NOT_FOUND | 없는 경로 |
+| 405 | METHOD_NOT_ALLOWED | 경로는 있지만 메서드가 틀림 |
+| 500 | INTERNAL_ERROR | 서버 오류 |
+
 ## 1. GET /api/terms — 약관 조회
 - 분류: 인증
 - 설명: 회원가입 화면에 띄울 필수 약관 2종 최신 버전
@@ -330,7 +350,7 @@
 
 1. 인가 코드를 카카오에 보내 카카오 회원번호와 닉네임을 받음
 2. `user_social_accounts`에서 (KAKAO, 회원번호) 조회
-3. 있으면 그 사용자로 로그인, 없으면 `users` + `user_social_accounts` + `user_terms`를 한 트랜잭션으로 생성. 닉네임은 카카오 프로필 닉네임으로 저장 (DB `users.nickname` NOT NULL, 프로필 설정에서 변경 가능)
+3. 있으면 그 사용자로 로그인, 없으면 `users` + `user_social_accounts` + `user_terms`를 한 트랜잭션으로 생성. 닉네임은 카카오 프로필 닉네임으로 저장 (DB `users.nickname` NOT NULL, 프로필 설정에서 변경 가능). 카카오 닉네임이 비어 있으면 '카카오 사용자', 20자를 넘으면 앞 20자만 저장 (가입을 막지 않음)
 4. 이메일이 같아도 이메일 가입 계정과 자동으로 합치지 않음 (다른 계정으로 취급)
 
 #### 프론트 참고
@@ -373,6 +393,9 @@
 #### 프론트 참고
 
 - 어떤 API든 401 `AUTH_TOKEN_EXPIRED`가 오면 이 API를 한 번 부르고 원래 요청을 다시 보냄
+- 리프레시 토큰 쿠키: 이름 `refresh_token`, `HttpOnly`, `Path=/api/auth`, `SameSite=Lax`, 배포 환경은 `Secure`. 요청은 쿠키를 같이 보냄 (`credentials: 'include'`)
+- 쓸 때마다 교체되므로 여러 탭이 동시에 갱신하면 하나만 성공하고 나머지는 401. 갱신 요청은 하나로 묶어서 보냄
+- 이 API는 Authorization 헤더를 보지 않음 (만료된 액세스 토큰이 붙어 있어도 됨)
 
 ## 8. GET /api/me — 내 정보 조회
 - 분류: 온보딩 · 홈
@@ -609,7 +632,7 @@ H02에서 닉네임과 아바타를 한 번에 저장합니다. 저장하면 `on
 | characters[].id · name · profileImageUrl |  | 캐릭터 (이번 시연은 1명) |
 | characters[].personality | Array | 성격 태그 (`characters.personality text[]`) |
 | characters[].relation | Object | `level`, `levelName`, `totalStudySeconds`. 아직 안 만났으면 Lv.1 · 0초 |
-|  |  |  |
+| activeSessionId | Long | 이 룸에서 진행 중인 내 세션 id. 없거나 다른 룸에서 진행 중이면 null (그때 공부 시작을 누르면 409 → H18 팝업) |
 
 ```json
 {
@@ -762,6 +785,8 @@ GET /api/me/memories?date=2026-11-12
 
 - 정렬: 예정 · 전체는 가까운 날짜부터, 지난 일정은 최근 것부터. 날짜 없는 목표는 '전체'의 맨 아래
 - 같은 날이면 시간 있는 일정이 먼저, 종일은 그 다음
+- 날짜 없는 목표는 '전체'(`status=ALL`)에만 나오고, `from` · `to`와 상관없이 포함됨. `date`를 보내면 빠짐
+- `date`와 `status`는 같이 적용됨. 지난 날짜를 누르면 `status=ALL`(또는 `PAST`)을 같이 보냄 (기본값 UPCOMING이면 빈 목록)
 
 ## 16. POST /api/sessions — 공부 시작
 - 분류: 공부 세션
@@ -775,7 +800,7 @@ GET /api/me/memories?date=2026-11-12
 
 룸 · 캐릭터 1명 · 목표 시간으로 **세션을 만듭니다**.
 
-세션에 들어갈 캐릭터가 이 시점에 확정되므로, 공부 화면(H07)을 그리는 데 필요한 **캐릭터 정보(프로필 이미지 · 성격 태그)와 Live2D 모델 주소**를 함께 줍니다.
+세션에 들어갈 캐릭터가 이 시점에 확정되므로, 공부 화면(H07)을 그리는 데 필요한 **캐릭터 · 아바타 정보(이름 · 프로필 이미지)와 Live2D 모델 주소**를 함께 줍니다. 성격 태그는 룸 상세(12)에서만 줍니다 (2026-11-03 정리: 응답 표 기준).
 
 프론트는 이 응답을 받은 뒤 모델 로딩을 시작합니다.
 
@@ -873,7 +898,7 @@ GET /api/me/memories?date=2026-11-12
 
 | 이름 | 타입 | 설명 |
 | --- | --- | --- |
-| sessionId · targetMinutes · room · character · me · serverTime |  | '공부 시작' 응답과 같음 |
+| sessionId · targetMinutes · room · character · avatar · me · serverTime |  | '공부 시작' 응답과 같음 (`startedAt`은 없음. 타이머는 `studySeconds`로) |
 | studySeconds | Integer | 지금까지 공부 시간 → H07 타이머를 여기서부터 이어서 표시 |
 | breakSeconds | Integer | 지금까지 휴식 시간 (끊긴 구간 포함) |
 
@@ -881,7 +906,8 @@ GET /api/me/memories?date=2026-11-12
 {
   "sessionId": 512, "targetMinutes": 50,
   "room": { "id": 1, "name": "쌀쌀맞은 갸루짝꿍이 나에게만 친절하다!", "backgroundImageUrl": "https://cdn.../room1-bg.png" },
-  "character": { "id": 1, "name": "채린", "profileImageUrl": "https://cdn.../chaerin.png", "personality": ["츤데레", "같은 반 친구"] },
+  "character": { "id": 1, "name": "채린", "profileImageUrl": "https://cdn.../chaerin.png", "modelJsonUrl": "https://cdn.../live2d/chaerin/v1/chaerin.model3.json", "scale": 1.0, "offsetX": 0, "offsetY": 12 },
+  "avatar": { "id": 1, "name": "기본 아바타", "profileImageUrl": "https://cdn.../avatar1.png", "modelJsonUrl": "https://cdn.../live2d/avatar1/v1/avatar1.model3.json", "scale": 1.0, "offsetX": 0, "offsetY": 12 },
   "me": { "nickname": "승희", "profileImageUrl": "https://cdn.../avatar1.png" },
   "studySeconds": 1043, "breakSeconds": 420,
   "serverTime": "2026-11-07T05:31:10Z"
@@ -894,14 +920,14 @@ GET /api/me/memories?date=2026-11-12
 
 #### 서버가 하는 일
 
-1. 마지막 상태가 `BREAK`가 아니면, 마지막 heartbeat 시각에 `BREAK` 이벤트를 넣음 (끊긴 구간 = 휴식)
+1. 마지막 상태가 `BREAK`가 아니면, 마지막 heartbeat 시각에 `BREAK` 이벤트를 넣음 (끊긴 구간 = 휴식). 마지막 heartbeat 뒤에 온 이벤트가 있으면 그 이벤트 시각에 넣음 (그 상태가 끊긴 동안 이어지지 않게)
 2. 지금 시각에 `FOCUS` 이벤트를 넣고 `last_heartbeat_at` 갱신
 3. 서버가 넣은 이 두 이벤트는 호감도에 반영하지 않음
 
 #### 이 API 다음에 할 일
 
 1. 캐릭터 Live2D를 다시 받아 H07 그리기 (새로고침이면 메모리에서 사라졌으므로)
-2. 이어하기 응답에는 `focusEventId`를 넣지 않음 (2026-11-03 결정). 이어하기 직후에는 반응 없이 바로 공부 재개
+2. 이어하기 응답에는 `focusEventId`를 넣지 않음 (2026-11-03 결정). 이어하기 직후에는 반응 없이 바로 공부 재개. 프론트는 `FOCUS`를 따로 보내지 않음 (서버가 이미 넣음)
 3. heartbeat 재시작
 
 ## 18. POST /api/sessions/{sessionId}/events — 상태 변화 전송
@@ -937,7 +963,7 @@ GET /api/me/memories?date=2026-11-12
 
 | 화면 요소 | 보낼 이벤트 |
 | --- | --- |
-| H07 공부 시작 직후 · H18 이어서 시작 직후 | `FOCUS` |
+| H07 공부 시작 직후 | `FOCUS` (H18 이어서 시작 직후에는 보내지 않음. 서버가 넣음, 17 참고) |
 | H07 '● 얼굴 확인됨'이 10초 이상 꺼짐 (H09 '자리 비움') | `AWAY` |
 | H07 다시 얼굴 확인됨 (H09 '복귀 n회') | `RETURN` |
 | H08 쉬는 시간 시작 / '목표 정하고 공부 이어가기' | `BREAK` / `FOCUS` |
@@ -962,7 +988,7 @@ GET /api/me/memories?date=2026-11-12
 
 | 이름 | 타입 | 설명 |
 | --- | --- | --- |
-| eventId | Long | 저장된 이벤트 id → '이벤트 반응 받기'에 사용 |
+| eventId | Long | 저장된 이벤트 id → '이벤트 반응 받기'에 사용. 휴식 중이라 무시된 `AWAY` · `RETURN`이면 null (반응 받기를 부르지 않음) |
 
 ```json
 { "eventId": 12344 }
@@ -974,7 +1000,9 @@ GET /api/me/memories?date=2026-11-12
 
 #### 규칙
 
-- 휴식(`BREAK`) 중에 온 `AWAY` · `RETURN`은 서버가 무시
+- 휴식(`BREAK`) 중에 온 `AWAY` · `RETURN`은 서버가 무시: 저장하지 않고 **200** `{"eventId": null}`
+- `occurredAt`이 세션 시작보다 이르면 거절하지 않고 시작 시각으로 맞춤 (프론트 시계가 조금 늦어도 시작 직후 FOCUS가 실패하지 않게)
+- ⚠️ 기획 확인 필요 (J-01): 지금은 `AWAY` 없이 온 `RETURN`도 +1. RETURN만 반복하면 호감도가 계속 오름. "직전이 AWAY일 때만 점수" 같은 규칙이 필요한지 정하기
 - 휴식 끝은 `FOCUS`, 자리 비움에서 돌아오면 `RETURN` (복귀 횟수가 휴식 때문에 부풀지 않게)
 - 전송 실패 시 같은 내용으로 재시도 → 서버가 (타입, 시각)으로 중복을 걸러 같은 `eventId`를 돌려줌
 - 카메라를 끄면 자리 판정을 할 수 없으므로 `AWAY`를 보내지 않음 (끈 동안은 자리 지킴으로 계산)
@@ -996,7 +1024,7 @@ GET /api/me/memories?date=2026-11-12
 
 | 상황 | 부르는 방법 |
 | --- | --- |
-| 공부 시작 · 이어하기 직후 (`FOCUS`) | `eventId`만 → 인사 반응 |
+| 공부 시작 직후 (`FOCUS`) | `eventId`만 → 인사 반응. 이어하기 직후에는 부르지 않음 (17: 반응 없이 바로 재개) |
 | 자리 비움 (`AWAY`) | `eventId`  • `intensity: 1` → 1분 지나도 안 오면 같은 `eventId`로 `intensity: 2`, 5분이면 `3` |
 | 복귀 (`RETURN`) | `eventId`만 → 반겨주는 반응 |
 | 쉬는 시간 · 일시정지 (`BREAK`) | `eventId`만 |
@@ -1033,7 +1061,7 @@ GET /api/me/memories?date=2026-11-12
 | 이름 | 타입 | 설명 |
 | --- | --- | --- |
 | requestId | String | 요청의 `requestId` 그대로 |
-| trigger | String | 서버가 판단한 상황: `GREETING`(세션 첫 FOCUS) · `AWAY` · `RETURN` · `BREAK` · `BREAK_END`(휴식 뒤 FOCUS) |
+| trigger | String | 서버가 판단한 상황: `GREETING`(세션 첫 FOCUS) · `AWAY` · `RETURN` · `BREAK` · `BREAK_END`(세션 첫 FOCUS가 아닌 FOCUS = 쉬는 시간 · 일시정지 뒤) |
 | content | String | 말풍선 대사 (2줄 이내). 대사 없는 반응이면 null |
 | motion | Object | `group`, `file` — 바로 재생 (없으면 null) |
 | expression | Object | `name`, `file` — 모션 위에 겹쳐 적용 (없으면 null) |
@@ -1061,7 +1089,7 @@ GET /api/me/memories?date=2026-11-12
 #### 서버가 하는 일
 
 1. 이벤트 타입과 세션 상황으로 `trigger`를 정함
-2. `live2d_reaction_maps`에서 (trigger, intensity)에 맞는 행 중 **하나를 같은 확률로** 골라 모션 · 표정 결정
+2. `live2d_reaction_maps`에서 (trigger, intensity)에 맞는 행 중 **하나를 같은 확률로** 골라 모션 · 표정 결정. 그 강도의 행이 없으면 강도가 NULL인 행에서 고름 (그것도 없으면 `motion` · `expression` null)
 3. LLM으로 대사 생성 (5초 넘으면 trigger별 고정 대사). `tts: true`면 음성도 생성
 4. 이 이벤트의 호감도 변화(상태 변화 전송 때 이미 기록)를 같이 돌려줌. 같은 `eventId`로 intensity를 올려 다시 불러도 **호감도는 다시 바뀌지 않음**
 
@@ -1151,6 +1179,7 @@ GET /api/me/memories?date=2026-11-12
 #### 규칙
 
 - 답 길이: 공부 중 1\~2문장, 쉬는 시간 2\~4문장
+- 같은 `requestId`를 다시 보내면 저장된 답장을 그대로 돌려줌. 속도 제한(1분에 10번) 횟수에 세지 않음. 이때 `affinity.delta`는 0, `motion` · `expression`은 null (처음 응답의 값은 다시 주지 않음)
 - 일시정지 중에는 프론트가 입력을 막음
 
 ## 21. POST /api/sessions/{sessionId}/heartbeat — heartbeat
@@ -1264,6 +1293,8 @@ json
 2. 받은 값 검증: `0 ≤ presentSeconds ≤ studySeconds ≤ (종료 시각 − 시작 시각)` → 통과하면 `focus_seconds` · `distract_seconds` 저장, `RETURN` 이벤트 수로 `return_count` 저장
 3. 함께한 공부 시간(`studySeconds`)만큼 `relation_logs`에 STUDY_TIME 기록 → 호감도 · 단계 · 함께한 시간 갱신
 4. 이번 대화를 `conversations.summary`에 합치고 `chat_messages` 삭제
+5. 완료 대사(`closingLine`)를 만들어 `study_sessions.closing_line`에 저장
+6. LLM이 실패하거나 5초를 넘겨도 종료는 성공: 요약은 기존 것을 두고 이번 메시지도 지우지 않음, 완료 대사는 고정 문구
 
 ---
 
