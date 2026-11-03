@@ -1,4 +1,4 @@
-package com.capsule.user.internal;
+package com.capsule.user.internal.domain;
 
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -13,9 +13,9 @@ import java.time.LocalTime;
 /** user_memories 테이블. 날짜·시간은 타임존 없이 한국 날짜·시간 그대로. created_at은 DB 기본값 */
 @Entity
 @Table(name = "user_memories")
-class UserMemory {
+public class UserMemory {
 
-    enum Type {
+    public enum Type {
         EXAM,
         GOAL,
         PROMISE
@@ -36,7 +36,7 @@ class UserMemory {
 
     protected UserMemory() {}
 
-    UserMemory(long userId, Type type, String title, LocalDate dueDate, LocalTime dueTime) {
+    public UserMemory(long userId, Type type, String title, LocalDate dueDate, LocalTime dueTime) {
         this.userId = userId;
         this.type = type;
         this.title = title;
@@ -44,23 +44,23 @@ class UserMemory {
         this.dueTime = dueTime;
     }
 
-    long id() {
+    public long id() {
         return id;
     }
 
-    Type type() {
+    public Type type() {
         return type;
     }
 
-    String title() {
+    public String title() {
         return title;
     }
 
-    LocalDate dueDate() {
+    public LocalDate dueDate() {
         return dueDate;
     }
 
-    LocalTime dueTime() {
+    public LocalTime dueTime() {
         return dueTime;
     }
 }

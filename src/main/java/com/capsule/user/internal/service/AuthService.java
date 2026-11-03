@@ -1,8 +1,16 @@
-package com.capsule.user.internal;
+package com.capsule.user.internal.service;
 
 import com.capsule.common.error.ApiException;
 import com.capsule.common.ratelimit.RateLimiter;
-import com.capsule.user.internal.TermsRepository.TermVersion;
+import com.capsule.user.internal.client.EmailSender;
+import com.capsule.user.internal.client.KakaoClient;
+import com.capsule.user.internal.domain.User;
+import com.capsule.user.internal.dto.KakaoRequest;
+import com.capsule.user.internal.dto.Login;
+import com.capsule.user.internal.dto.SignupRequest;
+import com.capsule.user.internal.dto.TermVersion;
+import com.capsule.user.internal.repository.TermsRepository;
+import com.capsule.user.internal.repository.UserRepository;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.time.Clock;
@@ -22,7 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /** 약관, 이메일 인증, 가입, 로그인, 카카오 (api.md 1~6). 토큰 발급은 {@link TokenService}. */
 @Service
-class AuthService {
+public class AuthService {
 
     private static final Pattern EMAIL = Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
     private static final Duration CODE_TTL = Duration.ofMinutes(5);
@@ -33,12 +41,6 @@ class AuthService {
     private static final int BCRYPT_MAX_BYTES = 72; // 넘으면 BCryptPasswordEncoder가 예외를 던진다
     private static final String KAKAO = "KAKAO";
     private static final SecureRandom RANDOM = new SecureRandom();
-
-    record SignupRequest(String verificationToken, String password, String nickname, List<Long> agreedTermVersionIds) {}
-
-    record KakaoRequest(String code, String redirectUri, List<Long> agreedTermVersionIds) {}
-
-    record Login(long userId, boolean onboardingRequired, boolean newUser) {}
 
     private final UserRepository users;
     private final TermsRepository terms;
@@ -69,12 +71,12 @@ class AuthService {
     }
 
     @Transactional(readOnly = true)
-    List<TermVersion> terms() {
+    public List<TermVersion> terms() {
         return terms.latestVersions(Instant.now(clock));
     }
 
     /** 6자리 번호를 5분 보관하고 메일로 보낸다. 돌려주는 값 = 유효 시간(초) */
-    int requestVerification(String rawEmail) {
+    public int requestVerification(String rawEmail) {
         String email = normalize(rawEmail);
         if (!EMAIL.matcher(email).matches()) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_EMAIL");
@@ -93,7 +95,7 @@ class AuthService {
     }
 
     /** 맞으면 가입 토큰(10분, 값은 이메일). 5번째로 틀리면 번호를 버린다 */
-    String confirmVerification(String rawEmail, String code) {
+    public String confirmVerification(String rawEmail, String code) {
         String email = normalize(rawEmail);
         String saved = redis.opsForValue().get(codeKey(email));
         if (saved == null) {
@@ -113,7 +115,7 @@ class AuthService {
     }
 
     @Transactional
-    Login signup(SignupRequest req) {
+    public Login signup(SignupRequest req) {
         String verifiedKey = req.verificationToken() == null ? null : verifiedKey(req.verificationToken());
         String email = verifiedKey == null ? null : redis.opsForValue().get(verifiedKey);
         if (email == null) {
@@ -139,7 +141,7 @@ class AuthService {
 
     /** 없는 이메일·틀린 비밀번호·탈퇴는 구분하지 않는다. 5번 틀리면 5분 잠금 */
     @Transactional
-    Login login(String rawEmail, String password) {
+    public Login login(String rawEmail, String password) {
         String email = normalize(rawEmail);
         String lockKey = "auth:login-lock:" + email;
         String failKey = "auth:login-fail:" + email;
@@ -168,7 +170,7 @@ class AuthService {
 
     /** 처음이면 users + user_social_accounts + user_terms를 한 트랜잭션으로 (api.md 6 '서버가 하는 일') */
     @Transactional
-    Login kakao(KakaoRequest req) {
+    public Login kakao(KakaoRequest req) {
         KakaoClient.KakaoProfile profile = kakaoClient
                 .fetchProfile(req.code(), req.redirectUri())
                 .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "SOCIAL_AUTH_FAILED"));

@@ -1,7 +1,8 @@
-package com.capsule.user.internal;
+package com.capsule.user.internal.service;
 
 import com.capsule.common.error.ApiException;
 import com.capsule.common.security.AuthProperties;
+import com.capsule.user.internal.dto.Issued;
 import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.Duration;
@@ -19,14 +20,11 @@ import org.springframework.stereotype.Service;
 
 /** 액세스 토큰(JWT 30분) + 리프레시 토큰(무작위 값, Redis, 쓸 때마다 교체) (ADR 0011) */
 @Service
-class TokenService {
+public class TokenService {
 
-    static final String REFRESH_COOKIE = "refresh_token";
+    public static final String REFRESH_COOKIE = "refresh_token";
     private static final Duration ACCESS_TTL = Duration.ofMinutes(30);
     private static final SecureRandom RANDOM = new SecureRandom();
-
-    /** cookie = Set-Cookie 헤더 값 */
-    record Issued(String accessToken, String cookie) {}
 
     private final JwtEncoder jwtEncoder;
     private final StringRedisTemplate redis;
@@ -40,7 +38,7 @@ class TokenService {
         this.clock = clock;
     }
 
-    Issued issue(long userId) {
+    public Issued issue(long userId) {
         Instant now = Instant.now(clock);
         JwtClaimsSet claims = JwtClaimsSet.builder()
                 .subject(Long.toString(userId))
@@ -57,7 +55,7 @@ class TokenService {
     }
 
     /** 옛 토큰은 지우고(GETDEL) 새로 발급. 이미 쓴 토큰을 다시 내면 401 */
-    Issued rotate(String refreshToken) {
+    public Issued rotate(String refreshToken) {
         String userId = refreshToken == null ? null : redis.opsForValue().getAndDelete(refreshKey(refreshToken));
         if (userId == null) {
             throw new ApiException(HttpStatus.UNAUTHORIZED, "REFRESH_TOKEN_INVALID");
@@ -66,7 +64,7 @@ class TokenService {
     }
 
     /** 리프레시 토큰을 지우고, 쿠키를 비우는 Set-Cookie 값을 돌려준다 */
-    String revoke(String refreshToken) {
+    public String revoke(String refreshToken) {
         if (refreshToken != null) {
             redis.delete(refreshKey(refreshToken));
         }

@@ -1,4 +1,4 @@
-package com.capsule.user.internal;
+package com.capsule.user.internal.client;
 
 import java.util.Optional;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;

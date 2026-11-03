@@ -1,12 +1,15 @@
-package com.capsule.user.internal;
+package com.capsule.user.internal.controller;
 
 import com.capsule.common.security.LoginUser;
-import com.capsule.user.internal.MemoryService.CreateMemoryRequest;
-import com.capsule.user.internal.MemoryService.MemoryList;
-import com.capsule.user.internal.MemoryService.MemoryResponse;
-import com.capsule.user.internal.MemoryService.Status;
-import com.capsule.user.internal.ProfileService.MeResponse;
-import com.capsule.user.internal.ProfileService.UpdateMeRequest;
+import com.capsule.user.internal.domain.UserMemory;
+import com.capsule.user.internal.dto.CreateMemoryRequest;
+import com.capsule.user.internal.dto.MeResponse;
+import com.capsule.user.internal.dto.MemoryList;
+import com.capsule.user.internal.dto.MemoryResponse;
+import com.capsule.user.internal.dto.UpdateMeRequest;
+import com.capsule.user.internal.service.MemoryService;
+import com.capsule.user.internal.service.MemoryService.Status;
+import com.capsule.user.internal.service.ProfileService;
 import java.time.LocalDate;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.format.annotation.DateTimeFormat.ISO;

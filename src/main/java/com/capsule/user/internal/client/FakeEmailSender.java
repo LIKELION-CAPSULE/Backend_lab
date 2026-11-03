@@ -1,4 +1,4 @@
-package com.capsule.user.internal;
+package com.capsule.user.internal.client;
 
 import java.util.Locale;
 import java.util.Map;

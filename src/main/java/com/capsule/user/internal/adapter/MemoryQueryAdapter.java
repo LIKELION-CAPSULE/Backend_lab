@@ -1,7 +1,8 @@
-package com.capsule.user.internal;
+package com.capsule.user.internal.adapter;
 
 import com.capsule.user.api.MemoryQuery;
 import com.capsule.user.api.UserTypes.MemoryInfo;
+import com.capsule.user.internal.service.MemoryService;
 import java.util.List;
 import org.springframework.stereotype.Component;
 

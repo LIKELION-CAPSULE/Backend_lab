@@ -1,4 +1,4 @@
-package com.capsule.user.internal;
+package com.capsule.user.internal.domain;
 
 import com.capsule.common.error.ApiException;
 import jakarta.persistence.Entity;
@@ -12,7 +12,7 @@ import org.springframework.http.HttpStatus;
 /** users 테이블. created_at은 DB 기본값, profile_image_url은 쓰지 않아서(B7) 매핑하지 않는다. */
 @Entity
 @Table(name = "users")
-class User {
+public class User {
 
     private static final int NICKNAME_MAX = 20;
 
@@ -38,16 +38,16 @@ class User {
         this.updatedAt = now;
     }
 
-    static User emailUser(String email, String passwordHash, String nickname, Instant now) {
+    public static User emailUser(String email, String passwordHash, String nickname, Instant now) {
         return new User(nickname, email, passwordHash, now);
     }
 
-    static User socialUser(String nickname, Instant now) {
+    public static User socialUser(String nickname, Instant now) {
         return new User(nickname, null, null, now);
     }
 
     /** 앞뒤 공백을 자르고 1~20자 (가입·프로필 설정 공통 규칙) */
-    static String validNickname(String raw) {
+    public static String validNickname(String raw) {
         String nickname = raw == null ? "" : raw.strip();
         int length = nickname.codePointCount(0, nickname.length());
         if (length < 1 || length > NICKNAME_MAX) {
@@ -57,48 +57,48 @@ class User {
     }
 
     /** 카카오 닉네임은 거절하지 않고 20자로 자른다 */
-    static String fitNickname(String raw) {
+    public static String fitNickname(String raw) {
         String nickname = raw == null ? "" : raw.strip();
         int length = nickname.codePointCount(0, nickname.length());
         return length <= NICKNAME_MAX ? nickname : nickname.substring(0, nickname.offsetByCodePoints(0, NICKNAME_MAX));
     }
 
-    void loggedIn(Instant now) {
+    public void loggedIn(Instant now) {
         this.lastLoginAt = now;
     }
 
-    void updateProfile(String nickname, long avatarId, Instant now) {
+    public void updateProfile(String nickname, long avatarId, Instant now) {
         this.nickname = nickname;
         this.avatarId = avatarId;
         this.updatedAt = now;
     }
 
-    long id() {
+    public long id() {
         return id;
     }
 
-    String nickname() {
+    public String nickname() {
         return nickname;
     }
 
-    String email() {
+    public String email() {
         return email;
     }
 
-    String passwordHash() {
+    public String passwordHash() {
         return password;
     }
 
-    Long avatarId() {
+    public Long avatarId() {
         return avatarId;
     }
 
-    boolean isActive() {
+    public boolean isActive() {
         return withdrawnAt == null;
     }
 
     /** 닉네임은 가입 때 받으므로 아바타만 본다 (A1) */
-    boolean onboardingRequired() {
+    public boolean onboardingRequired() {
         return avatarId == null;
     }
 }

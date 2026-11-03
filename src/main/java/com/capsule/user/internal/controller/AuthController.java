@@ -1,10 +1,20 @@
-package com.capsule.user.internal;
+package com.capsule.user.internal.controller;
 
-import com.capsule.user.internal.AuthService.KakaoRequest;
-import com.capsule.user.internal.AuthService.Login;
-import com.capsule.user.internal.AuthService.SignupRequest;
-import com.capsule.user.internal.TermsRepository.TermVersion;
-import java.util.List;
+import com.capsule.user.internal.dto.AccessTokenResponse;
+import com.capsule.user.internal.dto.ConfirmRequest;
+import com.capsule.user.internal.dto.EmailRequest;
+import com.capsule.user.internal.dto.ExpiresResponse;
+import com.capsule.user.internal.dto.Issued;
+import com.capsule.user.internal.dto.KakaoRequest;
+import com.capsule.user.internal.dto.KakaoResponse;
+import com.capsule.user.internal.dto.Login;
+import com.capsule.user.internal.dto.LoginRequest;
+import com.capsule.user.internal.dto.LoginResponse;
+import com.capsule.user.internal.dto.SignupRequest;
+import com.capsule.user.internal.dto.TermsResponse;
+import com.capsule.user.internal.dto.VerificationResponse;
+import com.capsule.user.internal.service.AuthService;
+import com.capsule.user.internal.service.TokenService;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -18,24 +28,6 @@ import org.springframework.web.bind.annotation.RestController;
 /** api.md 1~7, 24 */
 @RestController
 class AuthController {
-
-    record TermsResponse(List<TermVersion> terms) {}
-
-    record EmailRequest(String email) {}
-
-    record ExpiresResponse(int expiresInSeconds) {}
-
-    record ConfirmRequest(String email, String code) {}
-
-    record VerificationResponse(String verificationToken) {}
-
-    record LoginRequest(String email, String password) {}
-
-    record LoginResponse(String accessToken, long userId, boolean onboardingRequired) {}
-
-    record KakaoResponse(String accessToken, long userId, boolean isNewUser, boolean onboardingRequired) {}
-
-    record AccessTokenResponse(String accessToken) {}
 
     private final AuthService auth;
     private final TokenService tokens;
@@ -74,7 +66,7 @@ class AuthController {
     @PostMapping("/api/auth/social/KAKAO")
     ResponseEntity<KakaoResponse> kakao(@RequestBody KakaoRequest req) {
         Login login = auth.kakao(req);
-        TokenService.Issued issued = tokens.issue(login.userId());
+        Issued issued = tokens.issue(login.userId());
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, issued.cookie())
                 .body(new KakaoResponse(
@@ -84,7 +76,7 @@ class AuthController {
     @PostMapping("/api/auth/refresh")
     ResponseEntity<AccessTokenResponse> refresh(
             @CookieValue(name = TokenService.REFRESH_COOKIE, required = false) String refreshToken) {
-        TokenService.Issued issued = tokens.rotate(refreshToken);
+        Issued issued = tokens.rotate(refreshToken);
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, issued.cookie())
                 .body(new AccessTokenResponse(issued.accessToken()));
@@ -100,7 +92,7 @@ class AuthController {
     }
 
     private ResponseEntity<LoginResponse> loggedIn(HttpStatus status, Login login) {
-        TokenService.Issued issued = tokens.issue(login.userId());
+        Issued issued = tokens.issue(login.userId());
         return ResponseEntity.status(status)
                 .header(HttpHeaders.SET_COOKIE, issued.cookie())
                 .body(new LoginResponse(issued.accessToken(), login.userId(), login.onboardingRequired()));

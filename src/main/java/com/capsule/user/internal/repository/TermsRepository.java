@@ -1,5 +1,6 @@
-package com.capsule.user.internal;
+package com.capsule.user.internal.repository;
 
+import com.capsule.user.internal.dto.TermVersion;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -10,10 +11,7 @@ import org.springframework.stereotype.Repository;
 
 /** terms, term_versions, user_terms. 읽기와 동의 기록(추가만)뿐이라 엔티티 없이 SQL로 둔다. */
 @Repository
-class TermsRepository {
-
-    /** GET /api/terms 항목 모양 그대로 */
-    record TermVersion(long termVersionId, String code, String name, boolean required, String content) {}
+public class TermsRepository {
 
     private final JdbcClient jdbc;
 
@@ -22,7 +20,7 @@ class TermsRepository {
     }
 
     /** 약관마다 시행일이 지난 버전 중 가장 높은 것, 표시 순서대로 */
-    List<TermVersion> latestVersions(Instant now) {
+    public List<TermVersion> latestVersions(Instant now) {
         return jdbc.sql("""
                         SELECT term_version_id, code, name, required, content FROM (
                             SELECT DISTINCT ON (t.id)
@@ -39,7 +37,7 @@ class TermsRepository {
                 .list();
     }
 
-    void recordAgreements(long userId, Collection<Long> termVersionIds) {
+    public void recordAgreements(long userId, Collection<Long> termVersionIds) {
         for (long termVersionId : termVersionIds) {
             jdbc.sql("INSERT INTO user_terms (user_id, term_version_id, agreed) VALUES (?, ?, true)")
                     .params(userId, termVersionId)

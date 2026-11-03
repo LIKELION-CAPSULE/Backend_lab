@@ -1,9 +1,9 @@
-package com.capsule.user.internal;
+package com.capsule.user.internal.client;
 
 import java.util.Optional;
 
 /** 카카오 인가 코드 → 회원번호·닉네임. 지금은 Fake만 있다. 실제 어댑터는 키를 받은 뒤 RestClient로 (ADR 0011). */
-interface KakaoClient {
+public interface KakaoClient {
 
     record KakaoProfile(String providerUserId, String nickname) {}
 

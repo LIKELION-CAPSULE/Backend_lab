@@ -1,7 +1,8 @@
-package com.capsule.user.internal;
+package com.capsule.user.internal.adapter;
 
 import com.capsule.user.api.UserQuery;
 import com.capsule.user.api.UserTypes.UserProfile;
+import com.capsule.user.internal.service.ProfileService;
 import java.util.Optional;
 import org.springframework.stereotype.Component;
 

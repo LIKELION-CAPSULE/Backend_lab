@@ -1,9 +1,14 @@
-package com.capsule.user.internal;
+package com.capsule.user.internal.service;
 
 import com.capsule.common.error.ApiException;
 import com.capsule.common.time.ClockConfig;
 import com.capsule.user.api.UserTypes.MemoryInfo;
-import com.capsule.user.internal.UserMemory.Type;
+import com.capsule.user.internal.domain.UserMemory;
+import com.capsule.user.internal.domain.UserMemory.Type;
+import com.capsule.user.internal.dto.CreateMemoryRequest;
+import com.capsule.user.internal.dto.MemoryList;
+import com.capsule.user.internal.dto.MemoryResponse;
+import com.capsule.user.internal.repository.UserMemoryRepository;
 import java.time.Clock;
 import java.time.DateTimeException;
 import java.time.Instant;
@@ -18,9 +23,12 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 일정 저장·조회 (api.md 13, 14). 날짜는 한국 기준. MemoryQuery 계약은 {@link MemoryQueryAdapter}가 이 클래스로 위임 */
+/**
+ * 일정 저장·조회 (api.md 13, 14). 날짜는 한국 기준. MemoryQuery 계약은
+ * {@link com.capsule.user.internal.adapter.MemoryQueryAdapter}가 이 클래스로 위임
+ */
 @Service
-class MemoryService {
+public class MemoryService {
 
     private static final String DEFAULT_PROMISE_TITLE = "같이 공부하기";
     private static final DateTimeFormatter HH_MM = DateTimeFormatter.ofPattern("HH:mm");
@@ -39,18 +47,11 @@ class MemoryService {
                     UserMemory::dueDate, Comparator.nullsLast(Comparator.<LocalDate>reverseOrder()))
             .thenComparing(SAME_DAY);
 
-    enum Status {
+    public enum Status {
         UPCOMING,
         ALL,
         PAST
     }
-
-    /** 형식 오류도 INVALID_MEMORY로 내려고 문자열로 받는다 */
-    record CreateMemoryRequest(String type, String title, String dueDate, String dueTime) {}
-
-    record MemoryResponse(long memoryId, Type type, String title, LocalDate dueDate, String dueTime, Integer dDay) {}
-
-    record MemoryList(List<MemoryResponse> memories, List<LocalDate> datesWithMemories) {}
 
     private final UserMemoryRepository memories;
     private final Clock clock;
@@ -62,7 +63,7 @@ class MemoryService {
 
     /** EXAM·PROMISE는 날짜 필수, GOAL은 선택(B9). 날짜 없이 시간만·지난 날짜는 안 됨 */
     @Transactional
-    MemoryResponse create(long userId, CreateMemoryRequest req) {
+    public MemoryResponse create(long userId, CreateMemoryRequest req) {
         Type type = parse(req.type(), Type::valueOf);
         LocalDate dueDate = parse(req.dueDate(), LocalDate::parse);
         LocalTime dueTime = parse(req.dueTime(), s -> LocalTime.parse(s, HH_MM));
@@ -82,7 +83,7 @@ class MemoryService {
 
     /** date가 있으면 from·to보다 우선. datesWithMemories는 from~to 안의 날짜(탭·date와 무관) */
     @Transactional(readOnly = true)
-    MemoryList list(long userId, LocalDate from, LocalDate to, LocalDate date, Status status, Type type) {
+    public MemoryList list(long userId, LocalDate from, LocalDate to, LocalDate date, Status status, Type type) {
         if (from != null && to != null && (to.isBefore(from) || ChronoUnit.DAYS.between(from, to) >= MAX_RANGE_DAYS)) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_DATE_RANGE");
         }
