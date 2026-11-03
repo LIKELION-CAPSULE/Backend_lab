@@ -36,19 +36,12 @@ def main() -> int:
     root = os.path.realpath(ROOT)
     if not abs_path.startswith(root + os.sep):
         return 0  # 레포 밖 파일은 관여하지 않음
-    rel = os.path.relpath(abs_path, root).replace(os.sep, "/")
+    rel = os.path.relpath(abs_path, root)
 
     try:
         import zones
         cfg = zones.load()
-        branch = zones.current_branch()
-        # 서브에이전트 worktree(.claude/worktrees/<이름>/...)는 별도 체크아웃이다. 그 안의 경로와 그 worktree의 브랜치로 판정한다
-        # (안 하면 worktree 안의 모든 파일이 .claude/** 하네스 구역이 되어 수정마다 확인 질문이 뜸)
-        worktree = re.match(r"(\.claude/worktrees/[^/]+)/(.+)", rel)
-        if worktree:
-            rel = worktree.group(2)
-            branch = zones.git("rev-parse", "--abbrev-ref", "HEAD", cwd=os.path.join(root, worktree.group(1)))[1] or branch
-        decision, reason = zones.decide(rel, cfg, zones.current_member(cfg), zones.current_phase(), branch)
+        decision, reason = zones.decide(rel, cfg, zones.current_member(cfg), zones.current_phase(), zones.current_branch())
     except Exception as e:  # 하네스 오류로 작업이 막히지 않게: 경고만 남기고 통과
         print(f"[하네스] zone_guard 오류(통과 처리): {e}", file=sys.stderr)
         return 0
