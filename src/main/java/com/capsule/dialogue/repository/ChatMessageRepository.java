@@ -1,0 +1,14 @@
+package com.capsule.dialogue.repository;
+
+import com.capsule.dialogue.domain.ChatMessage;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> {
+
+    List<ChatMessage> findByConversationIdAndSessionIdOrderById(long conversationId, long sessionId);
+
+    Optional<ChatMessage> findByConversationIdAndRequestIdAndSender(long conversationId, UUID requestId, String sender);
+}
