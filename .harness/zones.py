@@ -268,7 +268,9 @@ def decide(relpath: str, cfg: Config, me: str | None, phase: str, branch: str,
         return "ask", (f"[하네스] {module} 계약(api) 변경({who}). 상대 코드가 깨질 수 있음. "
                        f"contract-change 스킬 절차(확장→이전→제거)를 따르는지 확인.")
 
-    return "ask", "[하네스] 공용 구역. 기능 PR에 섞지 말고 작은 공용 PR로 먼저 머지하는 게 규칙."
+    # 공용 구역(문서, common, gradle, yml)은 묻지 않는다. 같은 알림을 CI가 PR에 zone:shared 라벨로 하므로
+    # 여기서도 물으면 확인만 반복된다(ADR 0010). 묻는 건 상대 코드가 깨질 수 있는 경우(남의 모듈·계약·남의 마이그레이션)만
+    return "allow", "공용 구역 (PR에 zone:shared 라벨. 기능 PR에 섞지 말고 작은 공용 PR로)"
 
 
 # ---------------------------------------------------------------- CI/훅 보조

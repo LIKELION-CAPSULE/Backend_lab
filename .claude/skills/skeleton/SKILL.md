@@ -1,6 +1,6 @@
 ---
 name: skeleton
-description: 노션에서 가져온 docs/specs의 API 명세·DB 스키마(와 기획 흐름)로 캡슐 백엔드의 얇은 뼈대(walking skeleton)를 만든다. 단순한 부분은 전부 구현하고, LLM 대화와 기획 판단이 필요한 부분은 Fake 구현 + TODO(judgment)로 남겨 판단 백로그를 만든다. "뼈대 만들어", "스켈레톤", "명세로 프로젝트 만들어", "specs 기반으로 구현 시작" 같은 요청이나 .harness/phase가 skeleton인 상태에서 구현을 시작할 때 반드시 사용.
+description: docs/specs의 API 명세·DB 스키마(와 기획 흐름)로 캡슐 백엔드의 얇은 뼈대(walking skeleton)를 만든다. 단순한 부분은 전부 구현하고, LLM 대화와 기획 판단이 필요한 부분은 Fake 구현 + TODO(judgment)로 남겨 판단 백로그를 만든다. "뼈대 만들어", "스켈레톤", "명세로 프로젝트 만들어", "specs 기반으로 구현 시작" 같은 요청이나 .harness/phase가 skeleton인 상태에서 구현을 시작할 때 반드시 사용.
 ---
 
 # 얇은 뼈대 만들기
@@ -11,11 +11,11 @@ description: 노션에서 가져온 docs/specs의 API 명세·DB 스키마(와 �
 - 공용 코드, 모듈 계약(api), DB 스키마를 **둘이 갈라지기 전에** 한 번에 깔아둔다. 갈라진 뒤에 이걸 만들면 충돌의 대부분이 여기서 난다.
 - 판단이 필요한 부분을 지금 구현하면 기획이 정해지기 전에 코드가 기획을 정해버린다. 그래서 자리만 만들고 목록으로 넘긴다.
 
-## 입력 (원본은 노션, 레포엔 스냅샷)
-- `docs/specs/api.md`: API 명세 (spec-sync가 노션에서 가져옴)
-- `docs/specs/schema.sql`: DB 스키마 (spec-sync가 노션에서 가져옴)
+## 입력 (원본은 docs/specs, ADR 0013)
+- `docs/specs/api.md`: API 명세
+- `docs/specs/schema.sql`: DB 스키마
 - `docs/specs/flow.md`: 핵심 흐름 (선택)
-api.md나 schema.sql이 없거나 상세가 "(spec-sync 실행 전)"이면 먼저 spec-sync를 돌린다.
+api.md나 schema.sql이 없거나 비어 있으면 멈추고 사람에게 알린다.
 flow.md가 없으면 api.md의 순서와 와이어프레임 번호(H01→H20)로 흐름 초안을 만들어 계획에 넣고 확인받는다.
 
 ## 절차
@@ -94,4 +94,4 @@ docs/decisions에 없는 새 라이브러리·구조를 쓰려면 여기서 이�
 - 실제 LLM API 호출 코드 작성, API 키 읽기.
 - 계획 확인 전에 코드 생성.
 - 마이그레이션 파일 수동 생성, develop/main에서 작업.
-- api.md·schema.sql 직접 수정 (원본은 노션. 틀려 보이면 불일치 목록에 올림).
+- api.md·schema.sql을 뼈대 작업 중에 고치기 (틀려 보이면 불일치 목록에 올리고, 고치는 건 별도 명세 PR).

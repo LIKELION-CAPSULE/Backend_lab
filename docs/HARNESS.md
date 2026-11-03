@@ -12,8 +12,8 @@
 ### 한 줄 답
 - **하네스 프레임워크**: 기성 팩(Superpowers, pstack, CCPM)을 설치하지 않음. Claude Code 기본 기능(훅, 스킬, 서브에이전트, settings) + GitHub Actions(anthropics/claude-code-action)로 직접 구성함
 - **앱 스택**: Spring Boot + Spring Modulith(모듈러 모놀리스) + PostgreSQL + Redis + Flyway + Testcontainers + Gradle(Spotless)
-- **명세 원본**: 노션 (시연 API 최종본 DB, DB 페이지). 레포 `docs/specs/`에는 spec-sync 스킬이 가져온 스냅샷
-- **개발 파이프라인**: 노션 명세 동기화 → 얇은 뼈대(단순한 건 구현, 판단·LLM은 자리만) → 도메인 분리 개발 → PR 3단 리뷰
+- **명세 원본**: 레포 `docs/specs/`(api.md, schema.sql). 명세 PR로 고치고, 머지 뒤 spec-sync가 노션 사본(프론트·기획용, 읽기 전용)에 반영 (2026-11-04부터, ADR 0013)
+- **개발 파이프라인**: 명세(뼈대 때는 노션에서 가져옴) → 얇은 뼈대(단순한 건 구현, 판단·LLM은 자리만) → 도메인 분리 개발 → PR 3단 리뷰
 
 ### 하네스 프레임워크: 왜 기성 팩이 아니라 직접 구성했나
 
@@ -45,7 +45,7 @@
 | Claude 자동 리뷰는 위험한 PR만 | 비용 | 모든 PR 자동 리뷰 |
 | 충돌 예측 자동화는 안 함 | 구역 분리·짧은 브랜치·공용 PR 우선으로 대부분 예방되고, 남는 충돌은 rebase와 PR 화면에서 git이 알려줌. 자동 예측은 push마다 fetch 비용과 경고 소음만 늘림 | push·세션 시작 때 merge-tree로 상대 브랜치와 미리 합쳐보기 |
 | git·GitHub가 하는 일은 다시 만들지 않음 | develop/main 보호는 GitHub 브랜치 보호, 로컬 파일 제외는 .gitignore, 리뷰 요청은 필요할 때 PR 화면에서, 뒤처짐은 git status가 이미 함. 같은 규칙을 두 군데서 관리하면 한쪽만 바뀌는 일이 생김. 예외: 브랜치 보호를 못 쓰는 동안 Claude의 develop/main push는 bash_guard가 막음(2-3장) | pre-commit·pre-push 훅, 셸 명령 차단으로 push 규칙 재구현 |
-| 명세 원본은 노션, 레포엔 스냅샷 | 기획은 노션에서 쓰고 고치는 게 편함. 하지만 두 에이전트·CI·리뷰어가 같은 버전을 봐야 하고, 명세 변경이 PR diff로 보여야 함. CI는 노션을 못 읽음 | 에이전트가 매번 노션 직접 읽기, 레포에서 명세 작성 |
+| 명세 원본은 레포, 노션은 읽기 전용 사본 | 처음엔 노션이 원본(0008)이었지만 여러 사람·세션이 동시에 고치며 꼬였고 리뷰·충돌 표시·변경 이유가 안 남음. 레포에선 명세 변경도 PR로 리뷰되고 diff로 보임. 프론트·기획은 계속 노션에서 봄 | 노션 원본 유지(0008), 노션 보관 + GitHub 링크, OpenAPI를 원본으로(구현 기록으로만 쓸 예정) |
 
 ### 앱 스택
 
@@ -61,7 +61,7 @@
 | git flow (가볍게) | main ← develop ← feature. 에이전트는 많이 바꾸므로 브랜치는 짧게 | `docs/decisions/0004` |
 | Spotless | 포맷 논쟁 제거, Stop 훅이 자동 정리 | - |
 | 하네스 직접 구성 | 위 표 | `docs/decisions/0006`, `0007`, `0010` |
-| 명세 동기화 (노션 → 레포) | 위 표 | `docs/decisions/0008` |
+| 명세 원본 레포, 노션 사본 (레포 → 노션) | 위 표 | `docs/decisions/0013` (0008 대체) |
 
 ### 이 원칙은 앞으로도 적용됨
 - 프레임워크·라이브러리·구조·파이프라인을 새로 고르거나 바꿀 때는 **코드보다 이유 설명이 먼저**: 무엇을 / 왜 / 버린 대안 → 확인 → `docs/decisions/`에 ADR 추가
@@ -143,7 +143,7 @@ scripts/setup.sh --me seonguk
 
 setup.sh가 하는 일: 도구 확인(python3 연결, git, docker, java 21, gh) → 내가 누구인지 `.claude/settings.local.json`에 저장(커밋 안 됨) → `.env.local` 생성 → Notion MCP 연결 여부 확인
 
-둘 다 Claude Code에 Notion MCP를 한 번 연결 (spec-sync용): `claude mcp add --transport http notion https://mcp.notion.com/mcp` → Claude Code에서 `/mcp`로 노션 로그인
+둘 다 Claude Code에 Notion MCP를 한 번 연결 (spec-sync가 노션 사본에 반영할 때 씀): `claude mcp add --transport http notion https://mcp.notion.com/mcp` → Claude Code에서 `/mcp`로 노션 로그인
 
 ### 2-3. GitHub 저장소 설정 (승희, 한 번)
 - **기본 브랜치**: `develop` (설정 완료 2026-11-03)
@@ -162,7 +162,9 @@ setup.sh가 하는 일: 도구 확인(python3 연결, git, docker, java 21, gh) 
 
 ## 3. Phase A: 얇은 뼈대 (승희)
 
-### 3-1. 노션 명세 가져오기 (spec-sync)
+### 3-1. 노션 명세 가져오기 (spec-sync, 뼈대 때 기록)
+> 2026-11-04부터는 반대 방향이다: 원본은 레포 `docs/specs/`, 노션은 읽기 전용 사본 (ADR 0013, 4장 '명세가 바뀔 때'). 아래는 뼈대를 만들 때 한 일의 기록.
+
 명세는 노션에서 쓰고 고친다. 레포에는 spec-sync 스킬이 그대로 옮긴 스냅샷이 들어감.
 
 | 노션 원본 | 레포 파일 | 내용 |
@@ -216,7 +218,7 @@ skeleton 스킬이 하는 일:
 1. **아침**: `git fetch && git rebase origin/develop`
 2. **브랜치**: `git switch -c feature/<모듈>-<설명>` (develop에서 고치려 하면 훅이 막음)
 3. **작업**: `judgment-backlog.md`에서 내 항목(J-xx) 가져가서 구현. 내 모듈 안은 훅이 조용히 통과
-4. **노션 명세가 바뀌었으면**: spec-sync → 작은 명세 PR을 먼저 머지 (기능 PR에 섞지 않음)
+4. **명세를 바꿔야 하면**: `docs/specs/api.md`·`schema.sql`만 고치는 작은 명세 PR을 먼저 머지 (기능 PR에 섞지 않음) → 머지 뒤 "노션에 명세 반영해줘"(spec-sync)로 노션 사본 갱신. 노션은 고치지 않는다
 5. **내 모듈 밖이 필요해지면**: 훅이 멈추고 물어봄 → 6장 표대로 판단
 6. **수시로**: Claude가 멈출 때마다 Stop 훅이 `verify.sh --quick` → 실패하면 Claude가 계속 고침
 7. **작게 자주 커밋, 하루 1번 이상 push, 작업 시작하면 draft PR** (상대가 내 진행 상황을 GitHub에서 볼 수 있게)
@@ -230,7 +232,7 @@ skeleton 스킬이 하는 일:
 - 나: seunghee | 내 모듈: relation, dialogue
 - 단계: domain (도메인 분리 개발. 내 모듈 밖 수정은 사람 확인을 거침)
 - 브랜치: feature/dialogue-reply
-- 명세 스냅샷: 2026-11-03 (원본은 노션. 바뀌었으면 spec-sync)
+- 명세: 원본은 docs/specs (고칠 때는 명세 PR 먼저) | 노션 사본 반영: 2026-11-04 `0a8df11` (명세 PR 머지 뒤 spec-sync)
 - 미구현 판단 목록: docs/specs/judgment-backlog.md (내 담당 항목부터)
 ```
 
@@ -252,7 +254,7 @@ skeleton 스킬이 하는 일:
 | 내 모듈 | `<base>/dialogue/**` (내가 담당) | 허용 | 허용 |
 | 상대 모듈 | `<base>/user/**` (성욱 담당) | 허용 | **확인 질문** |
 | 계약 | `<base>/*/api/**` | 허용 | **확인 질문** (내 모듈이어도) |
-| 공용 | `common/**`, `build.gradle`, `application*.yml`, `docs/specs/**` | 허용 | **확인 질문** |
+| 공용 | `common/**`, `build.gradle`, `application*.yml`, `docs/specs/**` | 허용 | 허용 (PR에 `zone:shared` 라벨로 알림. 2026-11-04 전에는 확인 질문) |
 | 마이그레이션 | `db/migration/**` | 규칙 맞으면 허용 | 내 모듈 허용 / 남의 모듈 확인 |
 | 하네스 | `.claude/`, `.harness/`, `scripts/`, `.github/`, `CLAUDE.md` | `harness/*` 브랜치만 허용, 그 외 확인 | 같음 |
 
@@ -277,9 +279,9 @@ skeleton 스킬이 하는 일:
 | 내 모듈 안 수정 | 통과, Stop 훅이 검증 | 없음 |
 | 상대 모듈 내부를 고쳐야 함 (버그 발견 등) | 확인 질문 → 승인 시 PR에 `cross-module` 라벨 | 원칙은 상대에게 요청. 급하면 승인하고 고친 뒤 카톡 한 줄 |
 | 계약(api) 변경 | 확인 질문, PR에 `zone:contract`, Claude 자동 리뷰 | contract-change 스킬: 확장→이전→제거, 각각 별도 PR |
-| 공용 수정 (`common`, gradle, yml) | 확인 질문, `zone:shared`, Claude 자동 리뷰 | 기능 PR에 섞지 말고 작은 공용 PR로 먼저 머지, 상대는 rebase |
-| DB 변경 | 기존 파일 수정 차단, 남의 테이블은 확인 | 노션 DB 페이지 수정 → spec-sync → `scripts/new-migration.sh`, 컬럼 변경도 확장→이전→제거 |
-| 노션 API 명세가 바뀜 | spec-sync가 스냅샷 갱신, 바뀐 부분이 PR diff로 보임 | 작은 명세 PR을 먼저 머지, 영향받는 모듈 담당자가 구현 |
+| 공용 수정 (`common`, gradle, yml, 문서) | 확인 없이 통과(2026-11-04부터), PR에 `zone:shared`, Claude 자동 리뷰 | 기능 PR에 섞지 말고 작은 공용 PR로 먼저 머지, 상대는 rebase |
+| DB 변경 | 기존 파일 수정 차단, 남의 테이블은 확인 | `schema.sql` 명세 PR → `scripts/new-migration.sh`, 컬럼 변경도 확장→이전→제거 |
+| API 명세가 바뀜 | 명세 PR에서 바뀐 부분이 diff로 보임, 머지 뒤 spec-sync가 노션 사본 갱신 | 작은 명세 PR을 먼저 머지, 영향받는 모듈 담당자가 구현 |
 | 로컬 전용 설정·비밀값 | .gitignore로 커밋 제외, Claude의 `.env` 읽기 차단 | `.env.local`, `*.local.*`에 둠 |
 | 아직 커밋 안 한 작업 | 상대에게 안 보임 | 작게 자주 커밋, 하루 1번 push, 작업 시작하면 draft PR |
 | 내 병렬 세션끼리 (worktree) | worktree별 DB·포트 자동 분리 (`run-local.sh`) | 세션당 worktree 하나, 동시 3개 이하 |
@@ -333,7 +335,7 @@ skeleton 스킬이 하는 일:
 | `.claude/hooks/bash_guard.py` | 마이그레이션 삭제·`.env` 읽기·develop/main push 차단 | Bash 직전 |
 | `.claude/hooks/stop_verify.sh` | `verify.sh --quick`, 실패하면 Claude가 계속 고치게 (연속 3회까지) | Claude가 멈추기 직전 |
 | `.claude/agents/reviewer.md` | 읽기 전용 셀프 리뷰 | pr-write가 호출 |
-| `.claude/skills/spec-sync/` | 노션 API 명세·DB → `docs/specs` 스냅샷 | Phase A 시작, 명세 변경 시 |
+| `.claude/skills/spec-sync/` | 명세 PR 만들기, 머지된 명세를 노션 사본에 반영 (레포 → 노션) | 명세 변경 시, 명세 PR 머지 뒤 |
 | `.claude/skills/skeleton/` | 명세 → 뼈대 | Phase A |
 | `.claude/skills/verify/` | 검증 실행과 실패 해석 | 실패 시 |
 | `.claude/skills/pr-write/` | 세션 맥락 → PR 본문 → PR | PR 올릴 때 |
@@ -350,7 +352,7 @@ skeleton 스킬이 하는 일:
 | `.gitattributes` | 텍스트 파일 LF 고정 (Windows에서 받아도 `.sh`·`gradlew`가 CRLF로 깨지지 않게) | checkout 시 |
 | `CLAUDE.md` | 에이전트 상시 컨텍스트 (짧게, 상세는 링크) | 매 요청 |
 | `docs/decisions/` | 스택·설계 결정 이유 (ADR) | 에이전트가 엉뚱한 대안 제안 방지 |
-| `docs/specs/` | 노션 명세 스냅샷(api.md, schema.sql, SOURCE.md), 뼈대 계획, 판단 백로그 | Phase A·B |
+| `docs/specs/` | 명세 원본(api.md, schema.sql), 노션 사본 위치(SOURCE.md), 뼈대 계획, 판단 백로그 | Phase A·B |
 
 ---
 
@@ -390,7 +392,7 @@ skeleton 스킬이 하는 일:
 | 세션 시작 때 하네스 상태가 안 뜨고, 훅이 아무것도 안 막음 (Windows) | `python3`가 Microsoft Store 바로가기라 실행하면 exit 49. 훅은 exit 2만 차단이라 경고만 남기고 통과 | `scripts/setup.sh`를 다시 실행 → 실제 파이썬으로 연결하는 `~/bin/python3`를 자동으로 만듦 (Git Bash와 Claude Code 훅의 PATH 맨 앞이 `~/bin`). 직접 하려면 그 파일에 `#!/usr/bin/env bash`와 `exec /c/Python313/python "$@"` 두 줄 |
 | 훅이 계속 "누구인지 모름" | HARNESS_ME 미설정, git 이메일이 zones.conf와 다름 | `scripts/setup.sh --me <키>` |
 | 모든 파일 수정이 차단됨 | develop/main 브랜치에 있음 | `git switch -c feature/<모듈>-<설명>` |
-| 확인 질문이 자주 뜸 | domain 단계에서 공용·계약·남의 모듈 작업 중 / 하네스 파일을 `harness/*` 밖에서 수정 | 원래 확인 대상. 하네스는 `harness/<설명>` 브랜치에서 |
+| 확인 질문이 자주 뜸 | domain 단계에서 계약·남의 모듈 작업 중 / 하네스 파일을 `harness/*` 밖에서 수정 / 메인 폴더가 옛 develop이라 훅이 옛 규칙(공용 구역도 질문)으로 돎 | 원래 확인 대상. 하네스는 `harness/<설명>` 브랜치에서. 훅은 메인 폴더의 `.harness/zones.py`로 돌므로 메인 폴더를 develop 최신으로 |
 | Claude가 끝내지 않고 계속 고침 | Stop 훅이 verify 실패를 돌려보낸 것 (정상) | 연속 3번까지만 막고, 그래도 실패하면 멈추고 사람에게 넘김. 그때 오류를 보고 방향 지시 |
 | `Could not find a valid Docker environment` | Docker 꺼짐 | Docker Desktop 실행 |
 | 로컬에서 Flyway `Detected applied migration not resolved locally` | 다른 브랜치에서 적용한 마이그레이션이 로컬 DB에 남아 있음(브랜치 전환) | `scripts/run-local.sh --reset` |
@@ -398,7 +400,7 @@ skeleton 스킬이 하는 일:
 | CI `zones.conf 엄격 검사` 실패 | `[team]`에 TODO 남음 | GitHub 아이디·이메일 채우는 harness PR |
 | CI `PR 본문` 실패 | '작업 내용' 섹션이 없거나 템플릿 안내 문구뿐 | pr-write로 다시 쓰거나 '작업 내용'을 채움 |
 | `claude-review` 실패 | 시크릿 없음 | 2-3장. 안 쓸 거면 무시해도 다른 체크엔 영향 없음 |
-| spec-sync가 노션을 못 읽음 | Claude Code에 Notion MCP 미연결·미로그인 | 2-2장 Notion MCP 연결 |
+| spec-sync가 노션에 반영을 못 함 | Claude Code에 Notion MCP 미연결·미로그인 | 2-2장 Notion MCP 연결 |
 
 ---
 
