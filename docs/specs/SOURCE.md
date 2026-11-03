@@ -8,4 +8,4 @@
 | `schema.sql` | DB: https://app.notion.com/p/40db9a07e59280abad14da2dde00c864 | 페이지의 SQL 코드 블록 그대로 |
 | `flow.md` (선택) | 없음 | 사람이 쓰거나, skeleton이 API 순서·와이어프레임 번호로 초안을 만들고 확인받음 |
 
-동기화 시각: 2026-11-03 (초기 스냅샷. api.md는 목록만, 상세는 spec-sync 첫 실행 때 채움)
+동기화 시각: 2026-11-03 (spec-sync: api.md 23행 상세 반영, schema.sql 변경 없음)
