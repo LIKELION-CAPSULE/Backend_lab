@@ -1,6 +1,6 @@
 # 모듈 구조 규칙
 
-모듈 경계는 `api`/`internal`(ADR 0001), `internal` 안은 레이어 패키지(ADR 0012).
+모듈 경계는 `api`(ADR 0001), 모듈 바로 아래는 크루윙 백엔드와 같은 레이어 패키지(ADR 0012).
 
 ```
 <base>/
@@ -13,20 +13,18 @@
 │   │   ├── UserQuery.java       (interface)
 │   │   ├── UserTypes.java       (record DTO 모음)
 │   │   └── ActiveSessionLookup.java (위 모듈이 구현하는 SPI)
-│   └── internal/            # 구현: 다른 모듈은 절대 참조 금지 → 모듈 구역
-│       ├── controller/      AuthController, MeController
-│       ├── service/         AuthService, TokenService, ProfileService, MemoryService
-│       ├── dto/             요청·응답 record (파일 하나에 하나: SignupRequest, MeResponse ...)
-│       ├── repository/      UserRepository, UserMemoryRepository, TermsRepository
-│       ├── domain/          User, UserMemory (JPA 엔티티)
-│       ├── adapter/         UserQueryAdapter, MemoryQueryAdapter (계약 구현)
-│       └── client/          KakaoClient, FakeKakaoClient, EmailSender, FakeEmailSender (외부 연동 포트 + Fake)
+│   ├── controller/          AuthController, MeController          ┐
+│   ├── service/             AuthService, TokenService, ...         │ 구현: 다른 모듈은 참조 금지
+│   ├── dto/                 SignupRequest, MeResponse ... (파일 하나에 하나) │ → 모듈 구역
+│   ├── repository/          UserRepository, TermsRepository ...    │
+│   ├── domain/              User, UserMemory (JPA 엔티티)          │
+│   ├── adapter/             UserQueryAdapter, MemoryQueryAdapter (계약 구현)
+│   └── client/              KakaoClient, FakeKakaoClient, EmailSender, FakeEmailSender ┘
 ├── content/ ...  session/ ...  relation/ ...
 └── dialogue/
-    └── internal/
-        ├── client/LlmClient.java       (포트. 입출력 record는 dto/ChatLine·ReplyContext·LlmReply)
-        ├── client/FakeLlmClient.java   (@ConditionalOnProperty capsule.llm.mode=fake)
-        └── ...
+    ├── client/LlmClient.java       (포트. 입출력 record는 dto/ChatLine·ReplyContext·LlmReply)
+    ├── client/FakeLlmClient.java   (@ConditionalOnProperty capsule.llm.mode=fake)
+    └── ...
 ```
 
 ## 패키지
@@ -49,7 +47,7 @@
   @org.springframework.modulith.NamedInterface("api")
   package com.capsule.user.api;
   ```
-- `internal` 하위 패키지끼리 쓰는 클래스는 public이어도 된다. 다른 모듈이 못 쓰게 막는 건 `ModularityTests`가 한다.
+- 레이어 패키지는 모듈의 하위 패키지라 Spring Modulith가 다른 모듈에서 감춘다. 레이어끼리 쓰는 클래스는 public이어도 되고, 다른 모듈이 쓰면 `ModularityTests`가 실패한다.
 - `common`도 Spring Modulith에겐 모듈 하나라서 하위 패키지(`common/error` 등)가 기본 비공개다. 모든 모듈이 쓰는 공용이므로 열어둔다(안 하면 ModularityTests가 `depends on non-exposed type`으로 실패):
   ```java
   @org.springframework.modulith.ApplicationModule(type = org.springframework.modulith.ApplicationModule.Type.OPEN)

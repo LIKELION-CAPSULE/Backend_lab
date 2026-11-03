@@ -17,7 +17,7 @@ description: 캡슐 백엔드를 검증하고 실패를 해석한다. 구현을 
 - **spotlessCheck 실패**: `./gradlew spotlessApply` 후 다시.
 - **컴파일 실패**: 다른 사람이 바꾼 계약 때문이면 `git log origin/develop -- '*/api/*'`로 확인. 계약이 바뀌었는데 내 코드가 옛 시그니처를 쓰면, deprecated 표시와 대체 메서드를 찾아 옮긴다.
 - **ModularityTests 실패** (`Module 'x' depends on non-exposed type ... within module 'y'`):
-  다른 모듈의 internal을 참조한 것. 고치는 순서: ① 그 모듈 `api`에 이미 있는 걸로 대체 ② 없으면 이벤트로 바꿀 수 있는지 ③ 둘 다 안 되면 상대 모듈 `api`에 추가가 필요 → 계약 변경이므로 contract-change 스킬, 상대 모듈이면 담당자에게 요청.
+  다른 모듈의 `api` 밖 패키지(controller·service·repository 등)를 참조한 것. 고치는 순서: ① 그 모듈 `api`에 이미 있는 걸로 대체 ② 없으면 이벤트로 바꿀 수 있는지 ③ 둘 다 안 되면 상대 모듈 `api`에 추가가 필요 → 계약 변경이므로 contract-change 스킬, 상대 모듈이면 담당자에게 요청.
 - **Testcontainers 오류** (`Could not find a valid Docker environment`): Docker가 꺼져 있음. 사람에게 Docker 실행을 요청한다.
 - **Flyway 오류**
   - `Validate failed: Migration checksum mismatch`: 적용된 마이그레이션 파일이 바뀜. 되돌리고 새 마이그레이션으로.
