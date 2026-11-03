@@ -1,4 +1,4 @@
-package com.capsule.content.internal;
+package com.capsule.content.internal.domain;
 
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -8,7 +8,7 @@ import jakarta.persistence.Table;
 
 @Entity
 @Table(name = "study_rooms")
-class StudyRoom {
+public class StudyRoom {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -19,4 +19,24 @@ class StudyRoom {
     String thumbnailUrl;
     int sortOrder;
     boolean isActive;
+
+    public Long id() {
+        return id;
+    }
+
+    public String name() {
+        return name;
+    }
+
+    public String description() {
+        return description;
+    }
+
+    public String thumbnailUrl() {
+        return thumbnailUrl;
+    }
+
+    public boolean isActive() {
+        return isActive;
+    }
 }

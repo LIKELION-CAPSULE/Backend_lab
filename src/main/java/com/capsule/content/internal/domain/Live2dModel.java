@@ -1,4 +1,4 @@
-package com.capsule.content.internal;
+package com.capsule.content.internal.domain;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -10,7 +10,7 @@ import java.math.BigDecimal;
 
 @Entity
 @Table(name = "live2d_models")
-class Live2dModel {
+public class Live2dModel {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -25,4 +25,28 @@ class Live2dModel {
 
     @Column(name = "offset_y")
     int offsetY;
+
+    public Long id() {
+        return id;
+    }
+
+    public String storagePrefix() {
+        return storagePrefix;
+    }
+
+    public String modelJsonPath() {
+        return modelJsonPath;
+    }
+
+    public BigDecimal scale() {
+        return scale;
+    }
+
+    public int offsetX() {
+        return offsetX;
+    }
+
+    public int offsetY() {
+        return offsetY;
+    }
 }

@@ -1,8 +1,11 @@
-package com.capsule.content.internal;
+package com.capsule.content.internal.adapter;
 
 import com.capsule.content.api.ContentTypes.AvatarInfo;
 import com.capsule.content.api.ContentTypes.CharacterInfo;
 import com.capsule.content.api.ContentTypes.ModelInfo;
+import com.capsule.content.internal.domain.Avatar;
+import com.capsule.content.internal.domain.CharacterEntity;
+import com.capsule.content.internal.domain.Live2dModel;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -18,15 +21,25 @@ class ContentMapper {
 
     ModelInfo model(Live2dModel m) {
         return new ModelInfo(
-                cdnBaseUrl + "/" + m.storagePrefix + m.modelJsonPath, m.scale.doubleValue(), m.offsetX, m.offsetY);
+                cdnBaseUrl + "/" + m.storagePrefix() + m.modelJsonPath(),
+                m.scale().doubleValue(),
+                m.offsetX(),
+                m.offsetY());
     }
 
     AvatarInfo avatar(Avatar a) {
-        return new AvatarInfo(a.id, a.name, a.thumbnailUrl, a.isActive, model(a.model));
+        return new AvatarInfo(a.id(), a.name(), a.thumbnailUrl(), a.isActive(), model(a.model()));
     }
 
     CharacterInfo character(CharacterEntity c) {
         return new CharacterInfo(
-                c.id, c.roomId, c.name, c.profileImageUrl, c.personality, c.intro, c.isActive, model(c.model));
+                c.id(),
+                c.roomId(),
+                c.name(),
+                c.profileImageUrl(),
+                c.personality(),
+                c.intro(),
+                c.isActive(),
+                model(c.model()));
     }
 }

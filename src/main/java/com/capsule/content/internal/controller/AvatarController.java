@@ -1,8 +1,8 @@
-package com.capsule.content.internal;
+package com.capsule.content.internal.controller;
 
 import com.capsule.content.api.AvatarQuery;
-import com.capsule.content.api.ContentTypes.ModelInfo;
-import java.util.List;
+import com.capsule.content.internal.dto.AvatarItem;
+import com.capsule.content.internal.dto.AvatarsResponse;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -22,8 +22,4 @@ class AvatarController {
                 .map(a -> new AvatarItem(a.id(), a.name(), a.thumbnailUrl(), a.model()))
                 .toList());
     }
-
-    record AvatarsResponse(List<AvatarItem> avatars) {}
-
-    record AvatarItem(long id, String name, String thumbnailUrl, ModelInfo model) {}
 }

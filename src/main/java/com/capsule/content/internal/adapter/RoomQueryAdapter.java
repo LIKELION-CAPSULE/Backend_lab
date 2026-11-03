@@ -1,8 +1,13 @@
-package com.capsule.content.internal;
+package com.capsule.content.internal.adapter;
 
 import com.capsule.content.api.ContentTypes.BackgroundInfo;
 import com.capsule.content.api.ContentTypes.RoomInfo;
 import com.capsule.content.api.RoomQuery;
+import com.capsule.content.internal.domain.RoomBackground;
+import com.capsule.content.internal.domain.StudyRoom;
+import com.capsule.content.internal.repository.CharacterRepository;
+import com.capsule.content.internal.repository.RoomBackgroundRepository;
+import com.capsule.content.internal.repository.StudyRoomRepository;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Service;
@@ -10,14 +15,14 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @Transactional(readOnly = true)
-class RoomQueryService implements RoomQuery {
+class RoomQueryAdapter implements RoomQuery {
 
     private final StudyRoomRepository rooms;
     private final RoomBackgroundRepository backgrounds;
     private final CharacterRepository characters;
     private final ContentMapper mapper;
 
-    RoomQueryService(
+    RoomQueryAdapter(
             StudyRoomRepository rooms,
             RoomBackgroundRepository backgrounds,
             CharacterRepository characters,
@@ -42,22 +47,22 @@ class RoomQueryService implements RoomQuery {
 
     @Override
     public Optional<BackgroundInfo> defaultBackground(long roomId) {
-        return backgrounds.findByRoomIdAndIsDefaultTrue(roomId).map(RoomQueryService::info);
+        return backgrounds.findByRoomIdAndIsDefaultTrue(roomId).map(RoomQueryAdapter::info);
     }
 
     @Override
     public Optional<BackgroundInfo> background(long backgroundId) {
-        return backgrounds.findById(backgroundId).map(RoomQueryService::info);
+        return backgrounds.findById(backgroundId).map(RoomQueryAdapter::info);
     }
 
     private RoomInfo info(StudyRoom r) {
-        var roomCharacters = characters.findByRoomIdAndIsActiveTrueOrderBySortOrderAscIdAsc(r.id).stream()
+        var roomCharacters = characters.findByRoomIdAndIsActiveTrueOrderBySortOrderAscIdAsc(r.id()).stream()
                 .map(mapper::character)
                 .toList();
-        return new RoomInfo(r.id, r.name, r.description, r.thumbnailUrl, r.isActive, roomCharacters);
+        return new RoomInfo(r.id(), r.name(), r.description(), r.thumbnailUrl(), r.isActive(), roomCharacters);
     }
 
     private static BackgroundInfo info(RoomBackground b) {
-        return new BackgroundInfo(b.id, b.roomId, b.name, b.imageUrl);
+        return new BackgroundInfo(b.id(), b.roomId(), b.name(), b.imageUrl());
     }
 }
