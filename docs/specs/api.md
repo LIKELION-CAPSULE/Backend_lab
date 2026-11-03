@@ -407,7 +407,7 @@
 
 | 화면 요소 | 이 API가 하는 일 |
 | --- | --- |
-| H03 헤더 오른쪽 프로필 · 닉네임 | `nickname`, `avatar.thumbnailUrl` |
+| H03 헤더 오른쪽 프로필 · 닉네임 | `nickname`, `profileImage` |
 | H18 이어하기 팝업 '쌀쌀맞은 갸루짝꿍이…에서 하던 공부' | `activeSession.roomName` |
 
 - 테이블: `users`, `avatars`, `study_sessions` · 인증: 필요
@@ -901,7 +901,7 @@ GET /api/me/memories?date=2026-11-12
 #### 이 API 다음에 할 일
 
 1. 캐릭터 Live2D를 다시 받아 H07 그리기 (새로고침이면 메모리에서 사라졌으므로)
-2. 응답에 함께 오는 `FOCUS`의 반응이 필요하면 '상태 변화 전송' 대신 바로 '이벤트 반응 받기'를 부르도록 `focusEventId`는 응답에 넣지 않음 (2026-11-03 결정). 반응 없이 바로 공부 재개
+2. 이어하기 응답에는 `focusEventId`를 넣지 않음 (2026-11-03 결정). 이어하기 직후에는 반응 없이 바로 공부 재개
 3. heartbeat 재시작
 
 ## 18. POST /api/sessions/{sessionId}/events — 상태 변화 전송
