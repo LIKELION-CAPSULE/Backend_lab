@@ -63,7 +63,7 @@ docs/decisions에 없는 새 라이브러리·구조를 쓰려면 여기서 이�
 `references/module-layout.md`의 구조로 각 모듈의 `api` 패키지(인터페이스, record DTO, 이벤트)를 먼저 만든다. 구현보다 계약이 먼저 있어야 이후 둘이 서로를 기다리지 않는다.
 
 ### 5. 단순 부분 구현
-- 각 모듈 `internal`에 엔티티, 리포지토리, 서비스, 컨트롤러를 구현하고 테스트를 붙인다.
+- 각 모듈의 레이어 패키지(`domain`·`repository`·`service`·`controller`·`dto`, `references/module-layout.md`)에 구현하고 테스트를 붙인다.
 - 다른 모듈은 반드시 `api`나 이벤트로만 부른다.
 
 ### 6. 판단 부분은 자리만
@@ -72,7 +72,7 @@ docs/decisions에 없는 새 라이브러리·구조를 쓰려면 여기서 이�
 - `docs/specs/judgment-backlog.md`에 항목 추가 (형식은 `references/judgment-backlog-format.md`). 담당자는 zones.conf의 모듈 담당.
 
 ### 7. LLM 자리 (dialogue 모듈)
-- `dialogue/api`에 대화 계약(예: `DialogueService.reply(...)`), `dialogue/internal/llm`에 `LlmClient` 포트와 `FakeLlmClient`.
+- `dialogue/api`에 대화 계약(예: `DialogueService.reply(...)`), `dialogue/client`에 `LlmClient` 포트와 `FakeLlmClient`.
 - `capsule.llm.mode=fake`(기본, local/test)일 때 Fake가 주입되게 한다. 실제 LLM 어댑터는 만들지 않는다(승희가 도메인 단계에서 개발).
 - Fake 응답은 고정 문자열 + 입력 일부 반영 정도로, E2E가 검증할 수 있게.
 

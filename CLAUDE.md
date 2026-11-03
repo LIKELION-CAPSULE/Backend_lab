@@ -21,8 +21,9 @@ AI 캐릭터와 함께 공부하는 웹서비스의 백엔드. Spring Boot + Pos
 - 이 파일 누구 담당?: `python3 .harness/zones.py explain <경로>`
 
 ## 구조 규칙
-- 모듈 = `<base>/<모듈>/api`(계약, 다른 모듈이 쓰는 유일한 입구) + `<base>/<모듈>/internal`(구현)
-- 다른 모듈의 internal 참조 금지. 결과가 필요하면 상대 `api`, 알리기만 하면 이벤트. 다른 모듈 테이블 JOIN 금지
+- 모듈 = `<base>/<모듈>/api`(계약, 다른 모듈이 쓰는 유일한 입구) + 레이어 패키지(구현)
+- 레이어는 모듈 바로 아래에 `controller`·`service`·`dto`·`repository`·`domain`(+`adapter`·`client`·`config`), 크루윙 백엔드와 같은 모양. 상세: `.claude/skills/skeleton/references/module-layout.md`, ADR 0012
+- 다른 모듈은 `api`만 참조(레이어 패키지 참조 금지). 결과가 필요하면 상대 `api`, 알리기만 하면 이벤트. 다른 모듈 테이블 JOIN 금지
 - 계약(`*/api/**`) 변경은 contract-change 스킬(확장→이전→제거). 기존 시그니처를 제자리에서 바꾸지 않는다
 - develop에 머지된 마이그레이션은 수정 금지. 변경은 새 마이그레이션으로
 - `TODO(judgment)` 자리(기획 판단·LLM)는 명세 근거 없이 구현하지 않는다. 목록: `docs/specs/judgment-backlog.md`

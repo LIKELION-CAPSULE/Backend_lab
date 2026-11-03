@@ -53,6 +53,8 @@
 |---|---|---|
 | Spring Boot (Java 21) | 팀 주력 스택(Spring Boot/JPA) | - |
 | Spring Modulith | 2인 팀에 MSA는 운영 부담. 모듈 경계를 테스트로 강제해서 둘이 모듈 단위로 나눠 일함 | `docs/decisions/0001` |
+| 모듈 안 레이어 패키지 | 모듈 바로 아래 controller·service·dto·repository·domain(+adapter·client·config), 크루윙 백엔드와 같은 모양. 다른 모듈은 `api`만 씀 | `docs/decisions/0012` |
+| Spring Security + JWT | 리소스 서버 스타터로 검증·발급, 리프레시 토큰은 Redis의 무작위 값 | `docs/decisions/0011` |
 | PostgreSQL + Flyway | 관계형 중심. 스키마가 PostgreSQL 전용 기능(IDENTITY, text[], 부분 인덱스)을 씀. 스키마 변경 이력 공유 | `docs/decisions/0002` |
 | Redis | 리프레시 토큰, 이메일 인증번호, 로그인 잠금 (DB 최종본 원칙: 만료 있는 값은 DB에 안 둠) | `docs/decisions/0009` |
 | Testcontainers | H2의 "테스트 통과, 실서버 실패"를 막음 | `docs/decisions/0003` |
@@ -233,7 +235,7 @@ skeleton 스킬이 하는 일:
 ```
 
 ### 4-3. 승희의 LLM 파트 (dialogue 모듈)
-- 뼈대에는 `dialogue/api`(대화 계약) + `dialogue/internal/llm/LlmClient`(포트) + `FakeLlmClient`만 있음
+- 뼈대에는 `dialogue/api`(대화 계약) + `dialogue/client/LlmClient`(포트) + `FakeLlmClient`만 있음
 - 실제 LLM 어댑터는 `capsule.llm.mode=real`일 때 주입되는 새 구현으로 추가 → Fake는 테스트·로컬 기본값으로 계속 유지 (E2E가 API 비용 없이 돎)
 - API 키는 `.env.local` (Claude는 읽지 못하게 막혀 있음)
 - 대화 품질 평가(골든 대화 세트)는 Phase C에서 하네스에 추가 예정
