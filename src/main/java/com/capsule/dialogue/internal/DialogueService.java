@@ -142,18 +142,19 @@ class DialogueService {
     @Transactional
     MessageResponse send(long userId, long sessionId, UUID requestId, String content, Boolean tts) {
         SessionInfo session = openSession(userId, sessionId);
-        if (!rateLimiter.tryAcquire("rate:chat:" + userId, MESSAGES_PER_MINUTE, Duration.ofMinutes(1))) {
-            throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "TOO_MANY_REQUESTS");
-        }
         long characterId = session.characterId();
         Conversation conversation = conversation(userId, characterId);
 
+        // 재전송은 한도 검사 전에 돌려준다: 응답을 못 받아 다시 보낸 요청이 429가 되면 안 됨
         Optional<ChatMessage> answered =
                 messages.findByConversationIdAndRequestIdAndSender(conversation.id(), requestId, CHARACTER);
         if (answered.isPresent()) {
             // ponytail: 재전송 때 원래 delta(와 모션·표정·fallback)는 다시 보여주지 않음. 필요하면 chat_messages에 같이 저장
             return new MessageResponse(
                     requestId, answered.get().content(), null, null, unchanged(userId, characterId), false, audio(tts));
+        }
+        if (!rateLimiter.tryAcquire("rate:chat:" + userId, MESSAGES_PER_MINUTE, Duration.ofMinutes(1))) {
+            throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "TOO_MANY_REQUESTS");
         }
 
         List<Line> history = lines(messages.findByConversationIdAndSessionIdOrderById(conversation.id(), sessionId));
@@ -178,17 +179,24 @@ class DialogueService {
                 requestId, answer, reaction.motion(), reaction.expression(), affinity, reply.isEmpty(), audio(tts));
     }
 
-    /** 공부 종료 트랜잭션 안에서 불린다. 이번 세션 대화를 요약에 합치고 메시지를 지운 뒤 완료 대사를 돌려준다 */
+    /**
+     * 공부 종료 트랜잭션 안에서 불린다. 이번 세션 대화를 요약에 합치고 메시지를 지운 뒤 완료 대사를 돌려준다.
+     * LLM이 실패하거나 5초를 넘겨도 공부 종료는 성공해야 하므로 고정 문구로 대신한다.
+     */
     @Transactional
     public String close(SessionClosing closing) {
         Conversation conversation = conversation(closing.userId(), closing.characterId());
         List<ChatMessage> sessionMessages =
                 messages.findByConversationIdAndSessionIdOrderById(conversation.id(), closing.sessionId());
-        conversation.updateSummary(
-                llm.mergeSummary(conversation.summary(), closing.sessionId(), lines(sessionMessages)),
-                Instant.now(clock));
-        messages.deleteAllInBatch(sessionMessages);
-        return llm.closingLine(closing.characterName());
+        Optional<String> summary =
+                callLlm(() -> llm.mergeSummary(conversation.summary(), closing.sessionId(), lines(sessionMessages)));
+        if (summary.isPresent()) {
+            conversation.updateSummary(summary.get(), Instant.now(clock));
+            messages.deleteAllInBatch(sessionMessages);
+        }
+        // ponytail: 요약에 실패하면 기존 요약을 두고 이번 세션 메시지도 남긴다(다음 종료 때는 그 세션만 보므로 다시 합쳐지지 않음).
+        //   실제 LLM을 붙인 뒤 실패가 잦으면 남은 메시지를 합치는 재시도 배치
+        return callLlm(() -> llm.closingLine(closing.characterName())).orElse(LlmClient.FALLBACK_CLOSING_LINE);
     }
 
     /** 세션 첫 FOCUS는 GREETING, 그 밖의 FOCUS는 BREAK_END. 나머지는 이벤트 타입 그대로 */

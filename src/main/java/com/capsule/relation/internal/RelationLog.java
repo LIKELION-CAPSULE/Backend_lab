@@ -43,6 +43,10 @@ class RelationLog {
         this.createdAt = createdAt;
     }
 
+    long id() {
+        return id;
+    }
+
     int delta() {
         return delta;
     }

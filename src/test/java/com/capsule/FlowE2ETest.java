@@ -1,6 +1,7 @@
 package com.capsule;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -136,17 +137,24 @@ class FlowE2ETest {
         assertThat(((Number) JsonPath.read(body(meNow), "$.activeSession.sessionId")).longValue())
                 .isEqualTo(sessionId);
 
-        // 18~20 종료 → 멱등 → 리포트
-        MvcResult end = call(post(s + "/end"), token, "{\"studySeconds\":0,\"presentSeconds\":0}", 200);
+        // 18~20 종료 → 멱등 → 리포트. 1분 공부한 것으로 보내려면 실제 경과 시간이 1분 이상이어야 해서 시작 시각을 당긴다
+        jdbc.update("UPDATE study_sessions SET started_at = started_at - interval '2 minutes' WHERE id = ?", sessionId);
+        String endBody = "{\"studySeconds\":60,\"presentSeconds\":60}";
+        MvcResult end = call(post(s + "/end"), token, endBody, 200);
         assertThat((Integer) JsonPath.read(body(end), "$.returnCount")).isEqualTo(1);
-        int pointsBefore = JsonPath.read(body(end), "$.relation.pointsBefore");
-        int pointsAfter = JsonPath.read(body(end), "$.relation.pointsAfter");
-        assertThat(pointsAfter).isGreaterThan(pointsBefore);
+        assertThat((Integer) JsonPath.read(body(end), "$.studySeconds")).isEqualTo(60);
+        // 첫 만남 +5, 자리 비움 −1, 복귀 +1, 채팅 +1(Fake), 공부 1분 +1 (J-01·J-02·J-06 Fake 값)
+        assertThat((Integer) JsonPath.read(body(end), "$.relation.pointsBefore"))
+                .isEqualTo(0);
+        assertThat((Integer) JsonPath.read(body(end), "$.relation.pointsAfter")).isEqualTo(7);
         assertThat((String) JsonPath.read(body(end), "$.closingLine")).isNotBlank();
-        MvcResult endAgain = call(post(s + "/end"), token, "{\"studySeconds\":0,\"presentSeconds\":0}", 200);
+        MvcResult endAgain = call(post(s + "/end"), token, endBody, 200);
         assertThat(body(endAgain)).isEqualTo(body(end));
         MvcResult report = call(get(s + "/report"), token, null, 200);
         assertThat(body(report)).isEqualTo(body(end));
+        MvcResult roomAfter = call(get("/api/rooms/1"), token, null, 200);
+        assertThat((Integer) JsonPath.read(body(roomAfter), "$.characters[0].relation.totalStudySeconds"))
+                .isEqualTo(60);
 
         // 21~22 갱신 (만료된 액세스 토큰이 헤더에 붙어 있어도 됨, 옛 리프레시는 401) → 로그아웃
         MvcResult refreshed = mvc.perform(post("/api/auth/refresh")
@@ -183,6 +191,9 @@ class FlowE2ETest {
         String token = JsonPath.read(body(first), "$.accessToken");
         MvcResult me = call(get("/api/me"), token, null, 200);
         assertThat((String) JsonPath.read(body(me), "$.nickname")).isEqualTo("카카오닉");
+        // 없는 경로도 에러 응답 모양(B13) 그대로
+        MvcResult missing = call(get("/api/nope"), token, null, 404);
+        assertThat((String) JsonPath.read(body(missing), "$.code")).isEqualTo("NOT_FOUND");
 
         MvcResult again = call(post("/api/auth/social/KAKAO"), null, withTerms, 200);
         assertThat((Boolean) JsonPath.read(body(again), "$.isNewUser")).isFalse();
@@ -215,8 +226,10 @@ class FlowE2ETest {
                 "UPDATE session_events SET occurred_at = occurred_at - interval '10 minutes' WHERE session_id = ?",
                 sessionId);
 
+        // 시작~마지막 heartbeat 7분은 공부, 끊긴 3분은 휴식 (DB와 앱 시계 차이만큼 여유)
         MvcResult resumed = call(post(s + "/resume"), token, null, 200);
-        assertThat((Integer) JsonPath.read(body(resumed), "$.breakSeconds")).isGreaterThan(0);
+        assertThat((Integer) JsonPath.read(body(resumed), "$.studySeconds")).isCloseTo(420, within(5));
+        assertThat((Integer) JsonPath.read(body(resumed), "$.breakSeconds")).isCloseTo(180, within(5));
 
         call(post(s + "/end"), token, "{\"studySeconds\":60,\"presentSeconds\":60}", 200);
     }

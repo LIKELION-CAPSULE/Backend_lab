@@ -42,4 +42,7 @@ public interface LlmClient {
 
     // TODO(judgment): J-05 답장이 5초를 넘을 때 쓸 대체 대사 문구
     String FALLBACK_REPLY = "미안, 잠깐 딴생각했어. 다시 말해줄래?";
+
+    // TODO(judgment): J-09 완료 대사를 못 만들 때 쓸 문구 (지금은 명세 22 응답 예시 문장)
+    String FALLBACK_CLOSING_LINE = "오늘도 같이 공부해서 좋았어. 다음에도 함께하자.";
 }

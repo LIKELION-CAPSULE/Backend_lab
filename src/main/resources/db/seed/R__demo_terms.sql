@@ -13,3 +13,7 @@ VALUES (3, 1, 1, '(이용약관 본문 준비 중)', true, '2026-11-01 00:00:00+
        (4, 2, 1, '(개인정보 처리방침 본문 준비 중)', true, '2026-11-01 00:00:00+09')
 ON CONFLICT (id) DO UPDATE SET term_id = EXCLUDED.term_id, version = EXCLUDED.version, content = EXCLUDED.content,
     requires_reconsent = EXCLUDED.requires_reconsent, effective_at = EXCLUDED.effective_at;
+
+-- id를 직접 넣었으므로 시퀀스를 맞춘다 (안 하면 다음 INSERT가 id 1부터 시작해 충돌)
+SELECT setval(pg_get_serial_sequence('terms', 'id'), (SELECT max(id) FROM terms));
+SELECT setval(pg_get_serial_sequence('term_versions', 'id'), (SELECT max(id) FROM term_versions));

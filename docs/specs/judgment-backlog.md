@@ -14,13 +14,14 @@
 | J-06 | dialogue | seunghee | 대화 호감도 판정 (−5~5) | `dialogue/internal/llm/FakeLlmClient.java` | 항상 +1 | api.md 20 | 미정 |
 | J-07 | dialogue | seunghee | 답장 감정 → 모션·표정 고르는 규칙 | `dialogue/internal/DialogueService.java` | 모션·표정 없음 | api.md 20 | 미정 |
 | J-08 | dialogue | seunghee | 세션 종료 시 대화 요약 합치기 | `dialogue/internal/llm/FakeLlmClient.java` | 기존 요약 + "[세션 N] 메시지 n개" 한 줄 | api.md 22 | 미정 |
-| J-09 | dialogue | seunghee | 완료 대사 `closingLine` 생성 | `dialogue/internal/llm/FakeLlmClient.java` | 캐릭터 이름을 넣은 고정 문구 | api.md 22·23 | 미정 |
+| J-09 | dialogue | seunghee | 완료 대사 `closingLine` 생성, 못 만들 때 대체 문구 | `dialogue/internal/llm/FakeLlmClient.java`, `LlmClient.java`(대체 문구) | 캐릭터 이름을 넣은 고정 문구. 실패·5초 초과면 명세 22 예시 문장 | api.md 22·23 | 미정 |
 | J-10 | dialogue | seunghee | TTS `audioBase64` | `dialogue/internal/DialogueService.java` | 항상 null | api.md 19·20 | 미정 |
 | J-11 | session | seonguk | 종료 시 프론트 값과 서버 계산값이 "크게" 다를 때의 기준 | `session/internal/SessionService.java` `end()` | 명세의 부등식 검증만 하고 프론트 값 사용 | api.md 22 "같이 챙길 것" | 미정 |
 
 ## 판단 항목을 가져갈 때 같이 볼 것
 - **J-05 답 길이 규칙**(공부 중 1~2문장, 쉬는 시간 2~4문장)을 적용하려면 dialogue가 "지금 휴식 중인지"를 알아야 한다. 지금 `session.api.SessionQuery`에는 없어서 계약 확장이 필요하다(contract-change 스킬).
-- **실제 LLM을 붙일 때**: 메시지 전송은 지금 한 트랜잭션이라 LLM을 기다리는 동안(최대 5초) DB 커넥션을 잡고 있다. 공부 종료의 요약·완료 대사(`SessionClosingHandler.close`)에는 5초 제한이 없으니 실제 어댑터에 HTTP 타임아웃을 꼭 둔다.
+- **J-01 같이 정할 것**: 지금은 AWAY 없이 RETURN만 보내도 +1이 된다(상태 이벤트 검증은 순서를 보지 않음). RETURN 연타로 점수를 올릴 수 있으니, "직전이 AWAY일 때만 점수" 같은 규칙이 필요한지 기획과 정한다.
+- **실제 LLM을 붙일 때**: 메시지 전송과 공부 종료는 각각 한 트랜잭션이라 LLM을 기다리는 동안(호출마다 최대 5초) DB 커넥션을 잡고 있다. 공부 종료의 요약이 실패하면 기존 요약을 두고 그 세션 메시지를 지우지 않는다(다시 합치는 배치는 없음).
 
 ## 판단은 아니지만 남은 일
 | 할 일 | 담당 | 언제까지 |

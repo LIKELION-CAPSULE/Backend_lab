@@ -157,4 +157,29 @@ class RelationServiceTest {
         commands.applySessionEvent(event(second, "AWAY", false));
         assertThat(query.view(userId, CHARACTER)).isEqualTo(new RelationView(CHARACTER, 2, "친한 사이", 99, 5999, 300));
     }
+
+    @Test
+    void oscillatingAround100LevelsUpOnce() {
+        commands.settleStudyTime(userId, CHARACTER, newSession(), 5940); // +99
+
+        long session = newSession();
+        SessionEventRef up = event(session, "RETURN", false); // 100
+        SessionEventRef down = event(session, "AWAY", false); // 99
+        SessionEventRef upAgain = event(session, "RETURN", false); // 100
+        assertThat(commands.applySessionEvent(up).levelUp()).isTrue();
+        assertThat(commands.applySessionEvent(down)).isEqualTo(new AffinityChange(-1, 99, 2, false));
+        assertThat(commands.applySessionEvent(upAgain)).isEqualTo(new AffinityChange(1, 100, 2, false));
+        // 나중에 다시 읽어도 그 이벤트 당시 기준
+        assertThat(query.changeOf(up).levelUp()).isTrue();
+        assertThat(query.changeOf(upAgain).levelUp()).isFalse();
+
+        // 리포트도 같은 규칙: 이 세션에서 99 → 100, 단계 1 → 2. 다음 세션에서 다시 넘어도 단계는 그대로
+        assertThat(query.settlementOf(userId, CHARACTER, session))
+                .isEqualTo(new StudySettlement(1, 2, "친한 사이", 99, 100, 300, true));
+        long next = newSession();
+        commands.applySessionEvent(event(next, "AWAY", false)); // 99
+        StudySettlement again = commands.settleStudyTime(userId, CHARACTER, next, 60); // 100
+        assertThat(again).isEqualTo(new StudySettlement(2, 2, "친한 사이", 100, 100, 300, false));
+        assertThat(query.view(userId, CHARACTER).level()).isEqualTo(again.levelAfter());
+    }
 }

@@ -54,3 +54,13 @@ VALUES (1, 1, 1, '채린', '{츤데레, 같은 반 친구}', '차갑게 굴지�
 ON CONFLICT (id) DO UPDATE SET room_id = EXCLUDED.room_id, model_id = EXCLUDED.model_id, name = EXCLUDED.name,
     personality = EXCLUDED.personality, intro = EXCLUDED.intro, profile_image_url = EXCLUDED.profile_image_url,
     sort_order = EXCLUDED.sort_order;
+
+-- id를 직접 넣었으므로 시퀀스를 맞춘다 (안 하면 다음 INSERT가 id 1부터 시작해 충돌)
+SELECT setval(pg_get_serial_sequence('live2d_models', 'id'), (SELECT max(id) FROM live2d_models));
+SELECT setval(pg_get_serial_sequence('live2d_motions', 'id'), (SELECT max(id) FROM live2d_motions));
+SELECT setval(pg_get_serial_sequence('live2d_expressions', 'id'), (SELECT max(id) FROM live2d_expressions));
+SELECT setval(pg_get_serial_sequence('live2d_reaction_maps', 'id'), (SELECT max(id) FROM live2d_reaction_maps));
+SELECT setval(pg_get_serial_sequence('avatars', 'id'), (SELECT max(id) FROM avatars));
+SELECT setval(pg_get_serial_sequence('study_rooms', 'id'), (SELECT max(id) FROM study_rooms));
+SELECT setval(pg_get_serial_sequence('room_backgrounds', 'id'), (SELECT max(id) FROM room_backgrounds));
+SELECT setval(pg_get_serial_sequence('characters', 'id'), (SELECT max(id) FROM characters));

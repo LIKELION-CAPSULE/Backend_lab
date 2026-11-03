@@ -50,7 +50,8 @@ class SecurityConfig {
                 path.matcher(HttpMethod.POST, "/api/auth/email/login"),
                 path.matcher(HttpMethod.POST, "/api/auth/social/*"),
                 path.matcher(HttpMethod.POST, "/api/auth/refresh"),
-                path.matcher("/actuator/health/**"));
+                path.matcher("/actuator/health/**"),
+                path.matcher("/error")); // 필터 단계 예외가 /error로 넘어올 때 401로 덮이지 않게
     }
 
     @Bean

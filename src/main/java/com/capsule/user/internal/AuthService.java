@@ -197,7 +197,9 @@ class AuthService {
     private List<Long> agreedLatestTerms(List<Long> agreedIds, Instant now) {
         Set<Long> agreed = agreedIds == null ? Set.of() : new HashSet<>(agreedIds);
         List<TermVersion> latest = terms.latestVersions(now);
-        if (latest.stream().anyMatch(t -> t.required() && !agreed.contains(t.termVersionId()))) {
+        // 필수 약관이 하나도 없으면(약관 데이터를 아직 안 넣은 DB) 동의 없이 가입되지 않게 막는다
+        if (latest.stream().noneMatch(TermVersion::required)
+                || latest.stream().anyMatch(t -> t.required() && !agreed.contains(t.termVersionId()))) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "TERMS_REQUIRED");
         }
         return latest.stream()
