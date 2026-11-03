@@ -8,7 +8,14 @@
 """
 import json
 import os
+import re
 import sys
+
+
+def native(p: str) -> str:
+    """Windows에서 Git Bash 형식(/c/Users/...)을 C:/Users/...로. 안 하면 C:\\c\\Users로 읽혀 판정 없이 통과함."""
+    return re.sub(r"^/([a-zA-Z])/", r"\1:/", p) if os.name == "nt" else p
+
 
 ROOT = os.environ.get("CLAUDE_PROJECT_DIR") or os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(ROOT, ".harness"))
@@ -23,7 +30,9 @@ def main() -> int:
     path = tool_input.get("file_path") or tool_input.get("notebook_path")
     if not path:
         return 0
-    abs_path = os.path.realpath(path if os.path.isabs(path) else os.path.join(data.get("cwd") or ROOT, path))
+    path = native(path)
+    # stdin JSON의 cwd는 Git Bash가 변환해주지 않으므로 같이 바꾼다 (환경변수 ROOT는 Git Bash가 이미 변환함)
+    abs_path = os.path.realpath(path if os.path.isabs(path) else os.path.join(native(data.get("cwd") or ROOT), path))
     root = os.path.realpath(ROOT)
     if not abs_path.startswith(root + os.sep):
         return 0  # 레포 밖 파일은 관여하지 않음

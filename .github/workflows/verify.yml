@@ -25,7 +25,8 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-          cache: gradle
+          # Gradle 파일이 없으면(뼈대 생성 전) cache: gradle이 에러를 내므로 그때는 캐시를 끔
+          cache: ${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') != '' && 'gradle' || '' }}
 
       - name: 이미 머지된 마이그레이션을 고치지 않았는지
         if: github.event_name == 'pull_request'
