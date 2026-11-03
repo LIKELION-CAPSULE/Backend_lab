@@ -10,13 +10,13 @@ import com.capsule.content.api.ContentTypes.CharacterInfo;
 import com.capsule.content.api.ContentTypes.Reaction;
 import com.capsule.content.api.ReactionQuery;
 import com.capsule.dialogue.internal.client.LlmClient;
-import com.capsule.dialogue.internal.client.LlmClient.Line;
-import com.capsule.dialogue.internal.client.LlmClient.Reply;
-import com.capsule.dialogue.internal.client.LlmClient.ReplyContext;
 import com.capsule.dialogue.internal.domain.ChatMessage;
 import com.capsule.dialogue.internal.domain.Conversation;
+import com.capsule.dialogue.internal.dto.ChatLine;
+import com.capsule.dialogue.internal.dto.LlmReply;
 import com.capsule.dialogue.internal.dto.MessageResponse;
 import com.capsule.dialogue.internal.dto.ReactionResponse;
+import com.capsule.dialogue.internal.dto.ReplyContext;
 import com.capsule.dialogue.internal.repository.ChatMessageRepository;
 import com.capsule.dialogue.internal.repository.ConversationRepository;
 import com.capsule.relation.api.RelationCommands;
@@ -143,7 +143,8 @@ public class DialogueService {
             throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "TOO_MANY_REQUESTS");
         }
 
-        List<Line> history = lines(messages.findByConversationIdAndSessionIdOrderById(conversation.id(), sessionId));
+        List<ChatLine> history =
+                lines(messages.findByConversationIdAndSessionIdOrderById(conversation.id(), sessionId));
         messages.save(new ChatMessage(conversation.id(), sessionId, requestId, USER, content, Instant.now(clock)));
         ReplyContext context = new ReplyContext(
                 character(characterId),
@@ -151,15 +152,15 @@ public class DialogueService {
                 history,
                 memories.memoriesForConversation(userId),
                 content);
-        Optional<Reply> reply = callLlm(() -> llm.reply(context));
-        String answer = reply.map(Reply::content).orElse(LlmClient.FALLBACK_REPLY);
+        Optional<LlmReply> reply = callLlm(() -> llm.reply(context));
+        String answer = reply.map(LlmReply::content).orElse(LlmClient.FALLBACK_REPLY);
         messages.save(new ChatMessage(conversation.id(), sessionId, requestId, CHARACTER, answer, Instant.now(clock)));
 
         // 명세 20: fallback이면 호감도 변화 없음
         AffinityChange affinity = reply.map(
                         r -> relationCommands.applyChat(userId, characterId, sessionId, requestId, r.affinityScore()))
                 .orElseGet(() -> unchanged(userId, characterId));
-        // TODO(judgment): J-07 답장 감정(Reply.emotion) → 모션·표정 고르는 규칙. 지금은 없음
+        // TODO(judgment): J-07 답장 감정(LlmReply.emotion) → 모션·표정 고르는 규칙. 지금은 없음
         Reaction reaction = Reaction.NONE;
         return new MessageResponse(
                 requestId, answer, reaction.motion(), reaction.expression(), affinity, reply.isEmpty(), audio(tts));
@@ -219,8 +220,8 @@ public class DialogueService {
         return new AffinityChange(0, view.points(), view.level(), false);
     }
 
-    private static List<Line> lines(List<ChatMessage> chat) {
-        return chat.stream().map(m -> new Line(m.sender(), m.content())).toList();
+    private static List<ChatLine> lines(List<ChatMessage> chat) {
+        return chat.stream().map(m -> new ChatLine(m.sender(), m.content())).toList();
     }
 
     /** 5초 안에 끝나지 않거나 실패하면 빈 값 → 호출한 쪽이 고정 대사를 쓴다 */

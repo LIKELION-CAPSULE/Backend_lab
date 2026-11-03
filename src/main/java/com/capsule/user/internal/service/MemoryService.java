@@ -8,6 +8,7 @@ import com.capsule.user.internal.domain.UserMemory.Type;
 import com.capsule.user.internal.dto.CreateMemoryRequest;
 import com.capsule.user.internal.dto.MemoryList;
 import com.capsule.user.internal.dto.MemoryResponse;
+import com.capsule.user.internal.dto.MemoryStatus;
 import com.capsule.user.internal.repository.UserMemoryRepository;
 import java.time.Clock;
 import java.time.DateTimeException;
@@ -47,12 +48,6 @@ public class MemoryService {
                     UserMemory::dueDate, Comparator.nullsLast(Comparator.<LocalDate>reverseOrder()))
             .thenComparing(SAME_DAY);
 
-    public enum Status {
-        UPCOMING,
-        ALL,
-        PAST
-    }
-
     private final UserMemoryRepository memories;
     private final Clock clock;
 
@@ -83,7 +78,7 @@ public class MemoryService {
 
     /** date가 있으면 from·to보다 우선. datesWithMemories는 from~to 안의 날짜(탭·date와 무관) */
     @Transactional(readOnly = true)
-    public MemoryList list(long userId, LocalDate from, LocalDate to, LocalDate date, Status status, Type type) {
+    public MemoryList list(long userId, LocalDate from, LocalDate to, LocalDate date, MemoryStatus status, Type type) {
         if (from != null && to != null && (to.isBefore(from) || ChronoUnit.DAYS.between(from, to) >= MAX_RANGE_DAYS)) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_DATE_RANGE");
         }
@@ -97,7 +92,7 @@ public class MemoryService {
                 .filter(m ->
                         date != null ? date.equals(m.dueDate()) : m.dueDate() == null || inRange(m.dueDate(), from, to))
                 .filter(m -> inStatus(status, m.dueDate(), today))
-                .sorted(status == Status.PAST ? LATEST_FIRST : NEAREST_FIRST)
+                .sorted(status == MemoryStatus.PAST ? LATEST_FIRST : NEAREST_FIRST)
                 .map(m -> toResponse(m, today))
                 .toList();
         List<LocalDate> dates = mine.stream()
@@ -141,7 +136,7 @@ public class MemoryService {
         return d != null && (from == null || !d.isBefore(from)) && (to == null || !d.isAfter(to));
     }
 
-    private static boolean inStatus(Status status, LocalDate d, LocalDate today) {
+    private static boolean inStatus(MemoryStatus status, LocalDate d, LocalDate today) {
         return switch (status) {
             case ALL -> true;
             case UPCOMING -> d != null && !d.isBefore(today);

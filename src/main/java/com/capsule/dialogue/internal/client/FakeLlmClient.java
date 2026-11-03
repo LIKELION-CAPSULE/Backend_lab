@@ -1,6 +1,9 @@
 package com.capsule.dialogue.internal.client;
 
 import com.capsule.content.api.ContentTypes.CharacterInfo;
+import com.capsule.dialogue.internal.dto.ChatLine;
+import com.capsule.dialogue.internal.dto.LlmReply;
+import com.capsule.dialogue.internal.dto.ReplyContext;
 import java.util.List;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -17,7 +20,7 @@ class FakeLlmClient implements LlmClient {
     }
 
     @Override
-    public Reply reply(ReplyContext context) {
+    public LlmReply reply(ReplyContext context) {
         String head = context.userMessage()
                 .codePoints()
                 .limit(20)
@@ -25,11 +28,11 @@ class FakeLlmClient implements LlmClient {
                 .toString();
         // TODO(judgment): J-05 답장 생성 (캐릭터 설정·요약·이번 대화·일정 반영, 길이: 공부 중 1~2문장·쉬는 시간 2~4문장). 지금은 고정 문장 + 입력 앞 20자
         // TODO(judgment): J-06 대화 호감도 판정 (−5~5). 지금은 항상 +1
-        return new Reply("「" + head + "」… 그렇구나. 한 문제만 더 해보자.", null, 1);
+        return new LlmReply("「" + head + "」… 그렇구나. 한 문제만 더 해보자.", null, 1);
     }
 
     @Override
-    public String mergeSummary(String previousSummary, long sessionId, List<Line> messages) {
+    public String mergeSummary(String previousSummary, long sessionId, List<ChatLine> messages) {
         // TODO(judgment): J-08 세션 대화를 요약에 합치는 방법. 지금은 "메시지 n개" 한 줄만 덧붙임
         String line = "[세션 " + sessionId + "] 메시지 " + messages.size() + "개";
         return previousSummary == null ? line : previousSummary + "\n" + line;

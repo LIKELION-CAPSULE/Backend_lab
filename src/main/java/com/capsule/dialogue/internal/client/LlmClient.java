@@ -1,7 +1,9 @@
 package com.capsule.dialogue.internal.client;
 
 import com.capsule.content.api.ContentTypes.CharacterInfo;
-import com.capsule.user.api.UserTypes.MemoryInfo;
+import com.capsule.dialogue.internal.dto.ChatLine;
+import com.capsule.dialogue.internal.dto.LlmReply;
+import com.capsule.dialogue.internal.dto.ReplyContext;
 import java.util.List;
 import java.util.Map;
 
@@ -11,26 +13,12 @@ public interface LlmClient {
     /** 이벤트 반응 말풍선 대사 (2줄 이내). intensity는 AWAY일 때만 있음 */
     String reactionLine(CharacterInfo character, String trigger, Integer intensity);
 
-    Reply reply(ReplyContext context);
+    LlmReply reply(ReplyContext context);
 
     /** 이번 세션 대화를 지난 요약에 합친 새 요약. previousSummary는 처음이면 null */
-    String mergeSummary(String previousSummary, long sessionId, List<Line> messages);
+    String mergeSummary(String previousSummary, long sessionId, List<ChatLine> messages);
 
     String closingLine(String characterName);
-
-    /** sender: USER · CHARACTER */
-    record Line(String sender, String content) {}
-
-    /** history = 이번 세션의 앞선 메시지 (이번 userMessage는 빠짐) */
-    record ReplyContext(
-            CharacterInfo character,
-            String summary,
-            List<Line> history,
-            List<MemoryInfo> memories,
-            String userMessage) {}
-
-    /** emotion = 표정 태그, affinityScore = 이 대화의 호감도 점수 (relation이 −5~5로 자름) */
-    record Reply(String content, String emotion, int affinityScore) {}
 
     // TODO(judgment): J-04 trigger별 고정 대사 문구 (LLM이 5초 안에 못 만들 때도 이 표를 씀)
     Map<String, String> FIXED_REACTION_LINES = Map.of(

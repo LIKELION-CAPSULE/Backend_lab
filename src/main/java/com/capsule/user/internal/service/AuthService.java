@@ -5,6 +5,7 @@ import com.capsule.common.ratelimit.RateLimiter;
 import com.capsule.user.internal.client.EmailSender;
 import com.capsule.user.internal.client.KakaoClient;
 import com.capsule.user.internal.domain.User;
+import com.capsule.user.internal.dto.KakaoProfile;
 import com.capsule.user.internal.dto.KakaoRequest;
 import com.capsule.user.internal.dto.Login;
 import com.capsule.user.internal.dto.SignupRequest;
@@ -171,7 +172,7 @@ public class AuthService {
     /** 처음이면 users + user_social_accounts + user_terms를 한 트랜잭션으로 (api.md 6 '서버가 하는 일') */
     @Transactional
     public Login kakao(KakaoRequest req) {
-        KakaoClient.KakaoProfile profile = kakaoClient
+        KakaoProfile profile = kakaoClient
                 .fetchProfile(req.code(), req.redirectUri())
                 .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "SOCIAL_AUTH_FAILED"));
         Instant now = Instant.now(clock);

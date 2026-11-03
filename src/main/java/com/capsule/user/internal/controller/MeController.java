@@ -6,9 +6,9 @@ import com.capsule.user.internal.dto.CreateMemoryRequest;
 import com.capsule.user.internal.dto.MeResponse;
 import com.capsule.user.internal.dto.MemoryList;
 import com.capsule.user.internal.dto.MemoryResponse;
+import com.capsule.user.internal.dto.MemoryStatus;
 import com.capsule.user.internal.dto.UpdateMeRequest;
 import com.capsule.user.internal.service.MemoryService;
-import com.capsule.user.internal.service.MemoryService.Status;
 import com.capsule.user.internal.service.ProfileService;
 import java.time.LocalDate;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -58,7 +58,7 @@ class MeController {
             @RequestParam(required = false) @DateTimeFormat(iso = ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = ISO.DATE) LocalDate to,
             @RequestParam(required = false) @DateTimeFormat(iso = ISO.DATE) LocalDate date,
-            @RequestParam(defaultValue = "UPCOMING") Status status,
+            @RequestParam(defaultValue = "UPCOMING") MemoryStatus status,
             @RequestParam(required = false) UserMemory.Type type) {
         return memories.list(userId, from, to, date, status, type);
     }

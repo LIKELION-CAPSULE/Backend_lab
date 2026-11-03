@@ -12,11 +12,4 @@ public record MessageRequest(
         String content,
 
         @NotNull InputType inputType,
-        Boolean tts) {
-
-    /** inputType은 검증만 한다 (저장할 컬럼 없음) */
-    enum InputType {
-        TEXT,
-        QUICK
-    }
-}
+        Boolean tts) {}

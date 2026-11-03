@@ -1,5 +1,6 @@
 package com.capsule.user.internal.client;
 
+import com.capsule.user.internal.dto.KakaoProfile;
 import java.util.Optional;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Profile;
