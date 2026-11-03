@@ -22,6 +22,7 @@ AI 캐릭터와 함께 공부하는 웹서비스의 백엔드. Spring Boot + Pos
 
 ## 구조 규칙
 - 모듈 = `<base>/<모듈>/api`(계약, 다른 모듈이 쓰는 유일한 입구) + `<base>/<모듈>/internal`(구현)
+- `internal` 안은 `controller`·`service`·`dto`·`repository`·`domain`(+`adapter`·`client`·`config`)로 나눈다. 상세: `.claude/skills/skeleton/references/module-layout.md`, ADR 0012
 - 다른 모듈의 internal 참조 금지. 결과가 필요하면 상대 `api`, 알리기만 하면 이벤트. 다른 모듈 테이블 JOIN 금지
 - 계약(`*/api/**`) 변경은 contract-change 스킬(확장→이전→제거). 기존 시그니처를 제자리에서 바꾸지 않는다
 - develop에 머지된 마이그레이션은 수정 금지. 변경은 새 마이그레이션으로

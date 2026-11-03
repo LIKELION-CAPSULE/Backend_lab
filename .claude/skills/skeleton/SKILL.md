@@ -72,7 +72,7 @@ docs/decisions에 없는 새 라이브러리·구조를 쓰려면 여기서 이�
 - `docs/specs/judgment-backlog.md`에 항목 추가 (형식은 `references/judgment-backlog-format.md`). 담당자는 zones.conf의 모듈 담당.
 
 ### 7. LLM 자리 (dialogue 모듈)
-- `dialogue/api`에 대화 계약(예: `DialogueService.reply(...)`), `dialogue/internal/llm`에 `LlmClient` 포트와 `FakeLlmClient`.
+- `dialogue/api`에 대화 계약(예: `DialogueService.reply(...)`), `dialogue/internal/client`에 `LlmClient` 포트와 `FakeLlmClient`.
 - `capsule.llm.mode=fake`(기본, local/test)일 때 Fake가 주입되게 한다. 실제 LLM 어댑터는 만들지 않는다(승희가 도메인 단계에서 개발).
 - Fake 응답은 고정 문자열 + 입력 일부 반영 정도로, E2E가 검증할 수 있게.
 
