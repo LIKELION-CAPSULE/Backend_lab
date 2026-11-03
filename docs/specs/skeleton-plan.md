@@ -62,7 +62,7 @@
 
 | # | 질문 | 관련 | 추천안 |
 |---|---|---|---|
-| A1 | `users.nickname`은 NOT NULL인데, 가입 때는 닉네임을 받지 않음(이메일·카카오 둘 다) | API 4·6, DB 1 | **노션 DB에서 `nickname`을 NULL 허용으로 변경** → spec-sync. `onboardingRequired = nickname 또는 avatar_id가 NULL` |
+| A1 | `users.nickname`은 NOT NULL인데, 가입 때는 닉네임을 받지 않음(이메일·카카오 둘 다) | API 4·6, DB 1 | **결정(11/03): 닉네임은 가입할 때 받음.** DB `NOT NULL` 유지, 노션 API 4번에 `nickname` 추가함. 카카오 신규 가입자는 카카오 프로필 닉네임으로 저장(동의 항목 '닉네임' 필수, 노션 API 6번 반영). 프로필 설정(10)은 그대로(닉네임 필수, H02에서 가입 때 값을 채워 보여줌). `onboardingRequired`는 사실상 "아바타를 아직 안 고름" |
 | A2 | 완료 대사 `closingLine`을 새로고침해도 같게 보여줄 저장 자리가 없음 | API 22·23 | **노션 DB에 `study_sessions.closing_line text` 추가** (LLM 대사는 매번 달라서 고정 문구 선택보다 낫다) |
 | A3 | 메시지 전송(20) 응답: 설명은 "답장 + 모션·표정 + 바뀐 호감도"인데 응답 표는 `requestId`·`content`·`eventId`뿐. `eventId`가 무엇인지 불명확 | API 20 | **응답을 이벤트 반응(19)과 같은 모양으로**: `requestId`, `content`, `motion`, `expression`, `affinity`, `fallback`(+`audioBase64`). `eventId`는 뺌 |
 | A4 | 이벤트 반응(19): 표는 `content`, JSON은 `line`. `requestId`는 JSON에만 있음. `intensity`를 보내는 방법이 없음 | API 19 | **요청 본문 `{ "requestId": "...", "intensity": 1 }`**(`intensity`는 AWAY에서만, 기본 1), 응답 필드 이름은 `content` |
@@ -202,7 +202,7 @@ DTO는 `record`, 엔티티는 밖으로 내보내지 않는다. 각 `api` 패키
 1. 약관 조회 `GET /api/terms` → 약관 2개, `termVersionId`
 2. 인증번호 요청 `POST /api/auth/email/verification` → 202 (Fake 메일이 번호를 들고 있음)
 3. 인증 확인 `POST .../verification/confirm` → `verificationToken`
-4. 가입 `POST /api/auth/email/signup` → 201, `onboardingRequired: true`, 리프레시 쿠키
+4. 가입 `POST /api/auth/email/signup` (닉네임 포함) → 201, `onboardingRequired: true`, 리프레시 쿠키
 5. 아바타 목록 `GET /api/avatars` → 1개
 6. 프로필 설정 `PATCH /api/me` → `onboardingRequired: false`
 7. 홈 `GET /api/home` → 룸 1개, `activeSession: null`
@@ -223,7 +223,7 @@ DTO는 `record`, 엔티티는 밖으로 내보내지 않는다. 각 `api` 패키
 22. 로그아웃 → 204
 
 ### 흐름 2: 카카오 신규 가입 (Fake 카카오)
-카카오 로그인(약관 없음) → 400 `TERMS_REQUIRED` → 약관 포함 → `isNewUser: true` → 같은 코드로 다시 → `isNewUser: false`
+카카오 로그인(약관 없음) → 400 `TERMS_REQUIRED` → 약관 포함 → `isNewUser: true`, 닉네임 = Fake 카카오가 준 닉네임 → 같은 카카오 계정으로 다시 → `isNewUser: false`
 
 ### 흐름 3: 비정상 종료 후 이어하기
 공부 시작 → FOCUS → heartbeat → (끊김) → 이어하기 → `breakSeconds > 0`, 끊긴 구간이 공부 시간에 들어가지 않음 → 종료
