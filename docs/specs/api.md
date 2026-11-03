@@ -391,7 +391,7 @@
 - 화면 대부분에 **공통 헤더**(닉네임 · 프로필 · 알림 · 크레딧)가 있어서, 앱이 켜질 때 한 번 받아 전역으로 들고 있으려고
 - 권한 · 역할(관리자 등)에 따라 메뉴가 달라서
 
-⇒ 삭제해도 될듯? 그러고 홈 조회에 url, nickname만 추가
+> 2026-11-03: 남기기로 함. 새로고침 때 어느 화면으로 보낼지 정하는 기준
 
 항상 호출되는 API. 비정상적인 종료의 대비
 
@@ -408,7 +408,7 @@
 | 화면 요소 | 이 API가 하는 일 |
 | --- | --- |
 | H03 헤더 오른쪽 프로필 · 닉네임 | `nickname`, `avatar.thumbnailUrl` |
-| H18 이어하기 팝업 '쌌쌌맞은 갸루짝꿍이…에서 하던 공부' | `activeSession.roomName` |
+| H18 이어하기 팝업 '쌀쌀맞은 갸루짝꿍이…에서 하던 공부' | `activeSession.roomName` |
 
 - 테이블: `users`, `avatars`, `study_sessions` · 인증: 필요
 
@@ -419,11 +419,11 @@
 | 이름 | 타입 | 설명 |
 | --- | --- | --- |
 | userId | Long | 사용자 id |
-| nickname | String | 설정 전이면 null |
+| nickname | String | 닉네임 (가입 때 받음) |
 | email | String | 이메일 |
-| onboardingRequired | Boolean | 닉네임 또는 아바타가 없으면 true |
+| onboardingRequired | Boolean | 아바타를 아직 안 골랐으면 true (닉네임은 가입 때 받음) |
 | activeSession | Object | 진행 중 세션 `sessionId`, `roomId`, `roomName`, `characterName`, `startedAt`. 없으면 null |
-| profileImage | String | 프로필 이미지 |
+| profileImage | String | 프로필 이미지 = 아바타 썸네일. 아바타 설정 전이면 null |
 
 ```json
 {
@@ -431,8 +431,8 @@
   "nickname": "승희",
   "email": "name@example.com",
   "onboardingRequired": false,
-  "activeSession": { "sessionId": 512, "roomId": 1, "roomName": "쌌쌌맞은 갸루짝꿍이 나에게만 친절하다!", "characterName": "채린", "startedAt": "2026-11-07T05:00:02Z" }
-	"profileImage" : "profile_image_url.com"
+  "activeSession": { "sessionId": 512, "roomId": 1, "roomName": "쌀쌀맞은 갸루짝꿍이 나에게만 친절하다!", "characterName": "채린", "startedAt": "2026-11-07T05:00:02Z" },
+  "profileImage" : "profile_image_url.com"
 }
 ```
 
@@ -556,7 +556,7 @@ H02에서 닉네임과 아바타를 한 번에 저장합니다. 저장하면 `on
 
 | 이름 | 타입 | 설명 |
 | --- | --- | --- |
-| lastSession | Object | 진행 중 세션 (내 정보 조회와 같은 형태). 없으면 null |
+| activeSession | Object | 진행 중 세션 (내 정보 조회와 같은 형태). 없으면 null |
 | rooms[] | Array | 들어갈 수 있는 룸 (지금은 1개) |
 | rooms[].id · name · thumbnailUrl |  | 포스터 카드 |
 | rooms[].characters[] | Array | 포스터 아래 캐릭터 이름 · 프로필 |
@@ -565,7 +565,7 @@ H02에서 닉네임과 아바타를 한 번에 저장합니다. 저장하면 `on
 {
   "activeSession": null,
   "rooms": [
-    { "id": 1, "name": "쌌쌌맞은 갸루짝꿍이 나에게만 친절하다!", "thumbnailUrl": "https://cdn.../room1.png",
+    { "id": 1, "name": "쌀쌀맞은 갸루짝꿍이 나에게만 친절하다!", "thumbnailUrl": "https://cdn.../room1.png",
       "characters": [ { "id": 1, "name": "채린", "profileImageUrl": "https://cdn.../chaerin.png" } ] }
   ]
 }
@@ -593,7 +593,7 @@ H02에서 닉네임과 아바타를 한 번에 저장합니다. 저장하면 `on
 | H04 '이곳에서 함께할 친구들' 카드 이름 · 사진 | `characters[].name`, `profileImageUrl` |
 | H04 친구 카드 '#태그' | `characters[].personality` (배열, 순서대로 표시) |
 | H04 친구 카드 '◷ 함께 0분 · ♡ Lv.1 아는 사이' | `characters[].relation` |
-| H04 '이곳에서 공부하기 →' | H06으로 이동 (API 없음). 이때 '캐릭터 Live2D 조회'로 미리 받기 |
+| H04 '이곳에서 공부하기 →' | H06으로 이동 (API 없음). 캐릭터 모델 정보는 '공부 시작' 응답에 있음 (별도 조회 API 없음) |
 | H04 '진행 중인 공부로 돌아가기' | `activeSessionId`가 있으면 버튼 문구를 바꾸고 '세션 이어하기' |
 | H04 친구 카드 클릭 → H12, 나머지 캐릭터 | 목업 |
 
@@ -662,7 +662,7 @@ H02에서 닉네임과 아바타를 한 번에 저장합니다. 저장하면 `on
 | --- | --- | --- | --- |
 | type | String | O | `EXAM`(시험) / `PROMISE`(약속) / `GOAL`(목표) |
 | title | String | O | 일정 이름 (약속은 비우면 '같이 공부하기') |
-| dueDate | String | O | `YYYY-MM-DD` (한국 날짜 그대로). 목표는 마감일이 없을 수 있음 |
+| dueDate | String | EXAM · PROMISE는 O, GOAL은 X | `YYYY-MM-DD` (한국 날짜 그대로). 목표는 마감일이 없을 수 있음 |
 | dueTime | String | X | `HH:mm`. 약속에서만 사용. **dueDate 없이 시간만은 불가** |
 
 ```json
@@ -827,8 +827,8 @@ GET /api/me/memories?date=2026-11-12
   "startedAt": "2026-11-07T05:00:02Z",
   "targetMinutes": 50,
   "room": { "id": 1, "name": "쌀쌀맞은 갸루짝꿍이 나에게만 친절하다!", "backgroundImageUrl": "https://cdn.../room1-bg.png" },
-  "character": { "id": 1, "name": "채린", "thumbnailUrl": "https://cdn.../avatar1.png", "modelJsonUrl": "https://cdn.../live2d/chaerin/v1/chaerin.model3.json", "scale": 1.0, "offsetX": 0, "offsetY": 12 }
-  "avater": { "id": 1, "name": "기본 아바타", "thumbnailUrl": "https://cdn.../avatar1.png", "modelJsonUrl": "https://cdn.../live2d/chaerin/v1/chaerin.model3.json", "scale": 1.0, "offsetX": 0, "offsetY": 12 }
+  "character": { "id": 1, "name": "채린", "profileImageUrl": "https://cdn.../chaerin.png", "modelJsonUrl": "https://cdn.../live2d/chaerin/v1/chaerin.model3.json", "scale": 1.0, "offsetX": 0, "offsetY": 12 },
+  "avatar": { "id": 1, "name": "기본 아바타", "profileImageUrl": "https://cdn.../avatar1.png", "modelJsonUrl": "https://cdn.../live2d/avatar1/v1/avatar1.model3.json", "scale": 1.0, "offsetX": 0, "offsetY": 12 },
   "me": { "nickname": "승희", "profileImageUrl": "https://cdn.../avatar1.png" },
   "serverTime": "2026-11-07T05:00:02Z"
 }
@@ -901,7 +901,7 @@ GET /api/me/memories?date=2026-11-12
 #### 이 API 다음에 할 일
 
 1. 캐릭터 Live2D를 다시 받아 H07 그리기 (새로고침이면 메모리에서 사라졌으므로)
-2. 응답에 함께 오는 `FOCUS`의 반응이 필요하면 '상태 변화 전송' 대신 바로 '이벤트 반응 받기'를 부르도록 `focusEventId`를 응답에 추가할지 팀과 결정 (현재는 반응 없이 바로 공부 재개)
+2. 응답에 함께 오는 `FOCUS`의 반응이 필요하면 '상태 변화 전송' 대신 바로 '이벤트 반응 받기'를 부르도록 `focusEventId`는 응답에 넣지 않음 (2026-11-03 결정). 반응 없이 바로 공부 재개
 3. heartbeat 재시작
 
 ## 18. POST /api/sessions/{sessionId}/events — 상태 변화 전송
@@ -965,7 +965,7 @@ GET /api/me/memories?date=2026-11-12
 | eventId | Long | 저장된 이벤트 id → '이벤트 반응 받기'에 사용 |
 
 ```json
-{ "eventId": "12344" }
+{ "eventId": 12344 }
 ```
 
 > ✅ **201 Created** · 같은 (타입, 시각)을 다시 보내면 **200 + 기존 eventId** (재전송 안전)
@@ -1240,6 +1240,9 @@ json
 | --- | --- | --- |
 | sessionId · roomName |  |  |
 | startedAt · endedAt · endType |  | `NORMAL` / `AUTO_CLOSED` |
+| studySeconds | Integer | 저장된 공부 시간 |
+| presentSeconds | Integer | 저장된 자리 지킴 시간 |
+| awaySeconds | Integer | 저장된 자리 비움 시간 (studySeconds − presentSeconds) |
 | returnCount | Integer | 자리 비운 뒤 돌아온 횟수 (`RETURN` 이벤트 수) |
 | character | Object | `id`, `name` |
 | relation | Object | `levelBefore` · `levelAfter` · `levelName` · `pointsBefore`(공부 시작 때) · `pointsAfter`(이벤트 · 대화 · 공부 시간 반영 후) · `nextLevelPoints` · `levelUp` |
@@ -1248,7 +1251,7 @@ json
 json
 
 ```json
-{  "sessionId": 512, "roomName": "쌀쌀맞은 갸루짝꿍이 나에게만 친절하다!",  "startedAt": "2026-11-07T05:00:02Z", "endedAt": "2026-11-07T06:05:10Z", "endType": "NORMAL",  "returnCount": 2,  "character": { "id": 1, "name": "채린" },  "relation": { "levelBefore": 1, "levelAfter": 2, "levelName": "친한 사이", "pointsBefore": 80, "pointsAfter": 135, "nextLevelPoints": 300, "levelUp": true },  "closingLine": "오늘도 같이 공부해서 좋았어. 다음에도 함께하자."}
+{  "sessionId": 512, "roomName": "쌀쌀맞은 갸루짝꿍이 나에게만 친절하다!",  "startedAt": "2026-11-07T05:00:02Z", "endedAt": "2026-11-07T06:05:10Z", "endType": "NORMAL",  "studySeconds": 3300, "presentSeconds": 2880, "awaySeconds": 420,  "returnCount": 2,  "character": { "id": 1, "name": "채린" },  "relation": { "levelBefore": 1, "levelAfter": 2, "levelName": "친한 사이", "pointsBefore": 80, "pointsAfter": 135, "nextLevelPoints": 300, "levelUp": true },  "closingLine": "오늘도 같이 공부해서 좋았어. 다음에도 함께하자."}
 ```
 
 > ✅ **200 OK** (이미 끝난 세션도 200 + 같은 결과)
@@ -1266,7 +1269,7 @@ json
 
 ##### 같이 챙길 것 2가지
 
-- **리포트 조회(새로고침)는 응답에 시간 값을 다시 넣어야 함**: 새로고침하면 프론트 계산값이 사라지니까, 리포트 조회는 저장된 `studySeconds` · `presentSeconds` · `awaySeconds`를 돌려줘야 H09를 다시 그릴 수 있음
+- **리포트 조회(새로고침)는 응답에 시간 값을 다시 넣어야 함**: 새로고침하면 프론트 계산값이 사라지니까, 리포트 조회는 저장된 `studySeconds` · `presentSeconds` · `awaySeconds`를 돌려줘야 H09를 다시 그릴 수 있음 → 2026-11-03 결정: 공부 종료 · 리포트 응답에 넣음
 - **자동 마감 · 비정상 종료는 프론트 값이 없음**: 6시간 방치로 배치가 닫을 땐 보내줄 프론트가 없어서, 그때는 **서버가 이벤트로 직접 계산**해야 함. 그래서 이벤트로 계산하는 로직은 서버에 계속 있어야 하고, 위 2번 검증에서도 그 계산값과 크게 차이 나면 서버 값으로 바꾸는 식으로 쓰면 조작도 같이 막을 수 있음
 
 ## 23. GET /api/sessions/{sessionId}/report — 리포트 조회
