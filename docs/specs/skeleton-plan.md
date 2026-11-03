@@ -66,7 +66,7 @@
 | A2 | 완료 대사 `closingLine`을 새로고침해도 같게 보여줄 저장 자리가 없음 | API 22·23 | **노션 DB에 `study_sessions.closing_line text` 추가** (LLM 대사는 매번 달라서 고정 문구 선택보다 낫다) |
 | A3 | 메시지 전송(20) 응답: 설명은 "답장 + 모션·표정 + 바뀐 호감도"인데 응답 표는 `requestId`·`content`·`eventId`뿐. `eventId`가 무엇인지 불명확 | API 20 | **응답을 이벤트 반응(19)과 같은 모양으로**: `requestId`, `content`, `motion`, `expression`, `affinity`, `fallback`(+`audioBase64`). `eventId`는 뺌 |
 | A4 | 이벤트 반응(19): 표는 `content`, JSON은 `line`. `requestId`는 JSON에만 있음. `intensity`를 보내는 방법이 없음 | API 19 | **요청 본문 `{ "requestId": "...", "intensity": 1 }`**(`intensity`는 AWAY에서만, 기본 1), 응답 필드 이름은 `content` |
-| A5 | 약관 `contentUrl`: DB에는 본문(`term_versions.content`)만 있고 URL이 없음 | API 1 | **응답에 `content`(본문)를 그대로 넣음**. 링크가 꼭 필요하면 노션 DB에 URL 컬럼을 추가 |
+| A5 | 약관 `contentUrl`: DB에는 본문(`term_versions.content`)만 있고 URL이 없음 | API 1 | **결정(11/03): 응답에 `content`(본문)를 그대로 넣음.** 노션 API 1번 반영함 |
 | A6 | 시드 데이터: 룸 1개, 캐릭터 채린, 기본 아바타, Live2D 모델·모션·표정·반응 매핑, 약관 2종(본문 포함)의 실제 값이 명세에 예시로만 있음 | 전체 | **명세 예시값으로 `content` 시드 마이그레이션을 만듦**. 약관 본문은 "(약관 본문 준비 중)"으로 두고, 실제 값은 나중에 새 마이그레이션으로 교체 |
 
 **B. 이의가 없으면 이대로 진행하는 것** (명세 안에서 서로 안 맞거나 비어 있는 곳)
