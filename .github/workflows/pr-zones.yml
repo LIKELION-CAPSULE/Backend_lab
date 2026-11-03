@@ -1,0 +1,45 @@
+# PR에 구역 라벨을 붙이고, PR 본문 필수 섹션을 검사한다. (리뷰어 지정은 pr-write가 PR 생성 때 GitHub 기본 기능으로)
+# 빌드·모듈 구성을 바꿨는데 docs/decisions에 ADR이 없으면 needs-adr 라벨 (원칙: 이유 먼저)
+# 판정은 로컬 훅과 같은 .harness/zones.py 를 쓰므로 기준이 어긋나지 않는다.
+name: pr-zones
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  zones:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PR: ${{ github.event.pull_request.number }}
+      AUTHOR: ${{ github.event.pull_request.user.login }}
+      BASE: ${{ github.base_ref }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 구역 분류 → 라벨
+        run: |
+          changed="$(git diff --name-only "origin/$BASE" HEAD)"
+          labels="$(printf '%s\n' "$changed" | python3 .harness/zones.py classify --author "$AUTHOR") $(printf '%s\n' "$changed" | python3 .harness/zones.py adr-hint)"
+          labels="$(echo $labels)"
+          echo "라벨: ${labels:-없음}"
+          for l in $labels; do
+            gh label create "$l" --force --color "$( [ "$l" = cross-module ] && echo D93F0B || echo C5DEF5 )" >/dev/null
+          done
+          if [ -n "$labels" ]; then
+            gh pr edit "$PR" --add-label "$(echo "$labels" | tr ' ' ',')"
+          fi
+
+      - name: PR 본문 필수 섹션 (draft는 건너뜀)
+        if: github.event.pull_request.draft == false
+        env:
+          BODY: ${{ github.event.pull_request.body }}
+        run: printf '%s' "$BODY" | python3 .harness/zones.py check-pr-body

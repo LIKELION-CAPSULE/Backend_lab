@@ -1,0 +1,22 @@
+# --- build ---
+.gradle/
+build/
+out/
+!gradle/wrapper/gradle-wrapper.jar
+
+# --- IDE ---
+.idea/
+*.iml
+.vscode/
+
+# --- 로컬 전용 (하네스 local 구역) ---
+.env
+.env.local
+*.local.*
+.claude/settings.local.json
+
+# --- OS ---
+.DS_Store
+
+# --- python (하네스 스크립트) ---
+__pycache__/

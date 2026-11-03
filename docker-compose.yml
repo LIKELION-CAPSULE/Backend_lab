@@ -1,0 +1,18 @@
+# 로컬 개발용 PostgreSQL + Redis(토큰·인증번호·로그인 잠금). worktree마다 DB 이름이 달라서 같은 컨테이너를 같이 씀 (scripts/run-local.sh)
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: capsule
+      POSTGRES_PASSWORD: capsule
+      POSTGRES_DB: capsule
+    ports:
+      - "5432:5432"
+    volumes:
+      - capsule-pg:/var/lib/postgresql/data
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+volumes:
+  capsule-pg:

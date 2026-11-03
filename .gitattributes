@@ -1,0 +1,5 @@
+# Windows(core.autocrlf=true)에서 받아도 텍스트 파일을 LF로 유지.
+# 안 하면 .sh·gradlew가 CRLF로 바뀌어 bash가 `$'\r': command not found`로 깨짐
+* text=auto eol=lf
+*.bat text eol=crlf
+*.jar binary

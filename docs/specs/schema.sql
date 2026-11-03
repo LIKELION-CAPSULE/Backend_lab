@@ -1,0 +1,389 @@
+-- =====================================================================
+-- 노션 원본 스냅샷: DB (https://app.notion.com/p/40db9a07e59280abad14da2dde00c864)
+-- 이 파일은 spec-sync 스킬이 만든다. 직접 고치지 말고 노션을 고친 뒤 spec-sync.
+-- 아래는 노션 코드 블록 그대로.
+-- =====================================================================
+-- =====================================================================
+-- CAPSULE DB schema (PostgreSQL 15 이상)
+-- 2026-11-02 최종본: 로그인, 약관, Live2D, 룸·세션, 관계·해금, 대화 전체
+--
+-- 이번 버전의 원칙
+--   - 같은 정보를 두 번 저장하지 않음 (status 대신 withdrawn_at / ended_at)
+--   - 탈퇴는 소프트 삭제: users 행은 남기고 개인정보만 비움 → users FK에 CASCADE 없음
+--   - 토큰(리프레시, 이메일 인증, 비밀번호 재설정)과 로그인 잠금은 Redis에서 처리
+--   - 계산 로직과 묶인 값 목록은 CHECK, 연출용으로 늘어날 목록은 서버 enum으로 관리
+--
+-- 2026-11-02 변경
+--   - characters.personality: text → text[] (태그 배열)
+--   - user_memories: start_at / end_at → due_date / due_time
+--   - study_sessions: detect_mode 제거
+--   - session_events: type에서 GAZE_AWAY 제거
+--   - relation_logs: session_event_id, reason 'SESSION_EVENT' 추가 (이벤트별 호감도 반영)
+-- =====================================================================
+
+BEGIN;
+
+-- ---------------------------------------------------------------------
+-- 1. 회원 / 로그인 (S01)
+-- ---------------------------------------------------------------------
+-- 이메일 가입자: email, password가 있음 / 소셜 가입자: 둘 다 NULL, user_social_accounts에 행이 있음
+-- 이메일은 인증을 먼저 받고 가입시키므로 인증 여부 컬럼은 없음
+CREATE TABLE users (
+    id                bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    nickname          text        NOT NULL,
+    email             text        UNIQUE CHECK (email = lower(email)),  -- 이메일 가입자의 로그인 아이디
+    password          text,                                             -- bcrypt 해시 (원문 저장 금지)
+    avatar_id         bigint,                                           -- 처음 설정 전에는 NULL (FK는 avatars 생성 후)
+    profile_image_url text,
+    last_login_at     timestamptz,
+    created_at        timestamptz NOT NULL DEFAULT now(),
+    updated_at        timestamptz NOT NULL DEFAULT now(),
+    withdrawn_at      timestamptz,                                      -- NULL이면 활성 회원
+    CHECK ((email IS NULL) = (password IS NULL))                        -- 둘 다 있거나 둘 다 없거나
+);
+
+-- 소셜 가입 계정 (지금은 계정당 하나, 탈퇴하면 행 삭제 → 같은 소셜 계정으로 재가입 가능)
+CREATE TABLE user_social_accounts (
+    provider         text        NOT NULL CHECK (provider IN ('KAKAO', 'NAVER', 'APPLE', 'GOOGLE')),
+    provider_user_id text        NOT NULL,
+    user_id          bigint      NOT NULL UNIQUE REFERENCES users (id),  -- 계정 연결이 생기면 UNIQUE만 제거
+    email            text,                                               -- 제공자가 준 이메일 (선택 동의라 없을 수 있음)
+    created_at       timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (provider, provider_user_id)
+);
+
+-- ---------------------------------------------------------------------
+-- 2. 약관 (S01)
+-- ---------------------------------------------------------------------
+CREATE TABLE terms (
+    id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    code        text        NOT NULL UNIQUE,      -- SERVICE, PRIVACY, AGE_14, MARKETING
+    name        text        NOT NULL,
+    is_required boolean     NOT NULL,
+    sort_order  int         NOT NULL DEFAULT 0,   -- 가입 화면 표시 순서
+    created_at  timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE term_versions (
+    id                 bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    term_id            bigint      NOT NULL REFERENCES terms (id),
+    version            int         NOT NULL,
+    content            text        NOT NULL,
+    requires_reconsent boolean     NOT NULL DEFAULT true,   -- false면 공지만, 재동의 안 받음
+    effective_at       timestamptz NOT NULL,                -- 시행일
+    created_at         timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (term_id, version)
+);
+CREATE INDEX idx_term_versions_latest ON term_versions (term_id, effective_at DESC);
+
+-- 동의 기록: 추가만 하고 수정·삭제하지 않음. 철회도 agreed=false인 새 행. 탈퇴해도 남김
+CREATE TABLE user_terms (
+    id              bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id         bigint      NOT NULL REFERENCES users (id),
+    term_version_id bigint      NOT NULL REFERENCES term_versions (id),
+    agreed          boolean     NOT NULL,
+    created_at      timestamptz NOT NULL DEFAULT now()      -- 동의·철회 시각
+);
+CREATE INDEX idx_user_terms_user_version ON user_terms (user_id, term_version_id, id DESC);
+
+-- ---------------------------------------------------------------------
+-- 3. Live2D 모델 (파일 정보만. 캐릭터와 아바타가 이 모델을 가리킴)
+-- ---------------------------------------------------------------------
+CREATE TABLE live2d_models (
+    id              bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    storage_prefix  text         NOT NULL,                -- 예: live2d/chaerin/v1/
+    model_json_path text         NOT NULL,                -- 예: chaerin.model3.json (prefix 기준 상대 경로)
+    scale           numeric(5,2) NOT NULL DEFAULT 1.00,   -- 칸 안에서의 기본 확대율
+    offset_x        int          NOT NULL DEFAULT 0,      -- 칸 안에서의 위치 보정
+    offset_y        int          NOT NULL DEFAULT 0,
+    created_at      timestamptz  NOT NULL DEFAULT now()
+);
+
+CREATE TABLE live2d_motions (
+    id         bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    model_id   bigint NOT NULL REFERENCES live2d_models (id) ON DELETE CASCADE,
+    group_name text   NOT NULL,                  -- model3.json의 Motions 그룹 (Idle, TapBody ...)
+    name       text   NOT NULL,                  -- 사람이 알아볼 이름 (예: 손 흔들기)
+    file_path  text   NOT NULL,                  -- .motion3.json 상대 경로
+    UNIQUE (model_id, file_path),
+    UNIQUE (id, model_id)                        -- 반응 매핑의 복합 FK용
+);
+
+CREATE TABLE live2d_expressions (
+    id        bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    model_id  bigint NOT NULL REFERENCES live2d_models (id) ON DELETE CASCADE,
+    name      text   NOT NULL,                   -- 예: 삐짐, 웃음
+    file_path text   NOT NULL,                   -- .exp3.json 상대 경로
+    UNIQUE (model_id, file_path),
+    UNIQUE (id, model_id)
+);
+
+-- 사용자 상태 → 어떤 모션/표정을 틀지 (캐릭터, 아바타 모두)
+-- 같은 트리거에 여러 행이면 서버가 똑같은 확률로 하나 고름. 대사는 LLM이 실시간 생성
+CREATE TABLE live2d_reaction_maps (
+    id            bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    model_id      bigint   NOT NULL REFERENCES live2d_models (id) ON DELETE CASCADE,
+    trigger_type  text     NOT NULL,   -- 허용 값은 서버 enum으로 관리 (GREETING, FOCUS, GAZE_AWAY, AWAY, RETURN, BREAK, LONG_FOCUS ...)
+    intensity     smallint CHECK (intensity BETWEEN 1 AND 3),   -- 눈치 / 말 걸기 / 서운함
+    motion_id     bigint,
+    expression_id bigint,
+    CHECK (motion_id IS NOT NULL OR expression_id IS NOT NULL),  -- 모션이나 표정 중 하나는 있어야 함
+    FOREIGN KEY (motion_id, model_id)
+        REFERENCES live2d_motions (id, model_id) ON DELETE CASCADE,       -- 같은 모델의 모션만
+    FOREIGN KEY (expression_id, model_id)
+        REFERENCES live2d_expressions (id, model_id) ON DELETE CASCADE    -- 같은 모델의 표정만
+);
+CREATE INDEX idx_live2d_reaction_lookup
+    ON live2d_reaction_maps (model_id, trigger_type, intensity);
+
+-- ---------------------------------------------------------------------
+-- 4. 아바타 (S02)
+-- ---------------------------------------------------------------------
+CREATE TABLE avatars (
+    id            bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    model_id      bigint      NOT NULL UNIQUE REFERENCES live2d_models (id),
+    name          text        NOT NULL,                  -- 예: 아바타 A
+    thumbnail_url text        NOT NULL,                  -- 선택 화면 카드
+    sort_order    int         NOT NULL DEFAULT 0,
+    is_active     boolean     NOT NULL DEFAULT true,     -- 고른 사용자가 있으니 지우지 말고 비활성화
+    created_at    timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE users
+    ADD FOREIGN KEY (avatar_id) REFERENCES avatars (id);
+
+-- ---------------------------------------------------------------------
+-- 5. 스터디룸 / 배경 / 캐릭터 (S03, S04)
+-- ---------------------------------------------------------------------
+-- 1:1 / 1:3 구분은 저장하지 않음: 룸에 속한 캐릭터 수로 계산
+CREATE TABLE study_rooms (
+    id            bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    name          text        NOT NULL,
+    description   text,
+    thumbnail_url text,
+    sort_order    int         NOT NULL DEFAULT 0,
+    is_active     boolean     NOT NULL DEFAULT true,
+    created_at    timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE room_backgrounds (
+    id           bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    room_id      bigint  NOT NULL REFERENCES study_rooms (id) ON DELETE CASCADE,
+    name         text    NOT NULL,
+    image_url    text    NOT NULL,
+    is_default   boolean NOT NULL DEFAULT false,
+    unlock_type  text    CHECK (unlock_type IN ('LEVEL')),  -- NULL이면 처음부터 열림 (구매는 BM 확정 후 추가)
+    unlock_value int,                                       -- LEVEL이면 이 룸 캐릭터와의 필요 관계 단계
+    sort_order   int     NOT NULL DEFAULT 0,
+    is_active    boolean NOT NULL DEFAULT true,
+    UNIQUE (id, room_id),                                   -- 세션의 복합 FK용
+    CHECK ((unlock_type IS NULL) = (unlock_value IS NULL)),
+    CHECK (NOT is_default OR unlock_type IS NULL)           -- 기본 배경은 항상 열려 있어야 함
+);
+CREATE INDEX idx_room_backgrounds_room ON room_backgrounds (room_id, sort_order);
+CREATE UNIQUE INDEX uq_room_backgrounds_default
+    ON room_backgrounds (room_id) WHERE is_default;         -- 룸당 기본 배경 하나
+
+-- 캐릭터는 한 룸에만 속하고, 모델은 하나
+CREATE TABLE characters (
+    id                bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    room_id           bigint      NOT NULL REFERENCES study_rooms (id),
+    model_id          bigint      NOT NULL UNIQUE REFERENCES live2d_models (id),
+    name              text        NOT NULL,
+    personality       text[]      NOT NULL DEFAULT '{}',   -- 성격 태그 (예: {츤데레, 같은 반 친구}), 순서대로 표시
+    intro             text,
+    profile_image_url text,
+    sort_order        int         NOT NULL DEFAULT 0,      -- 룸 안 표시 순서
+    is_active         boolean     NOT NULL DEFAULT true,
+    created_at        timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (id, room_id)                                   -- session_characters 복합 FK용
+);
+CREATE INDEX idx_characters_room ON characters (room_id, sort_order);
+
+-- 사용자가 연 배경 (해금 판정 규칙은 서버: 한 명이라도 / 모두 / 합계 중 미정)
+CREATE TABLE user_unlocked_backgrounds (
+    user_id       bigint      NOT NULL REFERENCES users (id),
+    background_id bigint      NOT NULL REFERENCES room_backgrounds (id) ON DELETE CASCADE,
+    unlocked_at   timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (user_id, background_id)
+);
+
+-- ---------------------------------------------------------------------
+-- 6. 캐릭터 콘텐츠 / 관계 / 해금 / 기억 (S04, S09, S11)
+-- ---------------------------------------------------------------------
+CREATE TABLE character_contents (
+    id             bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    character_id   bigint  NOT NULL REFERENCES characters (id) ON DELETE CASCADE,
+    type           text    NOT NULL CHECK (type IN ('LINE', 'MOTION', 'STORY', 'VOICE')),
+    title          text    NOT NULL,
+    body           text,                                   -- 대사, 스토리 본문
+    asset_url      text,                                   -- 미리 녹음한 음성 파일 등
+    motion_id      bigint  REFERENCES live2d_motions (id), -- MOTION일 때 (그 캐릭터 모델의 모션인지는 서버가 검사)
+    unlock_type    text    NOT NULL DEFAULT 'LEVEL' CHECK (unlock_type IN ('LEVEL', 'EVENT')),  -- 구매는 BM 확정 후
+    unlock_value   int,                                    -- LEVEL이면 필요한 관계 단계
+    event_start_at timestamptz,                            -- EVENT면 기간
+    event_end_at   timestamptz,
+    is_active      boolean NOT NULL DEFAULT true,
+    CHECK ((type = 'MOTION') = (motion_id IS NOT NULL)),
+    CHECK ((unlock_type = 'LEVEL') = (unlock_value IS NOT NULL)),
+    CHECK ((unlock_type = 'EVENT') = (event_start_at IS NOT NULL)),
+    CHECK (event_end_at IS NULL OR event_end_at >= event_start_at)
+);
+CREATE INDEX idx_character_contents_character ON character_contents (character_id, type);
+
+-- 사용자 × 캐릭터 관계: 처음 만날 때 행을 만듦. 행이 없으면 아직 안 만난 것
+-- 호감도는 세션이 끝나도 여기에 계속 남음 (사용자마다 다르므로 characters가 아니라 여기)
+CREATE TABLE user_character_relations (
+    id                  bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id             bigint      NOT NULL REFERENCES users (id),
+    character_id        bigint      NOT NULL REFERENCES characters (id),
+    relation_points     int         NOT NULL DEFAULT 0,    -- 호감도 (갱신은 relation_points = relation_points + n)
+    level               int         NOT NULL DEFAULT 1,    -- 저장해 둠: 기준이 바뀌어도 이미 오른 단계는 유지
+    total_study_seconds int         NOT NULL DEFAULT 0,    -- 함께한 공부 시간 (쉬는 시간 제외, 세션 합계와 같아야 함)
+    first_met_at        timestamptz NOT NULL DEFAULT now(),
+    last_met_at         timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (user_id, character_id)
+);
+CREATE INDEX idx_relations_character ON user_character_relations (character_id);
+
+CREATE TABLE user_unlocked_contents (
+    user_id     bigint      NOT NULL REFERENCES users (id),
+    content_id  bigint      NOT NULL REFERENCES character_contents (id) ON DELETE CASCADE,
+    unlocked_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (user_id, content_id)
+);
+
+-- 시험, 목표, 약속 (캐릭터 공통). 사용자가 직접 말한 내용이라 탈퇴 시 서버가 삭제
+-- 날짜만 말하면 due_time은 NULL (자정과 구분됨). date / time은 타임존 변환 없이 한국 날짜 그대로 저장
+CREATE TABLE user_memories (
+    id         bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id    bigint      NOT NULL REFERENCES users (id),
+    type       text        NOT NULL CHECK (type IN ('EXAM', 'GOAL', 'PROMISE')),
+    title      text        NOT NULL,
+    due_date   date,                                       -- 시험일, 약속일, 목표 마감일 (없을 수 있음)
+    due_time   time,                                       -- NULL이면 시간 미입력
+    created_at timestamptz NOT NULL DEFAULT now(),
+    CHECK (due_time IS NULL OR due_date IS NOT NULL)       -- 날짜 없이 시간만 있는 경우 방지
+);
+CREATE INDEX idx_user_memories_user ON user_memories (user_id, type);
+
+-- ---------------------------------------------------------------------
+-- 7. 공부 세션 (S05, S06, S09, S10)
+-- ---------------------------------------------------------------------
+-- 공부 시간 = focus_seconds + distract_seconds (쉬는 시간 제외)
+-- 세션은 사용자가 종료를 누를 때만 끝남. 탭이 닫히면 heartbeat 기준으로 자동 마감
+CREATE TABLE study_sessions (
+    id                bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id           bigint      NOT NULL REFERENCES users (id),
+    room_id           bigint      NOT NULL REFERENCES study_rooms (id),
+    background_id     bigint      NOT NULL,               -- 미선택이면 서버가 룸 기본 배경을 채움
+    target_minutes    int         CHECK (target_minutes > 0),   -- 목표 시간 (건너뛸 수 있음, 달성해도 종료 안 함)
+    started_at        timestamptz NOT NULL DEFAULT now(),
+    ended_at          timestamptz,                        -- NULL이면 진행 중
+    end_type          text        CHECK (end_type IN ('NORMAL', 'AUTO_CLOSED')),
+    last_heartbeat_at timestamptz,                        -- 1분에 한 번 정도만 갱신
+    focus_seconds     int         NOT NULL DEFAULT 0,     -- 아래 넷은 종료 시 session_events로 계산해 저장
+    distract_seconds  int         NOT NULL DEFAULT 0,
+    break_seconds     int         NOT NULL DEFAULT 0,
+    return_count      int         NOT NULL DEFAULT 0,
+    CHECK (ended_at IS NULL OR ended_at >= started_at),
+    CHECK ((ended_at IS NULL) = (end_type IS NULL)),
+    UNIQUE (id, room_id),                                 -- session_characters 복합 FK용
+    FOREIGN KEY (background_id, room_id) REFERENCES room_backgrounds (id, room_id)  -- 그 룸의 배경만
+);
+CREATE INDEX idx_sessions_user_started ON study_sessions (user_id, started_at DESC);
+CREATE INDEX idx_sessions_room_started ON study_sessions (room_id, started_at DESC);
+CREATE UNIQUE INDEX uq_sessions_one_in_progress
+    ON study_sessions (user_id) WHERE ended_at IS NULL;   -- 사용자당 진행 중 세션 하나
+CREATE INDEX idx_sessions_in_progress
+    ON study_sessions (last_heartbeat_at) WHERE ended_at IS NULL;  -- 자동 마감 배치용
+
+-- 이번 세션에서 고른 캐릭터 (그 룸의 캐릭터 중 1명 이상, 공부 중 변경 불가)
+CREATE TABLE session_characters (
+    session_id   bigint NOT NULL,
+    room_id      bigint NOT NULL,                     -- 세션의 룸과 같아야 함 (복합 FK로 강제)
+    character_id bigint NOT NULL,
+    PRIMARY KEY (session_id, character_id),
+    FOREIGN KEY (session_id, room_id)   REFERENCES study_sessions (id, room_id) ON DELETE CASCADE,
+    FOREIGN KEY (character_id, room_id) REFERENCES characters (id, room_id)
+);
+CREATE INDEX idx_session_characters_character ON session_characters (character_id);
+
+-- 상태가 바뀔 때만 한 줄씩. 각 상태는 다음 이벤트가 올 때 끝남
+--   FOCUS: 시작·쉬는 시간 종료 / AWAY: 자리 비움 / RETURN: 딴짓에서 복귀 / BREAK: 쉬는 시간
+--   쉬는 시간 중에는 감지 이벤트를 남기지 않음 (서버가 무시)
+CREATE TABLE session_events (
+    id             bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    session_id     bigint      NOT NULL REFERENCES study_sessions (id) ON DELETE CASCADE,
+    type           text        NOT NULL CHECK (type IN ('FOCUS', 'AWAY', 'RETURN', 'BREAK')),
+    false_positive boolean     NOT NULL DEFAULT false,   -- '아니야' 버튼 (오탐이면 집중으로 계산)
+    occurred_at    timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_session_events_session ON session_events (session_id, occurred_at);
+
+-- 호감도 변화 이력 (계속 남음). 대화 점수는 LLM이 주고 서버가 범위 안으로 자른 뒤 기록
+--   SESSION_EVENT: 공부 중 이벤트(자리 비움, 복귀 등) 하나로 바뀐 점수. 1:3 룸이면 캐릭터마다 한 행씩
+--   EVENT: 기간 한정 이벤트(character_contents의 EVENT)로 받은 점수
+CREATE TABLE relation_logs (
+    id               bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    relation_id      bigint      NOT NULL REFERENCES user_character_relations (id),
+    session_id       bigint      REFERENCES study_sessions (id),
+    session_event_id bigint      REFERENCES session_events (id),   -- SESSION_EVENT일 때 원인 이벤트
+    request_id       uuid,                                      -- CHAT일 때 메시지 전송 요청 id (메시지는 지워지므로 FK 아님)
+    delta            int         NOT NULL,                      -- 음수 가능
+    reason           text        NOT NULL CHECK (reason IN (
+                         'STUDY_TIME', 'STREAK', 'FOCUS_BONUS', 'FIRST_MEET', 'EVENT', 'CHAT', 'SESSION_EVENT')),
+    created_at       timestamptz NOT NULL DEFAULT now(),
+    CHECK ((reason = 'CHAT') = (request_id IS NOT NULL)),
+    CHECK ((reason = 'SESSION_EVENT') = (session_event_id IS NOT NULL)),
+    CHECK (delta <> 0),                                        -- 0점이면 기록하지 않음
+    CHECK (reason <> 'CHAT' OR delta BETWEEN -5 AND 5)         -- 대화 한 번의 점수 범위 (기획에 맞게 조정)
+);
+CREATE INDEX idx_relation_logs_relation ON relation_logs (relation_id, created_at DESC);
+CREATE UNIQUE INDEX uq_relation_logs_request
+    ON relation_logs (relation_id, request_id) WHERE request_id IS NOT NULL;              -- 같은 요청은 한 번만 반영
+CREATE UNIQUE INDEX uq_relation_logs_session_event
+    ON relation_logs (relation_id, session_event_id) WHERE session_event_id IS NOT NULL;  -- 같은 이벤트는 캐릭터마다 한 번만
+
+-- ---------------------------------------------------------------------
+-- 8. 대화 LLM (S08)
+-- ---------------------------------------------------------------------
+-- 사용자 × 캐릭터마다 하나. 세션을 넘어 이어지는 건 요약뿐. 탈퇴 시 서버가 삭제
+CREATE TABLE conversations (
+    id                 bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id            bigint      NOT NULL REFERENCES users (id),
+    character_id       bigint      NOT NULL REFERENCES characters (id),
+    summary            text,                              -- 지난 세션들까지의 대화 요약
+    summary_updated_at timestamptz,
+    created_at         timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (user_id, character_id)
+);
+
+-- 현재 세션의 메시지만 보관. 세션이 끝나면 요약에 합친 뒤 한 트랜잭션에서 삭제
+-- 음성(TTS)은 저장하지 않고 응답으로 바로 전달
+CREATE TABLE chat_messages (
+    id              bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    conversation_id bigint      NOT NULL REFERENCES conversations (id) ON DELETE CASCADE,
+    session_id      bigint      NOT NULL REFERENCES study_sessions (id),
+    request_id      uuid        NOT NULL,                 -- 사용자 메시지와 그 답변이 같은 값
+    sender          text        NOT NULL CHECK (sender IN ('USER', 'CHARACTER')),
+    content         text        NOT NULL,
+    created_at      timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (conversation_id, request_id, sender)          -- 재전송돼도 질문·답변 각각 한 번만
+);
+CREATE INDEX idx_chat_messages_session ON chat_messages (session_id, id);
+
+-- LLM 사용량 (지우지 않고 계속 쌓임, 비용·크레딧 근거)
+CREATE TABLE llm_usages (
+    id            bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id       bigint      NOT NULL REFERENCES users (id),
+    session_id    bigint      NOT NULL REFERENCES study_sessions (id),
+    purpose       text        NOT NULL CHECK (purpose IN ('CHAT', 'AFFINITY', 'SUMMARY')),  -- 답변 / 호감도 점수 판정 / 세션 종료 요약
+    model         text        NOT NULL,
+    input_tokens  int         NOT NULL CHECK (input_tokens >= 0),
+    output_tokens int         NOT NULL CHECK (output_tokens >= 0),
+    created_at    timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_llm_usages_user ON llm_usages (user_id, created_at);
+
+COMMIT;

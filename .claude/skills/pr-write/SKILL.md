@@ -1,0 +1,30 @@
+---
+name: pr-write
+description: 지금 세션의 작업 맥락으로 PR 본문을 쓰고 draft PR을 연다. 작업을 마치고 "PR 올려", "PR 써줘", "푸시하고 PR", "리뷰 요청하자"라고 할 때 반드시 사용. 리뷰어(사람과 CI의 Claude)는 이 세션 대화를 볼 수 없으므로, 맥락을 PR 본문으로 옮기는 것이 이 스킬의 목적이다.
+---
+
+# PR 쓰기
+
+리뷰어는 diff만 본다. "왜 이렇게 했는지"는 지금 이 세션에만 있다. 그걸 PR 본문에 옮긴다.
+
+## 절차
+1. `scripts/verify.sh` (full) 실행. 실패하면 PR을 만들지 않고 고친다.
+2. reviewer 서브에이전트로 셀프 리뷰. '반드시 고칠 것'이 있으면 고치고 다시 1.
+3. 정보 수집
+   - `git log --oneline origin/develop..HEAD`, `git diff --stat origin/develop...HEAD`
+   - 구역: `git diff --name-only origin/develop...HEAD | python3 .harness/zones.py classify --author "$(gh api user -q .login)"`
+4. 본문 작성 (`.github/pull_request_template.md`의 6개 섹션, 비면 CI 실패. 해당 없으면 '없음')
+   - **목적**: 무엇을 왜. 관련 명세, `J-xx` 백로그 ID
+   - **결정과 이유**: 코드만 봐서는 모를 선택. "무엇"이 아니라 "왜". 이 세션에서 사람과 합의한 내용 포함
+   - **시도했다 버린 것**: 세션에서 시도했다가 되돌린 접근과 이유. 리뷰어의 "이렇게 하면 되잖아?"를 미리 막는 섹션
+   - **일부러 안 한 것**: 범위 밖, 남긴 TODO(judgment)
+   - **검증**: verify 결과 한 줄, 직접 확인한 플로우
+   - **리뷰 포인트**: cross-module/contract/shared/migration 라벨이 나오면 그 파일과 이유를 반드시 적는다
+5. 문체: 짧은 한국어 문장. "~하는 것이 중요합니다", "다양한", "효율적인", 습관적인 세 개 나열, 문장마다 볼드를 쓰지 않는다. 근거 없는 "완벽하게/반드시 안전" 같은 단정도 쓰지 않는다.
+6. 제목: `[모듈] 한 줄 요약` (여러 모듈이면 주 모듈)
+7. 본문 초안을 사람에게 보여주고 확인받은 뒤:
+   `git push -u origin HEAD` → `gh pr create --base develop --draft --title "<제목>" --body-file <파일> --reviewer "$(python3 .harness/zones.py other-reviewer --author "$(gh api user -q .login)")"`
+8. 사람에게 안내: 준비되면 GitHub에서 'Ready for review' → 위험 라벨이면 Claude 자동 리뷰.
+
+## 하네스 변경 PR
+브랜치가 `harness/*`면 '리뷰 포인트'에 "이 변경 후 두 사람의 에이전트 동작이 어떻게 달라지는지"를 적는다.
