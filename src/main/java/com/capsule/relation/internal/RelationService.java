@@ -10,6 +10,7 @@ import com.capsule.relation.api.RelationTypes.AffinityChange;
 import com.capsule.relation.api.RelationTypes.RelationView;
 import com.capsule.relation.api.RelationTypes.SessionEventRef;
 import com.capsule.relation.api.RelationTypes.StudySettlement;
+import jakarta.persistence.EntityManager;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Optional;
@@ -24,11 +25,14 @@ class RelationService implements RelationQuery, RelationCommands {
     private final RelationRepository relations;
     private final RelationLogRepository logs;
     private final Clock clock;
+    private final EntityManager entityManager;
 
-    RelationService(RelationRepository relations, RelationLogRepository logs, Clock clock) {
+    RelationService(
+            RelationRepository relations, RelationLogRepository logs, Clock clock, EntityManager entityManager) {
         this.relations = relations;
         this.logs = logs;
         this.clock = clock;
+        this.entityManager = entityManager;
     }
 
     @Override
@@ -108,6 +112,7 @@ class RelationService implements RelationQuery, RelationCommands {
         int delta = AffinityPolicy.studyTimeDelta(studySeconds);
         if (delta != 0) record(rel, "STUDY_TIME", delta, sessionId, null, null);
         relations.addStudySeconds(rel.id(), studySeconds, Instant.now(clock));
+        entityManager.refresh(rel);
         return settlementOf(userId, characterId, sessionId);
     }
 
@@ -122,9 +127,9 @@ class RelationService implements RelationQuery, RelationCommands {
             Relation rel, String reason, int delta, Long sessionId, Long sessionEventId, UUID requestId) {
         logs.save(new RelationLog(rel.id(), reason, delta, sessionId, sessionEventId, requestId, Instant.now(clock)));
         relations.addPoints(rel.id(), delta);
-        Relation fresh = relations.findById(rel.id()).orElseThrow();
-        fresh.raiseLevel(levelOf(fresh.points()));
-        return fresh;
+        entityManager.refresh(rel); // 이 행만 다시 읽는다 (컨텍스트 전체를 비우면 다른 모듈 엔티티의 변경이 사라짐)
+        rel.raiseLevel(levelOf(rel.points()));
+        return rel;
     }
 
     private static AffinityChange change(Relation rel, int delta) {

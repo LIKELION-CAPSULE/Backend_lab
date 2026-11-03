@@ -20,7 +20,6 @@ import com.capsule.relation.api.RelationQuery;
 import com.capsule.relation.api.RelationTypes.AffinityChange;
 import com.capsule.relation.api.RelationTypes.RelationView;
 import com.capsule.relation.api.RelationTypes.SessionEventRef;
-import com.capsule.session.api.SessionClosingHandler;
 import com.capsule.session.api.SessionQuery;
 import com.capsule.session.api.SessionTypes.SessionClosing;
 import com.capsule.session.api.SessionTypes.SessionEventInfo;
@@ -46,7 +45,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /** 이벤트 반응(api.md 19), 메시지(20), 공부 종료 때 대화 마무리(22, session이 부름) */
 @Service
-class DialogueService implements SessionClosingHandler {
+class DialogueService {
 
     private static final Logger log = LoggerFactory.getLogger(DialogueService.class);
 
@@ -180,7 +179,6 @@ class DialogueService implements SessionClosingHandler {
     }
 
     /** 공부 종료 트랜잭션 안에서 불린다. 이번 세션 대화를 요약에 합치고 메시지를 지운 뒤 완료 대사를 돌려준다 */
-    @Override
     @Transactional
     public String close(SessionClosing closing) {
         Conversation conversation = conversation(closing.userId(), closing.characterId());

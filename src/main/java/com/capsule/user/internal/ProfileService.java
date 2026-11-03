@@ -4,7 +4,6 @@ import com.capsule.common.error.ApiException;
 import com.capsule.content.api.AvatarQuery;
 import com.capsule.content.api.ContentTypes.AvatarInfo;
 import com.capsule.user.api.ActiveSessionLookup;
-import com.capsule.user.api.UserQuery;
 import com.capsule.user.api.UserTypes.ActiveSessionSummary;
 import com.capsule.user.api.UserTypes.UserProfile;
 import java.time.Clock;
@@ -14,9 +13,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 내 정보 조회·프로필 설정 (api.md 8, 10) + UserQuery 계약 */
+/** 내 정보 조회·프로필 설정 (api.md 8, 10). UserQuery 계약은 {@link UserQueryAdapter}가 이 클래스로 위임 */
 @Service
-class ProfileService implements UserQuery {
+class ProfileService {
 
     /** profileImage = 아바타 썸네일 (B7) */
     record MeResponse(
@@ -59,7 +58,6 @@ class ProfileService implements UserQuery {
         return toMe(user, avatar.thumbnailUrl());
     }
 
-    @Override
     @Transactional(readOnly = true)
     public Optional<UserProfile> find(long userId) {
         return users.findById(userId)

@@ -30,11 +30,13 @@ interface RelationRepository extends JpaRepository<Relation, Long> {
             ON CONFLICT (user_id, character_id) DO UPDATE SET last_met_at = EXCLUDED.last_met_at""", nativeQuery = true)
     void meet(long userId, long characterId, Instant now);
 
-    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    // clearAutomatically는 쓰지 않는다: 같은 트랜잭션에 있는 다른 모듈(세션 종료 등)의 엔티티까지 떼어내 변경이 사라진다.
+    // 갱신 뒤에는 RelationService가 그 관계 행만 refresh한다
+    @Modifying(flushAutomatically = true)
     @Query("update Relation r set r.relationPoints = r.relationPoints + :delta where r.id = :id")
     void addPoints(long id, int delta);
 
-    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Modifying(flushAutomatically = true)
     @Query("update Relation r set r.totalStudySeconds = r.totalStudySeconds + :seconds, r.lastMetAt = :now"
             + " where r.id = :id")
     void addStudySeconds(long id, int seconds, Instant now);

@@ -2,7 +2,6 @@ package com.capsule.user.internal;
 
 import com.capsule.common.error.ApiException;
 import com.capsule.common.time.ClockConfig;
-import com.capsule.user.api.MemoryQuery;
 import com.capsule.user.api.UserTypes.MemoryInfo;
 import com.capsule.user.internal.UserMemory.Type;
 import java.time.Clock;
@@ -19,9 +18,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 일정 저장·조회 (api.md 13, 14) + MemoryQuery 계약. 날짜는 한국 기준 */
+/** 일정 저장·조회 (api.md 13, 14). 날짜는 한국 기준. MemoryQuery 계약은 {@link MemoryQueryAdapter}가 이 클래스로 위임 */
 @Service
-class MemoryService implements MemoryQuery {
+class MemoryService {
 
     private static final String DEFAULT_PROMISE_TITLE = "같이 공부하기";
     private static final DateTimeFormatter HH_MM = DateTimeFormatter.ofPattern("HH:mm");
@@ -107,7 +106,6 @@ class MemoryService implements MemoryQuery {
         return new MemoryList(listed, dates);
     }
 
-    @Override
     @Transactional(readOnly = true)
     public List<MemoryInfo> memoriesForConversation(long userId) {
         LocalDate today = today();
