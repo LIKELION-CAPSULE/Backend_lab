@@ -8,6 +8,9 @@ import java.util.UUID;
 public record MessageRequest(
         @NotNull UUID requestId,
 
+        /** 대화할 캐릭터. 그 세션 캐릭터만 가능 (명세 20) */
+        @NotNull Long characterId,
+
         @NotBlank(message = "EMPTY_MESSAGE") @Size(max = 300)
         String content,
 

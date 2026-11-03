@@ -131,8 +131,11 @@ class FlowE2ETest {
 
         // 16 채팅 → 같은 requestId 재전송은 한 번만
         String requestId = UUID.randomUUID().toString();
-        String message = "{\"requestId\":\"" + requestId + "\",\"content\":\"이거 너무 어려워\",\"inputType\":\"QUICK\"}";
+        String message = "{\"requestId\":\"" + requestId
+                + "\",\"characterId\":1,\"content\":\"이거 너무 어려워\",\"inputType\":\"QUICK\"}";
         MvcResult reply = call(post(s + "/messages"), token, message, 200);
+        assertThat(((Number) JsonPath.read(body(reply), "$.characterId")).longValue())
+                .isEqualTo(1);
         String replyContent = JsonPath.read(body(reply), "$.content");
         assertThat(replyContent).isNotBlank();
         MvcResult replyAgain = call(post(s + "/messages"), token, message, 200);

@@ -37,10 +37,12 @@ class DialogueController {
     MessageResponse send(
             @LoginUser long userId, @PathVariable long sessionId, @Valid @RequestBody MessageRequest request) {
         try {
-            return dialogue.send(userId, sessionId, request.requestId(), request.content(), request.tts());
+            return dialogue.send(
+                    userId, sessionId, request.requestId(), request.characterId(), request.content(), request.tts());
         } catch (DataIntegrityViolationException e) {
             // 같은 requestId 동시 요청: 늦은 쪽은 UNIQUE에 막힌다 → 먼저 온 요청이 저장한 답장을 돌려줌
-            return dialogue.answeredAfterConflict(userId, sessionId, request.requestId(), request.tts())
+            return dialogue.answeredAfterConflict(
+                            userId, sessionId, request.requestId(), request.characterId(), request.tts())
                     .orElseThrow(() -> e);
         }
     }
