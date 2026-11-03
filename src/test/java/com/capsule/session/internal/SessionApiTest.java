@@ -231,7 +231,8 @@ class SessionApiTest {
         assertThat(sessionQuery.findEvent(sessionId + 1000, focus)).isEmpty();
 
         expectError(postEvent(userId, sessionId, "SLEEP", t0), 400, "INVALID_EVENT");
-        expectError(postEvent(userId, sessionId, "FOCUS", t0.minusSeconds(60)), 400, "INVALID_EVENT");
+        // 프론트 시계가 늦어 시작 전 시각이 와도 시작 시각으로 맞춰진다 (여기선 t0의 FOCUS와 같아져 재전송으로 처리됨)
+        assertThat(event(sessionId, "FOCUS", t0.minusSeconds(60), 200)).isEqualTo(focus);
         expectError(postEvent(newUser(), sessionId, "FOCUS", t0), 404, "SESSION_NOT_FOUND");
     }
 

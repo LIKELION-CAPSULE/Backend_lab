@@ -228,13 +228,12 @@ class SessionService {
     public EventResponse recordEvent(long userId, long sessionId, EventRequest req) {
         StudySession s = inProgress(userId, sessionId);
         String type = req.type();
-        if (type == null
-                || !SessionEvent.TYPES.contains(type)
-                || req.occurredAt() == null
-                || req.occurredAt().isBefore(s.startedAt)) {
+        if (type == null || !SessionEvent.TYPES.contains(type) || req.occurredAt() == null) {
             throw new ApiException(BAD_REQUEST, "INVALID_EVENT");
         }
-        Instant at = req.occurredAt().truncatedTo(ChronoUnit.MICROS); // DB 정밀도와 맞춰야 재전송이 같은 값으로 걸린다
+        // 프론트 시계가 서버보다 조금 늦으면 시작 직후 FOCUS가 세션 시작보다 앞설 수 있어서, 거절하지 않고 시작 시각으로 맞춘다
+        Instant occurredAt = req.occurredAt().isBefore(s.startedAt) ? s.startedAt : req.occurredAt();
+        Instant at = occurredAt.truncatedTo(ChronoUnit.MICROS); // DB 정밀도와 맞춰야 재전송이 같은 값으로 걸린다
         List<SessionEvent> list = events.findBySessionIdOrderByOccurredAtAscIdAsc(s.id);
 
         Optional<SessionEvent> duplicate = list.stream()
