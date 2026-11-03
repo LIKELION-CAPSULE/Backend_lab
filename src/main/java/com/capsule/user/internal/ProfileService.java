@@ -1,0 +1,93 @@
+package com.capsule.user.internal;
+
+import com.capsule.common.error.ApiException;
+import com.capsule.content.api.AvatarQuery;
+import com.capsule.content.api.ContentTypes.AvatarInfo;
+import com.capsule.user.api.ActiveSessionLookup;
+import com.capsule.user.api.UserQuery;
+import com.capsule.user.api.UserTypes.ActiveSessionSummary;
+import com.capsule.user.api.UserTypes.UserProfile;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.Optional;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+/** 내 정보 조회·프로필 설정 (api.md 8, 10) + UserQuery 계약 */
+@Service
+class ProfileService implements UserQuery {
+
+    /** profileImage = 아바타 썸네일 (B7) */
+    record MeResponse(
+            long userId,
+            String nickname,
+            String email,
+            boolean onboardingRequired,
+            ActiveSessionSummary activeSession,
+            String profileImage) {}
+
+    record UpdateMeRequest(String nickname, Long avatarId) {}
+
+    private final UserRepository users;
+    private final AvatarQuery avatars;
+    private final ActiveSessionLookup activeSessions;
+    private final Clock clock;
+
+    ProfileService(UserRepository users, AvatarQuery avatars, ActiveSessionLookup activeSessions, Clock clock) {
+        this.users = users;
+        this.avatars = avatars;
+        this.activeSessions = activeSessions;
+        this.clock = clock;
+    }
+
+    @Transactional(readOnly = true)
+    MeResponse me(long userId) {
+        User user = activeUser(userId);
+        return toMe(user, thumbnail(user));
+    }
+
+    /** 아바타를 안 보내면 기본 아바타 (H02 '나중에 바꿀게요') */
+    @Transactional
+    MeResponse update(long userId, UpdateMeRequest req) {
+        User user = activeUser(userId);
+        String nickname = User.validNickname(req.nickname());
+        AvatarInfo avatar = (req.avatarId() == null ? avatars.defaultAvatar() : avatars.find(req.avatarId()))
+                .filter(AvatarInfo::active)
+                .orElseThrow(() -> new ApiException(HttpStatus.BAD_REQUEST, "AVATAR_NOT_FOUND"));
+        user.updateProfile(nickname, avatar.id(), Instant.now(clock));
+        return toMe(user, avatar.thumbnailUrl());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<UserProfile> find(long userId) {
+        return users.findById(userId)
+                .filter(User::isActive)
+                .map(u -> new UserProfile(
+                        u.id(), u.nickname(), u.email(), u.avatarId(), thumbnail(u), u.onboardingRequired()));
+    }
+
+    private MeResponse toMe(User user, String profileImage) {
+        return new MeResponse(
+                user.id(),
+                user.nickname(),
+                user.email(),
+                user.onboardingRequired(),
+                activeSessions.find(user.id()).orElse(null),
+                profileImage);
+    }
+
+    private String thumbnail(User user) {
+        return user.avatarId() == null
+                ? null
+                : avatars.find(user.avatarId()).map(AvatarInfo::thumbnailUrl).orElse(null);
+    }
+
+    /** 토큰은 맞는데 탈퇴했거나 없는 사용자 */
+    private User activeUser(long userId) {
+        return users.findById(userId)
+                .filter(User::isActive)
+                .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED"));
+    }
+}
