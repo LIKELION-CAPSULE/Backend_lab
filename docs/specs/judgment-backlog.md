@@ -17,6 +17,7 @@
 | J-09 | dialogue | seunghee | 완료 대사 `closingLine` 생성, 못 만들 때 대체 문구 | `dialogue/client/FakeLlmClient.java`, `LlmClient.java`(대체 문구) | 캐릭터 이름을 넣은 고정 문구. 실패·5초 초과면 명세 22 예시 문장 | api.md 22·23 | 미정 (#12) |
 | J-10 | dialogue | seunghee | TTS `audioBase64` | `dialogue/service/DialogueService.java` | 항상 null | api.md 19·20 | 미정 (#13) |
 | J-11 | session | seonguk | 종료 시 프론트 값과 서버 계산값이 "크게" 다를 때의 기준 | `session/service/SessionService.java` `end()` | 명세의 부등식 검증만 하고 프론트 값 사용 | api.md 22 "같이 챙길 것" | 미정 (#20) |
+| J-12 | dialogue | seunghee | 이벤트 반응 감정 `emotion` 값 목록과 정하는 기준 (LLM 출력) | `dialogue/client/FakeLlmClient.java` | trigger별 고정 값 (GREETING·RETURN `HAPPY`, AWAY `SAD`, BREAK·BREAK_END `NEUTRAL`). 고정 대사(fallback)면 null | api.md 19 (2026-11-04) | 미정 (이슈 없음) |
 
 ## 판단 항목을 가져갈 때 같이 볼 것
 - **J-05 답 길이 규칙**(공부 중 1~2문장, 쉬는 시간 2~4문장)을 적용하려면 dialogue가 "지금 휴식 중인지"를 알아야 한다. 지금 `session.api.SessionQuery`에는 없어서 계약 확장이 필요하다(contract-change 스킬).

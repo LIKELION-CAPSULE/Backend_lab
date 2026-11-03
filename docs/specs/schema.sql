@@ -289,7 +289,9 @@ CREATE TABLE study_sessions (
     ended_at          timestamptz,                        -- NULL이면 진행 중
     end_type          text        CHECK (end_type IN ('NORMAL', 'AUTO_CLOSED')),
     last_heartbeat_at timestamptz,                        -- 1분에 한 번 정도만 갱신
-    focus_seconds     int         NOT NULL DEFAULT 0,     -- 아래 넷은 종료 때 저장. focus · distract는 정상 종료면 프론트 값(API 22), 자동 마감이면 session_events로 계산. break · return_count는 항상 session_events로 계산
+    heartbeat_study_seconds   int,                        -- 마지막 heartbeat 때 프론트가 보낸 공부 시간 (API 21, 2026-11-04 추가). 자동 마감에 사용
+    heartbeat_present_seconds int,                        -- 위 값 중 자리 지킴
+    focus_seconds     int         NOT NULL DEFAULT 0,     -- 아래 넷은 종료 때 저장. focus · distract는 정상 종료면 프론트 값(API 22), 자동 마감이면 마지막 heartbeat 값(없으면 session_events로 계산). break · return_count는 항상 session_events로 계산
     distract_seconds  int         NOT NULL DEFAULT 0,
     break_seconds     int         NOT NULL DEFAULT 0,
     return_count      int         NOT NULL DEFAULT 0,
