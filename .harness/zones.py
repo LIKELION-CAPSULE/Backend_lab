@@ -2,7 +2,7 @@
 """캡슐 하네스 핵심 모듈.
 
 zones.conf 를 읽어서 "이 파일은 어느 구역이고, 지금 이 사람이 고쳐도 되는가"를 판정한다.
-Claude Code 훅과 CI(라벨·리뷰 게이트)가 전부 이 파일 하나를 쓴다.
+Claude Code 훅과 CI(PR 검사·리뷰 게이트)가 전부 이 파일 하나를 쓴다.
 → 규칙이 한 곳에만 있으므로 로컬과 CI 판정이 어긋나지 않는다.
 
 사람용 명령:
@@ -10,7 +10,7 @@ Claude Code 훅과 CI(라벨·리뷰 게이트)가 전부 이 파일 하나를 �
   python3 .harness/zones.py explain <경로>          # 이 파일의 구역/담당/판정
   python3 .harness/zones.py check [--strict]       # zones.conf 검사 (--strict: TODO 남으면 실패)
   python3 .harness/zones.py new-migration <모듈> <설명>
-CI/훅용 명령: classify, other-reviewer, check-pr-body, frozen-migrations, changed-modules, adr-hint
+CI/훅용 명령: classify, other-reviewer, check-pr-body, check-pr-title, frozen-migrations, changed-modules, adr-hint
 """
 from __future__ import annotations
 
@@ -242,7 +242,7 @@ def decide(relpath: str, cfg: Config, me: str | None, phase: str, branch: str,
             return "ask", f"[하네스] 마이그레이션의 모듈 '{mod}'이 zones.conf에 없음."
         if owner == me:
             return "allow", "내 모듈 마이그레이션"
-        return "ask", f"[하네스] {mod} 모듈({owner} 담당)의 테이블을 바꾸는 마이그레이션. 승인하면 PR에 cross-module이 붙음. {owner}에게 한 줄 공유."
+        return "ask", f"[하네스] {mod} 모듈({owner} 담당)의 테이블을 바꾸는 마이그레이션. 승인하면 PR에서 Claude 자동 리뷰가 남의 모듈 변경으로 봄. {owner}에게 한 줄 공유."
 
     if zone == "harness":
         if branch.startswith("harness/"):
@@ -259,7 +259,7 @@ def decide(relpath: str, cfg: Config, me: str | None, phase: str, branch: str,
         owner = cfg.modules.get(module or "")
         if owner == me:
             return "allow", "내 모듈"
-        return "ask", (f"[하네스] {module} 모듈은 {owner} 담당. 승인하면 PR에 cross-module 라벨이 붙음. "
+        return "ask", (f"[하네스] {module} 모듈은 {owner} 담당. 승인하면 PR에서 Claude 자동 리뷰가 남의 모듈 변경으로 봄. "
                        f"고친 뒤 {owner}에게 한 줄 공유.")
 
     if zone == "contract":
@@ -268,9 +268,9 @@ def decide(relpath: str, cfg: Config, me: str | None, phase: str, branch: str,
         return "ask", (f"[하네스] {module} 계약(api) 변경({who}). 상대 코드가 깨질 수 있음. "
                        f"contract-change 스킬 절차(확장→이전→제거)를 따르는지 확인.")
 
-    # 공용 구역(문서, common, gradle, yml)은 묻지 않는다. 같은 알림을 CI가 PR에 zone:shared 라벨로 하므로
+    # 공용 구역(문서, common, gradle, yml)은 묻지 않는다. PR에서 Claude 자동 리뷰가 공용 변경으로 보므로
     # 여기서도 물으면 확인만 반복된다(ADR 0010). 묻는 건 상대 코드가 깨질 수 있는 경우(남의 모듈·계약·남의 마이그레이션)만
-    return "allow", "공용 구역 (PR에 zone:shared 라벨. 기능 PR에 섞지 말고 작은 공용 PR로)"
+    return "allow", "공용 구역 (PR에서 Claude 자동 리뷰가 봄. 기능 PR에 섞지 말고 작은 공용 PR로)"
 
 
 # ---------------------------------------------------------------- CI/훅 보조
@@ -311,6 +311,20 @@ def check_pr_body(body: str) -> list[str]:
         if not content:
             problems.append(f"'## {title}' 섹션이 비어 있음 (템플릿 안내 문구만 있음)")
     return problems
+
+
+# PR 제목 = squash 머지 커밋 메시지라 커밋 규칙(<type>(<범위>): 요약)과 같게 (ADR 0014)
+PR_TITLE_TYPES = ("feat", "fix", "docs", "chore", "test", "refactor", "ci")
+# 범위는 여러 모듈이면 쉼표로 (refactor(dialogue,relation): ...). GitHub Revert 버튼이 만드는 'Revert "..."'도 허용
+PR_TITLE_RE = re.compile(rf"^({'|'.join(PR_TITLE_TYPES)})(\([a-z0-9,-]+\))?: \S.*$")
+
+
+def check_pr_title(title: str) -> list[str]:
+    title = (title or "").strip()
+    if PR_TITLE_RE.match(title) or title.startswith('Revert "'):
+        return []
+    return [f"제목 '{title}'이 커밋 규칙과 다름. `<type>(<범위>): 요약` 모양으로 "
+            f"(type: {' · '.join(PR_TITLE_TYPES)}, 범위는 모듈·specs·harness 등 소문자. 예: feat(session): 공부 시작 API)"]
 
 
 def working_changed_paths() -> list[str]:
@@ -360,6 +374,7 @@ def main() -> int:
     p = sub.add_parser("classify"); p.add_argument("--author", default=""); p.add_argument("paths", nargs="*")
     p = sub.add_parser("other-reviewer"); p.add_argument("--author", required=True)
     sub.add_parser("check-pr-body")
+    sub.add_parser("check-pr-title")
     p = sub.add_parser("frozen-migrations"); p.add_argument("--base", default="origin/develop")
     sub.add_parser("changed-modules")
     sub.add_parser("adr-hint")
@@ -421,6 +436,16 @@ def main() -> int:
         print("✔ PR 본문 필수 섹션 확인")
         return 0
 
+    if args.cmd == "check-pr-title":
+        problems = check_pr_title(sys.stdin.read())
+        for prob in problems:
+            print(f"✖ PR 제목: {prob}", file=sys.stderr)
+        if problems:
+            print("  → GitHub PR 화면에서 제목만 고치면 검사가 다시 돎", file=sys.stderr)
+            return 1
+        print("✔ PR 제목 규칙 확인")
+        return 0
+
     if args.cmd == "frozen-migrations":
         # 점 세 개: 갈라진 지점부터 이 PR이 바꾼 것만. 점 두 개면 develop에 새로 머지된 마이그레이션이 'D'로 잡혀 잘못 실패함 (#16)
         _, out = git("diff", "--name-status", "--no-renames", f"{args.base}...HEAD", "--", MIGRATION_DIR)
@@ -443,7 +468,7 @@ def main() -> int:
         return 0
 
     if args.cmd == "adr-hint":
-        # 구조를 바꾸는 파일을 고쳤는데 결정 기록(ADR)이 없으면 needs-adr 출력 (라벨용, 차단 아님)
+        # 구조를 바꾸는 파일을 고쳤는데 결정 기록(ADR)이 없으면 needs-adr 출력 (CI 경고용, 차단 아님)
         paths = [x.strip() for x in sys.stdin if x.strip()]
         triggers = [p for p in paths if re.match(r"^(build\.gradle|settings\.gradle|gradle/libs\.versions\.toml|\.harness/zones\.conf)", p)]
         has_adr = any(p.startswith("docs/decisions/") for p in paths)

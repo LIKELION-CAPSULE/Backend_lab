@@ -8,7 +8,7 @@ tools: Read, Grep, Glob, Bash
 
 ## 먼저 확인할 것
 1. `git diff origin/develop...HEAD --stat` 와 `git diff origin/develop...HEAD` 로 이번 변경 범위를 본다.
-2. `git diff --name-only origin/develop...HEAD | python3 .harness/zones.py classify --author "$(gh api user -q .login 2>/dev/null)"` 로 구역 라벨을 본다. (gh가 없으면 `python3 .harness/zones.py explain <파일>`로 파일별 확인)
+2. `git diff --name-only origin/develop...HEAD | python3 .harness/zones.py classify --author "$(gh api user -q .login 2>/dev/null)"` 로 구역 판정을 본다. (gh가 없으면 `python3 .harness/zones.py explain <파일>`로 파일별 확인)
 3. 호출한 쪽이 알려준 작업 의도가 있으면 그 의도에 비춰 판단한다.
 
 ## 체크리스트 (해당하는 것만)
