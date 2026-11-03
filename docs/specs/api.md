@@ -21,8 +21,8 @@
 | 14 | 온보딩 · 홈 | GET | `/api/me/memories` | 내 일정 조회 |
 | 16 | 공부 세션 | POST | `/api/sessions` | 공부 시작 |
 | 17 | 공부 세션 | POST | `/api/sessions/{sessionId}/resume` | 세션 이어하기 |
-| 18 | 공부 세션 | POST | `/api/sessions/{sessionId}/events` | 상태 변화 전송 |
-| 19 | 대화 | POST | `/api/sessions/{sessionId}/events/{eventId}/reaction` | 이벤트 반응 받기 |
+| 18 | 공부 세션 | POST | `/api/sessions/{sessionId}/events` | 공부 상태 기록 |
+| 19 | 대화 | POST | `/api/sessions/{sessionId}/events/{eventId}/reaction` | 상태 반응 받기 |
 | 20 | 대화 | POST | `/api/sessions/{sessionId}/messages` | 메시지 전송 |
 | 21 | 공부 세션 | POST | `/api/sessions/{sessionId}/heartbeat` | heartbeat |
 | 22 | 리포트 | POST | `/api/sessions/{sessionId}/end` | 공부 종료 |
@@ -867,8 +867,8 @@ GET /api/me/memories?date=2026-11-12
 
 #### 이 API 다음에 할 일
 
-1. '상태 변화 전송'으로 `FOCUS` 1건 → `eventId` 받기
-2. '이벤트 반응 받기'에 그 `eventId` → 캐릭터 인사 (대사 + 모션 + 표정)
+1. '공부 상태 기록'으로 `FOCUS` 1건 → `eventId` 받기
+2. '상태 반응 받기'에 그 `eventId` → 캐릭터 인사 (대사 + 모션 + 표정)
 3. 1분마다 heartbeat 시작
 
 ## 17. POST /api/sessions/{sessionId}/resume — 세션 이어하기
@@ -932,9 +932,9 @@ GET /api/me/memories?date=2026-11-12
 2. 이어하기 응답에는 `focusEventId`를 넣지 않음 (2026-11-03 결정). 이어하기 직후에는 반응 없이 바로 공부 재개. 프론트는 `FOCUS`를 따로 보내지 않음 (서버가 이미 넣음)
 3. heartbeat 재시작
 
-## 18. POST /api/sessions/{sessionId}/events — 상태 변화 전송
+## 18. POST /api/sessions/{sessionId}/events — 공부 상태 기록
 - 분류: 공부 세션
-- 설명: 상태가 바뀌거나 동작(졸음 · 하품 · 손 흔들기)이 감지될 때마다 1건씩 전송 → 저장 + 호감도 반영 → eventId + 캐릭터별 모션 · 표정 · 호감도
+- 설명: 상태가 바뀌거나 동작(졸음 · 하품 · 손 흔들기)이 감지될 때마다 1건씩 전송 → 저장 + 호감도 반영 → eventId + 캐릭터별 '알아채는' 동작 · 호감도
 - 와이어프레임: H07 자리 감지 · 동작 감지 · H08 쉬는 시간 · H19 일시정지
 - 백엔드: Not started
 - 프론트: Not started
@@ -944,7 +944,7 @@ GET /api/me/memories?date=2026-11-12
 
 ![image.png](notion-file-block://b74b9a07-e592-82d0-a789-010ebef8cbd1/3bf86178-a4f3-4541-a33a-9e890e79dd3b?space_id=838cb83b-0307-45ee-872a-9da44a7ba809&name=image.png)
 
-공부 중 상태가 바뀌거나 동작(졸음 · 하품 · 손 흔들기)이 감지되면 **그때마다 1건씩** 보냅니다. 서버는 이벤트를 저장하고 **그 이벤트로 바뀌는 호감도를 바로 반영**한 뒤 `eventId`와 **캐릭터별 모션 · 표정 · 바뀐 호감도**를 돌려줍니다. 대사는 이 `eventId`로 '이벤트 반응 받기'를 불러서 받습니다.
+공부 중 상태가 바뀌거나 동작이 감지되면 **그때마다 1건씩** 보냅니다. 서버는 저장하고 **호감도를 바로 반영**한 뒤, `eventId`와 함께 캐릭터가 바로 재생할 **'알아채는' 짧은 동작(모션 · 표정)** 을 돌려줍니다. 대사는 19번으로 받습니다.
 
 > 📏 시간 계산(자리 지킴 · 자리 비움)은 **자리에 있다 / 없다**뿐입니다. 졸음 · 하품 · 손 흔들기는 캐릭터 반응을 위한 **동작 이벤트**라 시간 계산에 쓰지 않습니다. 시선 이탈은 판정하지 않습니다 (DB에서도 GAZE_AWAY 제거).
 
@@ -952,21 +952,21 @@ GET /api/me/memories?date=2026-11-12
 
 > 2026-11-04: 동작 이벤트 3종(`DROWSY` · `YAWN` · `WAVE`) 추가. 프론트가 졸음 · 하품 · 손 흔들기를 감지할 수 있게 됨
 
-| type | 언제 보내나 | 시간 분류 | 호감도 (예시, 기획 확정 필요) |
-| --- | --- | --- | --- |
-| `FOCUS` | 공부 시작 직후, 쉬는 시간 · 일시정지가 끝나고 다시 공부 | 자리 지킴 | 처음 만난 날 첫 FOCUS만 +5 (FIRST_MEET) |
-| `AWAY` | **10초 이상 연속**으로 사람이 안 보임 | 자리 비움 | −1 |
-| `RETURN` | 자리 비움 뒤 다시 보임 (복귀 횟수 +1) | 자리 지킴 | +1 |
-| `BREAK` | 쉬는 시간 시작 | 휴식 (공부 시간에서 제외) | 0 |
-| `DROWSY` | 졸음이 감지됨 (동작 이벤트) | 상태를 바꾸지 않음 | 미정 (확정 전까지 0) |
-| `YAWN` | 하품이 감지됨 (동작 이벤트) | 상태를 바꾸지 않음 | 미정 (확정 전까지 0) |
-| `WAVE` | 카메라를 보고 손을 흔듦 (동작 이벤트) | 상태를 바꾸지 않음 | 미정 (확정 전까지 0) |
+> 2026-11-04 (2차): 이름 '공부 상태 기록' → '공부 상태 기록'. 동작 이벤트는 같은 type 1분에 한 번(프론트 · 서버 둘 다), 서버는 1분 안에 다시 오면 무시. 시간 · 상태 판단은 상태 이벤트 4종만(공부 종료 정산 · 세션 이어하기 · heartbeat 포함). 타입은 서버 enum `STATE` / `MOTION`
 
-- `AWAY`의 `occurredAt`은 **안 보이기 시작한 시각** (10초 기다린 시각이 아님)
-- 10초 안에 다시 보이면 아무것도 안 보냄 (고개 숙임 · 조명으로 잠깐 끊기는 것 무시)
-- 동작 이벤트(`DROWSY` · `YAWN` · `WAVE`)는 감지된 순간 1건만 보냄. `occurredAt`은 감지 시각. 상태(자리 지킴 · 자리 비움 · 휴식)는 그대로라 공부 시간 · 자리 비움 시간 · 복귀 횟수에 영향이 없음
-- ⚠️ 프론트와 확정 필요: 같은 동작이 연달아 감지될 때 다시 보내는 간격 (제안: 같은 type은 1분에 한 번)
-- 호감도 0인 이벤트는 기록하지 않음 (DB `delta <> 0`)
+| type | 종류 | 언제 | 시간 분류 | 호감도 (예시, 기획 확정 필요) |
+| --- | --- | --- | --- | --- |
+| `FOCUS` | 상태 | 공부 시작 직후, 휴식 · 일시정지 끝 | 자리 지킴 | 처음 만난 날 첫 FOCUS만 +5 (FIRST_MEET) |
+| `AWAY` | 상태 | **10초 이상 연속**으로 안 보임 | 자리 비움 | −1 |
+| `RETURN` | 상태 | 자리 비움 뒤 다시 보임 (복귀 횟수 +1) | 자리 지킴 | +1 |
+| `BREAK` | 상태 | 쉬는 시간 · 일시정지 시작 | 휴식 (공부 시간에서 제외) | 0 |
+| `DROWSY` | 동작 | 졸음 감지 | 영향 없음 | 0 (미정) |
+| `YAWN` | 동작 | 하품 감지 | 영향 없음 | 0 (미정) |
+| `WAVE` | 동작 | 카메라 보고 손 흔듦 | 영향 없음 | 0 (미정) |
+
+- `AWAY`의 `occurredAt`은 **안 보이기 시작한 시각** (10초 기다린 시각이 아님). 10초 안에 다시 보이면 아무것도 안 보냄 (고개 숙임 · 조명으로 잠깐 끊기는 것 무시)
+- 동작 이벤트는 감지된 순간 1건만. `occurredAt`은 감지 시각. **같은 type은 1분에 한 번** (프론트 · 서버 둘 다 적용)
+- 호감도 0인 이벤트는 `relation_logs`에 기록하지 않음 (DB `delta <> 0`)
 
 #### 와이어프레임 대조
 
@@ -987,8 +987,8 @@ GET /api/me/memories?date=2026-11-12
 
 | 이름 | 타입 | 필수 | 설명 |
 | --- | --- | --- | --- |
-| type | String | O | `FOCUS` / `AWAY` / `RETURN` / `BREAK` / `DROWSY` / `YAWN` / `WAVE` |
-| occurredAt | String | O | 발생 시각 |
+| type | String | O | 위 7종: `FOCUS` / `AWAY` / `RETURN` / `BREAK` / `DROWSY` / `YAWN` / `WAVE` |
+| occurredAt | String | O | 발생 시각 (ISO) |
 
 ```json
 { "type": "AWAY", "occurredAt": "2026-11-07T05:21:04Z" }
@@ -1000,10 +1000,10 @@ GET /api/me/memories?date=2026-11-12
 
 | 이름 | 타입 | 설명 |
 | --- | --- | --- |
-| eventId | Long | 저장된 이벤트 id → '이벤트 반응 받기'에 사용. 휴식 중이라 무시된 `AWAY` · `RETURN` · 동작 이벤트면 null (반응 받기를 부르지 않음) |
-| characters | Array | 세션 캐릭터별 반응. 무시된 이벤트면 빈 배열 |
+| eventId | Long | 저장된 이벤트 id → 19번에 사용. 무시된 경우 null (아래 '규칙') |
+| characters | Array | 세션 캐릭터마다 1개 (1:1 룸이면 1개). 무시된 경우 `[]` |
 | characters[].characterId | Long | 캐릭터 id |
-| characters[].motion | Object | `group`, `file` — 바로 재생 (없으면 null) |
+| characters[].motion | Object | `group`, `file` — 받자마자 재생하는 짧은 '알아채는' 동작 (없으면 null) |
 | characters[].expression | Object | `name`, `file` — 모션 위에 겹쳐 적용 (없으면 null) |
 | characters[].affinity | Object | 이 이벤트로 바뀐 호감도: `delta`(0이면 변화 없음), `points`, `level`, `levelUp` |
 
@@ -1021,26 +1021,27 @@ GET /api/me/memories?date=2026-11-12
 }
 ```
 
-> ✅ **201 Created** · 같은 (타입, 시각)을 다시 보내면 **200 + 기존 eventId** (재전송 안전)
+> ✅ **201 Created** · 같은 (`type`, `occurredAt`)을 다시 보내면 **200 + 기존 응답** (재전송 안전. 호감도는 다시 바뀌지 않음)
 
 > ❌ **400** INVALID_EVENT · **404** SESSION_NOT_FOUND · **409** SESSION_ENDED
 
 #### 규칙
 
-- 휴식(`BREAK`) 중에 온 `AWAY` · `RETURN` · 동작 이벤트(`DROWSY` · `YAWN` · `WAVE`)는 서버가 무시: 저장하지 않고 **200** `{"eventId": null, "characters": []}`
-- 모션 · 표정은 `live2d_reaction_maps`에서 서버가 고름 (19와 같은 trigger 규칙, `AWAY`는 강도 1). 재전송이면 호감도는 다시 바뀌지 않고 기존 변화를 돌려줌
+- 무시: 저장하지 않고 **200** `{"eventId": null, "characters": []}`. 프론트는 19번을 부르지 않음
+  - 휴식(`BREAK`) 중에 온 `AWAY` · `RETURN` · 동작 이벤트
+  - 같은 동작 type이 1분 안에 다시 옴 (서버 쿨다운)
+- 시간 · 상태 판단은 상태 이벤트 4종(`FOCUS` · `AWAY` · `RETURN` · `BREAK`)만 봄: 공부 종료 정산, 세션 이어하기, heartbeat의 '마지막 이벤트'는 모두 이 4종 중 마지막. 동작 이벤트는 사이에 끼어도 구간을 끊지 않음
+- 타입 검증은 서버 enum (상태 `STATE` / 동작 `MOTION` 구분). 모르는 type은 **400** INVALID_EVENT
+- 18의 모션 · 표정은 `live2d_reaction_maps`에서 trigger 기준으로 서버가 고름 (trigger 규칙은 19와 같음, `AWAY`는 강도 1)
 - `occurredAt`이 세션 시작보다 이르면 거절하지 않고 시작 시각으로 맞춤 (프론트 시계가 조금 늦어도 시작 직후 FOCUS가 실패하지 않게)
-- ⚠️ 기획 확인 필요 (J-01): 지금은 `AWAY` 없이 온 `RETURN`도 +1. RETURN만 반복하면 호감도가 계속 오름. "직전이 AWAY일 때만 점수" 같은 규칙이 필요한지 정하기
 - 휴식 끝은 `FOCUS`, 자리 비움에서 돌아오면 `RETURN` (복귀 횟수가 휴식 때문에 부풀지 않게)
-- 동작 이벤트는 상태를 바꾸지 않음: 휴식 판정, 휴식 끝 판정, 공부 시간 · 자리 비움 계산은 상태 이벤트(`FOCUS` · `AWAY` · `RETURN` · `BREAK`)만 봄
-- ⚠️ 기획 확인 필요 (J-01): 동작 이벤트 3종의 호감도 (지금은 0)
-- 전송 실패 시 같은 내용으로 재시도 → 서버가 (타입, 시각)으로 중복을 걸러 같은 `eventId`를 돌려줌
-- 카메라를 끄면 자리 판정을 할 수 없으므로 `AWAY`를 보내지 않음 (끈 동안은 자리 지킴으로 계산)
-- 영상 · 얼굴 좌표는 보내지 않음
+- ⚠️ 기획 확인 필요 (J-01): 직전이 `AWAY`가 아닌 `RETURN`에도 +1을 줄지 (지금은 줌. RETURN만 반복하면 계속 오름), 동작 이벤트 3종의 호감도
+- 전송 실패 시 같은 내용으로 재시도 → 서버가 (타입, 시각)으로 중복을 걸러 같은 응답을 돌려줌
+- 카메라를 끄면 `AWAY` · 동작 이벤트를 보내지 않음 (끈 동안은 자리 지킴으로 계산). 영상 · 얼굴 좌표는 보내지 않음
 
-## 19. POST /api/sessions/{sessionId}/events/{eventId}/reaction — 이벤트 반응 받기
+## 19. POST /api/sessions/{sessionId}/events/{eventId}/reaction — 상태 반응 받기
 - 분류: 대화
-- 설명: eventId로 캐릭터별 반응(대사 + 감정 + 모션 + 표정) 받기
+- 설명: eventId로 캐릭터 대사(LLM) + 감정 + 감정에 맞는 모션 · 표정 받기
 - 와이어프레임: H07 말풍선 · 캐릭터 모션 · 표정
 - 백엔드: Not started
 - 프론트: Not started
@@ -1048,7 +1049,14 @@ GET /api/me/memories?date=2026-11-12
 
 #### 한 줄 요약
 
-'상태 변화 전송'으로 받은 `eventId`를 넣으면, 그 이벤트에 대한 **캐릭터별 반응(대사 + 감정 + 모션 + 표정)** 을 받습니다. 호감도는 상태 변화 전송(18) 응답에 있습니다. 모션 · 표정은 **서버가 골라서** 줍니다.
+18번에서 받은 `eventId`로 그 상황에 맞는 **캐릭터 대사를 LLM으로** 받습니다. **대사의 감정에 맞는 모션 · 표정**을 같이 줍니다. 호감도는 18번 응답에 이미 있어서 여기엔 없습니다.
+
+#### 18 모션과 19 모션
+
+| | 18 응답 | 19 응답 |
+| --- | --- | --- |
+| 역할 | 알아채는 즉시 동작 (고개 돌림 등) | 말할 때 감정 동작 |
+| 재생 | 받자마자 | 대사와 함께. null이면 18 동작 유지 |
 
 #### 언제 부르나
 
@@ -1056,12 +1064,12 @@ GET /api/me/memories?date=2026-11-12
 
 | 상황 | 부르는 방법 |
 | --- | --- |
-| 공부 시작 직후 (`FOCUS`) | `eventId`만 → 인사 반응. 이어하기 직후에는 부르지 않음 (17: 반응 없이 바로 재개) |
-| 자리 비움 (`AWAY`) | `eventId`  • `intensity: 1` → 1분 지나도 안 오면 같은 `eventId`로 `intensity: 2`, 5분이면 `3` |
-| 복귀 (`RETURN`) | `eventId`만 → 반겨주는 반응 |
-| 쉬는 시간 · 일시정지 (`BREAK`) | `eventId`만 |
-| 졸음 · 하품 · 손 흔들기 (`DROWSY` · `YAWN` · `WAVE`) | `eventId`만 → 그 동작에 맞는 반응 |
-| H07 '☾ 조용히 집중' 모드 | 부르지 않음 (호감도는 상태 변화 전송에서 이미 반영됨) |
+| 공부 시작 직후 `FOCUS` | `eventId`만 → 인사. 이어하기 직후에는 부르지 않음 (17: 반응 없이 바로 재개) |
+| `AWAY` | `intensity: 1` → 1분 지나도 안 오면 같은 `eventId`로 `2` → 5분이면 `3` |
+| `RETURN` · `BREAK` · 휴식 뒤 `FOCUS` | `eventId`만 |
+| `DROWSY` · `YAWN` · `WAVE` | `eventId`만 |
+| 18에서 `eventId`가 null | 부르지 않음 |
+| H07 '☾ 조용히 집중' 모드 | 부르지 않음 (호감도는 18에서 이미 반영됨) |
 
 #### 와이어프레임 대조
 
@@ -1090,18 +1098,20 @@ GET /api/me/memories?date=2026-11-12
 
 #### 🛬 Response
 
-> 2026-11-04: 캐릭터별 배열 `characters`로 바꿈. `trigger`는 뺌, 호감도는 상태 변화 전송(18) 응답으로 옮김, 캐릭터마다 `emotion` 추가 (노션 반영 전, 레포에서 먼저 수정)
+> 2026-11-04: 캐릭터별 배열 `characters`로 바꿈. `trigger`는 뺌, 호감도는 18번 응답으로 옮김, 캐릭터마다 `emotion` 추가 (노션 반영 전, 레포에서 먼저 수정)
+
+> 2026-11-04 (2차): `characters`는 이번에 말하는 캐릭터만, `emotion`은 6종 고정, 모션 · 표정은 감정 기준으로 고름 (18의 '알아채는' 동작과 역할이 다름)
 
 | 이름 | 타입 | 설명 |
 | --- | --- | --- |
 | requestId | String | 요청의 `requestId` 그대로 |
-| characters | Array | 세션 캐릭터별 반응 |
+| characters | Array | 이번에 말하는 캐릭터만 (1:1 룸이면 1개) |
 | characters[].characterId | Long | 캐릭터 id |
-| characters[].content | String | 말풍선 대사 (2줄 이내). 대사 없는 반응이면 null |
-| characters[].emotion | String | 대사의 감정 (LLM이 정함, 예: `SAD`). 고정 대사를 썼으면 null |
-| characters[].motion | Object | `group`, `file` — 바로 재생 (없으면 null) |
-| characters[].expression | Object | `name`, `file` — 모션 위에 겹쳐 적용 (없으면 null) |
-| characters[].fallback | Boolean | LLM이 5초 안에 대사를 못 만들어 고정 대사를 썼는지 |
+| characters[].content | String | 말풍선 대사 (2줄 이내) |
+| characters[].emotion | String | `HAPPY` · `SHY` · `ANGRY` · `SAD` · `SURPRISED` · `NEUTRAL`. ⚠️ 고정 대사(`fallback: true`)일 때 값은 확정 필요 (지금 구현은 null) |
+| characters[].motion | Object | `group`, `file` — 감정에 맞는 모션 (없으면 null → 18 동작 유지) |
+| characters[].expression | Object | `name`, `file` — 감정에 맞는 표정 (없으면 null) |
+| characters[].fallback | Boolean | LLM 5초 초과로 고정 대사를 썼는지 |
 | characters[].audioBase64 | String | 대사 음성 (mp3). 요청에 `tts: true`일 때만, 아니면 null |
 
 ```json
@@ -1127,19 +1137,20 @@ GET /api/me/memories?date=2026-11-12
 
 #### 서버가 하는 일
 
-1. 이벤트 타입과 세션 상황으로 trigger를 정함 (응답에는 넣지 않음): `GREETING`(세션 첫 FOCUS) · `AWAY` · `RETURN` · `BREAK` · `BREAK_END`(세션 첫 FOCUS가 아닌 FOCUS = 쉬는 시간 · 일시정지 뒤) · `DROWSY` · `YAWN` · `WAVE`(동작 이벤트, 타입 이름 그대로)
-2. `live2d_reaction_maps`에서 (trigger, intensity)에 맞는 행 중 **하나를 같은 확률로** 골라 모션 · 표정 결정. 그 강도의 행이 없으면 강도가 NULL인 행에서 고름 (그것도 없으면 `motion` · `expression` null)
-3. LLM으로 대사와 감정(`emotion`) 생성 (5초 넘으면 trigger별 고정 대사, `emotion` null). `tts: true`면 음성도 생성
-4. 호감도는 바꾸지 않음 (상태 변화 전송 때 이미 반영되고 그 응답에 있음). 같은 `eventId`로 intensity를 올려 다시 불러도 마찬가지
+1. 이벤트 타입 + 직전 상태 이벤트로 trigger 결정 (응답에는 넣지 않음): 첫 FOCUS = `GREETING`, 휴식 뒤 FOCUS = `BREAK_END`, `AWAY` · `RETURN` · `BREAK`, 동작은 type 그대로(`DROWSY` · `YAWN` · `WAVE`)
+2. LLM으로 대사 + 감정 생성 (5초 넘으면 trigger별 고정 대사)
+3. 감정에 맞는 모션 · 표정을 `live2d_reaction_maps`에서 하나 고름 (같은 감정의 행이 여러 개면 같은 확률)
+4. `tts: true`면 음성 생성
+- 호감도는 바꾸지 않음 (18번에서 끝남). 같은 `eventId`로 intensity를 올려 다시 불러도 마찬가지
 
 #### 프론트 참고
 
-- 응답이 오면 `motion` 재생 → `expression` 적용 → `content`를 말풍선 · 채팅 로그에 표시하며 입 모션
-- 응답의 `requestId`가 지금 기다리는 요청(마지막으로 보낸 `requestId`)이 아니면 버림 (복귀했는데 늦게 도착한 '자리 비웠어?' 방지)
+- 응답의 `requestId`가 마지막으로 보낸 것이 아니면 버림 (복귀했는데 늦게 도착한 '자리 비웠어?' 방지)
+- `motion` 재생 → `expression` 적용 → `content`를 말풍선 · 채팅 로그에 표시 → 입 모션
 
 ## 20. POST /api/sessions/{sessionId}/messages — 메시지 전송
 - 분류: 대화
-- 설명: 대화 → 답장 + 모션 · 표정 + 바뀐 호감도 (TTS 선택)
+- 설명: 대화 → 캐릭터별 답장 + 감정 모션 · 표정 + 바뀐 호감도 (TTS 선택)
 - 와이어프레임: H08 휴식 대화 · H20 공부 중 채팅
 - 백엔드: Not started
 - 프론트: Not started
@@ -1147,7 +1158,7 @@ GET /api/me/memories?date=2026-11-12
 
 #### 한 줄 요약
 
-캐릭터와 대화합니다. 답장과 함께 **그 답장에 맞는 모션 · 표정**, 그리고 **이 대화로 바뀐 호감도**를 같이 받습니다. 크레딧이 빠져서 횟수 제한은 없고, 남용 방지용 속도 제한만 있습니다.
+캐릭터와 대화합니다. **답장 · 감정 모션 · 호감도 변화**를 한 번에 받습니다. 응답 모양은 19번과 같고(`characters[]`), 채팅으로 바뀐 호감도(`affinity`)가 추가됩니다. `eventId`는 없습니다 (채팅은 `session_events`에 저장되지 않음). 크레딧이 빠져서 횟수 제한은 없고, 남용 방지용 속도 제한만 있습니다.
 
 #### 와이어프레임 대조
 
@@ -1155,8 +1166,8 @@ GET /api/me/memories?date=2026-11-12
 | --- | --- |
 | H08 · H20 '친구와 대화' 패널 '메시지 입력 ↑' | `content`, `inputType = TEXT` |
 | H08 · H20 빠른 답장 '파이팅' · '졸려' · '이거 어려워' | `inputType = QUICK` |
-| H08 · H20 '[친구 메시지]' · '입력 중…' | `content` (기다리는 동안 입력 중 표시) |
-| H07 캐릭터 칸 (답장할 때 동작 · 얼굴) | `motion`, `expression` |
+| H08 · H20 '[친구 메시지]' · '입력 중…' | `characters[].content` (기다리는 동안 입력 중 표시) |
+| H07 캐릭터 칸 (답장할 때 동작 · 얼굴) | `characters[].motion`, `characters[].expression` |
 | H08 · H20 캐릭터 탭 채린 · 수아 · 다희 | 세션 캐릭터 1명만 실제, 나머지 목업 |
 | H08 · H20 '하드코딩 / llm' 토글, '옵션 올리기', '베이직 하루 3회' | **제거** |
 
@@ -1170,7 +1181,7 @@ GET /api/me/memories?date=2026-11-12
 | --- | --- | --- | --- |
 | requestId | String (UUID) | O | 재전송돼도 한 번만 처리 |
 | content | String | O | 1~300자 |
-| inputType | String | O | `TEXT` / `QUICK` |
+| inputType | String | O | `TEXT` 직접 입력 / `QUICK` 빠른 답장 |
 | tts | Boolean | X | true면 답장 음성도 받음 (기본 false) |
 
 ```json
@@ -1179,27 +1190,32 @@ GET /api/me/memories?date=2026-11-12
 
 #### 🛬 Response
 
-> 2026-11-03: 응답을 '이벤트 반응 받기'와 같은 모양으로 맞춤 (모션 · 표정 · 호감도 · fallback · 음성). `eventId`는 뺌 (채팅은 상태 이벤트가 아니라 DB `session_events`에 없음)
+> 2026-11-03: 응답을 '상태 반응 받기'와 같은 모양으로 맞춤 (모션 · 표정 · 호감도 · fallback · 음성). `eventId`는 뺌 (채팅은 상태 이벤트가 아니라 DB `session_events`에 없음)
+
+> 2026-11-04: 19번과 같은 캐릭터별 배열 `characters[]`로 바꿈. 캐릭터마다 `emotion` 추가, `affinity`는 캐릭터 안으로
 
 | 이름 | 타입 | 설명 |
 | --- | --- | --- |
 | requestId | String | 요청 id 그대로 (늦게 온 답 걸러내기) |
-| content | String | 캐릭터 답장 |
-| motion | Object | `group`, `file` — 답장에 맞는 모션 (없으면 null) |
-| expression | Object | `name`, `file` — 모션 위에 겹쳐 적용 (없으면 null) |
-| affinity | Object | 이 대화로 바뀐 호감도: `delta`(0이면 변화 없음), `points`, `level`, `levelUp` |
-| fallback | Boolean | LLM이 5초 안에 답을 못 만들어 대체 대사를 썼는지 (true면 호감도 변화 없음) |
-| audioBase64 | String | 답장 음성 (mp3). 요청에 `tts: true`일 때만, 아니면 null |
+| characters | Array | 답하는 캐릭터 (1:1 룸이면 1개) |
+| characters[].characterId · content · emotion · motion · expression · fallback · audioBase64 | | 19번과 같음 |
+| characters[].affinity | Object | 이 대화로 바뀐 호감도 (−5~+5): `delta`(0이면 변화 없음), `points`, `level`, `levelUp`. `fallback`이면 `delta` 0 |
 
 ```json
 {
   "requestId": "9c3a...",
-  "content": "어렵다고 포기할 거야? 한 문제만 더 풀어봐.",
-  "motion": { "group": "...", "file": "..." },
-  "expression": { "name": "...", "file": "..." },
-  "affinity": { "delta": 1, "points": 81, "level": 1, "levelUp": false },
-  "fallback": false,
-  "audioBase64": null
+  "characters": [
+    {
+      "characterId": 1,
+      "content": "어렵다고 포기할 거야? 한 문제만 더 풀어봐.",
+      "emotion": "ANGRY",
+      "motion": { "group": "TapBody", "file": "motions/arms_crossed.motion3.json" },
+      "expression": { "name": "pout", "file": "exp/pout.exp3.json" },
+      "affinity": { "delta": 1, "points": 81, "level": 1, "levelUp": false },
+      "fallback": false,
+      "audioBase64": null
+    }
+  ]
 }
 ```
 
@@ -1210,10 +1226,10 @@ GET /api/me/memories?date=2026-11-12
 #### 서버가 하는 일
 
 1. 사용자 메시지 저장 (`chat_messages`)
-2. LLM 호출: 캐릭터 설정 + 지난 대화 요약 + 이번 세션 대화 + 일정 → 답장과 감정(표정 태그) 생성
+2. LLM: 캐릭터 설정 + 지난 대화 요약 + 이번 세션 대화 + 일정 → 답장 + 감정 + 호감도 점수
 3. 감정에 맞는 모션 · 표정을 `live2d_reaction_maps`에서 고름
-4. 호감도 판정(−5~+5로 자름) → 0이 아니면 `relation_logs`에 CHAT으로 기록
-5. 5초 넘으면 대체 대사 + `fallback: true` (호감도 변화 없음)
+4. 호감도를 −5~+5로 잘라 0이 아니면 `relation_logs`(CHAT, `request_id`)에 기록
+5. 5초 넘으면 대체 대사 + `fallback: true`, 호감도 변화 없음
 
 #### 규칙
 

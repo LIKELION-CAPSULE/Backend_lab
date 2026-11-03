@@ -26,6 +26,7 @@
 --
 -- 2026-11-04 변경
 --   - session_events.type에 동작 이벤트 DROWSY · YAWN · WAVE 추가 (졸음 · 하품 · 손 흔들기. 상태를 바꾸지 않음)
+--   - 주석: 동작 이벤트 서버 쿨다운(같은 type 1분), live2d_reaction_maps.trigger_type에 감정 6종 (API 19 · 20의 감정 동작)
 -- =====================================================================
 
 BEGIN;
@@ -130,7 +131,7 @@ CREATE TABLE live2d_expressions (
 CREATE TABLE live2d_reaction_maps (
     id            bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     model_id      bigint   NOT NULL REFERENCES live2d_models (id) ON DELETE CASCADE,
-    trigger_type  text     NOT NULL,   -- 허용 값은 서버 enum으로 관리 (지금: GREETING, AWAY, RETURN, BREAK, BREAK_END, DROWSY, YAWN, WAVE = API 19의 trigger. 늘어날 수 있음)
+    trigger_type  text     NOT NULL,   -- 허용 값은 서버 enum으로 관리 (지금: GREETING, AWAY, RETURN, BREAK, BREAK_END, DROWSY, YAWN, WAVE = API 18의 '알아채는' 동작용 trigger / HAPPY, SHY, ANGRY, SAD, SURPRISED, NEUTRAL = API 19 · 20의 감정 동작. 늘어날 수 있음)
     intensity     smallint CHECK (intensity BETWEEN 1 AND 3),   -- AWAY의 눈치 / 말 걸기 / 서운함. NULL이면 강도 무관 (그 강도 행이 없을 때도 씀)
     motion_id     bigint,
     expression_id bigint,
@@ -324,6 +325,7 @@ CREATE INDEX idx_session_characters_character ON session_characters (character_i
 -- 동작 이벤트는 감지된 순간 한 줄. 상태를 바꾸지 않고 시간 계산에 쓰지 않음 (캐릭터 반응 · 호감도용)
 --   DROWSY: 졸음 / YAWN: 하품 / WAVE: 손 흔들기
 --   쉬는 시간 중에는 감지 이벤트(AWAY · RETURN · 동작 이벤트)를 남기지 않음 (서버가 무시)
+--   같은 동작 type이 1분 안에 다시 오면 남기지 않음 (서버 쿨다운)
 CREATE TABLE session_events (
     id             bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     session_id     bigint      NOT NULL REFERENCES study_sessions (id) ON DELETE CASCADE,
