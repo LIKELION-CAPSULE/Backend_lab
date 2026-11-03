@@ -1,0 +1,25 @@
+package com.capsule.content.internal;
+
+import com.capsule.content.api.CharacterQuery;
+import com.capsule.content.api.ContentTypes.CharacterInfo;
+import java.util.Optional;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+@Transactional(readOnly = true)
+class CharacterQueryService implements CharacterQuery {
+
+    private final CharacterRepository characters;
+    private final ContentMapper mapper;
+
+    CharacterQueryService(CharacterRepository characters, ContentMapper mapper) {
+        this.characters = characters;
+        this.mapper = mapper;
+    }
+
+    @Override
+    public Optional<CharacterInfo> find(long characterId) {
+        return characters.findById(characterId).map(mapper::character);
+    }
+}
