@@ -153,6 +153,17 @@ public class SessionService {
 
     // ---- 16 공부 시작 · 17 이어하기
 
+    /** 16 · H18 팝업: 진행 중인 세션이 이미 있음 */
+    public static ApiException alreadyInProgress(long sessionId) {
+        return new ApiException(CONFLICT, "SESSION_ALREADY_IN_PROGRESS", Map.of("sessionId", sessionId));
+    }
+
+    /** 동시 시작이 유니크 인덱스에 막혔을 때 먼저 만들어진 세션 */
+    @Transactional(readOnly = true)
+    public Optional<Long> inProgressSessionId(long userId) {
+        return sessions.findByUserIdAndEndedAtIsNull(userId).map(StudySession::id);
+    }
+
     @Transactional
     public StartResponse start(long userId, StartRequest req) {
         Integer minutes = req.targetMinutes();
@@ -169,10 +180,10 @@ public class SessionService {
             throw new ApiException(FORBIDDEN, "ONBOARDING_REQUIRED");
         }
         sessions.findByUserIdAndEndedAtIsNull(userId).ifPresent(s -> {
-            throw new ApiException(CONFLICT, "SESSION_ALREADY_IN_PROGRESS", Map.of("sessionId", s.id()));
+            throw alreadyInProgress(s.id());
         });
         BackgroundInfo background = rooms.defaultBackground(room.id()).orElseThrow();
-        // ponytail: 동시에 두 번 시작하면 부분 유니크 인덱스가 막지만 409가 아니라 500. 연타가 문제 되면 예외를 409로 바꿀 것
+        // 동시에 두 번 시작하면 부분 유니크 인덱스(사용자당 진행 중 세션 하나)가 막는다 → 컨트롤러가 409로 바꿈
         StudySession s =
                 sessions.save(new StudySession(userId, room.id(), background.id(), character.id(), minutes, now()));
         relationCommands.meet(userId, character.id());

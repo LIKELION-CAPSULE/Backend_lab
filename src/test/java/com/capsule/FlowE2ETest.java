@@ -168,12 +168,18 @@ class FlowE2ETest {
                         .getResponse()
                         .getStatus())
                 .isEqualTo(401);
+        assertThat(newToken).isNotBlank();
         Cookie newRefresh = refreshed.getResponse().getCookie("refresh_token");
-        MvcResult logout = mvc.perform(post("/api/auth/logout")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + newToken)
-                        .cookie(newRefresh))
-                .andReturn();
+        // 액세스 토큰이 만료돼도(헤더 없이) 로그아웃은 리프레시 토큰을 폐기한다 (공용 시연 기기)
+        MvcResult logout =
+                mvc.perform(post("/api/auth/logout").cookie(newRefresh)).andReturn();
         assertThat(logout.getResponse().getStatus()).isEqualTo(204);
+        assertThat(logout.getResponse().getCookie("refresh_token").getMaxAge()).isZero();
+        assertThat(mvc.perform(post("/api/auth/refresh").cookie(newRefresh))
+                        .andReturn()
+                        .getResponse()
+                        .getStatus())
+                .isEqualTo(401);
     }
 
     @Test

@@ -104,6 +104,9 @@ public class DialogueService {
         long characterId = session.characterId();
         String trigger = triggerOf(event);
         Integer awayLevel = trigger.equals("AWAY") ? (intensity == null ? 1 : intensity) : null;
+        if (awayLevel != null && (awayLevel < 1 || awayLevel > 3)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_REQUEST");
+        }
 
         Reaction reaction = reactions.pick(characterId, trigger, awayLevel);
         // 호감도는 상태 변화 전송(18) 때 이미 반영됨. 여기서는 읽기만
@@ -124,7 +127,6 @@ public class DialogueService {
     }
 
     // ponytail: LLM을 기다리는 동안(최대 5초) DB 커넥션을 잡고 있음. 동시 사용자가 많아지면 LLM 호출을 트랜잭션 밖으로 뺄 것
-    // ponytail: 같은 requestId가 동시에 두 번 오면 두 번째는 UNIQUE 위반(500). 필요하면 잡아서 저장된 답장을 다시 읽기
     @Transactional
     public MessageResponse send(long userId, long sessionId, UUID requestId, String content, Boolean tts) {
         SessionInfo session = openSession(userId, sessionId);
@@ -132,12 +134,9 @@ public class DialogueService {
         Conversation conversation = conversation(userId, characterId);
 
         // 재전송은 한도 검사 전에 돌려준다: 응답을 못 받아 다시 보낸 요청이 429가 되면 안 됨
-        Optional<ChatMessage> answered =
-                messages.findByConversationIdAndRequestIdAndSender(conversation.id(), requestId, CHARACTER);
+        Optional<MessageResponse> answered = answered(conversation.id(), userId, characterId, requestId, tts);
         if (answered.isPresent()) {
-            // ponytail: 재전송 때 원래 delta(와 모션·표정·fallback)는 다시 보여주지 않음. 필요하면 chat_messages에 같이 저장
-            return new MessageResponse(
-                    requestId, answered.get().content(), null, null, unchanged(userId, characterId), false, audio(tts));
+            return answered.get();
         }
         if (!rateLimiter.tryAcquire("rate:chat:" + userId, MESSAGES_PER_MINUTE, Duration.ofMinutes(1))) {
             throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "TOO_MANY_REQUESTS");
@@ -164,6 +163,27 @@ public class DialogueService {
         Reaction reaction = Reaction.NONE;
         return new MessageResponse(
                 requestId, answer, reaction.motion(), reaction.expression(), affinity, reply.isEmpty(), audio(tts));
+    }
+
+    /**
+     * 같은 requestId가 동시에 두 번 와서 늦은 쪽이 UNIQUE에 막혔을 때(먼저 온 요청이 커밋될 때까지 기다린 뒤라 답장이 있음).
+     * 막힌 트랜잭션은 이미 끝났으므로 새 트랜잭션에서 읽는다
+     */
+    @Transactional(readOnly = true)
+    public Optional<MessageResponse> answeredAfterConflict(long userId, long sessionId, UUID requestId, Boolean tts) {
+        long characterId = openSession(userId, sessionId).characterId();
+        return conversations
+                .findByUserIdAndCharacterId(userId, characterId)
+                .flatMap(c -> answered(c.id(), userId, characterId, requestId, tts));
+    }
+
+    /** 이미 답한 requestId면 저장된 답장 */
+    private Optional<MessageResponse> answered(
+            long conversationId, long userId, long characterId, UUID requestId, Boolean tts) {
+        // ponytail: 재전송 때 원래 delta(와 모션·표정·fallback)는 다시 보여주지 않음. 필요하면 chat_messages에 같이 저장
+        return messages.findByConversationIdAndRequestIdAndSender(conversationId, requestId, CHARACTER)
+                .map(m -> new MessageResponse(
+                        requestId, m.content(), null, null, unchanged(userId, characterId), false, audio(tts)));
     }
 
     /**
@@ -208,11 +228,12 @@ public class DialogueService {
         return characters.find(characterId).orElseThrow();
     }
 
-    // ponytail: find 후 save. 같은 사용자의 첫 대화가 동시에 오면 UNIQUE 위반 가능. 문제 되면 INSERT ... ON CONFLICT DO NOTHING
+    /** 처음 대화면 만든다. 같은 사용자의 첫 대화가 동시에 와도 ON CONFLICT로 한 행만 */
     private Conversation conversation(long userId, long characterId) {
-        return conversations
-                .findByUserIdAndCharacterId(userId, characterId)
-                .orElseGet(() -> conversations.save(new Conversation(userId, characterId, Instant.now(clock))));
+        return conversations.findByUserIdAndCharacterId(userId, characterId).orElseGet(() -> {
+            conversations.insertIfAbsent(userId, characterId, Instant.now(clock));
+            return conversations.findByUserIdAndCharacterId(userId, characterId).orElseThrow();
+        });
     }
 
     private AffinityChange unchanged(long userId, long characterId) {

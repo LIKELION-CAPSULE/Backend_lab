@@ -7,6 +7,7 @@ import com.capsule.dialogue.internal.dto.ReactionRequest;
 import com.capsule.dialogue.internal.dto.ReactionResponse;
 import com.capsule.dialogue.internal.service.DialogueService;
 import jakarta.validation.Valid;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -35,6 +36,12 @@ class DialogueController {
     @PostMapping("/messages")
     MessageResponse send(
             @LoginUser long userId, @PathVariable long sessionId, @Valid @RequestBody MessageRequest request) {
-        return dialogue.send(userId, sessionId, request.requestId(), request.content(), request.tts());
+        try {
+            return dialogue.send(userId, sessionId, request.requestId(), request.content(), request.tts());
+        } catch (DataIntegrityViolationException e) {
+            // 같은 requestId 동시 요청: 늦은 쪽은 UNIQUE에 막힌다 → 먼저 온 요청이 저장한 답장을 돌려줌
+            return dialogue.answeredAfterConflict(userId, sessionId, request.requestId(), request.tts())
+                    .orElseThrow(() -> e);
+        }
     }
 }

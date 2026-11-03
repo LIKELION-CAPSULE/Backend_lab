@@ -22,13 +22,8 @@ public class Conversation {
     private Instant summaryUpdatedAt;
     private Instant createdAt;
 
+    /** 행은 ConversationRepository.insertIfAbsent로 만든다 (첫 대화 동시 요청 대비) */
     protected Conversation() {}
-
-    public Conversation(long userId, long characterId, Instant now) {
-        this.userId = userId;
-        this.characterId = characterId;
-        this.createdAt = now;
-    }
 
     public long id() {
         return id;

@@ -81,9 +81,13 @@ class RelationService implements RelationQuery, RelationCommands {
         Long firstId = logs.firstIdBySession(rel.id(), sessionId);
         Long lastId = logs.lastIdBySession(rel.id(), sessionId);
         if (lastId == null) {
-            // ponytail: 이 세션 기록이 없으면 현재 값으로 대신한다. 그 뒤 다른 세션 기록이 쌓였으면 세션 당시 값이 아님
-            //   (정확히 하려면 세션 종료 시각 이전 기록으로 계산)
-            return settlement(rel.points(), rel.points(), rel.level(), rel.level());
+            // 이 세션에서 바뀐 게 없으면 앞선 세션까지의 값. 뒤에 다른 세션이 쌓여도 리포트가 처음과 같다(명세 23)
+            // ponytail: session_id 없는 기록(EVENT 보상)이 생기면 세션 순서로 못 가르므로 시각 기준으로 바꿀 것
+            Long before = logs.lastIdBeforeSession(rel.id(), sessionId);
+            long upTo = before == null ? 0 : before;
+            int points = logs.sumUpTo(rel.id(), upTo);
+            int level = levelOf(logs.peakUpTo(rel.id(), upTo));
+            return settlement(points, points, level, level);
         }
         int after = logs.sumUpTo(rel.id(), lastId);
         return settlement(
@@ -129,6 +133,8 @@ class RelationService implements RelationQuery, RelationCommands {
         Relation rel = lock(userId, characterId);
         int delta = AffinityPolicy.studyTimeDelta(studySeconds);
         if (delta != 0) record(rel, "STUDY_TIME", delta, sessionId, null, null);
+        // ponytail: last_met_at = 정산 시각. 자동 마감이면 실제 종료(마지막 heartbeat)보다 6시간 넘게 늦다.
+        //   이 값을 화면에 쓰게 되면 계약에 종료 시각을 받아서 넣을 것 (지금 읽는 API 없음)
         relations.addStudySeconds(rel.id(), studySeconds, Instant.now(clock));
         entityManager.refresh(rel);
         return settlementOf(userId, characterId, sessionId);

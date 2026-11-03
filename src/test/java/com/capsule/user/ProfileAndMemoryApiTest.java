@@ -124,6 +124,13 @@ class ProfileAndMemoryApiTest extends UserApiTestSupport {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.dueDate").value(nullValue()))
                 .andExpect(jsonPath("$.dDay").value(nullValue()));
+        // 시간은 약속에서만: 시험에 시간이 와도 종일로 저장
+        createMemory(
+                        auth,
+                        "{\"type\":\"EXAM\",\"title\":\"모의고사\",\"dueDate\":\"%s\",\"dueTime\":\"09:00\"}"
+                                .formatted(today.plusDays(2)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.dueTime").value(nullValue()));
     }
 
     @Test

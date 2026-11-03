@@ -12,6 +12,7 @@ import com.capsule.session.internal.dto.StartRequest;
 import com.capsule.session.internal.dto.StartResponse;
 import com.capsule.session.internal.service.SessionService;
 import jakarta.validation.Valid;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -43,7 +44,13 @@ class SessionController {
     @PostMapping("/api/sessions")
     @ResponseStatus(HttpStatus.CREATED)
     StartResponse start(@LoginUser long userId, @Valid @RequestBody StartRequest req) {
-        return service.start(userId, req);
+        try {
+            return service.start(userId, req);
+        } catch (DataIntegrityViolationException e) {
+            // 연타로 두 요청이 동시에 들어오면 늦은 쪽이 유니크 인덱스에 막힌다. 트랜잭션이 끝난 뒤라 여기서 409로 바꿈
+            throw SessionService.alreadyInProgress(
+                    service.inProgressSessionId(userId).orElseThrow(() -> e));
+        }
     }
 
     @PostMapping("/api/sessions/{sessionId}/resume")

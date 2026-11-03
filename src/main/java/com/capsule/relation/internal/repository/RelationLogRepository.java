@@ -29,6 +29,10 @@ public interface RelationLogRepository extends JpaRepository<RelationLog, Long> 
     @Query("select max(l.id) from RelationLog l where l.relationId = :relationId and l.sessionId = :sessionId")
     Long lastIdBySession(long relationId, long sessionId);
 
+    /** 이 세션보다 앞선 세션의 마지막 기록. 사용자의 세션은 하나씩 차례로 진행되므로(진행 중 세션은 하나) 세션 id 순서 = 시간 순서 */
+    @Query("select max(l.id) from RelationLog l where l.relationId = :relationId and l.sessionId < :sessionId")
+    Long lastIdBeforeSession(long relationId, long sessionId);
+
     @Query("select coalesce(sum(l.delta), 0) from RelationLog l where l.relationId = :relationId and l.id <= :lastId")
     int sumUpTo(long relationId, long lastId);
 

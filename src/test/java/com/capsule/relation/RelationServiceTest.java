@@ -159,6 +159,17 @@ class RelationServiceTest {
     }
 
     @Test
+    void settlementOfQuietSessionDoesNotChangeLater() {
+        commands.settleStudyTime(userId, CHARACTER, newSession(), 600); // +10
+        long quiet = newSession();
+        StudySettlement atEnd = commands.settleStudyTime(userId, CHARACTER, quiet, 30); // 1분 미만: 기록 없음
+        assertThat(atEnd).isEqualTo(new StudySettlement(1, 1, "아는 사이", 10, 10, 100, false));
+
+        commands.settleStudyTime(userId, CHARACTER, newSession(), 6000); // 뒤 세션 +100 → Lv.2
+        assertThat(query.settlementOf(userId, CHARACTER, quiet)).isEqualTo(atEnd);
+    }
+
+    @Test
     void oscillatingAround100LevelsUpOnce() {
         commands.settleStudyTime(userId, CHARACTER, newSession(), 5940); // +99
 

@@ -50,6 +50,8 @@ class SecurityConfig {
                 path.matcher(HttpMethod.POST, "/api/auth/email/login"),
                 path.matcher(HttpMethod.POST, "/api/auth/social/*"),
                 path.matcher(HttpMethod.POST, "/api/auth/refresh"),
+                // 리프레시 쿠키만으로 처리. 액세스 토큰이 만료돼도 쿠키를 지워야 공용 시연 기기에서 다음 사람이 이전 계정으로 갱신되지 않음
+                path.matcher(HttpMethod.POST, "/api/auth/logout"),
                 path.matcher("/actuator/health/**"),
                 path.matcher("/error")); // 필터 단계 예외가 /error로 넘어올 때 401로 덮이지 않게
     }

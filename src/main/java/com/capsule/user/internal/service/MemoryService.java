@@ -73,6 +73,9 @@ public class MemoryService {
                 || (dueDate != null && dueDate.isBefore(today))) {
             throw invalidMemory();
         }
+        if (type != Type.PROMISE) {
+            dueTime = null; // 시간은 약속에서만 쓴다 (api.md 13). 형식 검사는 위에서 이미 함
+        }
         return toResponse(memories.save(new UserMemory(userId, type, title, dueDate, dueTime)), today);
     }
 

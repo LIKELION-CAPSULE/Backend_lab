@@ -44,11 +44,11 @@
 
 | 상태 | code | 언제 |
 | --- | --- | --- |
-| 400 | INVALID_REQUEST | JSON 형식이나 타입이 틀림 (예: 숫자 자리에 문자열). 각 API의 검증 코드보다 먼저 걸림 |
+| 400 | INVALID_REQUEST | JSON 형식이나 타입이 틀림 (예: 숫자 자리에 `"abc"`. 숫자 모양 문자열 `"50"`은 숫자로 받음). 각 API의 검증 코드보다 먼저 걸림 |
 | 401 | UNAUTHORIZED | 토큰 없이 인증 필요 API 호출 |
 | 401 | AUTH_TOKEN_EXPIRED | 토큰이 만료됐거나 잘못됨 → '토큰 갱신' 후 다시 요청 |
-| 404 | NOT_FOUND | 없는 경로 |
-| 405 | METHOD_NOT_ALLOWED | 경로는 있지만 메서드가 틀림 |
+| 404 | NOT_FOUND | 없는 경로 (토큰이 있을 때. 토큰 없이 부르면 401 UNAUTHORIZED가 먼저) |
+| 405 | METHOD_NOT_ALLOWED | 경로는 있지만 메서드가 틀림 (404와 같이 토큰이 있을 때) |
 | 500 | INTERNAL_ERROR | 서버 오류 |
 
 ## 1. GET /api/terms — 약관 조회
@@ -214,7 +214,7 @@
 | 이름 | 타입 | 필수 | 설명 |
 | --- | --- | --- | --- |
 | verificationToken | String | O | 이메일 인증 확인에서 받은 토큰 |
-| password | String | O | 8자 이상 |
+| password | String | O | 8자 이상, 72바이트 이하 (bcrypt 한계. 영문·숫자 72자, 한글 약 24자). 벗어나면 INVALID_PASSWORD |
 | nickname | String | O | 1~20자 (프로필 설정과 같은 규칙) |
 | agreedTermVersionIds | Array | O | 필수 약관이 빠지면 가입 불가 |
 
@@ -686,7 +686,7 @@ H02에서 닉네임과 아바타를 한 번에 저장합니다. 저장하면 `on
 | type | String | O | `EXAM`(시험) / `PROMISE`(약속) / `GOAL`(목표) |
 | title | String | O | 일정 이름 (약속은 비우면 '같이 공부하기') |
 | dueDate | String | EXAM · PROMISE는 O, GOAL은 X | `YYYY-MM-DD` (한국 날짜 그대로). 목표는 마감일이 없을 수 있음 |
-| dueTime | String | X | `HH:mm`. 약속에서만 사용. **dueDate 없이 시간만은 불가** |
+| dueTime | String | X | `HH:mm`. 약속에서만 사용 (다른 종류에 오면 버리고 종일로 저장). **dueDate 없이 시간만은 불가** |
 
 ```json
 { "type": "PROMISE", "title": "같이 공부하기", "dueDate": "2026-11-08", "dueTime": "20:00" }
@@ -765,7 +765,7 @@ GET /api/me/memories?date=2026-11-12
 | memories[].dueDate | String | `YYYY-MM-DD`, 없으면 null (마감일 없는 목표) |
 | memories[].dueTime | String | `HH:mm`, 없으면 null → '종일' 표시 |
 | memories[].dDay | Integer | 오늘 기준 D-day (지난 일정은 음수, 날짜 없으면 null) |
-| datesWithMemories | Array | `from`~`to` 안에서 일정이 있는 날짜 (탭과 무관) |
+| datesWithMemories | Array | `from`~`to` 안에서 일정이 있는 날짜 (탭 · `date`와 무관. `type`을 보내면 그 종류만) |
 
 ```json
 {
@@ -861,7 +861,7 @@ GET /api/me/memories?date=2026-11-12
 
 > ✅ **201 Created**
 
-> ❌ **400** INVALID_TARGET_MINUTES · CHARACTER_NOT_IN_ROOM · **403** ONBOARDING_REQUIRED · **409** SESSION_ALREADY_IN_PROGRESS (`detail.sessionId`) → H18 팝업
+> ❌ **400** INVALID_TARGET_MINUTES · CHARACTER_NOT_IN_ROOM · **403** ONBOARDING_REQUIRED · **404** ROOM_NOT_FOUND · **409** SESSION_ALREADY_IN_PROGRESS (`detail.sessionId`, 연타로 동시에 두 번 보내도 나중 것은 409) → H18 팝업
 
 #### 이 API 다음에 할 일
 
@@ -1049,7 +1049,7 @@ GET /api/me/memories?date=2026-11-12
 | 이름 | 타입 | 필수 | 설명 |
 | --- | --- | --- | --- |
 | requestId | String (UUID) | O | 프론트가 만든 요청 id. 응답에 그대로 돌아옴 (늦게 온 응답 걸러내기) |
-| intensity | Integer | X | `AWAY`일 때만: 1 눈치 · 2 말 걸기(1분) · 3 서운함(5분). 없으면 1, 다른 이벤트는 무시 |
+| intensity | Integer | X | `AWAY`일 때만: 1 눈치 · 2 말 걸기(1분) · 3 서운함(5분). 없으면 1, 다른 이벤트는 무시. AWAY인데 1\~3 밖이면 400 INVALID_REQUEST |
 | tts | Boolean | X | true면 대사 음성도 받음 (기본 false) |
 
 ```json
@@ -1166,7 +1166,7 @@ GET /api/me/memories?date=2026-11-12
 
 > ✅ **200 OK**
 
-> ❌ **400** EMPTY_MESSAGE · **404** SESSION_NOT_FOUND · **409** SESSION_ENDED · **429** TOO_MANY_REQUESTS (1분에 10번)
+> ❌ **400** EMPTY_MESSAGE · INVALID_REQUEST (300자 초과) · **404** SESSION_NOT_FOUND · **409** SESSION_ENDED · **429** TOO_MANY_REQUESTS (1분에 10번)
 
 #### 서버가 하는 일
 
@@ -1179,7 +1179,7 @@ GET /api/me/memories?date=2026-11-12
 #### 규칙
 
 - 답 길이: 공부 중 1\~2문장, 쉬는 시간 2\~4문장
-- 같은 `requestId`를 다시 보내면 저장된 답장을 그대로 돌려줌. 속도 제한(1분에 10번) 횟수에 세지 않음. 이때 `affinity.delta`는 0, `motion` · `expression`은 null (처음 응답의 값은 다시 주지 않음)
+- 같은 `requestId`를 다시 보내면 저장된 답장을 그대로 돌려줌. 속도 제한(1분에 10번) 횟수에 세지 않음. 이때 `affinity.delta`는 0, `motion` · `expression`은 null (처음 응답의 값은 다시 주지 않음). 첫 요청이 아직 처리 중일 때 온 재전송은 첫 요청이 끝날 때까지 기다렸다가 같은 답장을 받음
 - 일시정지 중에는 프론트가 입력을 막음
 
 ## 21. POST /api/sessions/{sessionId}/heartbeat — heartbeat
@@ -1356,10 +1356,8 @@ json
 | H03 헤더 프로필 메뉴 '로그아웃' | 로그아웃 → H01 |
 | H03 메뉴 '마이페이지' · '첫 방문 화면 보기' · '체험 기록 초기화' | 목업 |
 
-- 저장: Redis · 인증: 필요
+- 저장: Redis · 인증: 리프레시 토큰 쿠키만 (액세스 토큰은 보지 않음. 2026-11-03: 액세스 토큰이 만료돼도 리프레시 토큰을 폐기해야 공용 시연 기기에서 다음 사람이 이전 계정으로 갱신되지 않음)
 
 #### [POST] /api/auth/logout
 
-> ✅ **204 No Content**
-
-> ❌ **401** 이미 만료 → 프론트는 무시하고 H01로
+> ✅ **204 No Content** · 쿠키가 없거나 이미 폐기된 토큰이어도 204 (항상 쿠키를 비움) → 프론트는 H01로
