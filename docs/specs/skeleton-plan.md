@@ -19,7 +19,7 @@
 | 테스트 | Testcontainers (PostgreSQL 16, Redis 7). H2 안 씀 | [0003](../decisions/0003-testcontainers.md) |
 | 판단·LLM | 결정적인 Fake + `TODO(judgment)` + `judgment-backlog.md` | [0007](../decisions/0007-pipeline-skeleton-first.md) |
 
-#### 새로 쓰는 것 (확인 필요, 확정되면 ADR 0011 추가)
+#### 새로 쓰는 것 (확정 11/03, [ADR 0011](../decisions/0011-auth-spring-security-jwt.md))
 | 무엇 | 왜 | 버린 대안 |
 |---|---|---|
 | **Spring Security + `spring-boot-starter-oauth2-resource-server`** (JWT HS256 검증·발급은 같이 들어 있는 Nimbus 사용) | 명세가 "액세스 토큰 30분 + 리프레시 HttpOnly 쿠키" 방식. 스타터 하나로 검증 필터·401 처리·bcrypt(`spring-security-crypto`)가 다 들어 있음 | jjwt + 직접 만든 필터 (라이브러리가 하나 더 들고 필터를 직접 유지보수함) / 세션 쿠키 인증 (명세와 다름) |
@@ -67,7 +67,7 @@
 | A3 | 메시지 전송(20) 응답: 설명은 "답장 + 모션·표정 + 바뀐 호감도"인데 응답 표는 `requestId`·`content`·`eventId`뿐. `eventId`가 무엇인지 불명확 | API 20 | **결정(11/03): 이벤트 반응(19)과 같은 모양.** `requestId`, `content`, `motion`, `expression`, `affinity`, `fallback`, `audioBase64`(tts일 때). `eventId`는 뺌. 노션 API 20번 반영함 |
 | A4 | 이벤트 반응(19): 표는 `content`, JSON은 `line`. `requestId`는 JSON에만 있음. `intensity`를 보내는 방법이 없음 | API 19 | **결정(11/03): 요청 본문 `{ requestId, intensity, tts }`**(`intensity`는 AWAY에서만, 기본 1. `tts` 기본 false), 대사 필드는 `content`, 응답에 `requestId` 그대로. 노션 API 19번 반영함 |
 | A5 | 약관 `contentUrl`: DB에는 본문(`term_versions.content`)만 있고 URL이 없음 | API 1 | **결정(11/03): 응답에 `content`(본문)를 그대로 넣음.** 노션 API 1번 반영함 |
-| A6 | 시드 데이터: 룸 1개, 캐릭터 채린, 기본 아바타, Live2D 모델·모션·표정·반응 매핑, 약관 2종(본문 포함)의 실제 값이 명세에 예시로만 있음 | 전체 | **명세 예시값으로 `content` 시드 마이그레이션을 만듦**. 약관 본문은 "(약관 본문 준비 중)"으로 두고, 실제 값은 나중에 새 마이그레이션으로 교체 |
+| A6 | 시드 데이터: 룸 1개, 캐릭터 채린, 기본 아바타, Live2D 모델·모션·표정·반응 매핑, 약관 2종(본문 포함)의 실제 값이 명세에 예시로만 있음 | 전체 | **결정(11/03): 예시값 시드는 로컬·테스트 전용**(`db/seed`, `local`·`test` 프로필에서만 Flyway가 읽음). 배포 DB에는 실제 값이 나왔을 때 정식 마이그레이션 1개로 넣음. **할 일: 실제 시드(에셋·CDN 주소·약관 문구) 담당과 시점을 정해야 함. 시연 서버 배포 전 필수** |
 
 **B. 이의가 없으면 이대로 진행하는 것** (명세 안에서 서로 안 맞거나 비어 있는 곳)
 
@@ -123,10 +123,8 @@
 | 4 | `session_init` | study_sessions, session_characters, session_events |
 | 5 | `relation_init` | user_character_relations, user_unlocked_contents, user_unlocked_backgrounds, relation_logs |
 | 6 | `dialogue_init` | conversations, chat_messages, llm_usages |
-| 7 | `content_seed_demo` | A6 시드 (룸 1, 채린, 기본 아바타, 모델·모션·표정·반응 매핑) |
-| 8 | `user_seed_terms` | 약관 SERVICE·PRIVACY v1 |
-
 - schema.sql의 `BEGIN;`/`COMMIT;`은 뺀다 (Flyway가 마이그레이션마다 트랜잭션을 건다).
+- 예시값 시드(A6)는 마이그레이션이 아니다. `src/main/resources/db/seed/`에 Flyway 반복 마이그레이션(`R__demo_content.sql`, `R__demo_terms.sql`)으로 두고, `local`·`test` 프로필의 `spring.flyway.locations`에만 넣는다. 내용이 바뀌면 다시 적용되므로 넣는 SQL은 다시 실행해도 안전하게(`ON CONFLICT`) 쓴다. id는 명세 예시(룸 1, 캐릭터 1, 아바타 1, 약관 버전 3·4)와 맞춘다.
 - A1·A2가 확정되면 노션 → spec-sync → 해당 `*_init`에 반영(아직 develop에 안 들어갔으므로 이 PR 안에서는 고쳐도 됨).
 
 ---
@@ -253,6 +251,6 @@ DTO는 `record`, 엔티티는 밖으로 내보내지 않는다. 각 `api` 패키
 ---
 
 ## 7. 확인 후 진행 순서
-1. (확정 시) ADR 0011 인증 추가
+1. ADR 0011 인증 추가함 (HARNESS.md '앱 스택' 표에 링크 한 줄 추가는 하네스 파일이라 뼈대 머지 뒤 작은 harness PR로)
 2. Gradle 기반 (`references/build-setup.md`) → 마이그레이션 → 각 모듈 `api` 계약 → 단순 구현 + 테스트 → 판단 Fake + 백로그 → dialogue LLM 자리 → `FlowE2ETest`·`http/flow.http`·`ModularityTests` → `scripts/verify.sh --full` 통과
 3. 커밋은 단계별로 나눠서 PR 하나 (`[skeleton] ...`)
