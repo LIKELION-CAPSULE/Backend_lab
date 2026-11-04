@@ -100,10 +100,15 @@ class CharacterContentTest {
             for (int stage = 1; stage <= 4; stage++) {
                 assertThat(c.linesFor(situation, stage))
                         .as(situation + " 단계 " + stage)
-                        .hasSize(3)
-                        .allSatisfy(l -> assertThat(c.expressions()).contains(l.expression()));
+                        .hasSize(3);
             }
         }
+        // 모든 대사의 표정은 확정 8개 안 (근황 TODAY는 표정 없음). 옛 '찡그림' 같은 어긋남을 잡는다
+        assertThat(c.lines())
+                .filteredOn(l -> !l.situation().equals("TODAY"))
+                .allSatisfy(l -> assertThat(c.expressions())
+                        .as(l.situation() + ": " + l.text())
+                        .contains(l.expression()));
         // 5초 대체의 각 단계 첫 줄은 PM 문구, {name}은 닉네임으로
         String key = "fallback-test";
         assertThat(contents.next(1, "REPLY_FALLBACK", null, 4, key, "민수")
