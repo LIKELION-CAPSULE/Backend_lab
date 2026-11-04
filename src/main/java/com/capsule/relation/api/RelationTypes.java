@@ -20,7 +20,7 @@ public final class RelationTypes {
     /**
      * 상태 이벤트 하나 (api.md 18).
      *
-     * @param eventType FOCUS · AWAY · RETURN · BREAK
+     * @param eventType 상태 FOCUS · AWAY · RETURN · BREAK, 동작 DROWSY · YAWN · WAVE (api.md 18, 동작은 지금 0점)
      * @param firstFocusOfSession 이 세션의 첫 FOCUS인지 (처음 만난 날 첫 FOCUS 보너스 판단용)
      */
     public record SessionEventRef(
