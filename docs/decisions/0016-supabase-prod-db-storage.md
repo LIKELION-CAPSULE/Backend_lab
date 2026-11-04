@@ -17,7 +17,7 @@
   - Session pooler: IPv4로 되고 일반 PostgreSQL 연결처럼 동작한다. 연결 수 한도가 작아 풀을 작게 둔다
   - `sslmode=require`는 암호화만 하고 서버 인증서는 검증하지 않는다. 검증까지 하려면 Supabase CA 인증서로 `verify-full`
 - 버린 대안
-  - 로컬 개발도 Supabase 하나를 같이 쓰기: 둘이 동시에 마이그레이션을 돌리면 서로 깨지고, worktree별 DB 분리(run-local.sh)가 안 된다
+  - 로컬 개발도 Supabase 하나를 같이 쓰기: 둘이 동시에 마이그레이션을 돌리면 서로 깨지고, worktree별 DB 분리(run-local.sh)가 안 된다. → 0017에서 바뀜: 운영과 다른 개발 프로젝트를 같이 쓰고, 마이그레이션은 develop 머지 때 Actions만 넣는다
   - AWS RDS · 직접 띄운 PostgreSQL: 비용과 운영 부담
   - S3 + CloudFront: 계정 · 설정이 하나 더 늘어남. 트래픽이 커지면 다시 본다
 - 대가 (무료 플랜 한계)

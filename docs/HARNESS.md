@@ -160,6 +160,8 @@ setup.sh가 하는 일: 도구 확인(python3 연결, git, docker, java 21, gh) 
   3. 시크릿 등록: `gh secret set CLAUDE_CODE_OAUTH_TOKEN -R LIKELION-CAPSULE/Backend_lab` → 토큰 붙여넣기 (토큰을 채팅·파일에 남기지 않음)
   - API 키로 돌리려면 `ANTHROPIC_API_KEY` 시크릿 + `.github/workflows/claude-*.yml`에서 해당 줄 주석 해제
   - 시크릿이 없으면 claude-review(위험 구역 PR)와 `@claude`만 실패하고 나머지는 정상 동작함
+  4. 공용 개발 DB 시크릿(ADR 0017): `gh secret set DEV_DB_URL`, `DEV_DB_USERNAME`, `DEV_DB_PASSWORD` (Supabase 개발 프로젝트 Connect > JDBC · Session pooler 값, `?sslmode=require`). 넣은 뒤 Actions에서 `dev-db-migrate`를 develop으로 한 번 손으로 돌림. 없으면 그 워크플로만 경고하고 건너뜀
+  - 각자 `.env.local`에 같은 값을 `CAPSULE_DEV_DB_URL` · `CAPSULE_DEV_DB_USERNAME` · `CAPSULE_DEV_DB_PASSWORD`로 넣고 `scripts/run-local.sh --shared`
 
 ---
 
@@ -346,9 +348,10 @@ skeleton 스킬이 하는 일:
 | `.claude/skills/contract-change/` | 확장→이전→제거 절차 | 계약 변경 시 |
 | `scripts/verify.sh` | **유일한 검증 명령** | 사람·Stop 훅·CI |
 | `scripts/new-migration.sh` | 타임스탬프 + 모듈 이름 마이그레이션 생성 | DB 변경 시 |
-| `scripts/run-local.sh` | worktree별 DB·포트로 로컬 실행 (`--reset`, `--info`) | 로컬 확인 |
+| `scripts/run-local.sh` | worktree별 DB·포트로 로컬 실행 (`--reset`, `--info`). `--shared`는 공용 개발 DB(Supabase)에 붙고 마이그레이션은 안 함 (ADR 0017) | 로컬 확인 |
 | `scripts/setup.sh` | 1인 1회 세팅 | 클론 직후 |
 | `.github/workflows/verify.yml` | 합친 결과로 verify, 마이그레이션 불변, zones 엄격 검사 | PR, develop push |
+| `.github/workflows/dev-db-migrate.yml` | develop의 마이그레이션 · 예시 시드를 공용 개발 DB에 넣음. 공용 DB에 넣는 유일한 곳 (ADR 0017) | develop verify 통과 뒤 |
 | `.github/workflows/pr-zones.yml` | PR 제목·본문 검사, `needs-adr` 경고 (라벨은 안 붙임) | PR |
 | `.github/workflows/claude-review.yml` | 위험한 PR 자동 리뷰 | PR Ready |
 | `.github/workflows/claude.yml` | `@claude` 댓글 응답 | 댓글 |
@@ -400,7 +403,7 @@ skeleton 스킬이 하는 일:
 | `Could not find a valid Docker environment` | Docker 꺼짐 | Docker Desktop 실행 |
 | 로컬에서 Flyway `Detected applied migration not resolved locally` | 다른 브랜치에서 적용한 마이그레이션이 로컬 DB에 남아 있음(브랜치 전환) | `scripts/run-local.sh --reset` |
 | `Migration checksum mismatch` | 적용된 마이그레이션 파일이 바뀜 | 되돌리고 새 마이그레이션 |
-| CI `zones.conf 엄격 검사` 실패 | `[team]`에 TODO 남음 | GitHub 아이디·이메일 채우는 harness PR |
+| `run-local.sh --shared`가 `Schema-validation: missing table/column`으로 안 뜸 | 내 브랜치에 아직 머지 안 된 마이그레이션이 있음 (공용 개발 DB는 develop 기준) | 머지 전까지는 옵션 없이 실행(Docker 로컬 DB). 머지되면 `dev-db-migrate`가 넣음 || CI `zones.conf 엄격 검사` 실패 | `[team]`에 TODO 남음 | GitHub 아이디·이메일 채우는 harness PR |
 | CI `PR 본문` 실패 | '작업 내용' 섹션이 없거나 템플릿 안내 문구뿐 | pr-write로 다시 쓰거나 '작업 내용'을 채움 |
 | `claude-review` 실패 | 시크릿 없음 | 2-3장. 안 쓸 거면 무시해도 다른 체크엔 영향 없음 |
 | spec-sync가 노션에 반영을 못 함 | Claude Code에 Notion MCP 미연결·미로그인 | 2-2장 Notion MCP 연결 |

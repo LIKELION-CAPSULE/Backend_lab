@@ -1,0 +1,52 @@
+# develop에 머지된 마이그레이션 · 예시 시드를 공용 개발 DB(Supabase 개발 프로젝트)에 넣는다 (ADR 0017).
+# 공용 개발 DB에 마이그레이션을 넣는 곳은 여기 하나뿐이다. 앱(shared-db 프로필)은 Flyway를 끈다.
+# develop의 verify가 통과한 뒤에만 돈다. 새 마이그레이션이 없으면 Flyway가 아무것도 하지 않는다.
+name: dev-db-migrate
+
+on:
+  workflow_run:
+    workflows: [verify]
+    types: [completed]
+    branches: [develop]
+  workflow_dispatch: # 시크릿을 처음 넣었을 때 등 손으로 한 번 돌릴 때 (develop에서만)
+
+concurrency:
+  group: dev-db-migrate
+  cancel-in-progress: false # 마이그레이션 도중에 끊지 않는다
+
+jobs:
+  migrate:
+    if: >-
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+      || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/develop')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: 시크릿 확인
+        id: check
+        env:
+          DEV_DB_URL: ${{ secrets.DEV_DB_URL }}
+        run: |
+          if [ -z "$DEV_DB_URL" ]; then
+            echo "::warning::DEV_DB_URL 시크릿이 없어 건너뜀 (ADR 0017, HARNESS.md 2-3장)"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Flyway migrate (마이그레이션 + 예시 시드)
+        if: steps.check.outputs.skip != 'true'
+        env:
+          FLYWAY_URL: ${{ secrets.DEV_DB_URL }}
+          FLYWAY_USER: ${{ secrets.DEV_DB_USERNAME }}
+          FLYWAY_PASSWORD: ${{ secrets.DEV_DB_PASSWORD }}
+        # 앱과 같은 Flyway 12.4, 같은 out-of-order(ADR 0002), local과 같은 위치(db/migration + db/seed)
+        run: |
+          docker run --rm \
+            -e FLYWAY_URL -e FLYWAY_USER -e FLYWAY_PASSWORD \
+            -v "$PWD/src/main/resources/db:/flyway/capsule:ro" \
+            flyway/flyway:12.4.0 \
+            -locations=filesystem:/flyway/capsule/migration,filesystem:/flyway/capsule/seed \
+            -outOfOrder=true -connectRetries=3 \
+            migrate
