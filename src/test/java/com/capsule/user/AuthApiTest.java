@@ -164,7 +164,7 @@ class AuthApiTest extends UserApiTestSupport {
         String kakaoId = UUID.randomUUID().toString();
         String code = "fake-kakao:%s:카카오닉네임".formatted(kakaoId);
 
-        // 약관 체크 없이 가입되고, 최신 필수 약관(3·4)이 동의로 기록된다 (api.md 6, 안내 문구 고지)
+        // 약관 체크 없이 가입되고, 최신 필수 약관(3·4)이 동의로 기록된다 (api.md 6)
         MvcResult created = postJson("/api/auth/social/KAKAO", kakaoBody(code))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.isNewUser").value(true))
