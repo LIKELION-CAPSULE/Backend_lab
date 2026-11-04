@@ -104,7 +104,7 @@ class SceneChatPipeline implements ChatPipeline {
         return ChatOutcome.of(reply.strip(), emotion, null, trace);
     }
 
-    /** 고정 블록(scene.system) 변수. 상태 반응(ReactionWriter)도 같은 블록을 써서 캐시를 같이 탄다 */
+    /** 고정 블록(scene.system) 변수. 상태 반응(ReactionWriter)도 같은 블록을 쓴다 (캐시는 모델별이라 반응끼리만 같이 탄다) */
     static Map<String, String> systemVars(CharacterContent c) {
         Map<String, String> vars = new LinkedHashMap<>();
         vars.put("bible", c.bible());
