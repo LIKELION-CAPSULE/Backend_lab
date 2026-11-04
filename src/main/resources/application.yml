@@ -17,8 +17,89 @@ springdoc:
   swagger-ui.enabled: false
 
 capsule:
+  # LLM (ADR 0021). 공급자 전환 = provider 한 줄. 키는 환경변수로만 (ANTHROPIC_API_KEY · OPENAI_API_KEY)
   llm:
     mode: fake # fake | real (real은 dialogue 담당이 도메인 단계에서 구현)
+    provider: ${CAPSULE_LLM_PROVIDER:fake} # fake | anthropic | openai (jev는 결정 전용: routes.DECIDE.provider)
+    fallback-provider: ${CAPSULE_LLM_FALLBACK_PROVIDER:} # 기본 공급자가 실패하면 한 번 더 (비우면 없음)
+    http-timeout: 30s # 공급자 HTTP 한 번의 한도. 명세의 5초 대체 대사는 서비스가 따로 지킨다
+    max-retries: 1 # 429 · 5xx · 연결 오류만
+    log-content: false # 서비스 호출의 프롬프트·응답 원문 저장 (실험실·평가는 항상 저장)
+    anthropic:
+      base-url: https://api.anthropic.com
+      api-key: ${ANTHROPIC_API_KEY:}
+      version: "2023-06-01"
+      models: { fast: claude-haiku-5-5, smart: claude-sonnet-5-5, judge: claude-opus-5-5 }
+    openai:
+      base-url: https://api.openai.com/v1
+      api-key: ${OPENAI_API_KEY:}
+      # 모델 이름·가격은 바꾸기 전에 공식 문서로 확인. 5.1 이후 모델은 reasoning-effort minimal 대신 none
+      models: { fast: gpt-5-mini, smart: gpt-5, judge: gpt-5 }
+      reasoning-effort: minimal # 추론 토큰도 max-tokens에 들어가므로 짧은 대사는 최소로
+    jev: # TypeSafe Jev 결정 모델. 글을 쓰지 않고 보기 하나 + 확신도만 (DECIDE 용도만 받음)
+      base-url: https://api.typesafe.ai
+      api-key: ${JEV_API_KEY:}
+      models: { fast: jev-1.13.0 } # jev-latest는 모르는 사이 바뀌므로 시험한 버전으로 고정
+    routes: # 용도별 등급(공급자의 models 키)과 출력 한도. temperature를 비우면 공급자 기본값
+      CHAT: { tier: smart, max-tokens: 400 }
+      # 대화 엔진 용도 셋의 토큰 한도는 엔진 설정(Engine.Settings: 감독 500/품질 900, 배우 700, 심사 300)을 쓴다
+      DIRECTOR: { tier: fast }
+      ACTOR: { tier: smart }
+      JUDGE: { tier: fast }
+      REACTION: { tier: fast, max-tokens: 150 }
+      SUMMARY: { tier: fast, max-tokens: 300 } # 세션 카드 한 장 (80자 이내)
+      MEMORY: { tier: fast, max-tokens: 100 } # 기억 한 줄 (40자 이내)
+      CLOSING: { tier: fast, max-tokens: 150 }
+      EVAL_JUDGE: { tier: judge, max-tokens: 600 }
+      # 결정(사용자 말 신호 → 호감도). provider를 jev로 두면 Jev, 실패하면 기본 공급자(LLM)가 같은 질문에 답한다
+      DECIDE: { tier: fast, max-tokens: 200, provider: "${CAPSULE_LLM_DECIDE_PROVIDER:}" }
+    prices: # 달러/백만 토큰. Claude 모델은 Llm.DEFAULT_PRICES. 점(.)이 든 모델 이름은 "[gpt-5.5]"처럼 대괄호
+      gpt-5-mini: { in: 0.25, cache-write: 0, cache-read: 0.025, out: 2.0 }
+      gpt-5: { in: 1.25, cache-write: 0, cache-read: 0.125, out: 10.0 }
+    lab:
+      enabled: false # 실험실 /internal/llm-lab (local만 true). 운영에서 켜지 않는다
+      token: ${CAPSULE_LLM_LAB_TOKEN:} # 공용 서버에서 켤 때만: X-Lab-Token 헤더 검사
+      eval-parallelism: 3
+  dialogue:
+    chat-pipeline: SIMPLE # SIMPLE(LLM 한 번, 명세 20) | ENGINE(감독·배우 엔진. 캐릭터별 engine.* 프롬프트 필요)
+    # 상태 반응(19)을 LLM으로 만들 trigger. 합의: 상태 변화는 LLM(호감도 + 대화 맥락), 동작 이벤트는 고정 대사
+    #   (DROWSY · YAWN · WAVE · HEAD_TURN은 넣지 않는다). LLM이 5초를 넘기면 같은 trigger의 고정 대사
+    reaction-llm-triggers: [GREETING, AWAY, RETURN, BREAK, BREAK_END]
+    reaction-context-lines: 6 # 상태 반응 LLM에 같이 넣을 이번 세션 최근 대화 수
+    # 답장 감정 후보 (명세 19·20). TODO: #9 반응 매핑(live2d_reaction_maps)에서 캐릭터별로 읽기
+    emotions: [HAPPY, SHY, ANGRY, SAD, SURPRISED, NEUTRAL]
+    # 사용자 말의 종류(SignalType) 고르기: PATTERN(A안, 말 패턴. PM 확정) | DECIDER(B안, 결정 모델이 고름. 다음 주 재검토)
+    signal-detector: PATTERN
+    signal-min-confidence: 0.6 # DECIDER일 때 확신도가 이보다 낮으면 NEUTRAL(0점). 실험실 평가로 조정
+    severe-min-confidence: 0.8 # 패턴이 혐오 · 성적이라고 하면 결정 모델이 한 번 더 확인. 이보다 낮으면 RUDE로
+    # 대화 한 번의 점수표 (임시: 말포이 PM 표). 없는 종류는 0. 캐릭터별 표는 말포이 콘텐츠를 앱으로 옮길 때 character.yml로
+    #   once-per-session: 세션당 1번만 점수, repeat-points: 같은 세션에서 또 나오면 이 점수, loss-percent: 지금 값의 %를 깎음(points는 최소 감점)
+    chat-scores:
+      COMPLIMENT: { points: 1 }
+      THANKS: { points: 1 }
+      CONFIDE: { points: 2, once-per-session: true }
+      RUDE: { points: -2, repeat-points: -3 }
+      HATE_OR_SEXUAL: { points: -5, loss-percent: 30 }
+    chat-repeat-window: 10 # 최근 10턴 안에
+    chat-repeat-limit: 2 #   같은 종류가 이미 2번 있으면 세 번째부터 0점 (오르는 쪽만, 칭찬 연타 방지)
+    memory-max: 20 # 캐릭터가 아는 사실 최대 개수. 넘치면 결정 모델이 가장 덜 중요한 하나를 버린다
+    recap-max: 5 # 지난 세션 흐름 카드 최대 장수. 넘치면 오래된 카드부터 지운다
+    memory-async: true # 기억 정리를 답장 뒤 따로 돈다 (테스트는 false: 바로 돌려서 확인)
+    memory-enabled: true # 끄면 새 기억을 만들지 않는다 (매 턴 결정 모델 1번 + 한 줄 쓰기 0~1번이 빠짐)
+  # 호감도 · 레벨 (호감도 최종안 2026-11-04, ADR 0021). PM 답이 오면 값만 바꾼다. 날짜는 한국 날짜
+  #   호감도 0~100, 50에서 시작(DB 기본값). 대화 한 번의 점수표는 캐릭터마다 달라서 dialogue 쪽(chat-scores)
+  relation:
+    chat-daily-gain-cap: 15 # 대화로 하루에 오를 수 있는 최대. 내려가는 쪽은 상한 없음
+    away-min-seconds: 60 # 이보다 길게 비워야 감점 (AWAY를 끝낸 상태 이벤트에서 판단)
+    away-penalty: -1
+    away-daily-cap: 3 # 자리 비움으로 하루에 깎일 수 있는 최대
+    streak-points: 1 # 연속 출석 2일째부터 하루 한 번 (그날 처음 공부를 시작하면 출석)
+    level-seconds: 3600 # 자리 지킴 60분당 레벨 1, 상한 없음
+    stages: # 관계 단계 = 호감도 구간 (이름 임시). 호감도가 내려가면 단계도 내려간다
+      - { min: 0, name: 아는 사이 }
+      - { min: 30, name: 친한 사이 }
+      - { min: 70, name: Lv.3 }
+      - { min: 90, name: Lv.4 }
   # 외부 연동(카카오·메일) Fake. local/test에서만 true. 운영에서 켜면 아무 코드로나 로그인되므로 절대 켜지 않는다
   fake-integrations: false
   cdn:
