@@ -1,5 +1,6 @@
 package com.capsule;
 
+import static org.hamcrest.Matchers.contains;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
@@ -58,8 +59,13 @@ class SwaggerTest {
             mvc.perform(get("/v3/api-docs"))
                     .andExpect(jsonPath("$.paths['/api/me'].get.parameters").doesNotExist())
                     .andExpect(jsonPath("$.paths['/api/sessions/{sessionId}/end'].post.parameters[*].name")
-                            .value(org.hamcrest.Matchers.contains("sessionId")))
-                    .andExpect(jsonPath("$.tags[0].name").value("인증"));
+                            .value(contains("sessionId")));
+        }
+
+        @Test
+        void tagsInSpecOrder() throws Exception {
+            mvc.perform(get("/v3/api-docs"))
+                    .andExpect(jsonPath("$.tags[*].name").value(contains("인증", "온보딩 · 홈", "공부 세션", "대화", "리포트")));
         }
 
         @Test
