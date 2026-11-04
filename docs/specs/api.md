@@ -830,7 +830,7 @@ GET /api/me/memories?date=2026-11-12
 | H06 '대화 옵션' 등급 · 보유 크레딧 · 크레딧 부족 안내 | **제거** |
 | H07 상단 룸 제목 · 배경 | `room` |
 | H07 캐릭터 칸 이름 · 프로필 | `character` |
-| H07 내 칸 이름 · 아바타 (카메라를 켜도 영상 대신 아바타, 9번) | `me` |
+| H07 내 칸 이름 · 아바타 (카메라를 켜도 영상 대신 아바타, 9번) | `me`(닉네임) · `avatar`(Live2D 모델. 프론트가 이 모델로 사용자 동작을 따라 함) |
 | H07 타이머 '00:17:23 / 00:50:00' | `startedAt`, `targetMinutes`, `serverTime` |
 
 - 테이블: `study_sessions`, `session_characters`(1행), `user_character_relations`(처음 만나면 생성) · 인증: 필요
