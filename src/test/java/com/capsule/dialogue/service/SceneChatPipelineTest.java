@@ -3,6 +3,7 @@ package com.capsule.dialogue.service;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.capsule.content.api.ContentTypes.CharacterInfo;
+import com.capsule.dialogue.client.LlmJson;
 import com.capsule.dialogue.config.CharacterContentSeeder;
 import com.capsule.dialogue.domain.ChatMessage;
 import com.capsule.dialogue.dto.CharacterContent;
@@ -117,6 +118,14 @@ class SceneChatPipelineTest {
         assertThat(MALFOY.emotion("질투")).isEqualTo("삐짐");
         assertThat(MALFOY.emotion("SAD")).isNull();
         assertThat(MALFOY.emotion(null)).isNull();
+    }
+
+    @Test
+    void replyWrittenAsTextBeforeTheEmotionJsonIsKept() {
+        String text = "그걸 이제 풀었어? …뭐, 풀긴 했네.{\"emotion\":\"웃음\"}";
+        assertThat(SceneChatPipeline.replyText(text, LlmJson.objectIn(text))).isEqualTo("그걸 이제 풀었어? …뭐, 풀긴 했네.");
+        String ok = "{\"reply\":\"왔냐.\",\"emotion\":\"경멸\"}";
+        assertThat(SceneChatPipeline.replyText(ok, LlmJson.objectIn(ok))).isEqualTo("왔냐.");
     }
 
     @Test

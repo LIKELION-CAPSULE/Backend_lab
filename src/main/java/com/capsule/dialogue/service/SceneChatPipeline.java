@@ -97,7 +97,7 @@ class SceneChatPipeline implements ChatPipeline {
         if (json == null
                 && (truncated || r.text().strip().startsWith("{") || r.text().contains("\"emotion\"")))
             throw new IllegalStateException("답장 JSON이 깨짐 (stop_reason=" + r.stopReason() + "): " + r.text());
-        String reply = json != null ? LlmJson.str(json.path("reply")) : r.text();
+        String reply = replyText(r.text(), json);
         if (reply == null || reply.isBlank()) throw new IllegalStateException("빈 답장: " + r.text());
         String emotion = json == null ? null : c.emotion(LlmJson.str(json.path("emotion")));
 
@@ -170,6 +170,14 @@ class SceneChatPipeline implements ChatPipeline {
         L.add("지금: " + (in.onBreak() ? c.breakStyle() : c.studyStyle()));
         L.add("</상황>");
         return String.join("\n", L);
+    }
+
+    /** 답장 글: JSON의 reply. 대사를 글로 쓰고 뒤에 {"emotion": …}만 붙인 답(실제 키 평가 76번 중 1번)은 앞의 글 */
+    static String replyText(String text, JsonNode json) {
+        if (json == null) return text;
+        String reply = LlmJson.str(json.path("reply"));
+        if ((reply == null || reply.isBlank()) && text.indexOf('{') > 0) return text.substring(0, text.indexOf('{'));
+        return reply;
     }
 
     /** 캐릭터의 오늘 근황: TODAY 대사를 요일(월 = 0)로 고른다 (결정 19). 없으면 null */
