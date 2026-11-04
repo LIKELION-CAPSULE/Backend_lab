@@ -219,7 +219,7 @@ function confirmBtn(label, fn) {
 }
 
 /* ---------- 공용 부품 ---------- */
-const USER_F = ['nickname', 'relationLevel', 'summary', 'memories'];
+const USER_F = ['nickname', 'relationLevel', 'summary', 'facts', 'memories'];
 const MODEL_F = ['provider', 'model', 'temperature', 'maxTokens', 'pinnedPrompts', 'engine'];
 // 실험 조건(LabConfig) 편집기. 빈 칸 = null = 서버 기본값
 function configEditor(cfg, fields = [...USER_F, ...MODEL_F], title = '실험 조건', open = false) {
@@ -228,7 +228,8 @@ function configEditor(cfg, fields = [...USER_F, ...MODEL_F], title = '실험 조
   const i = {
     nickname: h('input', {value: c.nickname ?? '', placeholder: '기본'}),
     relationLevel: num(c.relationLevel),
-    summary: h('textarea', {rows: 2, value: c.summary ?? '', placeholder: '없음'}),
+    summary: h('textarea', {rows: 2, value: c.summary ?? '', placeholder: '11/03 55분, 3단원 하다 지쳐서 일찍 끝냄 (한 줄에 한 장, 최근 2장)'}),
+    facts: h('textarea', {rows: 3, value: (c.facts || []).join('\n'), placeholder: '사용자는 이번 달 토익 800 목표 (한 줄에 하나, 최대 20개)'}),
     memories: h('textarea', {rows: 2, value: (c.memories || []).join('\n'), placeholder: '시험: 중간고사 (2026-11-20)'}),
     provider: sel([['', '(기본)'], ...META.providers.map(p => p.name)], c.provider ?? ''),
     model: h('input', {value: c.model ?? '', placeholder: '기본'}),
@@ -241,12 +242,13 @@ function configEditor(cfg, fields = [...USER_F, ...MODEL_F], title = '실험 조
   };
   const el = h('details', {class: 'cfg', open}, h('summary', null, title), h('div', {class: 'cfggrid'},
     has('nickname') && field('닉네임', i.nickname),
-    has('relationLevel') && field('호감도 단계', i.relationLevel),
+    has('relationLevel') && field('관계 단계 (1~4, 호감도 0 · 30 · 70 · 90)', i.relationLevel),
     has('provider') && field('공급자', i.provider),
     has('model') && field('모델', i.model),
     has('temperature') && field('temperature', i.temperature),
     has('maxTokens') && field('최대 토큰', i.maxTokens),
-    has('summary') && field('지난 대화 요약', i.summary, 'wide'),
+    has('summary') && field('지난 세션 카드', i.summary, 'wide'),
+    has('facts') && field('캐릭터가 아는 사실 (답장 전에 결정 모델이 하나를 고름)', i.facts, 'wide'),
     has('memories') && field('일정 (한 줄에 하나)', i.memories, 'wide'),
     has('pinnedPrompts') && field('프롬프트 버전 고정 (키 → 버전 id, JSON)', i.pinnedPrompts, 'wide'),
     has('engine') && h('div', {class: 'f wide'}, h('span', null, '대화 엔진 (ENGINE 파이프라인만 · 비우면 기본값)'),
@@ -257,6 +259,7 @@ function configEditor(cfg, fields = [...USER_F, ...MODEL_F], title = '실험 조
     if (has('nickname')) o.nickname = txt(i.nickname);
     if (has('relationLevel')) o.relationLevel = nv(i.relationLevel);
     if (has('summary')) o.summary = txt(i.summary);
+    if (has('facts')) { const f = lines(i.facts.value); o.facts = f.length ? f : null; }
     if (has('memories')) { const m = lines(i.memories.value); o.memories = m.length ? m : null; }
     if (has('provider')) o.provider = i.provider.value || null;
     if (has('model')) o.model = txt(i.model);
@@ -464,7 +467,7 @@ function chatTab() {
 
 /* ---------- 2. 한 번 실행 ---------- */
 function playTab() {
-  const kinds = [['chat', '답장 (chat)'], ['reaction', '상태 반응 (reaction)'], ['summary', '요약 합치기 (summary)'], ['closing', '완료 대사 (closing)']];
+  const kinds = [['chat', '답장 (chat)'], ['memory', '기억 만들기 미리보기 (memory)'], ['reaction', '상태 반응 AI (reaction, 서비스는 꺼짐)'], ['summary', '세션 카드 (summary)'], ['closing', '완료 대사 AI (closing)']];
   const kind = sel(kinds, 'chat', {onchange: sync}), ch = charSel(), repeat = h('input', {type: 'number', min: 1, max: 10, value: 1}), cfg = configEditor();
   const pipe = sel(META.pipelines, META.defaultPipeline), msg = h('textarea', {rows: 2, placeholder: '사용자 말'});
   const hist = historyEditor('대화 기록 (chat: 앞선 대화 · reaction: 이번 공부에서 방금 나눈 대화, 최근 몇 줄만 들어감 · summary: 요약에 합칠 대화)');
@@ -472,7 +475,8 @@ function playTab() {
   const prev = h('textarea', {rows: 3, placeholder: '비우면 첫 요약'}), secs = h('input', {type: 'number', min: 0, value: 3300}), endT = sel(['NORMAL', 'AUTO_CLOSED'], 'NORMAL');
   const parts = {pipe: field('파이프라인', pipe), msg: field('메시지', msg, 'wide'), hist: hist.el, trig: field('트리거', trig), inten: field('강도 (AWAY만)', inten),
     prev: field('지난 요약', prev, 'wide'), secs: field('공부한 시간 (초)', secs), endT: field('종료 방식', endT)};
-  const shown = {chat: ['pipe', 'msg', 'hist'], reaction: ['trig', 'inten', 'hist'], summary: ['prev', 'hist'], closing: ['secs', 'endT']};
+  // memory: 실험 조건의 '캐릭터가 아는 사실'을 이미 아는 기억으로 보고 결정 · 한 줄을 보여 준다 (저장 안 함)
+  const shown = {chat: ['pipe', 'msg', 'hist'], memory: ['msg', 'hist'], reaction: ['trig', 'inten', 'hist'], summary: ['prev', 'hist'], closing: ['secs', 'endT']};
   function sync() {
     for (const [k, el] of Object.entries(parts)) el.hidden = !shown[kind.value].includes(k) || (k === 'inten' && trig.value !== 'AWAY');
   }
@@ -481,7 +485,7 @@ function playTab() {
   const runBtn = h('button', {class: 'primary', onclick: () => busy(runBtn, async () => {
     const k = kind.value, is = (...ks) => ks.includes(k);
     const body = {kind: k, characterId: Number(ch.value), repeat: clampInt(repeat.value, 1, 10), config: cfg.get(),
-      pipeline: is('chat') ? pipe.value : null, message: is('chat') ? msg.value.trim() : null, history: is('chat', 'reaction', 'summary') ? hist.get() : null,
+      pipeline: is('chat') ? pipe.value : null, message: is('chat', 'memory') ? msg.value.trim() : null, history: is('chat', 'memory', 'reaction', 'summary') ? hist.get() : null,
       trigger: is('reaction') ? trig.value : null, intensity: is('reaction') && trig.value === 'AWAY' ? Number(inten.value) : null,
       previousSummary: is('summary') ? prev.value.trim() || null : null, studySeconds: is('closing') ? Number(secs.value) : null, endType: is('closing') ? endT.value : null};
     out.replaceChildren(muted(`${body.repeat}번 실행 중…`));
@@ -492,7 +496,8 @@ function playTab() {
       + ` · 5초 초과 ${rs.filter(r => r.overBudget).length}번 · 실패 ${rs.filter(r => r.error).length}번`);
     head.classList.add('wide');
     out.replaceChildren(head, ...rs.map(r => {
-      const o = r.output || {}, text = {chat: o.reply, reaction: o.content, summary: o.summary, closing: o.closingLine}[k];
+      const o = r.output || {}, text = {chat: o.reply, reaction: o.content, summary: o.summary, closing: o.closingLine,
+        memory: `${o.choice ?? '-'}${o.confidence != null ? ` (확신 ${o.confidence})` : ''}${o.line ? ` → ${o.line}` : ''}${o.overflow ? ' · 20개 넘음: 하나 버림' : ''}`}[k];
       return h('div', {class: 'card'},
         h('div', {class: 'strong'}, '#' + r.n),
         r.error && h('div', {class: 'errbox'}, r.error),

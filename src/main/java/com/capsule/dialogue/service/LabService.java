@@ -98,6 +98,7 @@ public class LabService {
     private final ChatScorer scorer;
     private final ReactionWriter reactionWriter;
     private final ClosingWriter closingWriter;
+    private final MemoryKeeper memoryKeeper;
     private final LlmGateway gateway;
     private final CharacterQuery characters;
     private final RoomQuery rooms;
@@ -115,6 +116,7 @@ public class LabService {
             ChatScorer scorer,
             ReactionWriter reactionWriter,
             ClosingWriter closingWriter,
+            MemoryKeeper memoryKeeper,
             LlmGateway gateway,
             CharacterQuery characters,
             RoomQuery rooms,
@@ -130,6 +132,7 @@ public class LabService {
         this.scorer = scorer;
         this.reactionWriter = reactionWriter;
         this.closingWriter = closingWriter;
+        this.memoryKeeper = memoryKeeper;
         this.gateway = gateway;
         this.characters = characters;
         this.rooms = rooms;
@@ -343,6 +346,16 @@ public class LabService {
                                 r.endType() == null ? "NORMAL" : r.endType(),
                                 pinned,
                                 ctx));
+            // 기억 만들기 미리보기: 실험 조건의 '아는 사실' + 대화 기록 + 사용자 말 → 결정(무시 · 저장 · 고치기 · 지우기)과 쓸 한 줄. 저장하지 않음
+            case "memory" -> {
+                String message = required(r.message(), "message");
+                yield ctx -> memoryKeeper.preview(
+                        c,
+                        config.factsOrEmpty(),
+                        history.subList(Math.max(0, history.size() - ChatReplier.CONTEXT_LINES), history.size()),
+                        message,
+                        ctx);
+            }
             default -> throw new ApiException(HttpStatus.BAD_REQUEST, "UNKNOWN_KIND");
         };
         int n = Math.max(1, Math.min(10, r.repeat() == null ? 1 : r.repeat()));

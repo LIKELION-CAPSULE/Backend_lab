@@ -75,6 +75,22 @@ class CharacterContentTest {
     }
 
     @Test
+    void labPreviewsMemoryDecisionWithoutSaving() throws Exception {
+        // Fake 결정 모델은 첫 보기(무시)를 고른다. 개인정보 숫자는 묻지도 않는다
+        String body = "{\"kind\":\"memory\",\"characterId\":1,\"message\":\"나 이번 달 토익 800 목표야\","
+                + "\"config\":{\"facts\":[\"사용자는 밤에 공부가 잘 됨\"]}}";
+        mvc.perform(post("/internal/llm-lab/api/playground")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].output.choice").value("NOOP"));
+        mvc.perform(post("/internal/llm-lab/api/playground")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body.replace("토익 800 목표야", "번호 010-1234-5678")))
+                .andExpect(jsonPath("$[0].output.choice").value(org.hamcrest.Matchers.startsWith("SKIPPED")));
+    }
+
+    @Test
     void labCanEditAndReseedWithoutCodeChanges() throws Exception {
         String json = mvc.perform(get(API + "/1/content"))
                 .andExpect(status().isOk())

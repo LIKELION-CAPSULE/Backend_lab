@@ -104,9 +104,12 @@ public class MemoryKeeper {
                 || userMessage.isBlank()
                 || PRIVATE.matcher(userMessage).find()) return;
         List<CharacterMemory> known = memories.findByUserIdAndCharacterIdOrderById(userId, character.id());
-        Decision d = decider.decide(
-                        state(character, known, recent, userMessage), Map.of(KEEP, keepQuestion(known)), ctx)
-                .get(KEEP);
+        Decision d = decide(
+                character,
+                known.stream().map(m -> new Known(m.id(), m.content())).toList(),
+                recent,
+                userMessage,
+                ctx);
         if (d == null || NOOP.equals(d.choice())) return;
         String op = d.choice();
         Optional<CharacterMemory> target =
@@ -169,8 +172,46 @@ public class MemoryKeeper {
         return line.length() > MAX_LENGTH ? line.substring(0, MAX_LENGTH) : line;
     }
 
-    static String state(
-            CharacterInfo character, List<CharacterMemory> known, List<ChatLine> recent, String userMessage) {
+    /** 이미 아는 사실 (id는 결정 보기 이름에 쓰임) */
+    record Known(long id, String content) {}
+
+    /**
+     * 실험실 미리보기: 저장하지 않고 결정과 쓸 한 줄만 보여 준다 (서비스와 같은 질문 · 같은 프롬프트).
+     *
+     * @param facts 이미 아는 사실 (실험 조건). id는 1부터 순서대로
+     */
+    public Map<String, Object> preview(
+            CharacterInfo character, List<String> facts, List<ChatLine> recent, String userMessage, LlmContext ctx) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        if (userMessage == null
+                || userMessage.isBlank()
+                || PRIVATE.matcher(userMessage).find()) {
+            out.put("choice", "SKIPPED (개인정보 숫자 · 빈 말)");
+            return out;
+        }
+        List<Known> known = new java.util.ArrayList<>();
+        for (int i = 0; i < facts.size(); i++) known.add(new Known(i + 1, facts.get(i)));
+        Decision d = decide(character, known, recent, userMessage, ctx);
+        out.put("choice", d == null ? null : d.choice());
+        out.put("confidence", d == null ? null : d.confidence());
+        if (d == null || NOOP.equals(d.choice()) || d.choice().startsWith("DELETE_")) return out;
+        String current = known.stream()
+                .filter(k -> d.choice().endsWith("_" + k.id()))
+                .map(Known::content)
+                .findFirst()
+                .orElse(null);
+        out.put("line", write(character, current, recent, userMessage, ctx));
+        out.put("overflow", current == null && known.size() + 1 > props.memoryMax());
+        return out;
+    }
+
+    private Decision decide(
+            CharacterInfo character, List<Known> known, List<ChatLine> recent, String userMessage, LlmContext ctx) {
+        return decider.decide(state(character, known, recent, userMessage), Map.of(KEEP, keepQuestion(known)), ctx)
+                .get(KEEP);
+    }
+
+    static String state(CharacterInfo character, List<Known> known, List<ChatLine> recent, String userMessage) {
         String facts = known.isEmpty()
                 ? "없음"
                 : known.stream().map(m -> "#" + m.id() + " " + m.content()).collect(Collectors.joining("\n"));
@@ -181,11 +222,11 @@ public class MemoryKeeper {
     }
 
     // TODO(judgment): J-13 기억할 가치 기준 (임시: 아래 보기 설명). 실험실 평가로 다듬는다
-    static Decider.Question keepQuestion(List<CharacterMemory> known) {
+    static Decider.Question keepQuestion(List<Known> known) {
         Map<String, String> criteria = new LinkedHashMap<>();
         criteria.put(NOOP, "기억할 것이 없다: 인사, 잡담, 맞장구, 공부 문제 내용 자체, 그때뿐인 상태(배고파), 이미 아는 사실 그대로, 사용자 일정에 따로 있는 시험 · 약속 날짜");
         criteria.put(ADD, "새로 기억할 사실이 있다: 목표 · 계획, 이어지는 고민 · 감정, 취향 · 습관, 캐릭터와 한 약속, 자기 이야기(학년, 전공, 불러 달라는 이름)");
-        for (CharacterMemory m : known) {
+        for (Known m : known) {
             criteria.put("UPDATE_" + m.id(), "이미 아는 사실 #" + m.id() + "(" + m.content() + ")에 새 내용을 더하거나 바뀐 내용으로 고친다");
             criteria.put(
                     "DELETE_" + m.id(), "이미 아는 사실 #" + m.id() + "(" + m.content() + ")가 이제 틀렸다 (그만뒀다, 취소했다, 아니라고 했다)");
