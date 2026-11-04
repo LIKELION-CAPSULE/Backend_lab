@@ -161,7 +161,7 @@ CREATE TABLE avatars (
     id            bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     model_id      bigint      NOT NULL UNIQUE REFERENCES live2d_models (id),
     name          text        NOT NULL,                  -- 예: 아바타 A
-    thumbnail_url text        NOT NULL,                  -- 선택 화면 카드
+    thumbnail_url text        NOT NULL,                  -- 선택 화면 카드. 이미지 칸(*_url)은 CDN 상대 경로(예: haru/thumbnail.png) 또는 전체 URL. 상대 경로면 서버가 CDN 주소를 붙여 내려줌 (2026-11-05)
     sort_order    int         NOT NULL DEFAULT 0,
     is_active     boolean     NOT NULL DEFAULT true,     -- 고른 사용자가 있으니 지우지 말고 비활성화
     created_at    timestamptz NOT NULL DEFAULT now()
@@ -178,7 +178,7 @@ CREATE TABLE study_rooms (
     id            bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     name          text        NOT NULL,
     description   text,
-    thumbnail_url text,
+    thumbnail_url text,                                  -- CDN 상대 경로 또는 전체 URL (avatars.thumbnail_url과 같은 규칙)
     sort_order    int         NOT NULL DEFAULT 0,
     is_active     boolean     NOT NULL DEFAULT true,
     created_at    timestamptz NOT NULL DEFAULT now()
@@ -188,7 +188,7 @@ CREATE TABLE room_backgrounds (
     id           bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     room_id      bigint  NOT NULL REFERENCES study_rooms (id) ON DELETE CASCADE,
     name         text    NOT NULL,
-    image_url    text    NOT NULL,
+    image_url    text    NOT NULL,                          -- CDN 상대 경로 또는 전체 URL (avatars.thumbnail_url과 같은 규칙)
     is_default   boolean NOT NULL DEFAULT false,
     unlock_type  text    CHECK (unlock_type IN ('LEVEL')),  -- NULL이면 처음부터 열림 (구매는 BM 확정 후 추가)
     unlock_value int,                                       -- LEVEL이면 이 룸 캐릭터와의 필요 관계 단계
@@ -210,7 +210,7 @@ CREATE TABLE characters (
     name              text        NOT NULL,
     personality       text[]      NOT NULL DEFAULT '{}',   -- 성격 태그 (예: {츤데레, 슬리데린 5학년, 라이벌}), 순서대로 표시
     intro             text,
-    profile_image_url text,
+    profile_image_url text,                                -- CDN 상대 경로 또는 전체 URL (avatars.thumbnail_url과 같은 규칙)
     sort_order        int         NOT NULL DEFAULT 0,      -- 룸 안 표시 순서
     is_active         boolean     NOT NULL DEFAULT true,
     created_at        timestamptz NOT NULL DEFAULT now(),
