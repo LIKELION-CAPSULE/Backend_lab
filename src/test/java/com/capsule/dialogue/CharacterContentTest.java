@@ -60,7 +60,7 @@ class CharacterContentTest {
                 .doesNotContain("callback");
         assertThat(c.habits()).containsEntry("흥", CharacterContent.NO_OPENING);
         assertThat(c.rules()).contains("정답을 물으면 정답"); // PM: 답 대신 힌트만 → 정답은 정답, 힌트는 힌트
-        assertThat(c.fallbackExpression("화남")).isEqualTo("화남"); // 8개 모두 에셋이 있어 대체 표정 없음
+        assertThat(c.fallbackExpression("화남")).isEqualTo("화남"); // 8개 모두 에셋이 있어 목록 안 표정은 그대로
     }
 
     @Test

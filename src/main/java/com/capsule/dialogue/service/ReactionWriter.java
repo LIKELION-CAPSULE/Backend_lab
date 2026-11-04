@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
@@ -93,7 +94,7 @@ public class ReactionWriter {
                 List.of(new Llm.ChatTurn("user", "지금 상황에 맞는 한마디를 해 줘.")),
                 ctx.withPrompts(PromptVars.ids(List.of(system, lines))),
                 null);
-        return parse(r, props.emotions());
+        return parse(r, e -> PromptVars.emotion(e, props.emotions()));
     }
 
     /** 캐릭터 설정이 있는 캐릭터: 답장과 같은 고정 블록 + 반응 카드. 표정은 그 캐릭터의 표정 목록에서 */
@@ -135,7 +136,7 @@ public class ReactionWriter {
                 messages,
                 ctx.withPrompts(List.of(system.id())),
                 null);
-        return parse(r, c.expressions());
+        return parse(r, c::emotion);
     }
 
     /** 상태 반응의 상황 카드. 지난 세션 흐름 · 오늘 근황이 있으면 다시 만난 사이처럼 (공부 시작 인사) */
@@ -159,11 +160,11 @@ public class ReactionWriter {
     }
 
     /** 장면 블록은 {reply, emotion}, 공통 프롬프트는 {content, emotion} */
-    private static ReactionLine parse(Llm.Result r, List<String> emotions) {
+    private static ReactionLine parse(Llm.Result r, UnaryOperator<String> emotion) {
         JsonNode json = LlmJson.objectIn(r.text());
         String content = json == null ? null : LlmJson.str(json.path("reply"));
         if (content == null && json != null) content = LlmJson.str(json.path("content"));
         if (content == null || content.isBlank()) throw new IllegalStateException("반응 대사 형식 오류: " + r.text());
-        return new ReactionLine(content.strip(), PromptVars.emotion(LlmJson.str(json.path("emotion")), emotions));
+        return new ReactionLine(content.strip(), emotion.apply(LlmJson.str(json.path("emotion"))));
     }
 }

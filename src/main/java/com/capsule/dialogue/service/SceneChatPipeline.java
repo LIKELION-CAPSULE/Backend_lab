@@ -93,11 +93,13 @@ class SceneChatPipeline implements ChatPipeline {
 
         JsonNode json = LlmJson.objectIn(r.text());
         boolean truncated = "max_tokens".equals(r.stopReason()) || "length".equals(r.stopReason());
-        if (json == null && (truncated || r.text().strip().startsWith("{")))
+        // 앞이 잘린 JSON(`…","emotion":"경멸"}`)도 깨진 것: 그대로 두면 말풍선에 JSON 꼬리가 나간다
+        if (json == null
+                && (truncated || r.text().strip().startsWith("{") || r.text().contains("\"emotion\"")))
             throw new IllegalStateException("답장 JSON이 깨짐 (stop_reason=" + r.stopReason() + "): " + r.text());
         String reply = json != null ? LlmJson.str(json.path("reply")) : r.text();
         if (reply == null || reply.isBlank()) throw new IllegalStateException("빈 답장: " + r.text());
-        String emotion = json == null ? null : PromptVars.emotion(LlmJson.str(json.path("emotion")), c.expressions());
+        String emotion = json == null ? null : c.emotion(LlmJson.str(json.path("emotion")));
 
         Map<String, Object> trace = new LinkedHashMap<>();
         trace.put("pipeline", SCENE);

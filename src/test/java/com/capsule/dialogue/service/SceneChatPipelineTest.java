@@ -109,6 +109,16 @@ class SceneChatPipelineTest {
     }
 
     @Test
+    void offListEmotionMapsToTheNearestExpression() {
+        // 최종 검토에서 모델이 쓴 '걱정' · '질투'는 표정이 비었다 → 가까운 표정으로, 모르는 말은 null
+        assertThat(MALFOY.emotion("삐짐")).isEqualTo("삐짐");
+        assertThat(MALFOY.emotion(" 걱정 ")).isEqualTo("집중");
+        assertThat(MALFOY.emotion("질투")).isEqualTo("삐짐");
+        assertThat(MALFOY.emotion("SAD")).isNull();
+        assertThat(MALFOY.emotion(null)).isNull();
+    }
+
+    @Test
     void todayNotePicksTheWeekday() {
         // 2026-11-05는 목요일 → TODAY 네 번째 줄
         java.time.Clock thursday =
