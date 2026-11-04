@@ -16,7 +16,7 @@ import org.junit.jupiter.api.Test;
 /** 장면 카드에 이번 턴에 쓸 것만 들어가는지 (DB 없이, 말포이 처음 값으로) */
 class SceneChatPipelineTest {
 
-    static final CharacterContent MALFOY = CharacterContentSeeder.load("malfoy");
+    static final CharacterContent MALFOY = CharacterContentSeeder.load("malfoy", 1);
 
     static ChatInput input(String message, List<ChatLine> history, List<String> facts) {
         return input(message, history, facts, false);

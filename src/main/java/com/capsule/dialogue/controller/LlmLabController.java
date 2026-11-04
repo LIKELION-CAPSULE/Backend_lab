@@ -98,10 +98,10 @@ class LlmLabController {
     /** git의 처음 값(classpath:characters/{code}/)으로 덮어쓴다 */
     @PostMapping("/api/characters/reseed/{code}")
     CharacterContent reseed(@PathVariable String code) {
-        if (!seeder.seed(code, true)) throw new ApiException(HttpStatus.NOT_FOUND, "CHARACTER_NOT_FOUND");
-        CharacterContent c = CharacterContentSeeder.load(code);
-        contents.evict(c.characterId());
-        return content(c.characterId());
+        long id = seeder.seed(code, true)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "CHARACTER_NOT_FOUND"));
+        contents.evict(id);
+        return content(id);
     }
 
     @GetMapping({"", "/"})

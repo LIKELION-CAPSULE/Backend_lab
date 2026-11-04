@@ -40,9 +40,19 @@ public class CharacterContentRepository {
         this.jdbc = JdbcClient.create(jdbcTemplate);
     }
 
-    public boolean exists(long characterId) {
+    /** 이 캐릭터에 설정이 있는지 (어느 폴더에서 왔든) */
+    public boolean existsCharacter(long characterId) {
         return jdbc.sql("SELECT count(*) FROM character_profiles WHERE character_id = ?")
                         .param(characterId)
+                        .query(Integer.class)
+                        .single()
+                > 0;
+    }
+
+    /** 이 콘텐츠 폴더(code)의 설정이 이미 들어갔는지 */
+    public boolean existsCode(String code) {
+        return jdbc.sql("SELECT count(*) FROM character_profiles WHERE code = ?")
+                        .param(code)
                         .query(Integer.class)
                         .single()
                 > 0;
@@ -154,10 +164,26 @@ public class CharacterContentRepository {
                 habits));
     }
 
-    /** 이 캐릭터의 설정을 통째로 바꾼다. 세계(code 기준)는 있으면 고치고 지식 · 사건은 다시 넣는다 (같은 세계의 다른 캐릭터도 같이 바뀜) */
+    /** 이 캐릭터의 설정을 통째로 바꾼다 (실험실 저장). 세계(code 기준)는 있으면 고치고 지식 · 사건은 다시 넣는다 (같은 세계의 다른 캐릭터도 같이 바뀜) */
     @Transactional
     public void replace(CharacterContent c) {
-        World w = c.world();
+        replace(c, true);
+    }
+
+    /** writeWorld가 false면 같은 code의 세계가 이미 있을 때 그대로 쓴다 (세계 지식 · 사건을 덮지 않음). 없으면 새로 넣는다 */
+    @Transactional
+    public void replace(CharacterContent c, boolean writeWorld) {
+        Optional<Long> kept = writeWorld
+                ? Optional.empty()
+                : jdbc.sql("SELECT id FROM worlds WHERE code = ?")
+                        .param(c.world().code())
+                        .query(Long.class)
+                        .optional();
+        long worldId = kept.isPresent() ? kept.get() : writeWorld(c.world());
+        replaceCharacter(c, worldId);
+    }
+
+    private long writeWorld(World w) {
         long worldId = jdbc.sql("""
                         INSERT INTO worlds (code, name, setting) VALUES (?, ?, ?)
                         ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, setting = EXCLUDED.setting, updated_at = now()
@@ -181,10 +207,14 @@ public class CharacterContentRepository {
                     .params(worldId, e.code(), e.text(), e.hook(), e.loreCode(), Math.max(1, e.weight()))
                     .update();
         }
+        return worldId;
+    }
 
+    private void replaceCharacter(CharacterContent c, long worldId) {
         long id = c.characterId();
-        jdbc.sql("DELETE FROM character_profiles WHERE character_id = ?")
-                .param(id)
+        // 같은 폴더(code)가 다른 캐릭터에 붙어 있었으면 그것도 지운다 (reseed가 다른 캐릭터로 옮길 때 code UNIQUE 위반 방지)
+        jdbc.sql("DELETE FROM character_profiles WHERE character_id = ? OR code = ?")
+                .params(id, c.code())
                 .update(); // 하위 행은 CASCADE
         jdbc.sql("""
                         INSERT INTO character_profiles
