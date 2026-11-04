@@ -1,6 +1,6 @@
 -- 로컬·테스트 전용 예시 시드 (skeleton-plan A6). local/test 프로필에서만 Flyway가 읽는다. 배포 DB에는 들어가지 않음
 -- 반복 마이그레이션(R__): 내용이 바뀌면 다시 실행되므로 다시 실행해도 안전하게 쓴다
--- 값은 api.md 예시(룸 1 · 채린 · 기본 아바타). 이미지 주소는 가짜(.invalid). 실제 에셋은 정식 마이그레이션으로 따로 넣을 것
+-- 값은 api.md 예시(룸 1 · 캐릭터 1 · 기본 아바타). 캐릭터 1은 첫 캐릭터 말포이(PM 2026-11-04, 이름만 바꾸고 모델 · 이미지는 그대로). 이미지 주소는 가짜(.invalid). 실제 에셋은 정식 마이그레이션으로 따로 넣을 것
 
 INSERT INTO live2d_models (id, storage_prefix, model_json_path, scale, offset_x, offset_y) OVERRIDING SYSTEM VALUE
 VALUES (1, 'live2d/chaerin/v1/', 'chaerin.model3.json', 1.00, 0, 12),
@@ -49,7 +49,7 @@ ON CONFLICT (id) DO UPDATE SET room_id = EXCLUDED.room_id, name = EXCLUDED.name,
 
 INSERT INTO characters (id, room_id, model_id, name, personality, intro, profile_image_url, sort_order)
     OVERRIDING SYSTEM VALUE
-VALUES (1, 1, 1, '채린', '{츤데레, 같은 반 친구}', '차갑게 굴지만 나한테만 다정한 짝꿍',
+VALUES (1, 1, 1, '말포이', '{츤데레, 같은 반 친구}', '차갑게 굴지만 나한테만 다정한 짝꿍',
         'https://cdn.capsule.invalid/chaerin.png', 1)
 ON CONFLICT (id) DO UPDATE SET room_id = EXCLUDED.room_id, model_id = EXCLUDED.model_id, name = EXCLUDED.name,
     personality = EXCLUDED.personality, intro = EXCLUDED.intro, profile_image_url = EXCLUDED.profile_image_url,
