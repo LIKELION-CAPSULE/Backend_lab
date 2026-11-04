@@ -9,8 +9,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.capsule.TestcontainersConfiguration;
 import com.capsule.dialogue.client.LlmJson;
+import com.capsule.dialogue.config.CharacterContentSeeder;
 import com.capsule.dialogue.dto.CharacterContent;
+import com.capsule.dialogue.dto.CharacterContent.Lore;
+import com.capsule.dialogue.dto.CharacterContent.World;
+import com.capsule.dialogue.repository.CharacterContentRepository;
 import com.capsule.dialogue.service.CharacterContents;
+import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -34,6 +40,12 @@ class CharacterContentTest {
 
     @Autowired
     MockMvc mvc;
+
+    @Autowired
+    CharacterContentRepository repository;
+
+    @Autowired
+    CharacterContentSeeder seeder;
 
     @Test
     void malfoyIsSeededIntoTheDatabase() {
@@ -124,5 +136,53 @@ class CharacterContentTest {
 
         mvc.perform(post(API + "/reseed/malfoy")).andExpect(status().isOk());
         assertThat(contents.find(1).orElseThrow().bible()).doesNotContain("'흠'으로");
+    }
+
+    @Test
+    void firstSeedKeepsAnExistingWorldAndFindsTheCharacterByName() {
+        CharacterContent git = CharacterContentSeeder.load("malfoy", 1);
+        World w = git.world();
+        World edited = new World(
+                w.code(),
+                w.name(),
+                w.setting(),
+                List.of(new Lore("lab_only", "실험 카드", List.of("실험"), "실험실에서 고친 지식")),
+                List.of());
+        Optional<Long> reseeded;
+        try {
+            repository.replace(withWorld(git, edited)); // 실험실에서 세계 지식을 고침
+            repository.replace(git, false); // 같은 세계의 다른 캐릭터를 처음 불러올 때와 같다
+            assertThat(repository.find(1).orElseThrow().world().lore())
+                    .extracting(Lore::code)
+                    .containsExactly("lab_only");
+            assertThat(seeder.seed("malfoy", false)).isEmpty(); // 이미 있으면 파일을 읽지 않고 건너뜀
+        } finally {
+            reseeded = seeder.seed("malfoy", true); // 이름(말포이)으로 캐릭터 1을 찾아 git 값으로 되돌림 (다른 테스트를 위해 항상)
+            contents.evict(1);
+        }
+        assertThat(reseeded).contains(1L);
+        assertThat(repository.find(1).orElseThrow().world().lore())
+                .extracting(Lore::code)
+                .contains("pince");
+    }
+
+    private static CharacterContent withWorld(CharacterContent c, World world) {
+        return new CharacterContent(
+                c.characterId(),
+                c.code(),
+                c.speaker(),
+                c.bible(),
+                c.rules(),
+                c.safety(),
+                c.expressions(),
+                c.expressionFallbacks(),
+                c.stageTones(),
+                c.studyStyle(),
+                c.breakStyle(),
+                world,
+                c.moves(),
+                c.lines(),
+                c.scores(),
+                c.habits());
     }
 }
