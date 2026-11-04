@@ -67,6 +67,12 @@ public class User {
         this.lastLoginAt = now;
     }
 
+    /** 비밀번호 재설정 (api.md 26). passwordHash = bcrypt 해시 */
+    public void changePassword(String passwordHash, Instant now) {
+        this.password = passwordHash;
+        this.updatedAt = now;
+    }
+
     public void updateProfile(String nickname, long avatarId, Instant now) {
         this.nickname = nickname;
         this.avatarId = avatarId;

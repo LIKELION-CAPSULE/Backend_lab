@@ -51,22 +51,41 @@ public class TokenService {
                 .getTokenValue();
         String refreshToken = randomToken();
         redis.opsForValue().set(refreshKey(refreshToken), Long.toString(userId), props.refreshTokenTtl());
+        // 발급 시각은 따로 둔다. 값 형식(사용자 id)을 바꾸지 않아서 이전 버전으로 되돌려도 토큰이 그대로 돈다 (revokeAll)
+        redis.opsForValue().set(issuedAtKey(refreshToken), Long.toString(now.toEpochMilli()), props.refreshTokenTtl());
         return new Issued(accessToken, cookie(refreshToken, props.refreshTokenTtl()));
     }
 
-    /** 옛 토큰은 지우고(GETDEL) 새로 발급. 이미 쓴 토큰을 다시 내면 401 */
+    /** 옛 토큰은 지우고(GETDEL) 새로 발급. 이미 쓴 토큰 · 모두 로그아웃(revokeAll) 전에 받은 토큰이면 401 */
     public Issued rotate(String refreshToken) {
-        String userId = refreshToken == null ? null : redis.opsForValue().getAndDelete(refreshKey(refreshToken));
-        if (userId == null) {
+        String saved = refreshToken == null ? null : redis.opsForValue().getAndDelete(refreshKey(refreshToken));
+        if (saved == null) {
             throw new ApiException(HttpStatus.UNAUTHORIZED, "REFRESH_TOKEN_INVALID");
         }
-        return issue(Long.parseLong(userId));
+        long userId = Long.parseLong(saved);
+        String issued = redis.opsForValue().getAndDelete(issuedAtKey(refreshToken));
+        long issuedAt = issued == null ? 0 : Long.parseLong(issued); // 발급 시각이 없는 옛 토큰은 가장 오래된 것으로
+        String revokedAt = redis.opsForValue().get(revokedAtKey(userId));
+        if (revokedAt != null && issuedAt <= Long.parseLong(revokedAt)) {
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "REFRESH_TOKEN_INVALID");
+        }
+        return issue(userId);
+    }
+
+    /**
+     * 그 사용자의 리프레시 토큰을 모두 무효로 (api.md 26 비밀번호 재설정 뒤 모든 기기 로그아웃).
+     * 토큰을 하나씩 찾지 않고 '이 시각 전에 받은 토큰은 무효'를 남긴다. 리프레시 토큰 유효기간이 지나면 기록도 지워진다.
+     * 액세스 토큰(30분)은 만료될 때까지 그대로 쓰인다
+     */
+    public void revokeAll(long userId) {
+        redis.opsForValue()
+                .set(revokedAtKey(userId), Long.toString(Instant.now(clock).toEpochMilli()), props.refreshTokenTtl());
     }
 
     /** 리프레시 토큰을 지우고, 쿠키를 비우는 Set-Cookie 값을 돌려준다 */
     public String revoke(String refreshToken) {
         if (refreshToken != null) {
-            redis.delete(refreshKey(refreshToken));
+            redis.delete(java.util.List.of(refreshKey(refreshToken), issuedAtKey(refreshToken)));
         }
         return cookie("", Duration.ZERO);
     }
@@ -90,5 +109,13 @@ public class TokenService {
 
     private static String refreshKey(String token) {
         return "auth:refresh:" + token;
+    }
+
+    private static String issuedAtKey(String token) {
+        return "auth:refresh-issued-at:" + token;
+    }
+
+    private static String revokedAtKey(long userId) {
+        return "auth:refresh-revoked-at:" + userId;
     }
 }

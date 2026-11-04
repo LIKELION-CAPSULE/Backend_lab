@@ -53,11 +53,26 @@ class BrevoEmailSender implements EmailSender {
 
     @Override
     public void sendVerificationCode(String email, String code) {
+        send(email, "[캡슐] 이메일 인증번호 " + code, text(code));
+        log.info("인증 메일 발송 요청 완료"); // 주소 · 번호는 남기지 않는다
+    }
+
+    @Override
+    public void sendPasswordResetLink(String email, String link) {
+        send(email, "[캡슐] 비밀번호 재설정", resetText(link));
+        log.info("비밀번호 재설정 메일 발송 요청 완료"); // 주소 · 링크(토큰)는 남기지 않는다
+    }
+
+    private void send(String email, String subject, String textContent) {
         Map<String, Object> body = Map.of(
-                "sender", Map.of("name", SENDER_NAME, "email", from),
-                "to", List.of(Map.of("email", email)),
-                "subject", "[캡슐] 이메일 인증번호 " + code,
-                "textContent", text(code));
+                "sender",
+                Map.of("name", SENDER_NAME, "email", from),
+                "to",
+                List.of(Map.of("email", email)),
+                "subject",
+                subject,
+                "textContent",
+                textContent);
         rest.post()
                 .uri(SEND_URL)
                 .header("api-key", apiKey)
@@ -66,7 +81,17 @@ class BrevoEmailSender implements EmailSender {
                 .body(body)
                 .retrieve()
                 .toBodilessEntity();
-        log.info("인증 메일 발송 요청 완료"); // 주소 · 번호는 남기지 않는다
+    }
+
+    static String resetText(String link) {
+        return """
+                캡슐 비밀번호 재설정을 요청하셨어요.
+                아래 링크에서 30분 안에 새 비밀번호를 설정해 주세요.
+
+                %s
+
+                본인이 요청하지 않았다면 이 메일은 무시해 주세요. 비밀번호는 바뀌지 않아요.
+                """.formatted(link);
     }
 
     static String text(String code) {

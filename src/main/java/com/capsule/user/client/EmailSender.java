@@ -4,4 +4,7 @@ package com.capsule.user.client;
 public interface EmailSender {
 
     void sendVerificationCode(String email, String code);
+
+    /** 비밀번호 재설정 링크 (api.md 25). link에 재설정 토큰이 들어 있다 */
+    void sendPasswordResetLink(String email, String link);
 }

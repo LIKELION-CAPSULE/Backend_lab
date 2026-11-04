@@ -36,4 +36,17 @@ public class FakeEmailSender implements EmailSender {
     public Optional<String> lastCode(String email) {
         return Optional.ofNullable(codes.get(email.strip().toLowerCase(Locale.ROOT)));
     }
+
+    private final Map<String, String> resetLinks = new ConcurrentHashMap<>();
+
+    @Override
+    public void sendPasswordResetLink(String email, String link) {
+        resetLinks.put(email, link);
+        log.info("Fake 메일: 비밀번호 재설정 링크 발송 {}", email); // 링크(토큰)는 찍지 않는다
+    }
+
+    /** 테스트가 재설정 링크(토큰 포함)를 읽는다. 보낸 적이 없으면 빈 값 */
+    public Optional<String> lastResetLink(String email) {
+        return Optional.ofNullable(resetLinks.get(email.strip().toLowerCase(Locale.ROOT)));
+    }
 }
