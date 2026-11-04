@@ -23,6 +23,7 @@ import com.capsule.dialogue.dto.UsageView;
 import com.capsule.dialogue.service.EvalService;
 import com.capsule.dialogue.service.LabService;
 import com.capsule.dialogue.service.PromptService;
+import io.swagger.v3.oas.annotations.Hidden;
 import jakarta.validation.Valid;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -49,7 +50,9 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * LLM 실험실 (내부 품질 테스트, ADR 0021). capsule.llm.lab.enabled=true일 때만 생긴다 (local 기본 켬, 운영 끔).
  * 화면: GET /internal/llm-lab. 요청 예시: http/llm-lab.http
+ * 명세(api.md) 밖의 내부 도구라 Swagger에서 뺀다 (SwaggerTest: Swagger에는 명세 API만)
  */
+@Hidden
 @RestController
 @RequestMapping("/internal/llm-lab")
 @ConditionalOnProperty(name = "capsule.llm.lab.enabled", havingValue = "true")
