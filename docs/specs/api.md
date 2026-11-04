@@ -1390,7 +1390,7 @@ json
 | relation | Object | `levelBefore` · `levelAfter` · `levelUp`(공부 시간 레벨, 이 세션 자리 지킴 시간 반영) · `nextLevelSeconds`(다음 레벨이 되는 누적 자리 지킴 시간) · `pointsBefore`(공부 시작 때) · `pointsAfter`(이벤트 · 대화 반영 후) · `stage` · `stageName`(끝날 때 관계 단계) · `levelName`(옛 필드, `stageName`과 같은 값) · `nextLevelPoints`(옛 필드, 늘 null) |
 
 > 2026-11-04 (호감도 최종안): 공부 시간은 호감도를 올리지 않고 레벨에만 씀. 레벨 = 자리 지킴 60분당 1 (임시, PM 확인 필요)
-| closingLine | String | 완료 대사 (리포트 · 카드 공용). 캐릭터 설정에 완료 대사(`character_lines` CLOSING)가 있으면 그 문장(PM: 말포이는 고정), 없으면 AI |
+| closingLine | String | 완료 대사 (리포트 · 카드 공용). 캐릭터 설정에 완료 대사(`character_lines` CLOSING)가 있으면 지금 관계 단계의 그 문장(PM: 말포이는 고정), 없으면 AI. 직접 끝냈는데 목표 시간의 절반도 못 채웠으면 공부 포기 대사(GIVE_UP, 임시 J-15) |
 
 json
 
