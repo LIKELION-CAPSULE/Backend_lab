@@ -17,7 +17,7 @@ AI 캐릭터와 함께 공부하는 웹서비스의 백엔드. Spring Boot + Pos
 ## 명령
 - 검증(유일한 기준): `scripts/verify.sh --quick` (작업 중) / `scripts/verify.sh` (PR 전)
 - 마이그레이션 생성: `scripts/new-migration.sh <모듈> <설명>` (파일을 직접 만들지 않는다)
-- 로컬 실행: `scripts/run-local.sh`
+- 로컬 실행: `scripts/run-local.sh` (Docker 로컬 DB) / `scripts/run-local.sh --shared` (공용 개발 DB, 마이그레이션은 develop 머지 때 Actions만, ADR 0017)
 - 이 파일 누구 담당?: `python3 .harness/zones.py explain <경로>`
 
 ## 구조 규칙
