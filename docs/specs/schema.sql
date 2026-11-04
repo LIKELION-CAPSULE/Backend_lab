@@ -522,6 +522,7 @@ CREATE TABLE character_profiles (
     stage_tones          jsonb       NOT NULL DEFAULT '{}',  -- 관계 단계 → 말투 지시 한 줄
     study_style          text        NOT NULL,           -- 공부 중 답 길이 · 구성 (예: 1~2문장, 공부 얘기 중심)
     break_style          text        NOT NULL,           -- 쉬는 시간 답 길이 · 구성 (예: 2~4문장, 공부 재촉 없이 수다)
+    samples              jsonb       NOT NULL DEFAULT '[]',  -- 관계 단계별 말투 샘플 [{"minStage", "user", "reply"}] (ADR 0022 결정 19)
     updated_at           timestamptz NOT NULL DEFAULT now()
 );
 
