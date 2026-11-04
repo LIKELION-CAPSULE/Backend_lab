@@ -10,7 +10,7 @@
 | `schema.sql` | DB: https://app.notion.com/p/40db9a07e59280abad14da2dde00c864 | 맨 위 안내 주석을 뺀 나머지를 페이지의 SQL 코드 블록에 |
 | `flow.md`, `skeleton-plan.md`, `judgment-backlog.md` | 없음 | 레포에만 |
 
-노션 사본 반영: 2026-11-04 `ccd7dd3` (동작 이벤트 HEAD_TURN 고개 돌림까지. API 16·18~21번, schema.sql). 노션 상위 페이지와 DB 페이지 맨 위에도 같은 커밋을 적는다.
+노션 사본 반영: 2026-11-05 `f0d9a0b` (비밀번호 찾기 25·26, 호감도 최종안 · 대화 기억 · 세계관 설정, 카카오 약관, 말포이 예시까지. API 5·6·8·10~12·16~20·22·23·25·26번, schema.sql). 노션 상위 페이지와 DB 페이지 맨 위에도 같은 커밋을 적는다.
 
 ## 이력 (노션이 원본이던 때, spec-sync로 가져옴)
 - 7차(11-04): 동작 이벤트 3종 DROWSY · YAWN · WAVE. API 18·19번, schema.sql `session_events.type`·주석
