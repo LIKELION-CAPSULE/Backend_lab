@@ -23,6 +23,7 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Pattern;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -142,7 +143,14 @@ public class AuthService {
         if (users.existsByEmail(email)) {
             throw new ApiException(HttpStatus.CONFLICT, "EMAIL_ALREADY_USED");
         }
-        User user = users.save(User.emailUser(email, passwordEncoder.encode(password), nickname, now));
+        User user;
+        try {
+            // 가입 버튼 연타처럼 같은 이메일이 동시에 오면 둘 다 위 확인을 지나고, 늦은 쪽은 users.email UNIQUE에 막힌다.
+            // flush로 여기서 바로 부딪히게 해 500 대신 409로 (api.md 4, #40)
+            user = users.saveAndFlush(User.emailUser(email, passwordEncoder.encode(password), nickname, now));
+        } catch (DataIntegrityViolationException e) {
+            throw new ApiException(HttpStatus.CONFLICT, "EMAIL_ALREADY_USED");
+        }
         terms.recordAgreements(user.id(), agreed);
         redis.delete(verifiedKey);
         return new Login(user.id(), true, true);

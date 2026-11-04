@@ -36,13 +36,33 @@ public record LlmProperties(
      * @param models 등급 → 모델 이름 (예: fast → claude-haiku-5-5)
      * @param version Anthropic API 버전 헤더
      * @param reasoningEffort OpenAI 추론 모델의 reasoning_effort. 비우면 보내지 않는다
+     * @param thinking Anthropic 모델 이름 → 생각 설정 (#92). 없는 모델에는 보내지 않는다(모델 기본값)
      */
     public record Provider(
-            String baseUrl, String apiKey, String version, Map<String, String> models, String reasoningEffort) {
+            String baseUrl,
+            String apiKey,
+            String version,
+            Map<String, String> models,
+            String reasoningEffort,
+            Map<String, Thinking> thinking) {
         public boolean hasKey() {
             return apiKey != null && !apiKey.isBlank();
         }
+
+        /** 이 모델의 생각 설정. 없으면 null */
+        public Thinking thinkingFor(String model) {
+            return thinking == null ? null : thinking.get(model);
+        }
     }
+
+    /**
+     * Claude 5.5는 생각 설정이 없으면 스스로 생각하고(adaptive) 그 토큰이 max_tokens에서 빠져, 짧은 한도에서 빈 답이 난다 (#92).
+     * 모델마다 받는 값이 다르다: haiku-5-5는 disabled(effort high 이하), sonnet-5-5는 disabled가 400이라 between_tools가 가장 낮은 설정.
+     *
+     * @param type thinking.type (disabled · between_tools · adaptive). 비우면 보내지 않는다
+     * @param effort output_config.effort (low · medium · high · xhigh · max). 비우면 보내지 않는다
+     */
+    public record Thinking(String type, String effort) {}
 
     /**
      * @param temperature 비우면 보내지 않는다 (공급자 기본값)

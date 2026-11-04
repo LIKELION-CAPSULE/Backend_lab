@@ -69,9 +69,9 @@ class LlmGatewayTest {
                 Duration.ofSeconds(5),
                 1,
                 logContent,
-                new LlmProperties.Provider("", "k", "v", Map.of("smart", "claude-x"), null),
-                new LlmProperties.Provider("", "k", null, Map.of("smart", "gpt-x"), "minimal"),
-                new LlmProperties.Provider("", "k", null, Map.of("smart", "jev-x"), null),
+                new LlmProperties.Provider("", "k", "v", Map.of("smart", "claude-x"), null, null),
+                new LlmProperties.Provider("", "k", null, Map.of("smart", "gpt-x"), "minimal", null),
+                new LlmProperties.Provider("", "k", null, Map.of("smart", "jev-x"), null, null),
                 Map.of(
                         LlmPurpose.CHAT,
                         new LlmProperties.Route("smart", 100, null, null),

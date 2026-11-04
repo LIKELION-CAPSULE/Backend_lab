@@ -48,7 +48,8 @@ class SecurityConfig {
                 path.matcher(HttpMethod.POST, "/api/auth/email/verification/confirm"),
                 path.matcher(HttpMethod.POST, "/api/auth/email/signup"),
                 path.matcher(HttpMethod.POST, "/api/auth/email/login"),
-                path.matcher(HttpMethod.POST, "/api/auth/social/*"),
+                // 제공자는 카카오만 (api.md 6). 와일드카드면 토큰 없이 없는 경로(/social/GOOGLE)가 401 대신 404 (#40)
+                path.matcher(HttpMethod.POST, "/api/auth/social/KAKAO"),
                 path.matcher(HttpMethod.POST, "/api/auth/refresh"),
                 // 리프레시 쿠키만으로 처리. 액세스 토큰이 만료돼도 쿠키를 지워야 공용 시연 기기에서 다음 사람이 이전 계정으로 갱신되지 않음
                 path.matcher(HttpMethod.POST, "/api/auth/logout"),
