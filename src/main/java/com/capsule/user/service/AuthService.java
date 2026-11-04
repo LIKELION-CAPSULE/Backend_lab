@@ -178,8 +178,8 @@ public class AuthService {
     }
 
     /**
-     * 처음이면 users + user_social_accounts를 한 트랜잭션으로 (api.md 6 '서버가 하는 일').
-     * 약관 동의는 받지 않는다. 추후 카카오싱크로 받아 user_terms에 기록 (judgment-backlog).
+     * 처음이면 users + user_social_accounts + user_terms를 한 트랜잭션으로 (api.md 6 '서버가 하는 일').
+     * 약관 체크는 받지 않고 H01 안내 문구로 고지한다. 그래서 가입 시점의 최신 필수 약관 버전을 동의로 기록한다.
      * 카카오 호출(네트워크 왕복 2번)은 트랜잭션 밖에서 한다. 카카오가 느려도 DB 커넥션을 붙잡지 않게
      */
     public Login kakao(KakaoRequest req) {
@@ -206,6 +206,12 @@ public class AuthService {
         }
         User user = users.save(User.socialUser(nickname, now));
         users.insertSocialAccount(KAKAO, profile.providerUserId(), user.id());
+        terms.recordAgreements(
+                user.id(),
+                terms.latestVersions(now).stream()
+                        .filter(TermVersion::required)
+                        .map(TermVersion::termVersionId)
+                        .toList());
         return new Login(user.id(), true, true);
     }
 
