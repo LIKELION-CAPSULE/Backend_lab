@@ -88,13 +88,13 @@ class ContentTest {
         RoomInfo room = roomQuery.find(1).orElseThrow();
         assertThat(room.name()).isEqualTo("밤의 호그와트 도서관");
         assertThat(room.characters()).extracting(CharacterInfo::name).containsExactly("말포이");
-        assertThat(room.thumbnailUrl()).isEqualTo("https://cdn.capsule.invalid/images/auth-posters/fantasy.webp");
+        assertThat(room.thumbnailUrl()).isEqualTo("https://cdn.capsule.invalid/images/rooms/night-study.webp");
         assertThat(room.characters().get(0).profileImageUrl())
                 .isEqualTo("https://cdn.capsule.invalid/images/characters/kang-study.webp");
 
         assertThat(roomQuery.defaultBackground(1))
                 .contains(new BackgroundInfo(
-                        1, 1, "밤의 도서관", "https://cdn.capsule.invalid/images/scenes/fantasy-background-v1.webp"));
+                        1, 1, "밤의 도서관", "https://cdn.capsule.invalid/images/scenes/night-background-v1.webp"));
         assertThat(roomQuery.find(999)).isEmpty();
     }
 

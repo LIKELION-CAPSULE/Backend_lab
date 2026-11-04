@@ -3,7 +3,8 @@
 -- 값은 api.md 예시(룸 1 · 캐릭터 1 · 기본 아바타). 캐릭터 1은 첫 캐릭터 말포이(PM 2026-11-04, 모델 · 이미지 주소는 그대로).
 --   화면 문구(성격 · 소개 · 룸 · 배경 이름)는 말포이 설정(characters/malfoy/profile.yml의 세계 · 바이블)에 맞춤
 -- 룸 1 썸네일 · 배경, 캐릭터 1 프로필은 프론트 에셋 전달본(2026-11-05)의 실제 이미지 (Supabase 버킷 live2d-model/images/,
---   전달본 runtime/ 경로 그대로): 마법학교 포스터 · 촛불 도서관 배경 · 금발 채린 그림. 배포 DB는 정식 마이그레이션으로 따로 넣을 것
+--   전달본 runtime/ 경로 그대로): 야간 도서관 포스터 · 야간 도서관 배경 · 금발 채린 그림. 배포 DB는 정식 마이그레이션으로 따로 넣을 것
+--   상세 배너(room-detail-banners/night-detail-banner-v1) · 홈 카드 전경(scenes/home-v2/night-home-subject-v2)도 버킷에 있지만 API 칸이 없어 DB에 넣지 않음
 -- 이미지 칸은 CDN 상대 경로로 넣는다. 서버가 CAPSULE_CDN_BASE_URL을 붙여 내려줌 (schema.sql 이미지 칸 규칙, #105)
 -- 캐릭터 1 Live2D(모델 1)는 실제 에셋 (2026-11-05, Supabase 버킷 live2d-model의 chaerin/v1/, #9).
 --   CAPSULE_CDN_BASE_URL=https://<project-ref>.supabase.co/storage/v1/object/public/live2d-model 이면 그대로 열린다
@@ -65,13 +66,13 @@ ON CONFLICT (id) DO UPDATE SET model_id = EXCLUDED.model_id, name = EXCLUDED.nam
 
 INSERT INTO study_rooms (id, name, description, thumbnail_url, sort_order) OVERRIDING SYSTEM VALUE
 VALUES (1, '밤의 호그와트 도서관', '지기 싫어하는 슬리데린 라이벌 말포이와 촛불 아래에서 같이 공부해요.',
-        'images/auth-posters/fantasy.webp', 1)
+        'images/rooms/night-study.webp', 1)
 ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description,
     thumbnail_url = EXCLUDED.thumbnail_url, sort_order = EXCLUDED.sort_order;
 
 INSERT INTO room_backgrounds (id, room_id, name, image_url, is_default, sort_order) OVERRIDING SYSTEM VALUE
 VALUES (1, 1, '밤의 도서관',
-        'images/scenes/fantasy-background-v1.webp',
+        'images/scenes/night-background-v1.webp',
         true, 1)
 ON CONFLICT (id) DO UPDATE SET room_id = EXCLUDED.room_id, name = EXCLUDED.name, image_url = EXCLUDED.image_url,
     is_default = EXCLUDED.is_default, sort_order = EXCLUDED.sort_order;
