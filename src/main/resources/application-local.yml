@@ -12,6 +12,10 @@ springdoc: # Swagger: /swagger-ui.html (ADR 0019). 개발 서버(local,shared-db
   swagger-ui.enabled: true
 
 capsule:
+  llm:
+    log-content: true
+    lab:
+      enabled: true # http://localhost:<포트>/internal/llm-lab
   fake-integrations: true
   auth:
     jwt-secret: ${CAPSULE_JWT_SECRET:local-dev-only-secret-0123456789abcdef}
