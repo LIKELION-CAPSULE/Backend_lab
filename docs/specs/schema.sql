@@ -26,6 +26,7 @@
 --
 -- 2026-11-04 변경
 --   - session_events.type에 동작 이벤트 DROWSY · YAWN · WAVE 추가 (졸음 · 하품 · 손 흔들기. 상태를 바꾸지 않음)
+--   - session_events.type에 동작 이벤트 HEAD_TURN 추가 (고개 돌림. 다른 동작 이벤트와 같이 상태 · 시간 계산에 안 씀)
 --   - 주석: 동작 이벤트 서버 쿨다운(같은 type 1분), live2d_reaction_maps.trigger_type에 감정 이름 (API 19 · 20의 감정 동작. 목록은 데이터, 디자이너 에셋에 따라 바뀜)
 -- =====================================================================
 
@@ -131,7 +132,7 @@ CREATE TABLE live2d_expressions (
 CREATE TABLE live2d_reaction_maps (
     id            bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     model_id      bigint   NOT NULL REFERENCES live2d_models (id) ON DELETE CASCADE,
-    trigger_type  text     NOT NULL,   -- 허용 값은 서버 enum으로 관리 (지금: GREETING, AWAY, RETURN, BREAK, BREAK_END, DROWSY, YAWN, WAVE = API 18의 '알아채는' 동작용 trigger / 감정 이름(예: HAPPY, SAD) = API 19 · 20의 감정 동작. 감정 목록은 서버 enum이 아니라 이 테이블의 데이터로 정함(디자이너 에셋에 따라 바뀜))
+    trigger_type  text     NOT NULL,   -- 허용 값은 서버 enum으로 관리 (지금: GREETING, AWAY, RETURN, BREAK, BREAK_END, DROWSY, YAWN, WAVE, HEAD_TURN = API 18의 '알아채는' 동작용 trigger / 감정 이름(예: HAPPY, SAD) = API 19 · 20의 감정 동작. 감정 목록은 서버 enum이 아니라 이 테이블의 데이터로 정함(디자이너 에셋에 따라 바뀜))
     intensity     smallint CHECK (intensity BETWEEN 1 AND 3),   -- AWAY의 눈치 / 말 걸기 / 서운함. NULL이면 강도 무관 (그 강도 행이 없을 때도 씀)
     motion_id     bigint,
     expression_id bigint,
@@ -323,13 +324,13 @@ CREATE INDEX idx_session_characters_character ON session_characters (character_i
 -- 상태 이벤트는 상태가 바뀔 때만 한 줄씩. 각 상태는 다음 상태 이벤트가 올 때 끝남
 --   FOCUS: 시작·쉬는 시간 종료 / AWAY: 자리 비움 / RETURN: 딴짓에서 복귀 / BREAK: 쉬는 시간
 -- 동작 이벤트는 감지된 순간 한 줄. 상태를 바꾸지 않고 시간 계산에 쓰지 않음 (캐릭터 반응 · 호감도용)
---   DROWSY: 졸음 / YAWN: 하품 / WAVE: 손 흔들기
+--   DROWSY: 졸음 / YAWN: 하품 / WAVE: 손 흔들기 / HEAD_TURN: 고개 돌림
 --   쉬는 시간 중에는 감지 이벤트(AWAY · RETURN · 동작 이벤트)를 남기지 않음 (서버가 무시)
 --   같은 동작 type이 1분 안에 다시 오면 남기지 않음 (서버 쿨다운)
 CREATE TABLE session_events (
     id             bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     session_id     bigint      NOT NULL REFERENCES study_sessions (id) ON DELETE CASCADE,
-    type           text        NOT NULL CHECK (type IN ('FOCUS', 'AWAY', 'RETURN', 'BREAK', 'DROWSY', 'YAWN', 'WAVE')),
+    type           text        NOT NULL CHECK (type IN ('FOCUS', 'AWAY', 'RETURN', 'BREAK', 'DROWSY', 'YAWN', 'WAVE', 'HEAD_TURN')),
     false_positive boolean     NOT NULL DEFAULT false,   -- '아니야' 버튼 (오탐이면 집중으로 계산)
     occurred_at    timestamptz NOT NULL DEFAULT now()
 );
