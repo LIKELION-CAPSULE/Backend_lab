@@ -283,7 +283,7 @@
 | --- | --- | --- |
 | accessToken | String | 액세스 토큰 (30분). 리프레시 토큰은 HttpOnly 쿠키 |
 | userId | Long | 사용자 id |
-| onboardingRequired | Boolean | 닉네임 · 아바타 설정 전이면 true → H02, 아니면 H03 |
+| onboardingRequired | Boolean | 아바타 설정 전이면 true → H02, 아니면 H03 |
 
 ```json
 { "accessToken": "eyJ...", "userId": 7, "onboardingRequired": false }
@@ -303,7 +303,7 @@
 
 #### 설명
 
-카카오 인가 코드로 로그인합니다. 처음 온 사용자면 같은 요청에서 가입까지 끝내고, 가입 직후엔 H02(아바타 · 닉네임)로 보냅니다. 소셜 로그인은 카카오만 지원합니다.
+카카오 인가 코드로 로그인합니다. 처음 온 사용자면 같은 요청에서 가입까지 끝내고, 가입 직후엔 H02(아바타)로 보냅니다. 닉네임은 카카오 닉네임을 쓰고 H14 프로필에서 바꿀 수 있습니다. 소셜 로그인은 카카오만 지원합니다.
 
 #### 와이어프레임 대조
 
@@ -338,7 +338,7 @@
 | accessToken | String | 액세스 토큰 (30분). 리프레시 토큰은 HttpOnly 쿠키 |
 | userId | Long | 사용자 id |
 | isNewUser | Boolean | 이번에 가입했는지 |
-| onboardingRequired | Boolean | 닉네임 · 아바타 설정 전이면 true → H02 |
+| onboardingRequired | Boolean | 아바타 설정 전이면 true → H02 |
 
 ```json
 { "accessToken": "eyJ...", "userId": 8, "isNewUser": true, "onboardingRequired": true }
@@ -511,7 +511,7 @@
 
 ## 10. PATCH /api/me — 프로필 설정
 - 분류: 온보딩 · 홈
-- 설명: 닉네임 · 아바타 저장 (온보딩 완료)
+- 설명: 아바타 저장 (온보딩 완료) · 닉네임 · 아바타 변경
 - 와이어프레임: H02 이 모습으로 시작하기 · H14 프로필 저장
 - 백엔드: Not started
 - 프론트: Not started
@@ -519,16 +519,20 @@
 
 #### 설명
 
-H02에서 닉네임과 아바타를 한 번에 저장합니다. 저장하면 `onboardingRequired`가 false가 되고 H03 홈으로 갑니다.
+H02에서 아바타를 저장하면 `onboardingRequired`가 false가 되고 H03 홈으로 갑니다. 닉네임은 가입 때 정해져 있어서(이메일은 가입 폼, 카카오는 카카오 닉네임) H02에서 받지 않고, 나중에 H14 프로필에서 바꿉니다. 보낸 값만 바꾸고 안 보낸 값은 그대로 둡니다.
 
 #### 와이어프레임 대조
 
 | 화면 요소 | 이 API가 하는 일 |
 | --- | --- |
-| H02 '닉네임' 입력 | `nickname` |
-| H02 '이 모습으로 시작하기' | 닉네임 + 완성형 아바타 저장 |
-| H02 '나중에 바꿀게요' | 닉네임만 필수, 아바타는 기본(1번)으로 저장 |
+| H02 '이 모습으로 시작하기' | 완성형 아바타 저장 (`avatarId`) |
+| H02 '나중에 바꿀게요' | 빈 요청 `{}` → 기본 아바타(1번)로 저장 |
 | H02 '이 모습이 프로필 이미지가 돼요' | 아바타 썸네일을 프로필로 사용 |
+| H14 프로필 저장 | 바꾼 것만 보냄 (`nickname` · `avatarId`) |
+
+> ⚠️ H02에 닉네임 입력이 있다면 빼야 함 (닉네임 변경은 H14에서만)
+
+> 2026-11-05: H02에서 닉네임을 받지 않음. `nickname` 필수 → 선택, 안 보낸 값은 유지 (`avatarId`를 안 보내도 기존 아바타 유지, 아바타가 없을 때만 기본)
 
 - 테이블: `users` (`nickname`, `avatar_id`) · 인증: 필요
 
@@ -538,11 +542,11 @@ H02에서 닉네임과 아바타를 한 번에 저장합니다. 저장하면 `on
 
 | 이름 | 타입 | 필수 | 설명 |
 | --- | --- | --- | --- |
-| nickname | String | O | 1~20자 |
-| avatarId | Long | X | 없으면 기본 아바타 |
+| nickname | String | X | 1~20자. 없으면 그대로 (보냈는데 비었거나 20자 초과면 INVALID_NICKNAME) |
+| avatarId | Long | X | 없으면 그대로. 아직 아바타가 없으면 기본 아바타 |
 
 ```json
-{ "nickname": "승희", "avatarId": 1 }
+{ "avatarId": 1 }
 ```
 
 #### 🛬 Response
