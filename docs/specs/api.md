@@ -1159,7 +1159,7 @@ GET /api/me/memories?date=2026-11-12
 #### 서버가 하는 일
 
 1. 이벤트 타입 + 직전 상태 이벤트로 trigger 결정 (응답에는 넣지 않음): 첫 FOCUS = `GREETING`, 휴식 뒤 FOCUS = `BREAK_END`, `AWAY` · `RETURN` · `BREAK`, 동작은 type 그대로(`DROWSY` · `YAWN` · `WAVE` · `HEAD_TURN`)
-2. 상태 변화(`GREETING` · `AWAY` · `RETURN` · `BREAK` · `BREAK_END`): LLM이 대사 + 감정을 한 번에 만든다. 감정은 그 캐릭터의 표정 목록(`character_profiles.expressions`) 중에서. 넣는 것: 캐릭터 페르소나 + 지금 관계 단계의 관계 설명 · 말투 샘플 · 상태 변화 예시(그 단계의 미리 쓴 대사), 지난 세션 흐름, 이번 세션 최근 대화, 일어난 일 (ADR 0022 결정 19). 5초 넘거나 실패하면 미리 쓴 대사(`fallback: true`). 순간 동작(`DROWSY` · `YAWN` · `WAVE` · `HEAD_TURN`): 미리 쓴 대사와 그 칸의 표정을 순서대로 (AI 안 씀)
+2. 상태 변화(`GREETING` · `AWAY` · `RETURN` · `BREAK` · `BREAK_END`): LLM이 대사 + 감정을 한 번에 만든다. 감정은 그 캐릭터의 표정 목록(`character_profiles.expressions`) 중에서. 넣는 것: 캐릭터 페르소나 + 지금 관계 단계의 관계 설명 · 말투 샘플 · 상태 변화 예시(그 단계의 미리 쓴 대사), 캐릭터 오늘 근황(`character_lines` TODAY, 요일별), 지난 세션 흐름, 이번 세션 최근 대화, 일어난 일(trigger를 "방금 일어난 일" 한 줄로. 예: AWAY = 아직 안 돌아옴) (ADR 0022 결정 19). 5초 넘거나 실패하면 미리 쓴 대사(`fallback: true`). 순간 동작(`DROWSY` · `YAWN` · `WAVE` · `HEAD_TURN`): 미리 쓴 대사와 그 칸의 표정을 순서대로 (AI 안 씀)
 3. 감정에 맞는 모션 · 표정을 `live2d_reaction_maps`에서 하나 고름 (같은 감정의 행이 여러 개면 같은 확률)
 4. `tts: true`면 음성 생성
 - 호감도는 바꾸지 않음 (18번에서 끝남). 같은 `eventId`로 intensity를 올려 다시 불러도 마찬가지
@@ -1266,7 +1266,7 @@ GET /api/me/memories?date=2026-11-12
 
 1. 사용자 메시지 저장 (`chat_messages`)
 2. 결정 모델: 캐릭터가 아는 사실(최대 20개) + "선택 안 함" 중 이번 말에 꺼낼 사실 하나를 고름 (1.5초 안에 못 고르면 선택 안 함)
-3. LLM: 캐릭터 페르소나 + 지금 관계 단계의 관계 설명 · 말투 샘플(ADR 0022 결정 19) + 고른 사실 하나(있을 때만) + 지난 세션 흐름(최근 2장) + 이번 세션 대화(최근 15줄) + 일정(세션 첫 대화만) → 답장 + 감정
+3. LLM: 캐릭터 페르소나 + 지금 관계 단계의 관계 설명 · 말투 샘플(ADR 0022 결정 19) + 캐릭터 오늘 근황(`character_lines` TODAY, 요일별) + 고른 사실 하나(있을 때만) + 지난 세션 흐름(최근 2장) + 이번 세션 대화(최근 15줄) + 일정(세션 첫 대화만) → 답장 + 감정
 4. 감정에 맞는 모션 · 표정을 `live2d_reaction_maps`에서 고름
 5. 말의 종류(`chat_messages.signal`) → 점수 → 0~100에서 실제로 바뀐 만큼 `relation_logs`(CHAT, `request_id`, `signal`)에 기록
 6. 5초 넘으면 대체 대사 + `fallback: true`, 호감도 변화 없음
@@ -1390,7 +1390,7 @@ json
 | relation | Object | `levelBefore` · `levelAfter` · `levelUp`(공부 시간 레벨, 이 세션 자리 지킴 시간 반영) · `nextLevelSeconds`(다음 레벨이 되는 누적 자리 지킴 시간) · `pointsBefore`(공부 시작 때) · `pointsAfter`(이벤트 · 대화 반영 후) · `stage` · `stageName`(끝날 때 관계 단계) · `levelName`(옛 필드, `stageName`과 같은 값) · `nextLevelPoints`(옛 필드, 늘 null) |
 
 > 2026-11-04 (호감도 최종안): 공부 시간은 호감도를 올리지 않고 레벨에만 씀. 레벨 = 자리 지킴 60분당 1 (임시, PM 확인 필요)
-| closingLine | String | 완료 대사 (리포트 · 카드 공용). 캐릭터 설정에 완료 대사(`character_lines` CLOSING)가 있으면 지금 관계 단계의 그 문장(PM: 말포이는 고정), 없으면 AI. 직접 끝냈는데 목표 시간의 절반도 못 채웠으면 공부 포기 대사(GIVE_UP, 임시 J-15) |
+| closingLine | String | 완료 대사 (리포트 · 카드 공용). 캐릭터 설정에 완료 대사(`character_lines` CLOSING)가 있으면 지금 관계 단계의 그 문장(PM: 말포이는 고정. 단계별 문장은 확정 필요), 없으면 AI. 직접 끝냈는데 목표 시간의 절반도 못 채웠으면 공부 포기 대사(GIVE_UP, 임시 J-15). 절반은 `studySeconds`(자리 지킴 + 자리 비움) 기준, 목표 시간을 정하지 않은 세션은 포기로 보지 않음 (기준 시간 확정 필요) |
 
 json
 
