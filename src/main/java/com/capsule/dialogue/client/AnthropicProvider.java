@@ -54,6 +54,12 @@ class AnthropicProvider implements LlmProvider {
                         .map(m -> Map.of("role", m.role(), "content", m.text()))
                         .toList());
         if (r.temperature() != null) body.put("temperature", r.temperature());
+        // 모델별 생각 설정 (#92). 설정에 없는 모델은 보내지 않는다: between_tools처럼 한 모델만 받는 값이 다른 모델에서 400이 나지 않게
+        LlmProperties.Thinking config = settings.thinkingFor(r.model());
+        if (config != null) {
+            if (present(config.type())) body.put("thinking", Map.of("type", config.type()));
+            if (present(config.effort())) body.put("output_config", Map.of("effort", config.effort()));
+        }
         long t0 = System.nanoTime();
 
         if (onText == null) {
@@ -114,6 +120,10 @@ class AnthropicProvider implements LlmProvider {
             });
             return new Llm.Result(text.toString(), usage[0], ttft[0], LlmHttp.msSince(t0), stop[0], thinking[0]);
         });
+    }
+
+    private static boolean present(String s) {
+        return s != null && !s.isBlank();
     }
 
     private static Map<String, Object> block(Llm.SystemBlock b) {

@@ -62,9 +62,17 @@ class LlmProviderTest {
                 Duration.ofSeconds(5),
                 0,
                 false,
-                new LlmProperties.Provider(base, "test-key", "2023-06-01", Map.of(), null),
-                new LlmProperties.Provider(base + "/v1", "test-key", null, Map.of(), "minimal"),
-                new LlmProperties.Provider(base, "test-key", null, Map.of(), null),
+                new LlmProperties.Provider(
+                        base,
+                        "test-key",
+                        "2023-06-01",
+                        Map.of(),
+                        null,
+                        Map.of(
+                                "claude-haiku-5-5", new LlmProperties.Thinking("disabled", "low"),
+                                "claude-sonnet-5-5", new LlmProperties.Thinking("between_tools", "low"))),
+                new LlmProperties.Provider(base + "/v1", "test-key", null, Map.of(), "minimal", null),
+                new LlmProperties.Provider(base, "test-key", null, Map.of(), null, null),
                 Map.of(),
                 Map.of(),
                 new LlmProperties.Lab(false, "", 1));
@@ -119,10 +127,30 @@ class LlmProviderTest {
         assertThat(requestBody.path("messages")).hasSize(3);
         assertThat(requestBody.has("temperature")).isFalse();
         assertThat(requestBody.has("stream")).isFalse();
+        assertThat(requestBody.has("thinking")).isFalse(); // 생각 설정이 없는 모델은 모델 기본값
+        assertThat(requestBody.has("output_config")).isFalse();
         assertThat(r.text()).isEqualTo("반가워");
         assertThat(r.usage()).isEqualTo(new Llm.Usage(12, 0, 2048, 7));
         assertThat(r.stopReason()).isEqualTo("end_turn");
         assertThat(r.ttftMs()).isNull();
+    }
+
+    /** 5.5는 생각 설정이 없으면 생각 토큰이 max_tokens를 먹어 빈 답이 난다 (#92). 모델마다 받는 값이 달라서 모델별로 보낸다 */
+    @Test
+    void anthropicSendsThinkingSettingsPerModel() {
+        responseBody = """
+                {"content":[{"type":"text","text":"응"}],"stop_reason":"end_turn","usage":{"output_tokens":1}}""";
+        AnthropicProvider provider = new AnthropicProvider(props());
+
+        provider.complete(request(null, null, "claude-haiku-5-5"), null);
+        assertThat(requestBody.path("thinking").path("type").asString()).isEqualTo("disabled");
+        assertThat(requestBody.path("output_config").path("effort").asString()).isEqualTo("low");
+
+        // sonnet-5-5는 disabled가 400: 가장 낮은 설정 between_tools. thinking 안에 다른 칸을 넣으면 400이라 type만
+        provider.complete(request(null, null, "claude-sonnet-5-5"), null);
+        assertThat(requestBody.path("thinking").path("type").asString()).isEqualTo("between_tools");
+        assertThat(requestBody.path("thinking").size()).isEqualTo(1);
+        assertThat(requestBody.path("output_config").path("effort").asString()).isEqualTo("low");
     }
 
     @Test
