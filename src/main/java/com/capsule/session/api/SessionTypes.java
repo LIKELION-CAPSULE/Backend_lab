@@ -30,7 +30,28 @@ public final class SessionTypes {
             boolean firstFocusOfSession,
             boolean afterBreak) {}
 
-    /** 공부 종료 정보. endType: NORMAL · AUTO_CLOSED */
+    /**
+     * 공부 종료 정보. endType: NORMAL · AUTO_CLOSED
+     *
+     * @param targetMinutes 공부 시작 때 정한 목표 시간 (공부 포기 판단, 없으면 null)
+     */
     public record SessionClosing(
-            long sessionId, long userId, long characterId, String characterName, String endType, int studySeconds) {}
+            long sessionId,
+            long userId,
+            long characterId,
+            String characterName,
+            String endType,
+            int studySeconds,
+            Integer targetMinutes) {
+
+        /**
+         * @deprecated 목표 시간을 넘기는 생성자를 쓴다 (공부 포기 대사, 2026-11-05 확장).
+         *     제거 예정 PR: 남은 사용처(DialogueEngineTest · DialogueTest)를 옮긴 뒤 session 정리 PR (성욱)
+         */
+        @Deprecated(forRemoval = true)
+        public SessionClosing(
+                long sessionId, long userId, long characterId, String characterName, String endType, int studySeconds) {
+            this(sessionId, userId, characterId, characterName, endType, studySeconds, null);
+        }
+    }
 }

@@ -18,6 +18,7 @@ import java.util.Map;
  * @param pinnedPrompts 실험실에서 고정한 프롬프트 버전 (키 → id). 서비스는 빈 값
  * @param onBreak 지금 쉬는 시간 · 일시정지 중인지 (답 길이 · 말하는 방식이 달라짐)
  * @param chatty 공부 중인데 최근 수다가 길어졌는지 (캐릭터가 공부로 돌려보냄)
+ * @param sessionMinutes 이번 공부를 시작한 지 몇 분 (쉬는 시간 포함, 장시간 공부를 알아보게). 모르면 0
  */
 public record ChatInput(
         CharacterInfo character,
@@ -32,4 +33,5 @@ public record ChatInput(
         Map<String, Long> pinnedPrompts,
         EngineOptions engine,
         boolean onBreak,
-        boolean chatty) {}
+        boolean chatty,
+        int sessionMinutes) {}

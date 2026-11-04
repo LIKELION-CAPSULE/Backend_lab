@@ -1,62 +1,69 @@
 package com.capsule.dialogue.service;
 
+import com.capsule.common.time.ClockConfig;
 import com.capsule.dialogue.client.LlmGateway;
 import com.capsule.dialogue.client.LlmJson;
 import com.capsule.dialogue.domain.ChatMessage;
 import com.capsule.dialogue.domain.PromptKey;
 import com.capsule.dialogue.domain.PromptVersion;
 import com.capsule.dialogue.dto.CharacterContent;
-import com.capsule.dialogue.dto.CharacterContent.Event;
-import com.capsule.dialogue.dto.CharacterContent.Lore;
-import com.capsule.dialogue.dto.CharacterContent.Move;
 import com.capsule.dialogue.dto.ChatInput;
 import com.capsule.dialogue.dto.ChatLine;
 import com.capsule.dialogue.dto.ChatOutcome;
 import com.capsule.dialogue.dto.LlmContext;
 import com.capsule.dialogue.dto.LlmPurpose;
 import com.capsule.dialogue.engine.Llm;
-import com.capsule.relation.api.RelationTypes.SignalType;
+import java.time.Clock;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 
 /**
- * 장면 카드 답장 (ADR 0022 결정 15). 캐릭터 · 세계 설정은 DB(CharacterContent)에서 읽고, 코드는 이번 턴에 쓸 것만 골라
- * 장면 카드 한 장을 만든다. LLM은 한 번: [바이블 · 규칙 · 세계 · 표정 (매번 같아서 캐시)] + [장면 카드] + 이번 세션 대화.
- * 캐릭터 고유 문구는 코드에 없다 (말버릇 · 대화 기술 · 지식 · 대사 모두 데이터).
+ * 캐릭터 페르소나 답장 (ADR 0022 결정 19). 캐릭터 설정은 DB(CharacterContent).
+ * LLM은 한 번: [페르소나 · 지금 관계 단계의 관계 설명 · 말투 샘플 · 상태 변화 예시 · 규칙 (단계마다 같아서 캐시)]
+ * + [상황 카드: 지금 · 기억 · 지난 세션 같은 사실만] + 이번 세션 대화.
+ * 어떻게 말할지는 모델에 맡기고, 코드는 틀릴 수 없는 사실만 넘긴다 (결정 15의 매 턴 기술 · 지식 카드 · 무작위 사건은 뺐다).
  */
 @Component
 class SceneChatPipeline implements ChatPipeline {
 
-    static final int MAX_LORE = 4;
-    // TODO(judgment): J-05 세계 사건이 저절로 일어날 확률 (한 턴마다). 쉬는 시간엔 수다 거리가 되게 더 자주
-    static final double EVENT_CHANCE = 0.15;
-    static final double EVENT_CHANCE_ON_BREAK = 0.3;
     // 공부 중에 수다가 길어지면 (ChatInput.chatty, 기준은 DialogueService) 공부로 돌려보낸다. 막지는 않는다 (ADR 0022 결정 18)
     static final String CHATTY = "수다가 길어졌다: 공부 중인데 대화만 계속하고 있다. 이번 말은 짧게 받아 주고 공부로 돌려보낸다 (다그치지 말고 캐릭터 말투로)";
+    /** 고정 블록에 예시로 넣는 상태 변화 (순간 동작은 미리 쓴 대사 그대로라 뺀다) */
+    static final String TODAY = "TODAY";
+
+    static final List<String> STATE_SITUATIONS =
+            List.of("GREETING", "AWAY", "AWAY_2", "AWAY_3", "RETURN", "BREAK", "BREAK_END");
 
     private final LlmGateway llm;
     private final PromptService prompts;
     private final CharacterContents contents;
     private final SimpleChatPipeline generic;
     private final FactPicker factPicker;
+    private final FixedLines fixed;
+    private final Clock clock;
 
     SceneChatPipeline(
             LlmGateway llm,
             PromptService prompts,
             CharacterContents contents,
             SimpleChatPipeline generic,
-            FactPicker factPicker) {
+            FactPicker factPicker,
+            FixedLines fixed,
+            Clock clock) {
         this.llm = llm;
         this.prompts = prompts;
         this.contents = contents;
         this.generic = generic;
         this.factPicker = factPicker;
+        this.fixed = fixed;
+        this.clock = clock;
     }
 
     @Override
@@ -72,14 +79,14 @@ class SceneChatPipeline implements ChatPipeline {
         if (found.isEmpty()) return generic.reply(in, ctx);
         CharacterContent c = found.get();
         PromptVersion system = prompts.resolve(PromptKey.SCENE_SYSTEM, characterId, in.pinnedPrompts());
-        Map<String, String> vars = systemVars(c);
-
         String fact = factPicker.pick(in, ctx).orElse(null); // 아는 사실은 결정 모델이 고른 하나만 (없으면 안 넣음)
-        double chance = in.onBreak() ? EVENT_CHANCE_ON_BREAK : EVENT_CHANCE;
-        Scene scene = scene(c, in, fact, ThreadLocalRandom.current().nextDouble() < chance);
+        String card = card(c, in, fact, PromptVars.now(clock), today(c, clock));
         List<Llm.SystemBlock> blocks = List.of(
-                new Llm.SystemBlock(PromptService.render(system.body(), vars), true),
-                new Llm.SystemBlock(scene.card(), false));
+                new Llm.SystemBlock(
+                        PromptService.render(
+                                system.body(), systemVars(c, in.relationLevel(), in.nickname(), situation(c, in))),
+                        true),
+                new Llm.SystemBlock(card, false));
         List<Llm.ChatTurn> messages = new ArrayList<>(PromptVars.turns(in.history(), SimpleChatPipeline.HISTORY_LIMIT));
         messages.add(new Llm.ChatTurn("user", in.userMessage()));
         Llm.Result r = llm.complete(LlmPurpose.CHAT, blocks, messages, ctx.withPrompts(List.of(system.id())), null);
@@ -95,113 +102,79 @@ class SceneChatPipeline implements ChatPipeline {
         Map<String, Object> trace = new LinkedHashMap<>();
         trace.put("pipeline", SCENE);
         trace.put("prompts", PromptVars.versions(List.of(system)));
-        trace.put("move", scene.move() == null ? null : scene.move().code());
-        trace.put("lore", scene.lore().stream().map(Lore::code).toList());
-        trace.put("event", scene.event() == null ? null : scene.event().code());
+        trace.put("stage", in.relationLevel());
         trace.put("fact", fact);
-        trace.put("scene", scene.card());
+        trace.put("scene", card);
         trace.put("raw", r.text());
         return ChatOutcome.of(reply.strip(), emotion, null, trace);
     }
 
-    /** 고정 블록(scene.system) 변수. 상태 반응(ReactionWriter)도 같은 블록을 쓴다 (캐시는 모델별이라 반응끼리만 같이 탄다) */
-    static Map<String, String> systemVars(CharacterContent c) {
+    private Function<String, String> situation(CharacterContent c, ChatInput in) {
+        return s -> fixed.situation(c.characterId(), s, null, in.pinnedPrompts());
+    }
+
+    /**
+     * 고정 블록(scene.system) 변수: 페르소나 + 지금 관계 단계의 관계 설명 · 말투 샘플 · 상태 변화 예시.
+     * 상태 반응(ReactionWriter)도 같은 블록을 쓴다 (캐시는 모델별이라 반응끼리만 같이 탄다)
+     *
+     * @param situation 상황 코드(GREETING · AWAY_3 …) → "방금 일어난 일" 문장 (fixed.lines의 situation)
+     */
+    static Map<String, String> systemVars(
+            CharacterContent c, int stage, String nickname, Function<String, String> situation) {
         Map<String, String> vars = new LinkedHashMap<>();
         vars.put("bible", c.bible());
         vars.put("rules", c.rules());
         vars.put("speaker", c.speaker());
-        vars.put("worldName", c.world().name());
-        vars.put("worldSetting", c.world().setting());
         vars.put("expressions", String.join(", ", c.expressions()));
+        vars.put("relation", PromptVars.orNone(c.toneFor(stage), "보통"));
+        vars.put(
+                "samples",
+                c.samplesFor(stage).stream()
+                        .map(s -> "사용자: " + s.user() + "\n" + c.speaker() + ": " + named(s.reply(), nickname))
+                        .collect(Collectors.joining("\n\n")));
+        List<String> events = new ArrayList<>();
+        for (String s : STATE_SITUATIONS)
+            c.linesFor(s, stage).stream()
+                    .findFirst()
+                    .ifPresent(
+                            l -> events.add("(방금 일어난 일: " + situation.apply(s) + ") → " + named(l.text(), nickname)));
+        vars.put("events", String.join("\n", events));
         return vars;
     }
 
-    record Scene(String card, Move move, List<Lore> lore, Event event) {}
+    private static String named(String text, String nickname) {
+        return text.replace("{name}", nickname);
+    }
 
-    /** 이번 턴에 쓸 것만 고른다. 장면 카드는 매 턴 수십 줄 */
-    static Scene scene(CharacterContent c, ChatInput in, String fact, boolean eventHappens) {
-        SignalType signal = ChatScorer.detect(in.userMessage());
-        Event event = eventHappens ? pickEvent(c.world().events()) : null;
-        String hay = in.userMessage() + " "
-                + in.history().stream()
-                        .skip(Math.max(0, in.history().size() - 2))
-                        .map(ChatLine::content)
-                        .collect(Collectors.joining(" "));
-        List<Lore> lore = pickLore(c.world().lore(), hay, event);
-        String mode = in.onBreak() ? CharacterContent.BREAK : CharacterContent.STUDY;
-        Move move = pickMove(c.moves(), signal, mode);
-
+    /** 이번 턴의 사실만: 시각 · 기억 · 지난 세션 · 일정(첫 대화) · 피할 말버릇 · 수다 길어짐 · 지금(길이 · 구성, 맨 끝) */
+    static String card(CharacterContent c, ChatInput in, String fact, String now, String today) {
         List<String> L = new ArrayList<>();
-        L.add("<장면>");
-        L.add("사용자: " + in.nickname() + " / 관계: " + PromptVars.orNone(c.toneFor(in.relationLevel()), "보통"));
-        if (event != null)
-            L.add("방금 일어난 일: " + event.text() + (event.hook() == null ? "" : " (어울리는 반응: " + event.hook() + ")"));
-        if (!lore.isEmpty())
-            L.add("<세계 지식>\n" + lore.stream().map(l -> "- " + l.body()).collect(Collectors.joining("\n"))
-                    + "\n</세계 지식>");
-        // 기억 (ADR 0022 결정 16): 아는 사실은 결정 모델이 이번 말에 맞춰 고른 하나만, 세션 카드는 최근 recap-max(2)장,
-        // 이번 세션 원문은 메시지로 최근 15줄. 프롬프트가 길수록 지시를 덜 따르므로 작게 둔다
+        L.add("<상황>");
+        L.add("사용자: " + in.nickname() + " / 시각: " + now
+                + (in.sessionMinutes() > 0 ? " / 공부한 지: " + in.sessionMinutes() + "분" : ""));
+        if (today != null) L.add(c.speaker() + " 오늘: " + today);
+        // 기억 (ADR 0022 결정 16): 아는 사실은 결정 모델이 이번 말에 맞춰 고른 하나만, 세션 카드는 최근 2장, 원문은 메시지로 15줄
         if (fact != null) L.add("<꺼낼 수 있는 기억> " + fact + " (자연스러울 때만, 단정하지 말고)");
         if (in.summary() != null && !in.summary().isBlank())
             L.add("<지난 세션 흐름 (최근 것이 아래)>\n" + in.summary() + "\n</지난 세션 흐름>");
         // 사용자 일정은 공부 시작(이 세션 첫 대화)에만 (PM 확정: 시작과 끝에만)
         if (in.history().isEmpty() && !in.memories().isEmpty())
             L.add("<사용자 일정>\n- " + String.join("\n- ", in.memories()) + "\n</사용자 일정>");
-        if (move != null) {
-            L.add("이번 대화 기술: " + move.name() + " — " + move.how());
-            String ex = move.examples().stream()
-                    .limit(2)
-                    .map(e -> "사용자: " + e.user() + "\n" + c.speaker() + ": " + e.reply())
-                    .collect(Collectors.joining("\n\n"));
-            if (!ex.isEmpty()) L.add("<이 기술의 예시 (톤 참고용, 베끼지 않기)>\n" + ex + "\n</이 기술의 예시>");
-        }
         List<String> avoid = avoid(c, in.history());
         if (!avoid.isEmpty()) L.add("피할 것: " + String.join(" / ", avoid));
-        // 공부 중 · 쉬는 시간에 따라 답 길이와 구성이 다르다 (PM 확정: 1~2문장 / 2~4문장, 구성은 캐릭터 설정).
-        // 맨 끝에 둔다: 위에 두었을 때 실제 키 평가(2026-11-05)에서 공부 중 답이 자주 3~4문장으로 길어졌다
+        // 공부 중 · 쉬는 시간에 따라 답 길이와 구성이 다르다 (PM 확정: 1~2문장 / 2~4문장, 구성은 캐릭터 설정). 맨 끝에 둔다
         if (!in.onBreak() && in.chatty()) L.add(CHATTY);
         L.add("지금: " + (in.onBreak() ? c.breakStyle() : c.studyStyle()));
-        L.add("</장면>");
-        return new Scene(String.join("\n", L), move, lore, event);
+        L.add("</상황>");
+        return String.join("\n", L);
     }
 
-    /** 사건 카드 → 키워드가 맞는 카드 순으로 최대 4장 (엔진 Planning.pickLore와 같은 규칙) */
-    static List<Lore> pickLore(List<Lore> all, String hay, Event event) {
-        List<Lore> chosen = new ArrayList<>();
-        if (event != null && event.loreCode() != null)
-            all.stream()
-                    .filter(l -> l.code().equals(event.loreCode()))
-                    .findFirst()
-                    .ifPresent(chosen::add);
-        for (Lore l : all) {
-            if (chosen.size() >= MAX_LORE) break;
-            if (!chosen.contains(l) && l.keywords().stream().anyMatch(hay::contains)) chosen.add(l);
-        }
-        return chosen;
-    }
-
-    /**
-     * 지금(공부 중 · 쉬는 시간)에 쓰는 기술 중에서, 이 말의 종류에 어울리는 기술이 있으면 그중에서,
-     * 없으면 평소 기술(signals가 빈 것) 중에서 하나
-     */
-    static Move pickMove(List<Move> moves, SignalType signal, String mode) {
-        List<Move> usable = moves.stream().filter(m -> m.usableIn(mode)).toList();
-        List<Move> fit =
-                usable.stream().filter(m -> m.signals().contains(signal)).toList();
-        if (fit.isEmpty())
-            fit = usable.stream().filter(m -> m.signals().isEmpty()).toList();
-        return fit.isEmpty() ? null : fit.get(ThreadLocalRandom.current().nextInt(fit.size()));
-    }
-
-    static Event pickEvent(List<Event> events) {
-        int total = events.stream().mapToInt(Event::weight).sum();
-        if (total <= 0) return null;
-        int r = ThreadLocalRandom.current().nextInt(total);
-        for (Event e : events) {
-            r -= e.weight();
-            if (r < 0) return e;
-        }
-        return null;
+    /** 캐릭터의 오늘 근황: TODAY 대사를 요일(월 = 0)로 고른다 (결정 19). 없으면 null */
+    static String today(CharacterContent c, Clock clock) {
+        List<CharacterContent.Line> notes = c.linesFor(TODAY, 1);
+        if (notes.isEmpty()) return null;
+        int day = LocalDate.now(clock.withZone(ClockConfig.KST)).getDayOfWeek().getValue() - 1;
+        return notes.get(day % notes.size()).text();
     }
 
     /** 말버릇 규칙: 첫마디 금지는 늘, 세션 한 번은 이번 세션 캐릭터 대사에 이미 있으면 */

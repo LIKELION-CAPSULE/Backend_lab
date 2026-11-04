@@ -42,7 +42,8 @@ class FactPickerTest {
                 Map.of(),
                 EngineOptions.DEFAULT,
                 false,
-                false);
+                false,
+                0);
     }
 
     void answer(String choice, double confidence) {

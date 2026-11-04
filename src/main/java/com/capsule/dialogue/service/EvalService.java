@@ -232,7 +232,8 @@ public class EvalService {
                 runConfig.engine(),
                 context.facts(),
                 context.onBreak(),
-                context.chatty());
+                context.chatty(),
+                context.sessionMinutes());
         LlmContext ctx = LlmContext.lab(LlmContext.EVAL, config);
         CharacterInfo character = lab.character(c.characterId());
         ChatPipeline pipeline = lab.pipeline(run.pipeline());

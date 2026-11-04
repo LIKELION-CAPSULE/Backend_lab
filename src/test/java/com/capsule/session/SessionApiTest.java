@@ -474,7 +474,7 @@ class SessionApiTest {
 
         verify(relationCommands, times(1)).settleStudy(anyLong(), anyLong(), anyLong(), anyInt(), anyInt());
         verify(relationCommands).settleStudy(userId, 1L, sessionId, 3300, 2880);
-        SessionClosing closing = new SessionClosing(sessionId, userId, 1L, "채린", "NORMAL", 3300);
+        SessionClosing closing = new SessionClosing(sessionId, userId, 1L, "채린", "NORMAL", 3300, 50);
         // 초안은 한 번만: 400 요청과 두 번째 종료에는 LLM을 부르지 않는다
         verify(closingHandler, times(1)).draft(any());
         verify(closingHandler).draft(closing);
@@ -580,7 +580,7 @@ class SessionApiTest {
                 .containsEntry("closing_line", CLOSING_LINE);
         verify(relationCommands).settleStudy(userId, 1L, sessionId, 3600, 3600);
         verify(closingHandler)
-                .close(eq(new SessionClosing(sessionId, userId, 1L, "채린", "AUTO_CLOSED", 3600)), same(DRAFT));
+                .close(eq(new SessionClosing(sessionId, userId, 1L, "채린", "AUTO_CLOSED", 3600, 50)), same(DRAFT));
         assertThat(sessionQuery.find(freshSessionId)).get().matches(SessionInfo::inProgress);
     }
 
@@ -607,7 +607,7 @@ class SessionApiTest {
                 .containsEntry("distract_seconds", 300);
         verify(relationCommands).settleStudy(userId, 1L, sessionId, 3000, 2700);
         verify(closingHandler)
-                .close(eq(new SessionClosing(sessionId, userId, 1L, "채린", "AUTO_CLOSED", 3000)), same(DRAFT));
+                .close(eq(new SessionClosing(sessionId, userId, 1L, "채린", "AUTO_CLOSED", 3000, 50)), same(DRAFT));
     }
 
     // ---- 도우미

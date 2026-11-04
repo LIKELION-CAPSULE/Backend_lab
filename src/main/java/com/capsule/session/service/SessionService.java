@@ -458,9 +458,16 @@ public class SessionService {
         return toReport(s, settlement);
     }
 
+    /** 초안 · 저장 둘 다 이걸로 만든다. 목표 시간을 빠뜨리면 공부 포기(GIVE_UP) 판정이 꺼진다 */
     private SessionClosing closingOf(StudySession s, String endType, int studySeconds) {
         return new SessionClosing(
-                s.id(), s.userId(), s.characterId(), character(s.characterId()).name(), endType, studySeconds);
+                s.id(),
+                s.userId(),
+                s.characterId(),
+                character(s.characterId()).name(),
+                endType,
+                studySeconds,
+                s.targetMinutes());
     }
 
     private ReportResponse toReport(StudySession s, StudySettlement settlement) {

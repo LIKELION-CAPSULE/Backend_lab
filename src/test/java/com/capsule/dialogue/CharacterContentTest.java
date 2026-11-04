@@ -66,14 +66,19 @@ class CharacterContentTest {
     @Test
     void scriptedLinesRotateInOrder() {
         String session = "rotation-test";
+        // 단계 1의 BREAK는 PM 대사 2줄: 순서대로 돈다. 단계 4는 단계 4 묶음
         String first =
-                contents.next(1, "BREAK", null, 2, session, "민수").orElseThrow().content();
+                contents.next(1, "BREAK", null, 1, session, "민수").orElseThrow().content();
         String second =
-                contents.next(1, "BREAK", null, 2, session, "민수").orElseThrow().content();
+                contents.next(1, "BREAK", null, 1, session, "민수").orElseThrow().content();
         String third =
-                contents.next(1, "BREAK", null, 2, session, "민수").orElseThrow().content();
+                contents.next(1, "BREAK", null, 1, session, "민수").orElseThrow().content();
         assertThat(first).isNotEqualTo(second);
         assertThat(third).isEqualTo(first);
+        assertThat(contents.next(1, "BREAK", null, 4, session, "민수")
+                        .orElseThrow()
+                        .content())
+                .startsWith("쉬자. 오늘 진짜 열심히 했어");
         // 강도 칸(AWAY_2)이 있으면 그 칸, 없는 상황은 빈 값 (공통 고정 대사로)
         assertThat(contents.next(1, "AWAY_2", "AWAY", 1, session, "민수")
                         .orElseThrow()
@@ -126,6 +131,7 @@ class CharacterContentTest {
                 c.world(),
                 c.moves(),
                 c.lines(),
+                c.samples(),
                 c.scores(),
                 c.habits());
         mvc.perform(put(API + "/1/content")
@@ -182,6 +188,7 @@ class CharacterContentTest {
                 world,
                 c.moves(),
                 c.lines(),
+                c.samples(),
                 c.scores(),
                 c.habits());
     }

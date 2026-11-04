@@ -9,6 +9,7 @@ import com.capsule.dialogue.dto.CharacterContent.Example;
 import com.capsule.dialogue.dto.CharacterContent.Line;
 import com.capsule.dialogue.dto.CharacterContent.Lore;
 import com.capsule.dialogue.dto.CharacterContent.Move;
+import com.capsule.dialogue.dto.CharacterContent.Sample;
 import com.capsule.dialogue.dto.CharacterContent.World;
 import com.capsule.dialogue.engine.Content;
 import com.capsule.dialogue.repository.CharacterContentRepository;
@@ -63,11 +64,14 @@ public class CharacterContentSeeder implements ApplicationRunner {
             List<String> skipMoves,
             Map<SignalType, ScoreRule> scores,
             Map<String, String> habits,
-            Map<String, List<LineFile>> lines) {}
+            Map<String, List<LineFile>> lines,
+            Map<Integer, List<SampleFile>> samples) {}
 
     record WorldFile(String code, String name, String setting) {}
 
     record LineFile(String text, String expression, Integer minStage) {}
+
+    record SampleFile(String user, String reply) {}
 
     private final CharacterContentRepository contents;
     private final RoomQuery rooms;
@@ -167,6 +171,9 @@ public class CharacterContentSeeder implements ApplicationRunner {
                 lines.add(new Line(situation, l.minStage() == null ? 1 : l.minStage(), i, l.text(), l.expression()));
             }
         });
+        List<Sample> samples = new ArrayList<>();
+        (p.samples() == null ? Map.<Integer, List<SampleFile>>of() : p.samples())
+                .forEach((stage, list) -> list.forEach(s -> samples.add(new Sample(stage, s.user(), s.reply()))));
         return new CharacterContent(
                 characterId,
                 code,
@@ -183,6 +190,7 @@ public class CharacterContentSeeder implements ApplicationRunner {
                         p.world().code(), p.world().name(), p.world().setting().strip(), lore, events),
                 moves,
                 lines,
+                samples,
                 p.scores() == null ? Map.of() : p.scores(),
                 p.habits() == null ? Map.of() : p.habits());
     }
