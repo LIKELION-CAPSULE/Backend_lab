@@ -21,6 +21,9 @@
   - `REDIS_URL=${{Redis.REDIS_URL}}`
   - `CAPSULE_JWT_SECRET`: 32바이트 이상 무작위 값. local 기본값을 쓰지 않는다
   - `CAPSULE_CORS_ORIGINS`: 프론트 주소
+  - `CAPSULE_FRONTEND_URL`: 배포된 프론트 주소 하나(비밀번호 재설정 메일 링크 앞부분, api.md 25). 필수
+  - `CAPSULE_BREVO_KEY` · `CAPSULE_MAIL_FROM`: 인증 메일(0020). 필수
+  - `CAPSULE_KAKAO_REST_API_KEY`: 카카오 로그인. 필수(`CAPSULE_KAKAO_CLIENT_SECRET`는 Client Secret을 켰을 때만)
   - `CAPSULE_REFRESH_COOKIE_SAME_SITE`: 기본 `None`(프론트와 도메인이 다를 때). 같은 사이트면 `Lax`
   - 배포 브랜치: `develop`. Railway의 "Wait for CI"를 켜서 verify가 통과한 커밋만 배포한다
 - 대가
