@@ -825,7 +825,7 @@ GET /api/me/memories?date=2026-11-12
 
 | 화면 요소 | 이 API가 하는 일 |
 | --- | --- |
-| H06 '오늘의 목표 시간' 슬라이더 (5분~3시간, 기본 50분) | `targetMinutes` 검증 |
+| H06 '오늘의 목표 시간' 슬라이더 (3분~3시간, 기본 50분. 3 → 5 → 10 → … → 180) | `targetMinutes` 검증 |
 | H06 '시작하기' | 세션 생성 → H07 |
 | H06 '대화 옵션' 등급 · 보유 크레딧 · 크레딧 부족 안내 | **제거** |
 | H07 상단 룸 제목 · 배경 | `room` |
@@ -844,7 +844,7 @@ GET /api/me/memories?date=2026-11-12
 | --- | --- | --- | --- |
 | roomId | Long | O | 들어갈 수 있는 룸 (현재 1개) |
 | characterId | Long | O | 함께할 캐릭터 1명 (그 룸 캐릭터만 가능) |
-| targetMinutes | Integer | O | 5~180분, 5분 단위 |
+| targetMinutes | Integer | O | 3분, 또는 5~180분 5분 단위 (2026-11-05: 최소 5분 → 3분) |
 
 ```json
 { "roomId": 1, "characterId": 1, "targetMinutes": 50 }
