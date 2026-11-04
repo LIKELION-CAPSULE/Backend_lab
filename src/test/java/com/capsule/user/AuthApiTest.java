@@ -13,10 +13,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import jakarta.servlet.http.Cookie;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MvcResult;
 
 class AuthApiTest extends UserApiTestSupport {
+
+    @Autowired
+    JdbcTemplate jdbc;
 
     @Test
     void emailSignupLoginRefreshLogout() throws Exception {
@@ -159,7 +164,7 @@ class AuthApiTest extends UserApiTestSupport {
         String kakaoId = UUID.randomUUID().toString();
         String code = "fake-kakao:%s:카카오닉네임".formatted(kakaoId);
 
-        // 약관 동의 없이 가입된다 (api.md 6, 추후 카카오싱크)
+        // 약관 체크 없이 가입되고, 최신 필수 약관(3·4)이 동의로 기록된다 (api.md 6, 안내 문구 고지)
         MvcResult created = postJson("/api/auth/social/KAKAO", kakaoBody(code))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.isNewUser").value(true))
@@ -167,6 +172,11 @@ class AuthApiTest extends UserApiTestSupport {
                 .andExpect(header().string(HttpHeaders.SET_COOKIE, containsString("refresh_token=")))
                 .andReturn();
         int userId = read(created, "$.userId");
+        assertThat(jdbc.queryForList(
+                        "SELECT term_version_id FROM user_terms WHERE user_id = ? ORDER BY term_version_id",
+                        Long.class,
+                        userId))
+                .containsExactly(3L, 4L);
         mvc.perform(get("/api/me").header(HttpHeaders.AUTHORIZATION, bearer(created)))
                 .andExpect(jsonPath("$.nickname").value("카카오닉네임"))
                 .andExpect(jsonPath("$.email").value(nullValue()));
