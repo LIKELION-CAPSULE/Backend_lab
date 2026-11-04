@@ -249,7 +249,7 @@ public class LabService {
                 text,
                 out == null ? null : out.reply(),
                 out == null ? null : out.emotion(),
-                points(out),
+                points(out, s.characterId()),
                 error,
                 ms,
                 cost(used),
@@ -292,7 +292,7 @@ public class LabService {
                             "signal",
                             o.signal(),
                             "affinity",
-                            points(o),
+                            points(o, c.id()),
                             "trace",
                             o.trace());
                 };
@@ -409,9 +409,9 @@ public class LabService {
     /**
      * 서비스였다면 이 턴의 호감도 점수 (세션 반복 규칙 · 하루 상한 전, 비율 감점은 50점 기준). 실험실은 호감도를 바꾸지 않는다
      */
-    Integer points(ChatOutcome o) {
+    Integer points(ChatOutcome o, long characterId) {
         if (o == null || o.signal() == null) return null;
-        ChatScore s = scorer.score(o.signal(), List.of());
+        ChatScore s = scorer.score(characterId, o.signal(), List.of());
         return s.lossPercent() > 0 ? Math.min(s.points(), -(START_POINTS * s.lossPercent() + 99) / 100) : s.points();
     }
 

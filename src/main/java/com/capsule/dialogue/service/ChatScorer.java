@@ -2,10 +2,12 @@ package com.capsule.dialogue.service;
 
 import com.capsule.dialogue.config.DialogueProperties;
 import com.capsule.dialogue.config.DialogueProperties.ScoreRule;
+import com.capsule.dialogue.dto.CharacterContent;
 import com.capsule.dialogue.engine.Rules;
 import com.capsule.relation.api.RelationTypes.ChatScore;
 import com.capsule.relation.api.RelationTypes.SignalType;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Pattern;
 import org.springframework.stereotype.Component;
 
@@ -17,9 +19,11 @@ import org.springframework.stereotype.Component;
 public class ChatScorer {
 
     private final DialogueProperties props;
+    private final CharacterContents contents;
 
-    ChatScorer(DialogueProperties props) {
+    ChatScorer(DialogueProperties props, CharacterContents contents) {
         this.props = props;
+        this.contents = contents;
     }
 
     /** 앞에 걸리는 것이 이긴다: 심한 말 > 무례 > 고민 > 고마움 > 칭찬 > 불평 > 단답 */
@@ -40,9 +44,13 @@ public class ChatScorer {
     /**
      * @param earlier 이번 세션에서 앞선 사용자 말들의 종류 (오래된 것부터, 모르는 것은 null)
      */
-    // TODO(judgment): J-06 대화 점수표 · 반복 규칙 (PM 임시값: application.yml chat-scores)
-    public ChatScore score(SignalType signal, List<SignalType> earlier) {
-        ScoreRule rule = props.chatScores().get(signal);
+    // TODO(judgment): J-06 대화 점수표 · 반복 규칙 (PM 임시값: 캐릭터 설정 character_scores, 없으면 application.yml chat-scores)
+    public ChatScore score(long characterId, SignalType signal, List<SignalType> earlier) {
+        Map<SignalType, ScoreRule> table = contents.find(characterId)
+                .map(CharacterContent::scores)
+                .filter(s -> !s.isEmpty())
+                .orElse(props.chatScores());
+        ScoreRule rule = table.get(signal);
         if (rule == null) return new ChatScore(signal, 0, 0);
         boolean seen = earlier.contains(signal);
         if (rule.oncePerSession() && seen) return new ChatScore(signal, 0, 0);

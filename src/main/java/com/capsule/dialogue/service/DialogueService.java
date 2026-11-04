@@ -103,6 +103,7 @@ public class DialogueService {
     private final ChatPipeline chat;
     private final ChatReplier replier;
     private final ChatScorer scorer;
+    private final CharacterContents characterContents;
     private final MemoryKeeper memoryKeeper;
     private final ClosingWriter closingWriter;
     private final ConversationRepository conversations;
@@ -127,6 +128,7 @@ public class DialogueService {
             List<ChatPipeline> pipelines,
             ChatReplier replier,
             ChatScorer scorer,
+            CharacterContents characterContents,
             MemoryKeeper memoryKeeper,
             ClosingWriter closingWriter,
             ConversationRepository conversations,
@@ -153,6 +155,7 @@ public class DialogueService {
                         () -> new IllegalStateException("capsule.dialogue.chat-pipeline을 모름: " + props.chatPipeline()));
         this.replier = replier;
         this.scorer = scorer;
+        this.characterContents = characterContents;
         this.memoryKeeper = memoryKeeper;
         this.closingWriter = closingWriter;
         this.conversations = conversations;
@@ -180,9 +183,14 @@ public class DialogueService {
 
         // 호감도는 상태 변화 전송(18)이 반영하고 그 응답으로 돌려준다. 여기서는 관계 단계(호감도 구간)만 읽어 말투를 고른다
         int relationLevel = relationQuery.view(userId, characterId).stage();
-        ReactionLine line = fixedLines.reaction(characterId, trigger, awayLevel, relationLevel, Map.of());
+        // 캐릭터 설정에 미리 쓴 대사가 있으면 순서대로 (PM 확정). AI 생성은 없다. 없으면 공통 고정 대사 · LLM 설정대로
+        String situation = awayLevel != null && awayLevel > 1 ? trigger + "_" + awayLevel : trigger;
+        Optional<ReactionLine> scripted = characterContents.next(
+                characterId, situation, trigger, relationLevel, String.valueOf(sessionId), nickname(userId));
+        ReactionLine line =
+                scripted.orElseGet(() -> fixedLines.reaction(characterId, trigger, awayLevel, relationLevel, Map.of()));
         boolean fallback = false;
-        if (reactionWriter.usesLlm(trigger)) {
+        if (scripted.isEmpty() && reactionWriter.usesLlm(trigger)) {
             // 상태 변화는 LLM: 관계 단계 + 지난 세션 흐름 + 이번 세션 최근 대화를 같이 넣는다
             CharacterInfo character = character(characterId);
             String nickname = nickname(userId);
@@ -286,12 +294,17 @@ public class DialogueService {
                 EngineOptions.DEFAULT);
         LlmContext ctx = LlmContext.app(userId, sessionId, deadline());
         Optional<ChatOutcome> outcome = withinBudget(() -> replier.reply(chat, input, ctx));
-        String reply = outcome.map(ChatOutcome::reply).orElseGet(() -> fixedLines.replyFallback(characterId));
+        String reply = outcome.map(ChatOutcome::reply)
+                .orElseGet(() -> characterContents
+                        .next(characterId, "REPLY_FALLBACK", null, input.relationLevel(), String.valueOf(sessionId), "")
+                        .map(ReactionLine::content)
+                        .orElseGet(() -> fixedLines.replyFallback(characterId)));
         // 명세 20: fallback이면 호감도 변화 없음 (0점이어도 applyChatScore를 불러 잠금 순서를 지킨다)
         SignalType signal = outcome.map(ChatOutcome::signal).orElse(null);
         ChatScore score = signal == null
                 ? ChatScore.none()
                 : scorer.score(
+                        characterId,
                         signal,
                         earlier.stream()
                                 .filter(m -> USER.equals(m.sender()) && m.signal() != null)
@@ -373,7 +386,15 @@ public class DialogueService {
     /** 명세 19·20: 감정 이름으로 반응 표에서 모션·표정을 고른다. 감정이 없거나 그 감정 행이 없으면 동작 없음 */
     // TODO(judgment): J-07 ②·J-12 ② 감정이 없을 때(LLM 5초 초과 등) 기본 감정을 쓸지. 지금은 동작 없음
     private Reaction emotionReaction(long characterId, String emotion) {
-        return emotion == null ? Reaction.NONE : reactions.pick(characterId, emotion, null);
+        if (emotion == null) return Reaction.NONE;
+        Reaction r = reactions.pick(characterId, emotion, null);
+        if (!Reaction.NONE.equals(r)) return r;
+        // 아직 에셋이 없는 표정이면 캐릭터 설정의 대체 표정으로 (PM: 화남 → 찡그림 등)
+        String substitute = characterContents
+                .find(characterId)
+                .map(c -> c.fallbackExpression(emotion))
+                .orElse(emotion);
+        return substitute.equals(emotion) ? r : reactions.pick(characterId, substitute, null);
     }
 
     /** 이미 답한 requestId면 저장된 답장 */
@@ -419,8 +440,14 @@ public class DialogueService {
                         lines(pending),
                         Map.of(),
                         ctx));
-        CompletableFuture<String> line = start(() -> closingWriter.closingLine(
-                character, nickname, closing.studySeconds(), closing.endType(), Map.of(), ctx));
+        // 캐릭터 설정에 완료 대사가 있으면 그것 (PM: 말포이는 고정 문장), 없으면 LLM
+        Optional<String> scriptedClosing = characterContents
+                .next(closing.characterId(), "CLOSING", null, 1, String.valueOf(closing.sessionId()), nickname)
+                .map(ReactionLine::content);
+        CompletableFuture<String> line = scriptedClosing.isPresent()
+                ? CompletableFuture.completedFuture(scriptedClosing.get())
+                : start(() -> closingWriter.closingLine(
+                        character, nickname, closing.studySeconds(), closing.endType(), Map.of(), ctx));
 
         Optional<String> card = recap == null ? Optional.empty() : await(recap);
         if (card.isPresent()) {

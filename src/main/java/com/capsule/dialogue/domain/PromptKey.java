@@ -9,6 +9,7 @@ import java.util.Arrays;
 public enum PromptKey {
     CHAT_SYSTEM("chat.system", "md", false, "답장(20) 시스템: 캐릭터·규칙·출력 형식. 캐릭터마다 같아서 프롬프트 캐시에 올라감"),
     CHAT_CONTEXT("chat.context", "md", false, "답장(20) 상황: 시각·닉네임·호감도·지난 요약·일정. 매번 바뀜(캐시 안 됨)"),
+    SCENE_SYSTEM("scene.system", "md", false, "답장(20, SCENE): DB 캐릭터 설정(바이블·규칙·세계·표정)을 끼우는 틀. 캐시에 올라감"),
     FIXED_LINES("fixed.lines", "yml", false, "LLM 없이 쓰는 대사: 상태 반응(19) 고정 대사·감정, LLM 실패 때 대체 대사(20·22)"),
     REACTION_SYSTEM("reaction.system", "md", false, "상태 반응(19)을 LLM으로 만들 때 (capsule.dialogue.reaction-llm-triggers)"),
     SUMMARY_SYSTEM("summary.system", "md", false, "종료(22): 이번 대화를 지난 요약에 합치기 (J-08)"),

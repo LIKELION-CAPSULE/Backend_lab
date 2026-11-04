@@ -108,9 +108,10 @@ class FlowE2ETest {
         assertThat((Integer) JsonPath.read(body(focus), "$.characters[0].affinity.points"))
                 .isEqualTo(50); // 50에서 시작
         MvcResult greeting = call(post(s + "/events/" + eventId(focus) + "/reaction"), token, reactionBody(null), 200);
-        // 상태 변화(인사 · 자리 비움)는 LLM 반응 (테스트는 Fake LLM). 동작 이벤트는 고정 대사
+        // 상태 반응은 캐릭터 설정(DB, 처음 값은 characters/malfoy/profile.yml)의 미리 쓴 대사 (PM 확정, AI 생성 꺼짐)
         assertThat((String) JsonPath.read(body(greeting), "$.characters[0].content"))
-                .startsWith("(가짜 반응)");
+                .startsWith("뭐야, ")
+                .doesNotContain("{name}");
         assertThat((Boolean) JsonPath.read(body(greeting), "$.characters[0].fallback"))
                 .isFalse();
 
@@ -124,7 +125,9 @@ class FlowE2ETest {
         long awayId = eventId(awayEvent);
         MvcResult away = call(post(s + "/events/" + awayId + "/reaction"), token, reactionBody(1), 200);
         assertThat((String) JsonPath.read(body(away), "$.characters[0].content"))
-                .startsWith("(가짜 반응)");
+                .isEqualTo("야 어디가?!");
+        assertThat((String) JsonPath.read(body(away), "$.characters[0].emotion"))
+                .isEqualTo("삐짐");
         MvcResult awayAgain = eventCall(token, s, "AWAY", awayAt, 200);
         assertThat(eventId(awayAgain)).isEqualTo(awayId);
         assertThat(affinityDelta(awayAgain)).isZero(); // 재전송은 다시 반영하지 않고 같은 변화

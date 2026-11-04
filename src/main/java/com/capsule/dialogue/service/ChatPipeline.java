@@ -13,6 +13,8 @@ public interface ChatPipeline {
 
     String SIMPLE = "SIMPLE";
     String ENGINE = "ENGINE";
+    /** DB 캐릭터 설정 + 장면 카드 (ADR 0022 결정 15). 기본 */
+    String SCENE = "SCENE";
 
     String name();
 

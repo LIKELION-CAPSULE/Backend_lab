@@ -246,7 +246,8 @@ public class EvalService {
                         pipeline, LabService.input(character, config, List.copyOf(history), userText, state), ctx);
                 long ms = LabService.elapsedMs(t0);
                 total += ms;
-                transcript.add(new TranscriptTurn(userText, o.reply(), o.emotion(), lab.points(o), ms, null));
+                transcript.add(
+                        new TranscriptTurn(userText, o.reply(), o.emotion(), lab.points(o, character.id()), ms, null));
                 history.add(new ChatLine(ChatMessage.USER, userText));
                 history.add(new ChatLine(ChatMessage.CHARACTER, o.reply()));
                 state = o.engineState();

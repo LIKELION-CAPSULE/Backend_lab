@@ -1061,7 +1061,9 @@ GET /api/me/memories?date=2026-11-12
 
 #### 한 줄 요약
 
-18번에서 받은 `eventId`로 그 상황에 맞는 **캐릭터 대사를 LLM으로** 받습니다. **대사의 감정에 맞는 모션 · 표정**을 같이 줍니다. 호감도는 18번 응답에 이미 있어서 여기엔 없습니다.
+18번에서 받은 `eventId`로 그 상황에 맞는 **캐릭터 대사**를 받습니다. **대사의 감정에 맞는 모션 · 표정**을 같이 줍니다. 호감도는 18번 응답에 이미 있어서 여기엔 없습니다.
+
+> 2026-11-04 (PM 결정 · 캐릭터 설정 DB): 대사는 캐릭터 설정(`character_lines`)에 **미리 쓴 대사를 상황마다 순서대로** 돌려 쓴다. AI 생성은 설정으로 꺼 둠(데모데이 이후). 그 캐릭터에 그 상황 대사가 없으면 서버 공통 고정 대사
 
 #### 18 모션과 19 모션
 
@@ -1124,7 +1126,7 @@ GET /api/me/memories?date=2026-11-12
 | characters | Array | 이번에 말하는 캐릭터만 (1:1 룸이면 1개) |
 | characters[].characterId | Long | 캐릭터 id |
 | characters[].content | String | 말풍선 대사 (2줄 이내) |
-| characters[].emotion | String | 대사의 감정 이름 (예: `HAPPY` · `SAD`). **목록은 고정이 아니다**: 캐릭터의 Live2D 에셋(디자이너가 만든 표정 · 모션)에 따라 정해지고 바뀔 수 있다 (지금 후보: `HAPPY` · `SHY` · `ANGRY` · `SAD` · `SURPRISED` · `NEUTRAL`). 서버는 그 캐릭터의 반응 매핑에 있는 감정 중에서만 고른다. ⚠️ 고정 대사(`fallback: true`)일 때 값은 확정 필요 (지금 구현은 null) |
+| characters[].emotion | String | 대사의 표정 이름. **목록은 캐릭터 설정(`character_profiles.expressions`)이 정한다** (말포이: `웃음` · `찡그림` · `화남` · `삐짐` · `수줍음` · `집중`, PM 2026-11-04). 에셋이 없는 표정은 서버가 대체 표정(`expression_fallbacks`, 예: 화남 → 찡그림)으로 모션 · 표정을 고른다. 설정이 없는 캐릭터는 공통 후보(`HAPPY` · `SHY` · `ANGRY` · `SAD` · `SURPRISED` · `NEUTRAL`). ⚠️ 고정 대사(`fallback: true`)일 때 값은 확정 필요 (지금 구현은 null) |
 | characters[].motion | Object | `group`, `file` — 감정에 맞는 모션 (없으면 null → 18 동작 유지) |
 | characters[].expression | Object | `name`, `file` — 감정에 맞는 표정 (없으면 null) |
 | characters[].fallback | Boolean | LLM 5초 초과로 고정 대사를 썼는지 |
@@ -1383,7 +1385,7 @@ json
 | relation | Object | `levelBefore` · `levelAfter` · `levelUp`(공부 시간 레벨, 이 세션 자리 지킴 시간 반영) · `nextLevelSeconds`(다음 레벨이 되는 누적 자리 지킴 시간) · `pointsBefore`(공부 시작 때) · `pointsAfter`(이벤트 · 대화 반영 후) · `stage` · `stageName`(끝날 때 관계 단계) · `levelName`(옛 필드, `stageName`과 같은 값) · `nextLevelPoints`(옛 필드, 늘 null) |
 
 > 2026-11-04 (호감도 최종안): 공부 시간은 호감도를 올리지 않고 레벨에만 씀. 레벨 = 자리 지킴 60분당 1 (임시, PM 확인 필요)
-| closingLine | String | 완료 대사 (리포트 · 카드 공용) |
+| closingLine | String | 완료 대사 (리포트 · 카드 공용). 캐릭터 설정에 완료 대사(`character_lines` CLOSING)가 있으면 그 문장(PM: 말포이는 고정), 없으면 AI |
 
 json
 

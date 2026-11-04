@@ -1,7 +1,9 @@
 package com.capsule.dialogue.controller;
 
 import com.capsule.common.error.ApiException;
+import com.capsule.dialogue.config.CharacterContentSeeder;
 import com.capsule.dialogue.domain.PromptKey;
+import com.capsule.dialogue.dto.CharacterContent;
 import com.capsule.dialogue.dto.EnginePackRequest;
 import com.capsule.dialogue.dto.EvalCaseRequest;
 import com.capsule.dialogue.dto.EvalCaseView;
@@ -20,6 +22,7 @@ import com.capsule.dialogue.dto.PromptView;
 import com.capsule.dialogue.dto.RatingRequest;
 import com.capsule.dialogue.dto.UsageSummary;
 import com.capsule.dialogue.dto.UsageView;
+import com.capsule.dialogue.service.CharacterContents;
 import com.capsule.dialogue.service.EvalService;
 import com.capsule.dialogue.service.LabService;
 import com.capsule.dialogue.service.PromptService;
@@ -61,11 +64,44 @@ class LlmLabController {
     private final LabService lab;
     private final EvalService eval;
     private final PromptService prompts;
+    private final CharacterContents contents;
+    private final CharacterContentSeeder seeder;
 
-    LlmLabController(LabService lab, EvalService eval, PromptService prompts) {
+    LlmLabController(
+            LabService lab,
+            EvalService eval,
+            PromptService prompts,
+            CharacterContents contents,
+            CharacterContentSeeder seeder) {
         this.lab = lab;
         this.eval = eval;
         this.prompts = prompts;
+        this.contents = contents;
+        this.seeder = seeder;
+    }
+
+    // --- 캐릭터 · 세계관 설정 (DB가 원본, ADR 0022 결정 15) ---
+
+    @GetMapping("/api/characters/{id}/content")
+    CharacterContent content(@PathVariable long id) {
+        return contents.find(id).orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "CONTENT_NOT_FOUND"));
+    }
+
+    /** 설정 전체를 이 내용으로 바꾼다 (GET으로 받은 JSON을 고쳐서 보낸다). 바로 서비스 답장에 쓰인다 */
+    @PutMapping("/api/characters/{id}/content")
+    CharacterContent replaceContent(@PathVariable long id, @RequestBody CharacterContent body) {
+        if (body.characterId() != id) throw new ApiException(HttpStatus.BAD_REQUEST, "CHARACTER_ID_MISMATCH");
+        contents.replace(body);
+        return content(id);
+    }
+
+    /** git의 처음 값(classpath:characters/{code}/)으로 덮어쓴다 */
+    @PostMapping("/api/characters/reseed/{code}")
+    CharacterContent reseed(@PathVariable String code) {
+        if (!seeder.seed(code, true)) throw new ApiException(HttpStatus.NOT_FOUND, "CHARACTER_NOT_FOUND");
+        CharacterContent c = CharacterContentSeeder.load(code);
+        contents.evict(c.characterId());
+        return content(c.characterId());
     }
 
     @GetMapping({"", "/"})

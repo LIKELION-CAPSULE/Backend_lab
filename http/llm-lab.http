@@ -129,3 +129,16 @@ GET {{lab}}/usages
 
 ### 19. 7일 집계: 하루 × 출처 × 공급자 × 모델 × 용도별 호출 수·오류·토큰·비용·평균/p95 지연·5초 초과
 GET {{lab}}/usages/summary?days=7
+
+### 20. 캐릭터 · 세계관 설정 읽기 (DB가 원본, ADR 0022 결정 15)
+# 정체성 · 화법 · 규칙 · 표정 · 관계 단계 말투 · 세계 지식 · 사건 · 대화 기술 · 상황 대사 · 점수표 · 말버릇 전부
+GET {{lab}}/characters/1/content
+
+### 21. 캐릭터 설정 바꾸기: 20의 JSON을 고쳐서 통째로 보낸다. 바로 서비스 답장에 쓰인다 (되돌리려면 22)
+PUT {{lab}}/characters/1/content
+Content-Type: application/json
+
+< ./character-1.json
+
+### 22. git의 처음 값(classpath:characters/malfoy/)으로 덮어쓰기
+POST {{lab}}/characters/reseed/malfoy
