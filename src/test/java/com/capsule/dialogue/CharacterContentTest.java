@@ -188,6 +188,7 @@ class CharacterContentTest {
                 world,
                 c.moves(),
                 c.lines(),
+                c.samples(),
                 c.scores(),
                 c.habits());
     }
