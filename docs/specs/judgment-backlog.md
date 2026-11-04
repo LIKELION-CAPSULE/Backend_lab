@@ -9,15 +9,15 @@
 | J-01 | relation | seunghee | 상태 이벤트별 호감도 변화량 (동작 이벤트 DROWSY · YAWN · WAVE 포함, 2026-11-04 추가) | `relation/service/AffinityPolicy.java` | 명세 예시값: 처음 만난 날 첫 FOCUS +5(FIRST_MEET), AWAY −1, RETURN +1, BREAK 0. 동작 이벤트 3종은 0 | api.md 18 "예시, 기획 확정 필요" | 미정 (#14) |
 | J-02 | relation | seunghee | 공부 시간 → STUDY_TIME 점수 공식 | `relation/service/AffinityPolicy.java` | 공부 1분당 +1 | api.md 22 | 미정 (#14) |
 | J-03 | relation | seunghee | 레벨 기준 포인트·레벨 이름 | `relation/service/AffinityPolicy.java` | Lv.1 0점 '아는 사이', Lv.2 100점 '친한 사이', Lv.3 300점 'Lv.3' | api.md 12, 22 | 미정 (#14) |
-| J-04 | dialogue | seunghee | 이벤트 반응 대사(LLM)와 trigger별 고정 대사(5초 초과) | `dialogue/client/FakeLlmClient.java`, `LlmClient.java`(고정 대사 표) | trigger별 고정 문장 1개. 동작 이벤트 3종(DROWSY · YAWN · WAVE)은 아직 없음 → 대사 null (명세 8차에서 대사 null이 빠져 3종도 고정 대사가 필요) | api.md 19 | 미정 (#11, 동작 이벤트 #27) |
+| J-04 | dialogue | seunghee | 이벤트 반응 대사(LLM)와 trigger별 고정 대사(5초 초과) | `dialogue/client/FakeLlmClient.java`, `LlmClient.java`(고정 대사 표) | trigger별 고정 문장 1개. 동작 이벤트 3종(DROWSY · YAWN · WAVE)은 임시 문구(#41) | api.md 19 | 미정 (#11, 동작 이벤트 #27) |
 | J-05 | dialogue | seunghee | 대화 답장 생성 (캐릭터 설정·요약·대화·일정, 답 길이) | `dialogue/client/FakeLlmClient.java`, `LlmClient.java`(대체 대사) | 고정 문장 + 입력 일부 | api.md 20 | 미정 (#11, 휴식 여부 계약 #8) |
 | J-06 | dialogue | seunghee | 대화 호감도 판정 (−5~5) | `dialogue/client/FakeLlmClient.java` | 항상 +1 | api.md 20 | 미정 (#11, 점수는 기획 #7) |
-| J-07 | dialogue | seunghee | 답장 감정 → 모션·표정 고르는 규칙 (엔진 표정 태그 ↔ 반응 표 감정 이름) | `dialogue/service/DialogueService.java` | 모션·표정 없음 | api.md 19·20 (9차: 감정 목록은 데이터) | 미정 (#11·#33, 데이터 #9) |
+| J-07 | dialogue | seunghee | 답장 감정 → 모션·표정 고르는 규칙 (엔진 표정 태그 ↔ 반응 표 감정 이름) | `dialogue/service/DialogueService.java` | 감정이 있으면 반응 표에서 그 감정으로 고름(#41). Fake 답장은 감정을 안 정해서 모션·표정 없음 | api.md 19·20 (9차: 감정 목록은 데이터) | 미정 (#11·#33, 데이터 #9) |
 | J-08 | dialogue | seunghee | 세션 종료 시 대화 요약 합치기 | `dialogue/client/FakeLlmClient.java` | 기존 요약 + "[세션 N] 메시지 n개" 한 줄 | api.md 22 | 미정 (#12) |
 | J-09 | dialogue | seunghee | 완료 대사 `closingLine` 생성, 못 만들 때 대체 문구 | `dialogue/client/FakeLlmClient.java`, `LlmClient.java`(대체 문구) | 캐릭터 이름을 넣은 고정 문구. 실패·5초 초과면 명세 22 예시 문장 | api.md 22·23 | 미정 (#12) |
 | J-10 | dialogue | seunghee | TTS `audioBase64` | `dialogue/service/DialogueService.java` | 항상 null | api.md 19·20 | 미정 (#13) |
 | J-11 | session | seonguk | 종료 시 프론트 값과 서버 계산값이 "크게" 다를 때의 기준 | `session/service/SessionService.java` `end()` | 명세의 부등식 검증만 하고 프론트 값 사용 | api.md 22 "같이 챙길 것" | 미정 (#20) |
-| J-12 | dialogue | seunghee | 이벤트 반응 감정 `emotion` 값 목록과 정하는 기준 (LLM 출력) | `dialogue/client/FakeLlmClient.java` | trigger별 고정 값 (GREETING·RETURN `HAPPY`, AWAY `SAD`, BREAK·BREAK_END `NEUTRAL`). 고정 대사(fallback)면 null | api.md 19 (2026-11-04) | 미정 (#33) |
+| J-12 | dialogue | seunghee | 이벤트 반응 감정 `emotion` 값 목록과 정하는 기준 (LLM 출력) | `dialogue/client/FakeLlmClient.java` | trigger별 고정 값 (GREETING·RETURN·WAVE `HAPPY`, AWAY `SAD`, BREAK·BREAK_END·DROWSY·YAWN `NEUTRAL`). 고정 대사(fallback)면 null | api.md 19 (2026-11-04) | 미정 (#33) |
 
 ## 판단 항목을 가져갈 때 같이 볼 것
 - **J-05 답 길이 규칙**(공부 중 1~2문장, 쉬는 시간 2~4문장)을 적용하려면 dialogue가 "지금 휴식 중인지"를 알아야 한다. 지금 `session.api.SessionQuery`에는 없어서 계약 확장이 필요하다(contract-change 스킬).
@@ -251,7 +251,7 @@
   - `BREAK_END`: 쉬는 시간 뒤 다시 공부
   - `DROWSY` · `YAWN` · `WAVE`: 졸음, 하품, 손 흔들기
 - 동작은 두 번 나온다. 이벤트를 보내자마자 18 응답의 '알아채는' 동작(고개 돌림 등)을 재생하고, 대사가 오면 19 응답의 감정 동작을 재생한다.
-- 지금 Fake는 trigger마다 고정 문장 1개다(`LlmClient.FIXED_REACTION_LINES`). 캐릭터 구분이 없고, `AWAY` 강도 1~3에 같은 문장이 나오고, 동작 3종은 대사가 없다(null, 이슈 #27). 명세 8차에서 "대사 없는 반응이면 null"이 빠져서 3종도 대사가 있어야 한다.
+- 지금 Fake는 trigger마다 고정 문장 1개다(`LlmClient.FIXED_REACTION_LINES`). 캐릭터 구분이 없고, `AWAY` 강도 1~3에 같은 문장이 나온다. 동작 3종은 임시 문구가 들어가 있다(#41, 문구 확정은 #27). 명세 8차에서 "대사 없는 반응이면 null"이 빠져서 모든 상황에 대사가 있어야 한다.
 - '조용히 집중' 모드에서는 반응을 부르지 않는다.
 
 #### ① 대사를 LLM으로 만들까, 미리 써 둔 대사에서 고를까
@@ -282,8 +282,7 @@
 
 #### ④ 자리 비움 강도(1~3)를 동작에도 쓸까
 - 프론트는 자리 비움이 길어지면 같은 이벤트로 반응을 다시 부른다. 1 눈치(바로), 2 말 걸기(1분), 3 서운함(5분).
-- 지금 코드는 19가 trigger와 강도로 반응 표에서 동작을 고른다(시드의 `AWAY` 강도 2·3 행이 쓰임). 반면 Fake 대사는 강도를 무시한다.
-- 명세 8차 기준(#33 반영 후)으로는 19의 모션·표정이 감정 기준으로 바뀌고, 18의 '알아채는' 동작은 강도 1로 고정된다. 그러면 반응 표의 `AWAY` 강도 2·3 행을 고르는 곳이 없어지고, 강도는 대사에만 쓰인다(`api.md` 19 ⚠️).
+- 명세 8차대로 19의 모션·표정은 감정으로 고르고(#41), 18의 '알아채는' 동작은 강도 1로 고정이다. 그래서 반응 표의 `AWAY` 강도 2·3 행을 고르는 곳이 없고, 강도는 대사(LLM 입력)에만 쓰인다(`api.md` 19 ⚠️). 지금 Fake 대사는 강도를 무시한다.
 
 | 안 | 동작 | 기획 의미 |
 |---|---|---|
@@ -428,7 +427,7 @@
 #### 배경
 - 명세 9차에서 정해진 것: 감정 목록은 서버가 고정하지 않고 데이터로 정한다. 반응 표(`live2d_reaction_maps`)에 감정 이름(`HAPPY` 등)을 trigger로 행을 넣고, 서버는 그 캐릭터의 반응 표에 있는 감정 중에서만 고른다. 지금 후보는 `HAPPY` · `SHY` · `ANGRY` · `SAD` · `SURPRISED` · `NEUTRAL`이다. 목록은 디자이너 에셋에 따라 바뀐다.
 - 19(상태 반응)와 20(대화 답장) 모두 이 감정으로 모션과 표정을 고른다. 데이터는 성욱(#9), 코드는 승희(#33).
-- 지금 코드는 20에 모션·표정이 없고(null), 19는 감정이 아니라 trigger로 고른다(#33에서 고침).
+- 지금 코드는 19·20 모두 감정으로 반응 표에서 고른다(#41). 아직 못 한 것은 감정 후보를 그 캐릭터 반응 표에서 가져와 LLM에 주는 것이다(감정 목록 계약 #9 · #33). 로컬 시드에는 감정 행이 없어서 지금은 19·20의 모션·표정이 null이다.
 - 엔진의 배우는 답장 앞에 캐릭터 고유의 한국어 표정 태그를 붙인다. 말포이 기준: 심드렁, 비꼼, 당황, 뿌듯, 짜증, 걱정, 진지. 반응 표의 감정 이름과 다르다.
 
 #### ① 엔진 표정 태그와 반응 표 감정을 어떻게 맞출까
@@ -631,7 +630,7 @@
 
 #### 배경
 - 상태 반응(API 19)은 캐릭터마다 대사와 함께 감정 이름(`emotion`)을 준다. 서버는 그 감정으로 모션·표정을 고른다. 감정 목록은 반응 표의 데이터다(J-07 배경).
-- 지금 Fake는 trigger별 고정 값이다: `GREETING`·`RETURN` → `HAPPY`, `AWAY` → `SAD`, `BREAK`·`BREAK_END` → `NEUTRAL`. 동작 3종은 정해진 값이 없다. 고정 대사(fallback)면 null이다.
+- 지금 Fake는 trigger별 고정 값이다: `GREETING`·`RETURN` → `HAPPY`, `AWAY` → `SAD`, `BREAK`·`BREAK_END` → `NEUTRAL`. 동작 3종은 임시로 `DROWSY`·`YAWN` → `NEUTRAL`, `WAVE` → `HAPPY`(#41, 아래 ① 추천을 임시로 쓴 것). 고정 대사(fallback)면 null이다.
 - 명세 19는 "고정 대사일 때 값은 확정 필요"다.
 
 #### ① 감정을 누가 정할까
