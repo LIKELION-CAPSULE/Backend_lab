@@ -1,6 +1,7 @@
 package com.capsule.dialogue.adapter;
 
 import com.capsule.dialogue.service.DialogueService;
+import com.capsule.dialogue.service.DialogueService.ClosingDraft;
 import com.capsule.session.api.SessionClosingHandler;
 import com.capsule.session.api.SessionTypes.SessionClosing;
 import org.springframework.stereotype.Component;
@@ -19,7 +20,18 @@ class SessionClosingAdapter implements SessionClosingHandler {
     }
 
     @Override
+    public Draft draft(SessionClosing closing) {
+        return dialogue.draft(closing);
+    }
+
+    @Override
+    public String close(SessionClosing closing, Draft draft) {
+        return dialogue.close(closing, draft instanceof ClosingDraft d ? d : null);
+    }
+
+    @Override
+    @Deprecated(forRemoval = true)
     public String close(SessionClosing closing) {
-        return dialogue.close(closing);
+        return dialogue.close(closing, null);
     }
 }

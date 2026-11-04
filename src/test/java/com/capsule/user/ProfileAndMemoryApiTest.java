@@ -199,6 +199,28 @@ class ProfileAndMemoryApiTest extends UserApiTestSupport {
                 .containsExactly("같이 공부하기", "도서관", "영어 중간고사", "토익 900");
     }
 
+    @Test
+    void profileUpdateKeepsWhatIsNotSent() throws Exception {
+        String auth = bearer(signedUp(uniqueEmail()));
+        given(avatarQuery.defaultAvatar()).willReturn(Optional.of(AVATAR));
+        given(avatarQuery.find(1)).willReturn(Optional.of(AVATAR));
+
+        // H02 '나중에 바꿀게요': 빈 요청 → 기본 아바타, 닉네임은 가입 때 값 그대로
+        patchMe(auth, "{}")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nickname").value("승희"))
+                .andExpect(jsonPath("$.onboardingRequired").value(false))
+                .andExpect(jsonPath("$.profileImage").value(AVATAR.thumbnailUrl()));
+
+        // H14에서 닉네임만 바꾸면 아바타는 그대로. 기본 아바타를 다시 찾지 않으므로
+        // 기본 아바타가 없어도(AVATAR_NOT_FOUND가 날 상황) 200
+        given(avatarQuery.defaultAvatar()).willReturn(Optional.empty());
+        patchMe(auth, "{\"nickname\":\"바꾼닉\"}")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nickname").value("바꾼닉"))
+                .andExpect(jsonPath("$.profileImage").value(AVATAR.thumbnailUrl()));
+    }
+
     private ResultActions patchMe(String auth, String body) throws Exception {
         return mvc.perform(patch("/api/me")
                 .header(HttpHeaders.AUTHORIZATION, auth)

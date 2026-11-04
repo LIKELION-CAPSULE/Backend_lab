@@ -283,7 +283,7 @@
 | --- | --- | --- |
 | accessToken | String | 액세스 토큰 (30분). 리프레시 토큰은 HttpOnly 쿠키 |
 | userId | Long | 사용자 id |
-| onboardingRequired | Boolean | 닉네임 · 아바타 설정 전이면 true → H02, 아니면 H03 |
+| onboardingRequired | Boolean | 아바타 설정 전이면 true → H02, 아니면 H03 |
 
 ```json
 { "accessToken": "eyJ...", "userId": 7, "onboardingRequired": false }
@@ -303,17 +303,18 @@
 
 #### 설명
 
-카카오 인가 코드로 로그인합니다. 처음 온 사용자면 같은 요청에서 가입까지 끝내고, 가입 직후엔 H02(아바타 · 닉네임)로 보냅니다. 소셜 로그인은 카카오만 지원합니다.
+카카오 인가 코드로 로그인합니다. 처음 온 사용자면 같은 요청에서 가입까지 끝내고, 가입 직후엔 H02(아바타)로 보냅니다. 닉네임은 카카오 닉네임을 쓰고 H14 프로필에서 바꿀 수 있습니다. 소셜 로그인은 카카오만 지원합니다.
 
 #### 와이어프레임 대조
 
 | 화면 요소 | 이 API가 하는 일 |
 | --- | --- |
 | H01 '카카오로 계속하기' | 카카오 로그인 화면으로 이동 → 돌아온 인가 코드로 이 API 호출 |
-| (신규 가입자) 필수 약관 동의 | `agreedTermVersionIds` |
 | 로그인 후 분기 | `onboardingRequired`면 H02, 아니면 H03 |
 
-> ⚠️ 현재 H01은 카카오 버튼 주변에 약관 동의가 없음. 신규 가입자의 동의를 받으려면 카카오 버튼 아래에 '[필수] 이용약관 · 개인정보 처리방침 동의' 체크를 추가하거나, 신규일 때만 동의 팝업을 띄워야 함
+> ⚠️ 카카오 가입은 약관 화면 · 체크 · 안내 문구가 없음. 카카오로 가입하면 최신 필수 약관에 동의한 것으로 보고 서버가 기록함. 정식 출시 전에는 약관 고지 방식(안내 문구 등)을 다시 정해야 함 (확정 필요)
+
+> 2026-11-05: 카카오 로그인 요청에서 약관 동의(`agreedTermVersionIds`, 400 TERMS_REQUIRED) 제거. 가입하면 최신 필수 약관 동의로 기록
 
 - 테이블: `users`(이메일 · 비밀번호 NULL), `user_social_accounts`(provider · provider_user_id), `user_terms` · 인증: 불필요
 
@@ -325,10 +326,9 @@
 | --- | --- | --- | --- |
 | code | String | O | 카카오가 리다이렉트로 준 인가 코드 |
 | redirectUri | String | O | 카카오 앱에 등록한 리다이렉트 주소 |
-| agreedTermVersionIds | Array | 신규만 | 처음 가입하는 사용자는 필수 약관 동의가 있어야 함. 기존 회원은 무시 |
 
 ```json
-{ "code": "Kx8...", "redirectUri": "https://capsule.app/oauth/kakao", "agreedTermVersionIds": [3, 4] }
+{ "code": "Kx8...", "redirectUri": "https://capsule.app/oauth/kakao" }
 ```
 
 #### 🛬 Response
@@ -338,7 +338,7 @@
 | accessToken | String | 액세스 토큰 (30분). 리프레시 토큰은 HttpOnly 쿠키 |
 | userId | Long | 사용자 id |
 | isNewUser | Boolean | 이번에 가입했는지 |
-| onboardingRequired | Boolean | 닉네임 · 아바타 설정 전이면 true → H02 |
+| onboardingRequired | Boolean | 아바타 설정 전이면 true → H02 |
 
 ```json
 { "accessToken": "eyJ...", "userId": 8, "isNewUser": true, "onboardingRequired": true }
@@ -346,18 +346,18 @@
 
 > ✅ **200 OK**
 
-> ❌ **400** TERMS_REQUIRED (신규인데 약관 동의 없음) · **401** SOCIAL_AUTH_FAILED (인가 코드 만료 · 오류)
+> ❌ **401** SOCIAL_AUTH_FAILED (인가 코드 만료 · 오류)
 
 #### 서버가 하는 일
 
 1. 인가 코드를 카카오에 보내 카카오 회원번호와 닉네임을 받음
 2. `user_social_accounts`에서 (KAKAO, 회원번호) 조회
-3. 있으면 그 사용자로 로그인, 없으면 `users` + `user_social_accounts` + `user_terms`를 한 트랜잭션으로 생성. 닉네임은 카카오 프로필 닉네임으로 저장 (DB `users.nickname` NOT NULL, 프로필 설정에서 변경 가능). 카카오 닉네임이 비어 있으면 '카카오 사용자', 20자를 넘으면 앞 20자만 저장 (가입을 막지 않음)
+3. 있으면 그 사용자로 로그인, 없으면 `users` + `user_social_accounts` + `user_terms`를 한 트랜잭션으로 생성. `user_terms`에는 가입 시점의 최신 필수 약관 버전을 동의로 기록. 닉네임은 카카오 프로필 닉네임으로 저장 (DB `users.nickname` NOT NULL, 프로필 설정에서 변경 가능). 카카오 닉네임이 비어 있으면 '카카오 사용자', 20자를 넘으면 앞 20자만 저장 (가입을 막지 않음)
 4. 이메일이 같아도 이메일 가입 계정과 자동으로 합치지 않음 (다른 계정으로 취급)
 
 #### 프론트 참고
 
-- 카카오로 이동하기 전에 체크한 약관은 sessionStorage에 두었다가 리다이렉트로 돌아온 뒤 같이 보냄
+- 카카오 로그인 전후로 약관 관련 화면 · 문구를 두지 않음 (약관 체크는 이메일 회원가입에만)
 - **시연은 공용 기기**라, 로그아웃할 때 카카오 계정 로그아웃까지 같이 해야 다음 체험자가 이전 사람 계정으로 자동 로그인되지 않음
 - 카카오 디벨로퍼스에 시연 도메인의 리다이렉트 URI를 미리 등록해야 함
 - 카카오 디벨로퍼스 동의 항목에서 '닉네임'(profile_nickname)을 **필수 동의**로 설정해야 함 (가입 닉네임으로 씀)
@@ -511,7 +511,7 @@
 
 ## 10. PATCH /api/me — 프로필 설정
 - 분류: 온보딩 · 홈
-- 설명: 닉네임 · 아바타 저장 (온보딩 완료)
+- 설명: 아바타 저장 (온보딩 완료) · 닉네임 · 아바타 변경
 - 와이어프레임: H02 이 모습으로 시작하기 · H14 프로필 저장
 - 백엔드: Not started
 - 프론트: Not started
@@ -519,16 +519,20 @@
 
 #### 설명
 
-H02에서 닉네임과 아바타를 한 번에 저장합니다. 저장하면 `onboardingRequired`가 false가 되고 H03 홈으로 갑니다.
+H02에서 아바타를 저장하면 `onboardingRequired`가 false가 되고 H03 홈으로 갑니다. 닉네임은 가입 때 정해져 있어서(이메일은 가입 폼, 카카오는 카카오 닉네임) H02에서 받지 않고, 나중에 H14 프로필에서 바꿉니다. 보낸 값만 바꾸고 안 보낸 값은 그대로 둡니다.
 
 #### 와이어프레임 대조
 
 | 화면 요소 | 이 API가 하는 일 |
 | --- | --- |
-| H02 '닉네임' 입력 | `nickname` |
-| H02 '이 모습으로 시작하기' | 닉네임 + 완성형 아바타 저장 |
-| H02 '나중에 바꿀게요' | 닉네임만 필수, 아바타는 기본(1번)으로 저장 |
+| H02 '이 모습으로 시작하기' | 완성형 아바타 저장 (`avatarId`) |
+| H02 '나중에 바꿀게요' | 빈 요청 `{}` → 기본 아바타(1번)로 저장 |
 | H02 '이 모습이 프로필 이미지가 돼요' | 아바타 썸네일을 프로필로 사용 |
+| H14 프로필 저장 | 바꾼 것만 보냄 (`nickname` · `avatarId`) |
+
+> ⚠️ H02에 닉네임 입력이 있다면 빼야 함 (닉네임 변경은 H14에서만)
+
+> 2026-11-05: H02에서 닉네임을 받지 않음. `nickname` 필수 → 선택, 안 보낸 값은 유지 (`avatarId`를 안 보내도 기존 아바타 유지, 아바타가 없을 때만 기본)
 
 - 테이블: `users` (`nickname`, `avatar_id`) · 인증: 필요
 
@@ -538,11 +542,11 @@ H02에서 닉네임과 아바타를 한 번에 저장합니다. 저장하면 `on
 
 | 이름 | 타입 | 필수 | 설명 |
 | --- | --- | --- | --- |
-| nickname | String | O | 1~20자 |
-| avatarId | Long | X | 없으면 기본 아바타 |
+| nickname | String | X | 1~20자. 없으면 그대로 (보냈는데 비었거나 20자 초과면 INVALID_NICKNAME) |
+| avatarId | Long | X | 없으면 그대로. 아직 아바타가 없으면 기본 아바타 |
 
 ```json
-{ "nickname": "승희", "avatarId": 1 }
+{ "avatarId": 1 }
 ```
 
 #### 🛬 Response

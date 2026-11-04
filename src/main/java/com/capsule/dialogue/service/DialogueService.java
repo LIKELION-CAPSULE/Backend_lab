@@ -36,6 +36,7 @@ import com.capsule.relation.api.RelationTypes.AffinityChange;
 import com.capsule.relation.api.RelationTypes.ChatScore;
 import com.capsule.relation.api.RelationTypes.RelationView;
 import com.capsule.relation.api.RelationTypes.SignalType;
+import com.capsule.session.api.SessionClosingHandler;
 import com.capsule.session.api.SessionQuery;
 import com.capsule.session.api.SessionTypes.SessionClosing;
 import com.capsule.session.api.SessionTypes.SessionEventInfo;
@@ -425,15 +426,21 @@ public class DialogueService {
 
     // --- 22 공부 종료 ---
 
+    /** 공부 종료 초안. pendingIds = 카드에 넣은 메시지 (저장할 때 지운다) */
+    public record ClosingDraft(List<Long> pendingIds, Optional<String> card, String line)
+            implements SessionClosingHandler.Draft {}
+
     /**
-     * 공부 종료 트랜잭션 안에서 불린다. 이번 세션 대화를 흐름 카드 한 장으로 쓰고 메시지를 지운 뒤 완료 대사를 돌려준다 (기억 ②).
+     * 공부 종료 1단계: 트랜잭션 밖에서 이번 세션 대화를 흐름 카드 한 장으로 쓰고 완료 대사를 만든다 (기억 ②). DB에 쓰지 않는다:
+     * LLM을 기다리는 동안 DB 연결을 잡지 않게 (개발 서버 풀 2).
      * 대화방에 남은 메시지를 전부 쓴다: 카드에 넣은 메시지는 지우므로, 남은 게 있으면 앞선 종료에서 카드 쓰기가 실패한 것이다.
      * LLM이 실패하거나 5초를 넘겨도 공부 종료는 성공해야 하므로 고정 문구로 대신한다. 카드와 완료 대사는 같이 보낸다(둘 다 5초 안).
      */
-    @Transactional
-    public String close(SessionClosing closing) {
-        Conversation conversation = conversation(closing.userId(), closing.characterId());
-        List<ChatMessage> pending = messages.findByConversationIdOrderById(conversation.id());
+    public ClosingDraft draft(SessionClosing closing) {
+        List<ChatMessage> pending = conversations
+                .findByUserIdAndCharacterId(closing.userId(), closing.characterId())
+                .map(c -> messages.findByConversationIdOrderById(c.id()))
+                .orElse(List.of());
         CharacterInfo character = character(closing.characterId());
         String nickname = nickname(closing.userId());
         LlmContext ctx = LlmContext.app(closing.userId(), closing.sessionId(), deadline());
@@ -460,17 +467,26 @@ public class DialogueService {
                         character, nickname, closing.studySeconds(), closing.endType(), Map.of(), ctx));
 
         Optional<String> card = recap == null ? Optional.empty() : await(recap);
-        if (card.isPresent()) {
-            recapRepository.save(
-                    new ConversationRecap(conversation.id(), closing.sessionId(), card.get(), Instant.now(clock)));
+        String text = await(line).orElseGet(() -> fixedLines.closingFallback(closing.characterId()));
+        return new ClosingDraft(pending.stream().map(ChatMessage::id).toList(), card, text);
+    }
+
+    /** 공부 종료 2단계: 공부 종료 트랜잭션 안에서 초안을 저장하고 완료 대사를 돌려준다. draft가 null이면 여기서 만든다 (자동 마감 배치) */
+    @Transactional
+    public String close(SessionClosing closing, ClosingDraft draft) {
+        ClosingDraft d = draft != null ? draft : draft(closing);
+        if (d.card().isPresent()) {
+            Conversation conversation = conversation(closing.userId(), closing.characterId());
+            recapRepository.save(new ConversationRecap(
+                    conversation.id(), closing.sessionId(), d.card().get(), Instant.now(clock)));
             // 최근 recap-max장만 남긴다. 오래된 흐름은 지워져도 된다 (오래 남길 사실은 기억 ①에 있음)
             List<ConversationRecap> all = recapRepository.findByConversationIdOrderByIdDesc(conversation.id());
             if (all.size() > props.recapMax()) recapRepository.deleteAll(all.subList(props.recapMax(), all.size()));
-            messages.deleteAllInBatch(pending);
+            messages.deleteAllByIdInBatch(d.pendingIds());
         }
         // 카드 쓰기에 실패하면 메시지를 남긴다: 다음 종료 때 그 세션 카드에 같이 들어간다
         states.deleteBySession(closing.sessionId());
-        return await(line).orElseGet(() -> fixedLines.closingFallback(closing.characterId()));
+        return d.line();
     }
 
     // --- 공통 ---

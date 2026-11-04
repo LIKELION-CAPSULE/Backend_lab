@@ -79,8 +79,10 @@ class FlowE2ETest {
         // 5~6 아바타 → 프로필 설정
         MvcResult avatars = call(get("/api/avatars"), token, null, 200);
         Integer avatarId = JsonPath.read(body(avatars), "$.avatars[0].id");
-        MvcResult me = call(patch("/api/me"), token, "{\"nickname\":\"승희\",\"avatarId\":" + avatarId + "}", 200);
+        // H02는 아바타만 보낸다. 닉네임은 가입 때 값 그대로 (api.md 10)
+        MvcResult me = call(patch("/api/me"), token, "{\"avatarId\":" + avatarId + "}", 200);
         assertThat((Boolean) JsonPath.read(body(me), "$.onboardingRequired")).isFalse();
+        assertThat((String) JsonPath.read(body(me), "$.nickname")).isEqualTo("승희");
 
         // 7~9 홈 → 룸 상세 → 일정
         MvcResult home = call(get("/api/home"), token, null, 200);
@@ -213,14 +215,9 @@ class FlowE2ETest {
     @Test
     void 흐름2_카카오_신규_가입() throws Exception {
         String code = "fake-kakao:e2e-" + UUID.randomUUID() + ":카카오닉";
-        String noTerms = "{\"code\":\"" + code + "\",\"redirectUri\":\"http://localhost/oauth\"}";
-        String withTerms =
-                "{\"code\":\"" + code + "\",\"redirectUri\":\"http://localhost/oauth\",\"agreedTermVersionIds\":[3,4]}";
+        String kakao = "{\"code\":\"" + code + "\",\"redirectUri\":\"http://localhost/oauth\"}";
 
-        MvcResult rejected = call(post("/api/auth/social/KAKAO"), null, noTerms, 400);
-        assertThat((String) JsonPath.read(body(rejected), "$.code")).isEqualTo("TERMS_REQUIRED");
-
-        MvcResult first = call(post("/api/auth/social/KAKAO"), null, withTerms, 200);
+        MvcResult first = call(post("/api/auth/social/KAKAO"), null, kakao, 200);
         assertThat((Boolean) JsonPath.read(body(first), "$.isNewUser")).isTrue();
         String token = JsonPath.read(body(first), "$.accessToken");
         MvcResult me = call(get("/api/me"), token, null, 200);
@@ -229,7 +226,7 @@ class FlowE2ETest {
         MvcResult missing = call(get("/api/nope"), token, null, 404);
         assertThat((String) JsonPath.read(body(missing), "$.code")).isEqualTo("NOT_FOUND");
 
-        MvcResult again = call(post("/api/auth/social/KAKAO"), null, withTerms, 200);
+        MvcResult again = call(post("/api/auth/social/KAKAO"), null, kakao, 200);
         assertThat((Boolean) JsonPath.read(body(again), "$.isNewUser")).isFalse();
     }
 
@@ -239,7 +236,7 @@ class FlowE2ETest {
         MvcResult login = call(
                 post("/api/auth/social/KAKAO"),
                 null,
-                "{\"code\":\"" + code + "\",\"redirectUri\":\"http://localhost/oauth\",\"agreedTermVersionIds\":[3,4]}",
+                "{\"code\":\"" + code + "\",\"redirectUri\":\"http://localhost/oauth\"}",
                 200);
         String token = JsonPath.read(body(login), "$.accessToken");
         call(patch("/api/me"), token, "{\"nickname\":\"이어하기\"}", 200);

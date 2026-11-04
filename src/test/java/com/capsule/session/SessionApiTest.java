@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.times;
@@ -65,6 +66,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /** session API 통합 테스트. 다른 모듈 api는 전부 목, 값은 테스트 시드(룸 1 · 채린 · 배경 1 · 아바타 1)와 맞춘다 */
 @SpringBootTest
@@ -100,6 +102,7 @@ class SessionApiTest {
             new ModelInfo("https://cdn.capsule.invalid/live2d/avatar1/v1/avatar1.model3.json", 1.0, 0, 0));
     static final StudySettlement SETTLEMENT = new StudySettlement(1, 1, "아는 사이", 0, 55, null, false, 1, "아는 사이", 3600);
     static final String CLOSING_LINE = "오늘도 같이 공부해서 좋았어.";
+    static final SessionClosingHandler.Draft DRAFT = new SessionClosingHandler.Draft() {};
     static final Reaction GREETING_REACTION = new Reaction(
             new MotionRef("TapBody", "motions/wave.motion3.json"), new ExpressionRef("smile", "exp/smile.exp3.json"));
 
@@ -161,7 +164,13 @@ class SessionApiTest {
         given(relationQuery.settlementOf(anyLong(), anyLong(), anyLong())).willReturn(SETTLEMENT);
         given(relationCommands.settleStudy(anyLong(), anyLong(), anyLong(), anyInt(), anyInt()))
                 .willReturn(SETTLEMENT);
-        given(closingHandler.close(any())).willReturn(CLOSING_LINE);
+        // 대화 마무리 초안(LLM)은 DB 트랜잭션 밖에서 만들고, 저장 쪽에 그대로 넘긴다 (개발 서버 풀 2)
+        given(closingHandler.draft(any())).willAnswer(inv -> {
+            assertThat(TransactionSynchronizationManager.isActualTransactionActive())
+                    .isFalse();
+            return DRAFT;
+        });
+        given(closingHandler.close(any(), any())).willReturn(CLOSING_LINE);
         given(reactionQuery.pick(anyLong(), anyString(), any())).willReturn(Reaction.NONE);
     }
 
@@ -465,8 +474,12 @@ class SessionApiTest {
 
         verify(relationCommands, times(1)).settleStudy(anyLong(), anyLong(), anyLong(), anyInt(), anyInt());
         verify(relationCommands).settleStudy(userId, 1L, sessionId, 3300, 2880);
-        verify(closingHandler, times(1)).close(any());
-        verify(closingHandler).close(new SessionClosing(sessionId, userId, 1L, "채린", "NORMAL", 3300));
+        SessionClosing closing = new SessionClosing(sessionId, userId, 1L, "채린", "NORMAL", 3300);
+        // 초안은 한 번만: 400 요청과 두 번째 종료에는 LLM을 부르지 않는다
+        verify(closingHandler, times(1)).draft(any());
+        verify(closingHandler).draft(closing);
+        verify(closingHandler, times(1)).close(any(), any());
+        verify(closingHandler).close(eq(closing), same(DRAFT));
         assertThat(jdbc.queryForMap(
                         "SELECT end_type, focus_seconds, distract_seconds, return_count, closing_line"
                                 + " FROM study_sessions WHERE id = ?",
@@ -566,7 +579,8 @@ class SessionApiTest {
                 .containsEntry("focus_seconds", 3600)
                 .containsEntry("closing_line", CLOSING_LINE);
         verify(relationCommands).settleStudy(userId, 1L, sessionId, 3600, 3600);
-        verify(closingHandler).close(new SessionClosing(sessionId, userId, 1L, "채린", "AUTO_CLOSED", 3600));
+        verify(closingHandler)
+                .close(eq(new SessionClosing(sessionId, userId, 1L, "채린", "AUTO_CLOSED", 3600)), same(DRAFT));
         assertThat(sessionQuery.find(freshSessionId)).get().matches(SessionInfo::inProgress);
     }
 
@@ -592,7 +606,8 @@ class SessionApiTest {
                 .containsEntry("focus_seconds", 2700)
                 .containsEntry("distract_seconds", 300);
         verify(relationCommands).settleStudy(userId, 1L, sessionId, 3000, 2700);
-        verify(closingHandler).close(new SessionClosing(sessionId, userId, 1L, "채린", "AUTO_CLOSED", 3000));
+        verify(closingHandler)
+                .close(eq(new SessionClosing(sessionId, userId, 1L, "채린", "AUTO_CLOSED", 3000)), same(DRAFT));
     }
 
     // ---- 도우미

@@ -54,4 +54,20 @@ public class RelationLog {
     public int delta() {
         return delta;
     }
+
+    public String reason() {
+        return reason;
+    }
+
+    public String signal() {
+        return signal;
+    }
+
+    public Long sessionId() {
+        return sessionId;
+    }
+
+    public Instant createdAt() {
+        return createdAt;
+    }
 }

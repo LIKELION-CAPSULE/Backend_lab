@@ -40,6 +40,10 @@ public class ChatMessage {
         this.createdAt = now;
     }
 
+    public Long id() {
+        return id;
+    }
+
     public UUID requestId() {
         return requestId;
     }

@@ -28,6 +28,7 @@ import com.capsule.content.api.ContentTypes.Reaction;
 import com.capsule.content.api.ReactionQuery;
 import com.capsule.dialogue.client.Decider;
 import com.capsule.dialogue.client.LlmGateway;
+import com.capsule.dialogue.config.CharacterContentSeeder;
 import com.capsule.dialogue.dto.LlmPurpose;
 import com.capsule.dialogue.service.ChatReplier;
 import com.capsule.relation.api.RelationCommands;
@@ -82,6 +83,9 @@ class DialogueTest {
 
     @MockitoBean
     CharacterQuery characterQuery;
+
+    @MockitoBean // 캐릭터 설정(말포이)을 불러오지 않는다: 이 테스트는 설정 없는 캐릭터(공통 고정 대사 · SIMPLE) 기준
+    CharacterContentSeeder seeder;
 
     @MockitoBean
     ReactionQuery reactionQuery;
@@ -629,8 +633,21 @@ class DialogueTest {
                     "옛 카드 " + s);
         }
 
-        String closingLine =
-                closingHandler.close(new SessionClosing(sessionId, userId, CHARACTER_ID, "채린", "NORMAL", 3300));
+        SessionClosing closing = new SessionClosing(sessionId, userId, CHARACTER_ID, "채린", "NORMAL", 3300);
+        SessionClosingHandler.Draft draft = closingHandler.draft(closing); // 공부 종료처럼 트랜잭션 밖에서 먼저
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM conversation_recaps WHERE conversation_id = ?",
+                        Integer.class,
+                        conversationId))
+                .isEqualTo(3); // 초안은 DB에 쓰지 않는다
+        // 초안을 만든 뒤에 들어온 말은 카드에 안 들어갔으므로 지우지 않는다 (다음 종료 카드로)
+        jdbc.update(
+                "INSERT INTO chat_messages (conversation_id, session_id, request_id, sender, content)"
+                        + " VALUES (?, ?, ?, 'USER', '초안 뒤에 온 말')",
+                conversationId,
+                sessionId,
+                UUID.randomUUID());
+        String closingLine = closingHandler.close(closing, draft);
 
         assertThat(closingLine).isEqualTo("(가짜 완료 대사) 오늘 공부 수고했어."); // LLM이 만든 것 (대체 문구가 아님)
         List<String> cards = jdbc.queryForList(
@@ -640,9 +657,9 @@ class DialogueTest {
         assertThat(cards).hasSize(2).containsExactly(cards.getFirst(), "옛 카드 3");
         // 머리말(날짜 · 공부 시간)은 코드가 붙인다. Fake 요약은 입력 앞부분을 돌려준다
         assertThat(cards.getFirst()).matches("\\d{2}/\\d{2} 55분, \\(가짜 요약\\) <아는 사실>.*");
-        assertThat(jdbc.queryForObject(
-                        "SELECT count(*) FROM chat_messages WHERE conversation_id = ?", Integer.class, conversationId))
-                .isZero();
+        assertThat(jdbc.queryForList(
+                        "SELECT content FROM chat_messages WHERE conversation_id = ?", String.class, conversationId))
+                .containsExactly("초안 뒤에 온 말");
     }
 
     private void event(long eventId, String type, boolean firstFocus, boolean afterBreak) {

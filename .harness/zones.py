@@ -2,8 +2,8 @@
 """캡슐 하네스 핵심 모듈.
 
 zones.conf 를 읽어서 "이 파일은 어느 구역이고, 지금 이 사람이 고쳐도 되는가"를 판정한다.
-Claude Code 훅과 CI(PR 검사·리뷰 게이트)가 전부 이 파일 하나를 쓴다.
-→ 규칙이 한 곳에만 있으므로 로컬과 CI 판정이 어긋나지 않는다.
+Claude Code 훅, scripts/verify.sh, pr-write 스킬이 전부 이 파일 하나를 쓴다 (PR CI는 없음, ADR 0023).
+→ 규칙이 한 곳에만 있으므로 판정이 어긋나지 않는다.
 
 사람용 명령:
   python3 .harness/zones.py whoami                 # 나는 누구, 내 모듈
@@ -11,7 +11,7 @@ Claude Code 훅과 CI(PR 검사·리뷰 게이트)가 전부 이 파일 하나�
   python3 .harness/zones.py check [--strict]       # zones.conf 검사 (--strict: TODO 남으면 실패)
   python3 .harness/zones.py new-migration <모듈> <설명>
   python3 .harness/zones.py spec-impact            # api.md에서 바뀐 API → 컨트롤러·모듈·담당
-CI/훅용 명령: classify, other-reviewer, check-pr-body [--spec-changed], check-pr-title, frozen-migrations, changed-modules, adr-hint
+훅 · verify · pr-write용 명령: classify, other-reviewer, check-pr-body [--spec-changed], check-pr-title, frozen-migrations, changed-modules, adr-hint
 """
 from __future__ import annotations
 
@@ -36,7 +36,7 @@ MIGRATION_DIR = "src/main/resources/db/migration"
 MIGRATION_RE = re.compile(r"^V(\d{8})_(\d{6})__([a-z0-9]+)_[a-z0-9_]+\.sql$")
 PROTECTED_BRANCHES = ("develop", "main")
 ZONES = ("local", "harness", "migration", "contract", "module", "shared")
-# PR 본문 양식은 .github/PULL_REQUEST_TEMPLATE.md (2026-11-04 성욱 템플릿). CI는 '작업 내용'만 필수로 본다
+# PR 본문 양식은 .github/PULL_REQUEST_TEMPLATE.md (2026-11-04 성욱 템플릿). pr-write 검사는 '작업 내용'만 필수로 본다
 PR_TEMPLATE_PATH = os.path.join(REPO_ROOT, ".github", "PULL_REQUEST_TEMPLATE.md")
 PR_REQUIRED_SECTIONS = ["작업 내용"]
 
@@ -574,7 +574,7 @@ def main() -> int:
         return 0
 
     if args.cmd == "adr-hint":
-        # 구조를 바꾸는 파일을 고쳤는데 결정 기록(ADR)이 없으면 needs-adr 출력 (CI 경고용, 차단 아님)
+        # 구조를 바꾸는 파일을 고쳤는데 결정 기록(ADR)이 없으면 needs-adr 출력 (pr-write 경고용, 차단 아님)
         paths = [x.strip() for x in sys.stdin if x.strip()]
         triggers = [p for p in paths if re.match(r"^(build\.gradle|settings\.gradle|gradle/libs\.versions\.toml|\.harness/zones\.conf)", p)]
         has_adr = any(p.startswith("docs/decisions/") for p in paths)

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # =====================================================================
 # 캡슐의 단 하나의 검증 명령.
-# 사람도, Claude Code(Stop 훅)도, CI도 이것만 호출한다. 기준이 하나라서
-# "내 로컬에선 됐는데"가 생기지 않는다.
+# 사람도, Claude Code(Stop 훅 · pr-write)도 이것만 호출한다. 기준이 하나라서
+# "내 로컬에선 됐는데"가 생기지 않는다. PR CI는 없다 (ADR 0021 · 0023)
 #
-#   scripts/verify.sh            = --full (PR 올리기 전, CI)
+#   scripts/verify.sh            = --full (PR 올리기 전. 머지된 마이그레이션 불변 · zones.conf 엄격 검사 포함)
 #   scripts/verify.sh --quick    = Stop 훅용 (포맷 자동정리 + 컴파일 + 모듈 경계 + 바뀐 모듈 테스트)
 # =====================================================================
 set -uo pipefail
@@ -41,6 +41,12 @@ case "$MODE" in
     ./gradlew -q test "${filters[@]}" || fail "테스트 실패 (모듈 경계 위반이면 ModularityTests 메시지 확인)"
     ;;
   --full)
+    # PR CI(pr-zones)가 하던 검사 (ADR 0023). origin/develop은 가져온 시점 기준이라 PR 직전 rebase와 같이 쓴다
+    step "머지된 마이그레이션을 고치지 않았는지 · zones.conf 엄격 검사"
+    git fetch -q origin develop 2>/dev/null || printf 'ℹ origin/develop을 가져오지 못함. 마지막으로 가져온 것과 비교\n'
+    python3 .harness/zones.py frozen-migrations --base origin/develop || fail "develop에 머지된 마이그레이션을 고침 → 되돌리고 새 마이그레이션으로 (scripts/new-migration.sh)"
+    python3 .harness/zones.py check --strict || fail "zones.conf에 TODO가 남음"
+
     step "포맷 검사 (spotlessCheck)"
     ./gradlew spotlessCheck || fail "포맷 위반 → ./gradlew spotlessApply 후 다시"
 
