@@ -188,7 +188,9 @@ public class SessionService {
     @Transactional
     public StartResponse start(long userId, StartRequest req) {
         Integer minutes = req.targetMinutes();
-        if (minutes == null || minutes < 5 || minutes > 180 || minutes % 5 != 0) {
+        // 3분, 또는 5~180분 5분 단위 (api.md 16, 2026-11-05 최소 3분)
+        boolean valid = minutes != null && (minutes == 3 || (minutes >= 5 && minutes <= 180 && minutes % 5 == 0));
+        if (!valid) {
             throw new ApiException(BAD_REQUEST, "INVALID_TARGET_MINUTES");
         }
         RoomInfo room = activeRoom(req.roomId());
