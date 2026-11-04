@@ -133,9 +133,6 @@ class SceneChatPipeline implements ChatPipeline {
 
         List<String> L = new ArrayList<>();
         L.add("<장면>");
-        // 공부 중 · 쉬는 시간에 따라 답 길이와 구성이 다르다 (PM 확정: 1~2문장 / 2~4문장, 구성은 캐릭터 설정)
-        L.add("지금: " + (in.onBreak() ? c.breakStyle() : c.studyStyle()));
-        if (!in.onBreak() && in.chatty()) L.add(CHATTY);
         L.add("사용자: " + in.nickname() + " / 관계: " + PromptVars.orNone(c.toneFor(in.relationLevel()), "보통"));
         if (event != null)
             L.add("방금 일어난 일: " + event.text() + (event.hook() == null ? "" : " (어울리는 반응: " + event.hook() + ")"));
@@ -160,6 +157,10 @@ class SceneChatPipeline implements ChatPipeline {
         }
         List<String> avoid = avoid(c, in.history());
         if (!avoid.isEmpty()) L.add("피할 것: " + String.join(" / ", avoid));
+        // 공부 중 · 쉬는 시간에 따라 답 길이와 구성이 다르다 (PM 확정: 1~2문장 / 2~4문장, 구성은 캐릭터 설정).
+        // 맨 끝에 둔다: 위에 두었을 때 실제 키 평가(2026-11-05)에서 공부 중 답이 자주 3~4문장으로 길어졌다
+        if (!in.onBreak() && in.chatty()) L.add(CHATTY);
+        L.add("지금: " + (in.onBreak() ? c.breakStyle() : c.studyStyle()));
         L.add("</장면>");
         return new Scene(String.join("\n", L), move, lore, event);
     }

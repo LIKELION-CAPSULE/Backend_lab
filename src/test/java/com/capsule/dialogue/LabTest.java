@@ -238,7 +238,8 @@ class LabTest {
                         "짧게 답한다")));
         long runId = id(call(
                 post(API + "/eval/runs"),
-                Map.of("label", "기본", "caseIds", List.of(caseId), "repeats", 2, "pipeline", "SIMPLE", "judge", true)));
+                // 기본 파이프라인(SCENE)으로: 처음엔 DB CHECK가 SIMPLE · ENGINE만 받아서 500이 났다
+                Map.of("label", "기본", "caseIds", List.of(caseId), "repeats", 2, "pipeline", "SCENE", "judge", true)));
 
         String run = null;
         for (int i = 0; i < 100; i++) {

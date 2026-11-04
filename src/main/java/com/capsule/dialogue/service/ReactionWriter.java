@@ -101,22 +101,16 @@ public class ReactionWriter {
             Map<String, Long> pinned,
             LlmContext ctx) {
         PromptVersion system = prompts.resolve(PromptKey.SCENE_SYSTEM, c.characterId(), pinned);
+        String situation = fixed.situation(c.characterId(), trigger, intensity, pinned);
         Llm.Result r = llm.complete(
                 LlmPurpose.REACTION,
                 List.of(
                         new Llm.SystemBlock(PromptService.render(system.body(), SceneChatPipeline.systemVars(c)), true),
                         new Llm.SystemBlock(
-                                card(
-                                        c,
-                                        fixed.situation(c.characterId(), trigger, intensity, pinned),
-                                        trigger,
-                                        intensity,
-                                        relationLevel,
-                                        nickname,
-                                        summary,
-                                        recent),
+                                card(c, situation, trigger, intensity, relationLevel, nickname, summary, recent),
                                 false)),
-                List.of(new Llm.ChatTurn("user", "(사용자의 상태가 바뀌었다. 알아챈 한마디를 해 줘)")),
+                // "상태가 바뀌었다"만 주면 외모 · 표정이 바뀐 걸로 읽는다(실제 키 평가 2026-11-05): 일어난 일을 그대로
+                List.of(new Llm.ChatTurn("user", "(방금 일어난 일: " + situation + ")")),
                 ctx.withPrompts(List.of(system.id())),
                 null);
         return parse(r, c.expressions());
@@ -148,7 +142,8 @@ public class ReactionWriter {
                                     + (l.expression() == null ? "" : " (" + l.expression() + ")"))
                             .collect(Collectors.joining("\n"))
                     + "\n</이 상황에 미리 쓴 대사>");
-        L.add("이번 말: 상태가 바뀐 걸 알아챈 한마디. 한 문장, 말풍선 두 줄 이내. 사용자를 탓하거나 다그치지 않는다. 대사에 맞는 표정을 고른다");
+        L.add("이번 말: '방금 일어난 일'에 바로 반응하는 한마디 (사용자의 외모 · 표정 얘기가 아니다). 한 문장, 말풍선 두 줄 이내."
+                + " 관계 단계 말투를 따른다. 사용자를 탓하거나 다그치지 않는다. 대사에 맞는 표정을 고른다");
         List<String> avoid = SceneChatPipeline.avoid(c, recent);
         if (!avoid.isEmpty()) L.add("피할 것: " + String.join(" / ", avoid));
         L.add("</장면>");
