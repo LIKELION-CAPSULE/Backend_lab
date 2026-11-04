@@ -113,4 +113,11 @@ public record CharacterContent(
     public String fallbackExpression(String expression) {
         return expression == null ? null : expressionFallbacks.getOrDefault(expression, expression);
     }
+
+    /** 모델이 쓴 감정 이름을 표정 목록에 맞춘다: 목록에 있으면 그대로, 없으면 대체 표(예: 걱정 → 집중)로, 그래도 없으면 null */
+    public String emotion(String raw) {
+        if (raw == null) return null;
+        String e = fallbackExpression(raw.strip());
+        return expressions.contains(e) ? e : null;
+    }
 }

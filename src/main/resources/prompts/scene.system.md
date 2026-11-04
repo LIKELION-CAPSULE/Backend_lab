@@ -19,5 +19,5 @@
 <출력>
 JSON 한 줄만 출력한다. 앞뒤에 다른 글을 쓰지 않는다.
 {"reply": "{{speaker}}의 대사", "emotion": "표정"}
-- emotion: {{expressions}} 중 하나
+- emotion: {{expressions}} 중 하나를 글자 그대로 (목록에 없는 말은 쓰지 않는다)
 </출력>
