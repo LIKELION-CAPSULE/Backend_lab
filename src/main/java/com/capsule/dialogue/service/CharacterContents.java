@@ -14,7 +14,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.stereotype.Component;
 
 /**
- * DB 캐릭터 설정 읽기 (ADR 0022 결정 15). 한 턴에 여러 곳(장면 카드 · 점수표 · 상황 대사 · 표정)이 읽으므로 잠깐 들고 있는다.
+ * DB 캐릭터 설정 읽기 (ADR 0022 결정 15). 한 턴에 여러 곳(답장 고정 블록 · 점수표 · 상황 대사 · 표정)이 읽으므로 잠깐 들고 있는다.
  * 실험실에서 고치면 바로 비운다. ponytail: 서버 1대 전제(ADR 0011)의 메모리 캐시. 여러 대면 TTL만으로 맞춰진다
  */
 @Component
