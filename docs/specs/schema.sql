@@ -32,7 +32,7 @@
 --     user_character_relations: relation_points 0~100 · 기본 50, level = 자리 지킴 시간 레벨, total_present_seconds · streak_days · last_study_date 추가
 --     relation_logs: signal 추가(CHAT의 말의 종류), CHAT 범위 −100~5 (비율 감점), 공부 시간 · 첫 만남 점수는 더 기록하지 않음
 --     relation_settlements 추가 (공부 종료 때 레벨 전후, 리포트 재조회용)
---   - 대화 기억 세 겹 (ADR 0022): character_memories(아는 사실 최대 20개) · conversation_recaps(세션 카드 최근 5장) 추가,
+--   - 대화 기억 세 겹 (ADR 0022): character_memories(아는 사실 최대 20개) · conversation_recaps(세션 카드 최근 2장) 추가,
 --     chat_messages.signal 추가, conversations.summary는 더 쓰지 않음 (삭제는 다음 단계), llm_usages.purpose에 MEMORY
 --   - 세계관 · 캐릭터 설정을 데이터로 (ADR 0022 결정 15): worlds · world_lore · world_events · character_profiles
 --     · character_moves · character_lines · character_scores · character_habits 추가. characters는 화면용 정보만
@@ -404,7 +404,7 @@ CREATE TABLE conversations (
     UNIQUE (user_id, character_id)
 );
 
--- 지난 세션 흐름: 공부 종료 때 그 세션만 카드 한 장 (예: "11/03 55분, 3단원 하다 지쳐서 일찍 끝냄"). 최근 5장만 남기고 다시 압축하지 않음
+-- 지난 세션 흐름: 공부 종료 때 그 세션만 카드 한 장 (예: "11/03 55분, 3단원 하다 지쳐서 일찍 끝냄"). 최근 2장만 남기고 다시 압축하지 않음
 CREATE TABLE conversation_recaps (
     id              bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     conversation_id bigint      NOT NULL REFERENCES conversations (id) ON DELETE CASCADE,
@@ -415,6 +415,7 @@ CREATE TABLE conversation_recaps (
 );
 
 -- 캐릭터가 사용자에 대해 아는 사실 한 줄씩 (최대 20개). 매 턴 결정 모델이 추가 · 고치기 · 지우기를 고르고, 넘치면 가장 덜 중요한 하나를 버림
+-- 답장에는 다 넣지 않는다: 결정 모델이 이번 말에 꺼낼 사실 하나(또는 선택 안 함)를 골라 그것만 넣는다
 -- 사용자가 직접 넣는 일정(user_memories)과는 따로. 탈퇴 시 서버가 삭제
 CREATE TABLE character_memories (
     id                bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
