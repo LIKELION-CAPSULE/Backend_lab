@@ -112,8 +112,10 @@ public class DialogueService {
         // 호감도는 상태 변화 전송(18)이 반영하고 그 응답으로 돌려준다. 여기서는 다루지 않음
         CharacterInfo character = character(characterId);
         Optional<LlmReaction> generated = callLlm(() -> llm.reaction(character, trigger, awayLevel));
-        // 명세 19: 모션·표정은 대사의 감정으로 고른다 (trigger 기준 '알아채는' 동작은 18이 줌). 강도는 대사에만 쓴다
-        // ponytail: 감정 후보를 그 캐릭터의 반응 표에서 가져와 LLM에 주는 건 content.api 계약이 생긴 뒤 (#9, #33)
+        // 명세 19: 모션·표정은 대사의 감정으로 고른다 (trigger 기준 '알아채는' 동작은 18이 줌)
+        // TODO(judgment): J-04 ④ 강도를 동작에도 쓸지. 지금은 대사(LLM 입력)에만
+        // TODO(judgment): J-07 ①·J-12 ① 감정 후보를 어디서 정할지. 반응 표 목록을 LLM에 주면 content.api 계약 필요(#9, #33),
+        //   그 목록에서 trigger 이름(GREETING 등)은 빼야 함(같은 컬럼에 있음)
         String emotion = generated.map(LlmReaction::emotion).orElse(null);
         Reaction reaction = emotionReaction(characterId, emotion);
 
@@ -182,6 +184,7 @@ public class DialogueService {
     }
 
     /** 명세 19·20: 감정 이름으로 반응 표에서 모션·표정을 고른다. 감정이 없거나 그 감정 행이 없으면 동작 없음 */
+    // TODO(judgment): J-07 ②·J-12 ② 감정이 없을 때(고정 대사 등) 기본 감정을 쓸지. 지금은 동작 없음
     private Reaction emotionReaction(long characterId, String emotion) {
         return emotion == null ? Reaction.NONE : reactions.pick(characterId, emotion, null);
     }

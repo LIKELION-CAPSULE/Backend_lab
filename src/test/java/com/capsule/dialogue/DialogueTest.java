@@ -188,14 +188,18 @@ class DialogueTest {
 
     @Test
     void motionEventsGetTheirOwnLines() throws Exception {
-        String[][] cases = {{"DROWSY", "NEUTRAL"}, {"YAWN", "NEUTRAL"}, {"WAVE", "HAPPY"}};
+        String[][] cases = {
+            {"DROWSY", "졸려? 기지개 한 번 켜고 하자.", "NEUTRAL"},
+            {"YAWN", "하품했지? 물 한 모금 마시고 와.", "NEUTRAL"},
+            {"WAVE", "나도 안녕! 계속 해 보자.", "HAPPY"}
+        };
         long eventId = 20;
         for (String[] c : cases) {
             event(eventId, c[0], false, false);
             react(eventId++, "{\"requestId\":\"" + UUID.randomUUID() + "\"}")
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.characters[0].content").value(LlmClient.FIXED_REACTION_LINES.get(c[0])))
-                    .andExpect(jsonPath("$.characters[0].emotion").value(c[1]))
+                    .andExpect(jsonPath("$.characters[0].content").value(c[1]))
+                    .andExpect(jsonPath("$.characters[0].emotion").value(c[2]))
                     .andExpect(jsonPath("$.characters[0].fallback").value(false));
         }
     }
@@ -291,7 +295,7 @@ class DialogueTest {
         CountDownLatch replying = new CountDownLatch(1);
         doAnswer(invocation -> {
                     replying.countDown();
-                    Thread.sleep(1_000);
+                    Thread.sleep(2_000);
                     return invocation.callRealMethod();
                 })
                 .when(llm)
@@ -356,9 +360,11 @@ class DialogueTest {
         for (int i = 0; i < 10; i++) {
             send(UUID.randomUUID(), "파이팅").andExpect(status().isOk());
         }
-        send(UUID.randomUUID(), "파이팅")
+        UUID rejected = UUID.randomUUID();
+        send(rejected, "파이팅")
                 .andExpect(status().isTooManyRequests())
                 .andExpect(jsonPath("$.code").value("TOO_MANY_REQUESTS"));
+        assertThat(rows(rejected)).isZero(); // 한도 검사 전에 저장한 사용자 메시지는 롤백된다
     }
 
     @Test
