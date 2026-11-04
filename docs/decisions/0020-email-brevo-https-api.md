@@ -3,7 +3,7 @@
 - 결정
   - 이메일 인증번호(api.md 2)는 Brevo의 발송 API(`POST https://api.brevo.com/v3/smtp/email`)로 보낸다. `user/client/BrevoEmailSender`, RestClient. 새 의존성 없음
   - 값은 환경변수 `CAPSULE_BREVO_KEY`(API 키), `CAPSULE_MAIL_FROM`(Brevo에서 인증한 보내는 사람 이메일)
-  - 키가 있으면 실제 발송, 없으면 local · test는 Fake. 개발 서버(Railway dev)도 키를 넣어 메일만 실제로 보내고, 카카오는 Fake로 둔다. 운영(prod)은 키가 없으면 시작에 실패한다
+  - 키가 있으면 실제 발송, 없으면 local · test는 Fake. 개발 서버(Railway dev)는 메일만 실제로 보내고 카카오는 Fake로 둔다. 개발 서버와 운영(prod)은 키 · 보내는 주소가 빠지면 시작에 실패한다(2026-11-04: 개발 서버에서 변수 이름이 틀려 조용히 Fake로 떨어진 일이 있어서 필수로 바꿈)
   - 발송이 실패하면 500. 그때 저장한 인증번호와 1분 제한을 지워서 바로 다시 요청할 수 있게 한다
 - 이유
   - Railway는 Free · Trial · Hobby 플랜에서 외부 SMTP(25 · 465 · 587)를 막는다(Railway 문서 'Outbound Networking', 2026-11-04 확인). HTTPS API 메일 서비스를 써야 한다
