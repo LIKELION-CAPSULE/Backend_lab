@@ -79,8 +79,10 @@ class FlowE2ETest {
         // 5~6 아바타 → 프로필 설정
         MvcResult avatars = call(get("/api/avatars"), token, null, 200);
         Integer avatarId = JsonPath.read(body(avatars), "$.avatars[0].id");
-        MvcResult me = call(patch("/api/me"), token, "{\"nickname\":\"승희\",\"avatarId\":" + avatarId + "}", 200);
+        // H02는 아바타만 보낸다. 닉네임은 가입 때 값 그대로 (api.md 10)
+        MvcResult me = call(patch("/api/me"), token, "{\"avatarId\":" + avatarId + "}", 200);
         assertThat((Boolean) JsonPath.read(body(me), "$.onboardingRequired")).isFalse();
+        assertThat((String) JsonPath.read(body(me), "$.nickname")).isEqualTo("승희");
 
         // 7~9 홈 → 룸 상세 → 일정
         MvcResult home = call(get("/api/home"), token, null, 200);

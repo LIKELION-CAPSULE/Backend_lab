@@ -41,11 +41,18 @@ public class ProfileService {
         return toMe(user, thumbnail(user));
     }
 
-    /** 아바타를 안 보내면 기본 아바타 (H02 '나중에 바꿀게요') */
+    /**
+     * 보낸 값만 바꾼다 (api.md 10). H02는 아바타만, H14는 바꾼 것만 보낸다.
+     * 아바타를 안 보냈는데 아직 아바타가 없으면 기본 아바타 (H02 '나중에 바꿀게요')
+     */
     @Transactional
     public MeResponse update(long userId, UpdateMeRequest req) {
         User user = activeUser(userId);
-        String nickname = User.validNickname(req.nickname());
+        String nickname = req.nickname() == null ? user.nickname() : User.validNickname(req.nickname());
+        if (req.avatarId() == null && user.avatarId() != null) {
+            user.updateProfile(nickname, user.avatarId(), Instant.now(clock));
+            return toMe(user, thumbnail(user));
+        }
         AvatarInfo avatar = (req.avatarId() == null ? avatars.defaultAvatar() : avatars.find(req.avatarId()))
                 .filter(AvatarInfo::active)
                 .orElseThrow(() -> new ApiException(HttpStatus.BAD_REQUEST, "AVATAR_NOT_FOUND"));
