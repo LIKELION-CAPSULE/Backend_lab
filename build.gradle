@@ -33,6 +33,7 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-webmvc'
     implementation 'org.flywaydb:flyway-database-postgresql'
     implementation 'org.springframework.modulith:spring-modulith-starter-core'
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.1' // Swagger, local 프로필에서만 켬 (ADR 0019)
     runtimeOnly 'org.postgresql:postgresql'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'

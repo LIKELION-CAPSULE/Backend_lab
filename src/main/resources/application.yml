@@ -11,6 +11,11 @@ spring:
     enabled: true
     out-of-order: true # 타임스탬프 버전이라 만든 순서 ≠ 머지 순서 (ADR 0002)
 
+# Swagger는 기본으로 끈다(운영에서 API 목록을 공개하지 않음). local 프로필(로컬 · 개발 서버)에서만 켠다 (ADR 0019)
+springdoc:
+  api-docs.enabled: false
+  swagger-ui.enabled: false
+
 capsule:
   llm:
     mode: fake # fake | real (real은 dialogue 담당이 도메인 단계에서 구현)
