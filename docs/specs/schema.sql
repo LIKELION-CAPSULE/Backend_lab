@@ -541,6 +541,7 @@ CREATE TABLE character_moves (
 
 -- 상황별 미리 쓴 대사: 같은 상황이면 sort 순서대로 돌려 쓴다
 --   situation: GREETING · AWAY · AWAY_2 · AWAY_3 · RETURN · BREAK · BREAK_END · DROWSY · YAWN · WAVE · HEAD_TURN · REPLY_FALLBACK · CLOSING
+--              · GIVE_UP(공부 포기 완료 대사) · TODAY(캐릭터의 오늘 근황, sort = 요일 월 0 ~ 일 6)
 CREATE TABLE character_lines (
     id           bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     character_id bigint NOT NULL REFERENCES character_profiles (character_id) ON DELETE CASCADE,
