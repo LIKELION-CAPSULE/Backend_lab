@@ -1,0 +1,25 @@
+# 0021 CI에서 빌드 · 테스트(verify)를 뺀다. 빠른 검사만 남긴다
+
+- 결정
+  - `.github/workflows/verify.yml`을 지운다. PR · develop push에서 Gradle 빌드 · 전체 테스트(Testcontainers)를 돌리지 않는다
+  - verify가 같이 하던 몇 초짜리 검사(이미 머지된 마이그레이션 수정 금지, `zones.conf` 엄격 검사)는 `pr-zones`로 옮긴다. 머지 조건은 `zones` 초록
+  - 테스트는 로컬에서 한다
+    - 작업 중: Stop 훅의 `verify.sh --quick`(바뀐 모듈 테스트)
+    - PR 전: pr-write가 `git rebase origin/develop` 후 검증. 공용 · 계약 · 마이그레이션 · 여러 모듈을 바꿨으면 full, 내 모듈 안이면 `--quick`
+    - 결과를 PR 본문 '검증'에 적는다
+  - `dev-db-migrate`는 "develop verify 성공 뒤"에서 "develop에 `db/**`가 바뀐 push"로 바꾼다
+  - Railway "Wait for CI"는 기다릴 빌드 CI가 없다. 머지되면 바로 배포된다
+- 이유
+  - PR마다 CI 2분 + 로컬 full 검증 1~2분을 기다려서 작업이 느려졌다(2026-11-04 사용자 요청)
+  - 2인 팀이고, 둘 다 Claude 세션의 Stop 훅으로 바뀐 모듈 테스트를 이미 돌린다
+  - 마이그레이션 불변 검사는 몇 초면 끝나고, 놓치면 공용 · 운영 DB가 깨져서 남긴다
+- 버린 대안
+  - CI 그대로 두고 기다리지만 않기: 대기는 없어지지만 사용자는 CI 자체를 빼기로 했다
+  - 테스트를 develop 머지 뒤에만 돌리기: 머지 뒤에 알게 되는 건 같고, 그만큼의 Actions 시간이 든다
+  - CI 완전 삭제(빠른 검사까지): 머지된 마이그레이션을 고쳐도 막을 장치가 없어진다
+- 대가
+  - 각자 브랜치에서는 통과하는데 합치면 깨지는 경우를 머지 전에 못 잡는다. PR 직전 rebase · verify로 줄이고, 놓치면 develop 머지 뒤 개발 서버 배포 실패로 안다(Railway는 헬스체크를 통과 못 한 배포로 바꾸지 않아 이전 버전이 계속 돈다)
+  - 테스트가 환경마다 다르게 도는 문제(가끔 실패하는 테스트, 예: 2026-11-04 `EngineTurnTest`)를 CI에서 볼 기회가 없어진다
+  - 공용 DB에 들어가는 마이그레이션도 테스트를 거치지 않을 수 있다. 마이그레이션 PR은 full verify(Testcontainers로 전체 마이그레이션 적용)를 반드시 돌린다
+- 다시 볼 때
+  - 사람이 늘거나, 합치면 깨지는 일이 반복되면 verify CI를 되살린다(이 커밋을 되돌리면 된다)
