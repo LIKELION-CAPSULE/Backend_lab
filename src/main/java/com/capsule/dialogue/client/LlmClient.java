@@ -21,7 +21,7 @@ public interface LlmClient {
 
     String closingLine(String characterName);
 
-    // TODO(judgment): J-04 trigger별 고정 대사 문구 (LLM이 5초 안에 못 만들 때도 이 표를 씀). 동작 3종은 임시 문구 (#27)
+    // TODO(judgment): J-04 trigger별 고정 대사 문구 (LLM이 5초 안에 못 만들 때도 이 표를 씀). 동작 4종은 임시 문구 (#27)
     Map<String, String> FIXED_REACTION_LINES = Map.of(
             "GREETING", "왔구나. 오늘도 같이 해볼까?",
             "AWAY", "잠깐 자리 비운 거야?",
@@ -30,7 +30,8 @@ public interface LlmClient {
             "BREAK_END", "다시 시작해볼까?",
             "DROWSY", "졸려? 기지개 한 번 켜고 하자.",
             "YAWN", "하품했지? 물 한 모금 마시고 와.",
-            "WAVE", "나도 안녕! 계속 해 보자.");
+            "WAVE", "나도 안녕! 계속 해 보자.",
+            "HEAD_TURN", "어디 봐? 여기 집중!");
 
     // TODO(judgment): J-05 답장이 5초를 넘을 때 쓸 대체 대사 문구
     String FALLBACK_REPLY = "미안, 잠깐 딴생각했어. 다시 말해줄래?";
