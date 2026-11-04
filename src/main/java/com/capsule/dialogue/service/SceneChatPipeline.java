@@ -92,7 +92,7 @@ class SceneChatPipeline implements ChatPipeline {
         Llm.Result r = llm.complete(LlmPurpose.CHAT, blocks, messages, ctx.withPrompts(List.of(system.id())), null);
 
         JsonNode json = replyJson(r);
-        String reply = json != null ? LlmJson.str(json.path("reply")) : r.text();
+        String reply = replyText(r.text(), json);
         if (reply == null || reply.isBlank()) throw new IllegalStateException("빈 답장: " + r.text());
         String emotion = json == null ? null : c.emotion(LlmJson.str(json.path("emotion")));
 
@@ -163,8 +163,8 @@ class SceneChatPipeline implements ChatPipeline {
         L.add("<상황>");
         L.add("사용자: " + in.nickname() + " / 시각: " + now
                 + (in.sessionMinutes() > 0 ? " / 공부한 지: " + in.sessionMinutes() + "분" : ""));
-        // 근황은 이 세션 첫 대화와 쉬는 시간에만: 매 턴 넣었더니 묻지 않아도 매번 꺼냈다(실제 키 평가)
-        if (today != null && (in.history().isEmpty() || in.onBreak())) L.add(c.speaker() + " 오늘: " + today);
+        // 근황은 이 세션 첫 대화에만: 매 턴 · 쉬는 시간마다 넣었더니 묻지 않아도 매번 꺼냈다(실제 키 평가)
+        if (today != null && in.history().isEmpty()) L.add(c.speaker() + " 오늘: " + today);
         // 기억 (ADR 0022 결정 16): 아는 사실은 결정 모델이 이번 말에 맞춰 고른 하나만, 세션 카드는 최근 2장, 원문은 메시지로 15줄
         if (fact != null) L.add("<꺼낼 수 있는 기억> " + fact + " (자연스러울 때만, 단정하지 말고)");
         if (in.summary() != null && !in.summary().isBlank())
@@ -179,6 +179,14 @@ class SceneChatPipeline implements ChatPipeline {
         L.add("지금: " + (in.onBreak() ? c.breakStyle() : c.studyStyle()));
         L.add("</상황>");
         return String.join("\n", L);
+    }
+
+    /** 답장 글: JSON의 reply. 대사를 글로 쓰고 뒤에 {"emotion": …}만 붙인 답(실제 키 평가 76번 중 1번)은 앞의 글 */
+    static String replyText(String text, JsonNode json) {
+        if (json == null) return text;
+        String reply = LlmJson.str(json.path("reply"));
+        if ((reply == null || reply.isBlank()) && text.indexOf('{') > 0) return text.substring(0, text.indexOf('{'));
+        return reply;
     }
 
     /** 캐릭터의 오늘 근황: TODAY 대사를 요일(월 = 0)로 고른다 (결정 19). 없으면 null */
