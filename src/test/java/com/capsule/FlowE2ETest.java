@@ -106,8 +106,11 @@ class FlowE2ETest {
         MvcResult focus = eventCall(token, s, "FOCUS", Instant.now().toString(), 201);
         assertThat(affinityDelta(focus)).isEqualTo(5);
         MvcResult greeting = call(post(s + "/events/" + eventId(focus) + "/reaction"), token, reactionBody(null), 200);
+        // 상태 변화(인사 · 자리 비움)는 LLM 반응 (테스트는 Fake LLM). 동작 이벤트는 고정 대사
         assertThat((String) JsonPath.read(body(greeting), "$.characters[0].content"))
-                .isIn("왔구나. 오늘도 같이 해볼까?", "안녕. 오늘도 잘 부탁해."); // 처음 만남 = Lv.1 대사 묶음
+                .startsWith("(가짜 반응)");
+        assertThat((Boolean) JsonPath.read(body(greeting), "$.characters[0].fallback"))
+                .isFalse();
 
         // 12 heartbeat
         call(post(s + "/heartbeat"), token, "{\"studySeconds\":0,\"presentSeconds\":0}", 204);
@@ -119,7 +122,7 @@ class FlowE2ETest {
         long awayId = eventId(awayEvent);
         MvcResult away = call(post(s + "/events/" + awayId + "/reaction"), token, reactionBody(1), 200);
         assertThat((String) JsonPath.read(body(away), "$.characters[0].content"))
-                .isIn("잠깐 자리 비운 거야?", "어… 어디 갔어?");
+                .startsWith("(가짜 반응)");
         MvcResult awayAgain = eventCall(token, s, "AWAY", awayAt, 200);
         assertThat(eventId(awayAgain)).isEqualTo(awayId);
         assertThat(affinityDelta(awayAgain)).isEqualTo(-1); // 재전송은 다시 반영하지 않고 같은 변화
@@ -152,10 +155,10 @@ class FlowE2ETest {
         MvcResult end = call(post(s + "/end"), token, endBody, 200);
         assertThat((Integer) JsonPath.read(body(end), "$.returnCount")).isEqualTo(1);
         assertThat((Integer) JsonPath.read(body(end), "$.studySeconds")).isEqualTo(60);
-        // 첫 만남 +5, 자리 비움 −1, 복귀 +1, 채팅 +1(Fake), 공부 1분 +1 (J-01·J-02·J-06 Fake 값)
+        // 호감도 0~100: 첫 만남 +5, 자리 비움 −1, 복귀 +1, 채팅 0(Fake 결정 = NEUTRAL), 공부 1분 0(10분당 +1)
         assertThat((Integer) JsonPath.read(body(end), "$.relation.pointsBefore"))
                 .isEqualTo(0);
-        assertThat((Integer) JsonPath.read(body(end), "$.relation.pointsAfter")).isEqualTo(7);
+        assertThat((Integer) JsonPath.read(body(end), "$.relation.pointsAfter")).isEqualTo(5);
         assertThat((String) JsonPath.read(body(end), "$.closingLine")).isNotBlank();
         MvcResult endAgain = call(post(s + "/end"), token, endBody, 200);
         assertThat(body(endAgain)).isEqualTo(body(end));

@@ -246,7 +246,8 @@ CREATE TABLE user_character_relations (
     id                  bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     user_id             bigint      NOT NULL REFERENCES users (id),
     character_id        bigint      NOT NULL REFERENCES characters (id),
-    relation_points     int         NOT NULL DEFAULT 0,    -- 호감도 (갱신은 relation_points = relation_points + n)
+    relation_points     int         NOT NULL DEFAULT 0     -- 호감도 0~100 (%처럼 읽음, 끝이 있음). 서버가 범위를 넘는 만큼 잘라 반영
+                                    CHECK (relation_points BETWEEN 0 AND 100),
     level               int         NOT NULL DEFAULT 1,    -- 저장해 둠: 기준이 바뀌어도 이미 오른 단계는 유지
     total_study_seconds int         NOT NULL DEFAULT 0,    -- 함께한 공부 시간 (쉬는 시간 제외, 세션 합계와 같아야 함)
     first_met_at        timestamptz NOT NULL DEFAULT now(),
@@ -336,7 +337,8 @@ CREATE TABLE session_events (
 );
 CREATE INDEX idx_session_events_session ON session_events (session_id, occurred_at);
 
--- 호감도 변화 이력 (계속 남음). 대화 점수는 LLM이 주고 서버가 범위 안으로 자른 뒤 기록
+-- 호감도 변화 이력 (계속 남음). delta는 실제로 바뀐 만큼(0~100 밖으로 나간 몫은 잘림) → 기록의 합 = 지금 점수
+--   CHAT: 결정 모델이 사용자 말의 신호(칭찬 · 무례 등)를 고르고, 서버가 신호 → 점수 + 하루 상한으로 정해 기록
 --   SESSION_EVENT: 공부 중 이벤트(자리 비움, 복귀 등) 하나로 바뀐 점수. 1:3 룸이면 캐릭터마다 한 행씩
 --   EVENT: 기간 한정 이벤트(character_contents의 EVENT)로 받은 점수
 CREATE TABLE relation_logs (
@@ -395,10 +397,10 @@ CREATE TABLE llm_usages (
     user_id            bigint         REFERENCES users (id),
     session_id         bigint         REFERENCES study_sessions (id),
     purpose            text           NOT NULL CHECK (purpose IN (
-                           'CHAT', 'DIRECTOR', 'ACTOR', 'JUDGE', 'REACTION', 'SUMMARY', 'CLOSING', 'EVAL_JUDGE')),
+                           'CHAT', 'DIRECTOR', 'ACTOR', 'JUDGE', 'REACTION', 'SUMMARY', 'CLOSING', 'EVAL_JUDGE', 'DECIDE')),
     source             text           NOT NULL CHECK (source IN ('APP', 'LAB', 'EVAL')),
     trace_id           uuid           NOT NULL,           -- 한 요청(대화 한 턴 등)에서 나간 호출을 묶음
-    provider           text           NOT NULL,           -- anthropic · openai · fake
+    provider           text           NOT NULL,           -- anthropic · openai · jev · fake
     model              text           NOT NULL,
     status             text           NOT NULL CHECK (status IN ('OK', 'ERROR')),
     error              text,

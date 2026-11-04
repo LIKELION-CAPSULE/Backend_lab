@@ -7,6 +7,7 @@ import static com.capsule.relation.service.AffinityPolicy.nextLevelPoints;
 import com.capsule.relation.api.RelationCommands;
 import com.capsule.relation.api.RelationQuery;
 import com.capsule.relation.api.RelationTypes.AffinityChange;
+import com.capsule.relation.api.RelationTypes.ChatSignal;
 import com.capsule.relation.api.RelationTypes.RelationView;
 import com.capsule.relation.api.RelationTypes.SessionEventRef;
 import com.capsule.relation.api.RelationTypes.StudySettlement;
@@ -17,6 +18,7 @@ import com.capsule.relation.repository.RelationRepository;
 import jakarta.persistence.EntityManager;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -112,27 +114,48 @@ class RelationService implements RelationQuery, RelationCommands {
             record(rel, "FIRST_MEET", AffinityPolicy.FIRST_MEET_POINTS, event.sessionId(), null, null);
         }
         int delta = AffinityPolicy.sessionEventDelta(event.eventType());
-        if (delta != 0 && !logs.existsByRelationIdAndSessionEventId(rel.id(), event.sessionEventId())) {
+        if (!logs.existsByRelationIdAndSessionEventId(rel.id(), event.sessionEventId())) {
             record(rel, "SESSION_EVENT", delta, event.sessionId(), event.sessionEventId(), null);
         }
         return changeOf(event);
     }
 
     @Override
+    @Deprecated
     public AffinityChange applyChat(long userId, long characterId, long sessionId, UUID requestId, int delta) {
         Relation rel = lock(userId, characterId);
         Optional<RelationLog> done = logs.findByRelationIdAndRequestId(rel.id(), requestId);
         if (done.isPresent()) return change(rel, List.of(done.get()));
-        int clamped = Math.clamp(delta, -5, 5);
-        if (clamped == 0) return change(rel, List.of());
-        return change(rel, List.of(record(rel, "CHAT", clamped, sessionId, null, requestId)));
+        return change(rel, record(rel, "CHAT", Math.clamp(delta, -5, 5), sessionId, null, requestId));
+    }
+
+    @Override
+    public AffinityChange applyChatSignal(
+            long userId, long characterId, long sessionId, UUID requestId, ChatSignal signal) {
+        Relation rel = lock(userId, characterId);
+        Optional<RelationLog> done = logs.findByRelationIdAndRequestId(rel.id(), requestId);
+        if (done.isPresent()) return change(rel, List.of(done.get()));
+        int delta = AffinityPolicy.chatPoints(signal);
+        if (delta > 0) {
+            Instant today = LocalDate.now(clock.withZone(AffinityPolicy.DAY_ZONE))
+                    .atStartOfDay(AffinityPolicy.DAY_ZONE)
+                    .toInstant();
+            int gained = logs.chatGainSince(rel.id(), today);
+            delta = Math.min(delta, Math.max(0, AffinityPolicy.CHAT_DAILY_GAIN_CAP - gained));
+        }
+        return change(rel, record(rel, "CHAT", delta, sessionId, null, requestId));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public int chatPoints(ChatSignal signal) {
+        return AffinityPolicy.chatPoints(signal);
     }
 
     @Override
     public StudySettlement settleStudyTime(long userId, long characterId, long sessionId, int studySeconds) {
         Relation rel = lock(userId, characterId);
-        int delta = AffinityPolicy.studyTimeDelta(studySeconds);
-        if (delta != 0) record(rel, "STUDY_TIME", delta, sessionId, null, null);
+        record(rel, "STUDY_TIME", AffinityPolicy.studyTimeDelta(studySeconds), sessionId, null, null);
         // ponytail: last_met_at = 정산 시각. 자동 마감이면 실제 종료(마지막 heartbeat)보다 6시간 넘게 늦다.
         //   이 값을 화면에 쓰게 되면 계약에 종료 시각을 받아서 넣을 것 (지금 읽는 API 없음)
         relations.addStudySeconds(rel.id(), studySeconds, Instant.now(clock));
@@ -146,15 +169,22 @@ class RelationService implements RelationQuery, RelationCommands {
         return relations.findLockedByUserIdAndCharacterId(userId, characterId);
     }
 
-    /** 기록 + 점수 반영 + 단계 갱신 (rel도 갱신됨). 남긴 기록을 돌려준다 */
-    private RelationLog record(
+    /**
+     * 기록 + 점수 반영 + 단계 갱신 (rel도 갱신됨). 남긴 기록을 돌려준다 (없으면 빈 목록).
+     * 0~100 밖으로 나가는 만큼은 자르고 실제로 바뀐 만큼만 기록한다: 그래서 기록의 합 = 지금 점수가 늘 맞는다.
+     * 잘려서 0이면 기록하지 않는다 (DB delta <> 0).
+     * ponytail: 0이라 기록이 없으면 같은 이벤트·요청을 다시 받았을 때 그때 점수로 다시 반영될 수 있다(재전송은 몇 초 안이라 거의 같음).
+     */
+    private List<RelationLog> record(
             Relation rel, String reason, int delta, Long sessionId, Long sessionEventId, UUID requestId) {
+        int applied = AffinityPolicy.clamp(rel.points() + delta) - rel.points();
+        if (applied == 0) return List.of();
         RelationLog log = logs.save(
-                new RelationLog(rel.id(), reason, delta, sessionId, sessionEventId, requestId, Instant.now(clock)));
-        relations.addPoints(rel.id(), delta);
+                new RelationLog(rel.id(), reason, applied, sessionId, sessionEventId, requestId, Instant.now(clock)));
+        relations.addPoints(rel.id(), applied);
         entityManager.refresh(rel); // 이 행만 다시 읽는다 (컨텍스트 전체를 비우면 다른 모듈 엔티티의 변경이 사라짐)
         rel.raiseLevel(levelOf(rel.points()));
-        return log;
+        return List.of(log);
     }
 
     /**

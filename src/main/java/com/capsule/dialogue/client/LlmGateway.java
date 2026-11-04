@@ -52,9 +52,9 @@ public class LlmGateway {
             LlmContext ctx,
             Consumer<String> onText) {
         LlmProperties.Route route = props.route(purpose);
-        String primary = primary(ctx);
+        String primary = primary(ctx, route);
         LlmCallException last = null;
-        for (String name : order(ctx)) {
+        for (String name : order(ctx, route)) {
             LlmProvider provider = provider(name);
             ProviderRequest req = new ProviderRequest(
                     purpose,
@@ -122,7 +122,8 @@ public class LlmGateway {
 
     /** 이 맥락에서 이 용도에 실제로 쓸 모델 (엔진 비용 계산·실험실 표시용) */
     public String modelFor(LlmPurpose purpose, LlmContext ctx) {
-        return ctx.model() != null ? ctx.model() : props.model(primary(ctx), props.route(purpose));
+        LlmProperties.Route route = props.route(purpose);
+        return ctx.model() != null ? ctx.model() : props.model(primary(ctx, route), route);
     }
 
     /** 엔진 비용 계산용 가격표: 기본 가격(Llm.DEFAULT_PRICES) 위에 설정 가격 */
@@ -141,17 +142,27 @@ public class LlmGateway {
         return props.provider();
     }
 
-    private String primary(LlmContext ctx) {
-        return ctx.provider() != null ? ctx.provider() : props.provider();
+    /** 실험 고정 > 용도의 공급자(예: DECIDE → jev) > 기본 공급자 */
+    private String primary(LlmContext ctx, LlmProperties.Route route) {
+        if (ctx.provider() != null) return ctx.provider();
+        return present(route.provider()) ? route.provider() : props.provider();
     }
 
-    /** 실험에서 공급자를 고정했으면 대체 공급자로 넘기지 않는다 (비교 실험이 섞이지 않게) */
-    private List<String> order(LlmContext ctx) {
-        String primary = primary(ctx);
-        String fallback = props.fallbackProvider();
-        if (ctx.provider() != null || fallback == null || fallback.isBlank() || fallback.equals(primary))
-            return List.of(primary);
-        return List.of(primary, fallback);
+    /**
+     * 실험에서 공급자를 고정했으면 대체 공급자로 넘기지 않는다 (비교 실험이 섞이지 않게).
+     * 용도의 공급자가 실패하면 기본 공급자 → 대체 공급자 순서로 한 번씩 (예: Jev가 죽어도 LLM이 결정한다)
+     */
+    private List<String> order(LlmContext ctx, LlmProperties.Route route) {
+        String primary = primary(ctx, route);
+        if (ctx.provider() != null) return List.of(primary);
+        return java.util.stream.Stream.of(primary, props.provider(), props.fallbackProvider())
+                .filter(LlmGateway::present)
+                .distinct()
+                .toList();
+    }
+
+    private static boolean present(String s) {
+        return s != null && !s.isBlank();
     }
 
     private LlmProvider provider(String name) {

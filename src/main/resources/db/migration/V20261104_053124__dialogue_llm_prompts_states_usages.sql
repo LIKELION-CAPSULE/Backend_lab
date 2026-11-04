@@ -41,11 +41,11 @@ ALTER TABLE llm_usages ALTER COLUMN user_id DROP NOT NULL;
 ALTER TABLE llm_usages ALTER COLUMN session_id DROP NOT NULL;
 ALTER TABLE llm_usages DROP CONSTRAINT llm_usages_purpose_check;
 ALTER TABLE llm_usages ADD CONSTRAINT llm_usages_purpose_check CHECK (purpose IN (
-    'CHAT', 'DIRECTOR', 'ACTOR', 'JUDGE', 'REACTION', 'SUMMARY', 'CLOSING', 'EVAL_JUDGE'));
+    'CHAT', 'DIRECTOR', 'ACTOR', 'JUDGE', 'REACTION', 'SUMMARY', 'CLOSING', 'EVAL_JUDGE', 'DECIDE'));
 ALTER TABLE llm_usages
     ADD COLUMN source             text           NOT NULL CHECK (source IN ('APP', 'LAB', 'EVAL')),
     ADD COLUMN trace_id           uuid           NOT NULL,  -- 한 요청(대화 한 턴 등)에서 나간 호출을 묶음
-    ADD COLUMN provider           text           NOT NULL,  -- anthropic · openai · fake
+    ADD COLUMN provider           text           NOT NULL,  -- anthropic · openai · jev · fake
     ADD COLUMN status             text           NOT NULL CHECK (status IN ('OK', 'ERROR')),
     ADD COLUMN error              text,
     ADD COLUMN stop_reason        text,

@@ -241,11 +241,11 @@ public class EvalService {
         for (String userText : Arrays.asList(LlmJson.read(c.turns(), String[].class))) {
             long t0 = System.nanoTime();
             try {
-                ChatOutcome o =
-                        pipeline.reply(LabService.input(character, config, List.copyOf(history), userText, state), ctx);
+                ChatOutcome o = lab.chatTurn(
+                        pipeline, LabService.input(character, config, List.copyOf(history), userText, state), ctx);
                 long ms = LabService.elapsedMs(t0);
                 total += ms;
-                transcript.add(new TranscriptTurn(userText, o.reply(), o.emotion(), o.affinity(), ms, null));
+                transcript.add(new TranscriptTurn(userText, o.reply(), o.emotion(), lab.points(o), ms, null));
                 history.add(new ChatLine(ChatMessage.USER, userText));
                 history.add(new ChatLine(ChatMessage.CHARACTER, o.reply()));
                 state = o.engineState();

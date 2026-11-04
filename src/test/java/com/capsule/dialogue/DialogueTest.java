@@ -4,11 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.in;
 import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -26,11 +27,14 @@ import com.capsule.content.api.ContentTypes.ExpressionRef;
 import com.capsule.content.api.ContentTypes.MotionRef;
 import com.capsule.content.api.ContentTypes.Reaction;
 import com.capsule.content.api.ReactionQuery;
+import com.capsule.dialogue.client.Decider;
 import com.capsule.dialogue.client.LlmGateway;
 import com.capsule.dialogue.dto.LlmPurpose;
+import com.capsule.dialogue.service.ChatReplier;
 import com.capsule.relation.api.RelationCommands;
 import com.capsule.relation.api.RelationQuery;
 import com.capsule.relation.api.RelationTypes.AffinityChange;
+import com.capsule.relation.api.RelationTypes.ChatSignal;
 import com.capsule.relation.api.RelationTypes.RelationView;
 import com.capsule.session.api.SessionClosingHandler;
 import com.capsule.session.api.SessionQuery;
@@ -40,6 +44,7 @@ import com.capsule.session.api.SessionTypes.SessionInfo;
 import com.capsule.user.api.MemoryQuery;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -92,6 +97,9 @@ class DialogueTest {
 
     @MockitoSpyBean
     LlmGateway llm;
+
+    @MockitoSpyBean
+    Decider decider;
 
     @Autowired
     MockMvc mvc;
@@ -284,7 +292,11 @@ class DialogueTest {
     @Test
     void sendMessage() throws Exception {
         UUID requestId = UUID.randomUUID();
-        when(relationCommands.applyChat(userId, CHARACTER_ID, sessionId, requestId, 1))
+        // 사용자 말 신호는 결정 모델이 고른다 (여기선 PRAISE로), 점수는 relation이 정한다
+        doReturn(Map.of(ChatReplier.QUESTION, new Decider.Decision("PRAISE", 0.9)))
+                .when(decider)
+                .decide(anyString(), any(), any());
+        when(relationCommands.applyChatSignal(userId, CHARACTER_ID, sessionId, requestId, ChatSignal.PRAISE))
                 .thenReturn(new AffinityChange(1, 81, 1, false));
 
         send(requestId, "이거 너무 어려워")
@@ -307,6 +319,35 @@ class DialogueTest {
                         Integer.class,
                         sessionId))
                 .isEqualTo(1);
+    }
+
+    @Test
+    void signalIsReadInParallelAndUnsureMeansNeutral() throws Exception {
+        // Fake 결정 모델은 첫 보기(NEUTRAL)를 고르고, 그 호출도 기록된다
+        UUID first = UUID.randomUUID();
+        send(first, "오늘 날씨 좋다").andExpect(status().isOk());
+        verify(relationCommands).applyChatSignal(userId, CHARACTER_ID, sessionId, first, ChatSignal.NEUTRAL);
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM llm_usages WHERE session_id = ? AND purpose = 'DECIDE' AND status = 'OK'",
+                        Integer.class,
+                        sessionId))
+                .isEqualTo(1);
+
+        // 확신이 기준(0.6)보다 낮으면 무례로 읽혀도 0점(NEUTRAL)
+        doReturn(Map.of(ChatReplier.QUESTION, new Decider.Decision("RUDE", 0.4)))
+                .when(decider)
+                .decide(anyString(), any(), any());
+        UUID unsure = UUID.randomUUID();
+        send(unsure, "아 진짜").andExpect(status().isOk());
+        verify(relationCommands).applyChatSignal(userId, CHARACTER_ID, sessionId, unsure, ChatSignal.NEUTRAL);
+
+        // 결정 호출이 실패해도 답장은 나간다 (NEUTRAL)
+        doThrow(new IllegalStateException("결정 실패")).when(decider).decide(anyString(), any(), any());
+        UUID failed = UUID.randomUUID();
+        send(failed, "파이팅")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.fallback").value(false));
+        verify(relationCommands).applyChatSignal(userId, CHARACTER_ID, sessionId, failed, ChatSignal.NEUTRAL);
     }
 
     @Test
@@ -339,7 +380,7 @@ class DialogueTest {
     @Test
     void resendWithSameRequestIdIsHandledOnce() throws Exception {
         UUID requestId = UUID.randomUUID();
-        when(relationCommands.applyChat(userId, CHARACTER_ID, sessionId, requestId, 1))
+        when(relationCommands.applyChatSignal(userId, CHARACTER_ID, sessionId, requestId, ChatSignal.NEUTRAL))
                 .thenReturn(new AffinityChange(1, 81, 1, false));
         send(requestId, "졸려").andExpect(status().isOk());
 
@@ -349,7 +390,7 @@ class DialogueTest {
                 .andExpect(jsonPath("$.affinity.delta").value(0))
                 .andExpect(jsonPath("$.affinity.points").value(80));
         verify(llm, times(1)).complete(eq(LlmPurpose.CHAT), any(), any(), any(), any());
-        verify(relationCommands, times(1)).applyChat(anyLong(), anyLong(), anyLong(), any(), anyInt());
+        verify(relationCommands, times(1)).applyChatSignal(anyLong(), anyLong(), anyLong(), any(), any());
         assertThat(rows(requestId)).isEqualTo(2);
     }
 
@@ -416,7 +457,7 @@ class DialogueTest {
                 .when(llm)
                 .complete(any(), any(), any(), any(), any());
         UUID requestId = UUID.randomUUID();
-        when(relationCommands.applyChat(userId, CHARACTER_ID, sessionId, requestId, 0))
+        when(relationCommands.applyChatSignal(userId, CHARACTER_ID, sessionId, requestId, ChatSignal.NEUTRAL))
                 .thenReturn(new AffinityChange(0, 80, 1, false));
 
         send(requestId, "이거 어려워")
@@ -426,9 +467,14 @@ class DialogueTest {
                 .andExpect(jsonPath("$.fallback").value(true))
                 .andExpect(jsonPath("$.affinity.delta").value(0))
                 .andExpect(jsonPath("$.affinity.points").value(80));
-        // 대체 대사면 점수 0으로만 부른다 (호감도 변화 없음, relation 잠금 순서만 지킴)
+        // 대체 대사면 NEUTRAL로만 부른다 (호감도 변화 없음, relation 잠금 순서만 지킴)
         verify(relationCommands, never())
-                .applyChat(anyLong(), anyLong(), anyLong(), any(), org.mockito.ArgumentMatchers.intThat(d -> d != 0));
+                .applyChatSignal(
+                        anyLong(),
+                        anyLong(),
+                        anyLong(),
+                        any(),
+                        org.mockito.ArgumentMatchers.argThat(s -> s != ChatSignal.NEUTRAL));
     }
 
     @Test

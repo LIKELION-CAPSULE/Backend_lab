@@ -64,6 +64,7 @@ class LlmProviderTest {
                 false,
                 new LlmProperties.Provider(base, "test-key", "2023-06-01", Map.of(), null),
                 new LlmProperties.Provider(base + "/v1", "test-key", null, Map.of(), "minimal"),
+                new LlmProperties.Provider(base, "test-key", null, Map.of(), null),
                 Map.of(),
                 Map.of(),
                 new LlmProperties.Lab(false, "", 1));
@@ -250,6 +251,49 @@ class LlmProviderTest {
 
         assertThat(requestBody.has("reasoning_effort")).isFalse();
         assertThat(OpenAiProvider.reasoningModel("o4-mini")).isTrue();
+    }
+
+    // --- Jev (결정 모델) ---
+
+    @Test
+    void jevSendsChoiceQuestionsAndReturnsDeciderJson() {
+        responseBody = """
+                {"model":"jev-1.13.0",
+                 "answers":{"signal":{"type":"choice","choice":"PRAISE","confidence":0.82,
+                                      "probabilities":{"NEUTRAL":0.1,"PRAISE":0.82,"RUDE":0.08}}},
+                 "usage":{"input_tokens":120,"output_tokens":0}}""";
+        String payload = """
+                {"state":"사용자의 마지막 말: 고마워","questions":{"signal":{"instructions":"신호를 고른다",
+                 "criteria":{"NEUTRAL":"평범","PRAISE":"칭찬","RUDE":"무례"}}}}""";
+        ProviderRequest req = new ProviderRequest(
+                LlmPurpose.DECIDE,
+                "jev-1.13.0",
+                List.of(new Llm.SystemBlock("분류기", true)),
+                List.of(new Llm.ChatTurn("user", payload)),
+                200,
+                null,
+                null);
+
+        Llm.Result r = new JevProvider(props()).complete(req, null);
+
+        assertThat(requestPath).isEqualTo("/v1/systemone");
+        assertThat(requestHeaders.get("Authorization")).containsExactly("Bearer test-key");
+        assertThat(requestBody.path("model").asString()).isEqualTo("jev-1.13.0");
+        assertThat(requestBody.path("state").asString()).isEqualTo("사용자의 마지막 말: 고마워");
+        JsonNode q = requestBody.path("questions").path("signal");
+        assertThat(q.path("type").asString()).isEqualTo("choice");
+        assertThat(q.path("criteria").path("PRAISE").asString()).isEqualTo("칭찬");
+        JsonNode out = LlmJson.tree(r.text());
+        assertThat(out.path("signal").path("choice").asString()).isEqualTo("PRAISE");
+        assertThat(out.path("signal").path("confidence").asDouble()).isEqualTo(0.82);
+        assertThat(r.usage()).isEqualTo(new Llm.Usage(120, 0, 0, 0));
+    }
+
+    @Test
+    void jevRefusesNonDecisionPurposes() {
+        assertThatThrownBy(() -> new JevProvider(props()).complete(request(null), null))
+                .isInstanceOfSatisfying(
+                        LlmCallException.class, e -> assertThat(e.retryable()).isFalse());
     }
 
     @Test

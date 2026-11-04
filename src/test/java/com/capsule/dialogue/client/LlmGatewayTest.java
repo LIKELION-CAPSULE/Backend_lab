@@ -71,7 +71,12 @@ class LlmGatewayTest {
                 logContent,
                 new LlmProperties.Provider("", "k", "v", Map.of("smart", "claude-x"), null),
                 new LlmProperties.Provider("", "k", null, Map.of("smart", "gpt-x"), "minimal"),
-                Map.of(LlmPurpose.CHAT, new LlmProperties.Route("smart", 100, null)),
+                new LlmProperties.Provider("", "k", null, Map.of("smart", "jev-x"), null),
+                Map.of(
+                        LlmPurpose.CHAT,
+                        new LlmProperties.Route("smart", 100, null, null),
+                        LlmPurpose.DECIDE,
+                        new LlmProperties.Route("smart", 100, null, "jev")),
                 Map.of(),
                 new LlmProperties.Lab(false, "", 1));
         return new LlmGateway(List.of(providers), props, usages, Clock.systemUTC());
@@ -148,6 +153,26 @@ class LlmGatewayTest {
         assertThat(sent.temperature()).isEqualTo(0.2);
         assertThat(sent.maxTokens()).isEqualTo(50);
         assertThat(recorded(1).getFirst().request()).contains("claude-pinned"); // 실험실은 원문을 남긴다
+    }
+
+    @Test
+    void purposeProviderFallsBackToDefaultProvider() {
+        Scripted jev = new Scripted("jev", LlmCallException.http("jev", 400, "bad"));
+        Scripted anthropic = new Scripted("anthropic", OK);
+
+        // 결정은 Jev로, Jev가 실패하면 기본 공급자(LLM)가 같은 질문에 답한다
+        Llm.Result r = gateway(null, false, jev, anthropic)
+                .complete(
+                        LlmPurpose.DECIDE,
+                        List.of(),
+                        List.of(new Llm.ChatTurn("user", "{}")),
+                        LlmContext.app(1, 2, null),
+                        null);
+
+        assertThat(r.text()).isEqualTo("답");
+        assertThat(jev.requests.getFirst().model()).isEqualTo("jev-x");
+        assertThat(anthropic.requests.getFirst().model()).isEqualTo("claude-x");
+        assertThat(recorded(2)).extracting(LlmUsage::provider).containsExactly("jev", "anthropic");
     }
 
     @Test

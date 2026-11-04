@@ -85,9 +85,9 @@ class EngineChatPipeline implements ChatPipeline {
         trace.put("tensionAfter", t.tensionAfter());
         trace.put("statusAfter", t.statusAfter());
         trace.put("moodAfter", t.moodAfter());
-        // TODO(judgment): J-06 엔진 신호(칭찬·무례 등) → 호감도 점수. 지금은 점수 없음(0)
+        // 호감도는 엔진이 아니라 ChatReplier의 신호 읽기가 정한다 (SIMPLE과 같은 규칙, ADR 0017)
         // TODO(judgment): J-07 엔진 표정 태그(캐릭터 파일 emotions) → 명세 감정 이름. 지금은 태그 그대로
-        return new ChatOutcome(t.replyClean(), t.emotion(), null, st, trace);
+        return ChatOutcome.of(t.replyClean(), t.emotion(), st, trace);
     }
 
     /** 모델은 설정(routes)이 정하고, 엔진 비용 계산도 그 모델 가격으로 */

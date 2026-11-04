@@ -1,6 +1,7 @@
 package com.capsule.relation.repository;
 
 import com.capsule.relation.domain.RelationLog;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -22,6 +23,11 @@ public interface RelationLogRepository extends JpaRepository<RelationLog, Long> 
     @Query("select coalesce(sum(l.delta), 0) from RelationLog l"
             + " where l.relationId = :relationId and l.sessionId = :sessionId")
     int sumBySession(long relationId, long sessionId);
+
+    /** 이 시각 이후 대화로 오른 점수 합 (내려간 것은 빼지 않음): 하루 상한용 */
+    @Query("select coalesce(sum(l.delta), 0) from RelationLog l where l.relationId = :relationId"
+            + " and l.reason = 'CHAT' and l.delta > 0 and l.createdAt >= :since")
+    int chatGainSince(long relationId, Instant since);
 
     @Query("select min(l.id) from RelationLog l where l.relationId = :relationId and l.sessionId = :sessionId")
     Long firstIdBySession(long relationId, long sessionId);

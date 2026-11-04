@@ -19,7 +19,7 @@ springdoc:
 capsule:
   # LLM (ADR 0017). 공급자 전환 = provider 한 줄. 키는 환경변수로만 (ANTHROPIC_API_KEY · OPENAI_API_KEY)
   llm:
-    provider: ${CAPSULE_LLM_PROVIDER:fake} # fake | anthropic | openai
+    provider: ${CAPSULE_LLM_PROVIDER:fake} # fake | anthropic | openai (jev는 결정 전용: routes.DECIDE.provider)
     fallback-provider: ${CAPSULE_LLM_FALLBACK_PROVIDER:} # 기본 공급자가 실패하면 한 번 더 (비우면 없음)
     http-timeout: 30s # 공급자 HTTP 한 번의 한도. 명세의 5초 대체 대사는 서비스가 따로 지킨다
     max-retries: 1 # 429 · 5xx · 연결 오류만
@@ -35,6 +35,10 @@ capsule:
       # 모델 이름·가격은 바꾸기 전에 공식 문서로 확인. 5.1 이후 모델은 reasoning-effort minimal 대신 none
       models: { fast: gpt-5-mini, smart: gpt-5, judge: gpt-5 }
       reasoning-effort: minimal # 추론 토큰도 max-tokens에 들어가므로 짧은 대사는 최소로
+    jev: # TypeSafe Jev 결정 모델. 글을 쓰지 않고 보기 하나 + 확신도만 (DECIDE 용도만 받음)
+      base-url: https://api.typesafe.ai
+      api-key: ${JEV_API_KEY:}
+      models: { fast: jev-1.13.0 } # jev-latest는 모르는 사이 바뀌므로 시험한 버전으로 고정
     routes: # 용도별 등급(공급자의 models 키)과 출력 한도. temperature를 비우면 공급자 기본값
       CHAT: { tier: smart, max-tokens: 400 }
       # 대화 엔진 용도 셋의 토큰 한도는 엔진 설정(Engine.Settings: 감독 500/품질 900, 배우 700, 심사 300)을 쓴다
@@ -45,6 +49,8 @@ capsule:
       SUMMARY: { tier: fast, max-tokens: 600 }
       CLOSING: { tier: fast, max-tokens: 150 }
       EVAL_JUDGE: { tier: judge, max-tokens: 600 }
+      # 결정(사용자 말 신호 → 호감도). provider를 jev로 두면 Jev, 실패하면 기본 공급자(LLM)가 같은 질문에 답한다
+      DECIDE: { tier: fast, max-tokens: 200, provider: "${CAPSULE_LLM_DECIDE_PROVIDER:}" }
     prices: # 달러/백만 토큰. Claude 모델은 Llm.DEFAULT_PRICES. 점(.)이 든 모델 이름은 "[gpt-5.5]"처럼 대괄호
       gpt-5-mini: { in: 0.25, cache-write: 0, cache-read: 0.025, out: 2.0 }
       gpt-5: { in: 1.25, cache-write: 0, cache-read: 0.125, out: 10.0 }
@@ -54,10 +60,13 @@ capsule:
       eval-parallelism: 3
   dialogue:
     chat-pipeline: SIMPLE # SIMPLE(LLM 한 번, 명세 20) | ENGINE(감독·배우 엔진. 캐릭터별 engine.* 프롬프트 필요)
-    # 상태 반응(19)을 LLM으로 만들 trigger. 비우면 전부 고정 대사 (J-04 미정. 추천안 '섞기'면 [GREETING])
-    reaction-llm-triggers: []
+    # 상태 반응(19)을 LLM으로 만들 trigger. 합의: 상태 변화는 LLM(호감도 + 대화 맥락), 동작 이벤트는 고정 대사
+    #   (DROWSY · YAWN · WAVE · HEAD_TURN은 넣지 않는다). LLM이 5초를 넘기면 같은 trigger의 고정 대사
+    reaction-llm-triggers: [GREETING, AWAY, RETURN, BREAK, BREAK_END]
+    reaction-context-lines: 6 # 상태 반응 LLM에 같이 넣을 이번 세션 최근 대화 수
     # 답장 감정 후보 (명세 19·20). TODO: #9 반응 매핑(live2d_reaction_maps)에서 캐릭터별로 읽기
     emotions: [HAPPY, SHY, ANGRY, SAD, SURPRISED, NEUTRAL]
+    signal-min-confidence: 0.6 # 사용자 말 신호의 확신도가 이보다 낮으면 NEUTRAL(0점). 실험실 평가로 조정
   # 외부 연동(카카오·메일) Fake. local/test에서만 true. 운영에서 켜면 아무 코드로나 로그인되므로 절대 켜지 않는다
   fake-integrations: false
   cdn:

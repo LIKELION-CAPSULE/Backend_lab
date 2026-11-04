@@ -20,5 +20,7 @@ public enum LlmPurpose {
     /** 완료 대사 (명세 22) */
     CLOSING,
     /** 실험실 평가 심사관 */
-    EVAL_JUDGE
+    EVAL_JUDGE,
+    /** 결정: 정해진 보기 중 하나 고르기 + 확신도 (예: 사용자 말의 신호 → 호감도). 글을 쓰지 않는다. Jev 같은 결정 모델로 보낼 수 있다 */
+    DECIDE
 }

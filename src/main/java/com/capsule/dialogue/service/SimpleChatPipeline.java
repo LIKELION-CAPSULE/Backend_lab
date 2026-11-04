@@ -19,7 +19,7 @@ import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 
 /**
- * 명세 20의 흐름 그대로: LLM 한 번 → 답장 + 감정 + 호감도 점수(JSON).
+ * LLM 한 번 → 답장 + 감정(JSON). 호감도는 여기서 정하지 않는다: ChatReplier가 결정 모델로 신호를 같이 읽는다 (ADR 0017).
  * 시스템 = [캐릭터·규칙(chat.system, 캐시)] + [상황(chat.context, 매번 바뀜)], 메시지 = 이번 세션 대화 + 이번 말.
  */
 @Component
@@ -66,7 +66,7 @@ class SimpleChatPipeline implements ChatPipeline {
         List<PromptVersion> used = List.of(systemPrompt, contextPrompt);
         Llm.Result r = llm.complete(LlmPurpose.CHAT, system, messages, ctx.withPrompts(PromptVars.ids(used)), null);
 
-        // JSON 없이 글만 왔으면 그 글을 답장으로 쓴다 (감정·점수 없음).
+        // JSON 없이 글만 왔으면 그 글을 답장으로 쓴다 (감정 없음).
         // 단 한도에 걸려 잘린 JSON('{"reply":"…')은 말풍선에 내보내지 않고 실패로 본다 → 대체 대사
         JsonNode json = LlmJson.objectIn(r.text());
         boolean truncated = "max_tokens".equals(r.stopReason()) || "length".equals(r.stopReason());
@@ -74,7 +74,6 @@ class SimpleChatPipeline implements ChatPipeline {
             throw new IllegalStateException("답장 JSON이 깨짐 (stop_reason=" + r.stopReason() + "): " + r.text());
         String reply = json != null ? LlmJson.str(json.path("reply")) : r.text();
         if (reply == null || reply.isBlank()) throw new IllegalStateException("빈 답장: " + r.text());
-        JsonNode affinity = json == null ? null : json.path("affinity");
         String emotion = json == null ? null : PromptVars.emotion(LlmJson.str(json.path("emotion")), props.emotions());
 
         Map<String, Object> trace = new LinkedHashMap<>();
@@ -82,7 +81,6 @@ class SimpleChatPipeline implements ChatPipeline {
         trace.put("prompts", PromptVars.versions(used));
         trace.put("jsonParsed", json != null);
         trace.put("raw", r.text());
-        return new ChatOutcome(
-                reply.strip(), emotion, affinity != null && affinity.isNumber() ? affinity.asInt() : null, null, trace);
+        return ChatOutcome.of(reply.strip(), emotion, null, trace);
     }
 }

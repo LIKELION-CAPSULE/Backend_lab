@@ -31,6 +31,7 @@ import com.capsule.dialogue.repository.DialogueStateRepository;
 import com.capsule.relation.api.RelationCommands;
 import com.capsule.relation.api.RelationQuery;
 import com.capsule.relation.api.RelationTypes.AffinityChange;
+import com.capsule.relation.api.RelationTypes.ChatSignal;
 import com.capsule.relation.api.RelationTypes.RelationView;
 import com.capsule.session.api.SessionQuery;
 import com.capsule.session.api.SessionTypes.SessionClosing;
@@ -91,11 +92,13 @@ public class DialogueService {
     private final ReactionWriter reactionWriter;
     private final FixedLines fixedLines;
     private final ChatPipeline chat;
+    private final ChatReplier replier;
     private final ClosingWriter closingWriter;
     private final ConversationRepository conversations;
     private final ChatMessageRepository messages;
     private final DialogueStateRepository states;
     private final TransactionTemplate tx;
+    private final DialogueProperties props;
     private final Clock clock;
 
     DialogueService(
@@ -110,6 +113,7 @@ public class DialogueService {
             ReactionWriter reactionWriter,
             FixedLines fixedLines,
             List<ChatPipeline> pipelines,
+            ChatReplier replier,
             ClosingWriter closingWriter,
             ConversationRepository conversations,
             ChatMessageRepository messages,
@@ -132,11 +136,13 @@ public class DialogueService {
                 .findFirst()
                 .orElseThrow(
                         () -> new IllegalStateException("capsule.dialogue.chat-pipeline을 모름: " + props.chatPipeline()));
+        this.replier = replier;
         this.closingWriter = closingWriter;
         this.conversations = conversations;
         this.messages = messages;
         this.states = states;
         this.tx = new TransactionTemplate(transactionManager);
+        this.props = props;
         this.clock = clock;
     }
 
@@ -159,11 +165,18 @@ public class DialogueService {
         ReactionLine line = fixedLines.reaction(characterId, trigger, awayLevel, relationLevel, Map.of());
         boolean fallback = false;
         if (reactionWriter.usesLlm(trigger)) {
+            // 상태 변화는 LLM: 호감도 단계 + 지난 요약 + 이번 세션 최근 대화를 같이 넣는다
             CharacterInfo character = character(characterId);
             String nickname = nickname(userId);
+            Optional<Conversation> conv = conversations.findByUserIdAndCharacterId(userId, characterId);
+            String summary = conv.map(Conversation::summary).orElse(null);
+            List<ChatLine> recent = conv.map(c -> tail(
+                            lines(messages.findByConversationIdAndSessionIdOrderById(c.id(), sessionId)),
+                            props.reactionContextLines()))
+                    .orElse(List.of());
             LlmContext ctx = LlmContext.app(userId, sessionId, deadline());
-            Optional<ReactionLine> generated = withinBudget(() ->
-                    reactionWriter.generate(character, trigger, awayLevel, relationLevel, nickname, Map.of(), ctx));
+            Optional<ReactionLine> generated = withinBudget(() -> reactionWriter.generate(
+                    character, trigger, awayLevel, relationLevel, nickname, summary, recent, Map.of(), ctx));
             fallback = generated.isEmpty();
             line = generated.orElse(new ReactionLine(line.content(), null)); // 5초 넘으면 고정 대사, 감정 없음
         }
@@ -251,15 +264,16 @@ public class DialogueService {
                 Map.of(),
                 EngineOptions.DEFAULT);
         LlmContext ctx = LlmContext.app(userId, sessionId, deadline());
-        Optional<ChatOutcome> outcome = withinBudget(() -> chat.reply(input, ctx));
+        Optional<ChatOutcome> outcome = withinBudget(() -> replier.reply(chat, input, ctx));
         String reply = outcome.map(ChatOutcome::reply).orElseGet(() -> fixedLines.replyFallback(characterId));
-        // 명세 20: fallback이면 호감도 변화 없음 (0이어도 applyChat을 불러 잠금 순서를 지킨다)
-        int score = outcome.map(o -> o.affinity() == null ? 0 : o.affinity()).orElse(0);
+        // 명세 20: fallback이면 호감도 변화 없음 (NEUTRAL이어도 applyChatSignal을 불러 잠금 순서를 지킨다)
+        ChatSignal signal = outcome.map(ChatOutcome::signal).orElse(ChatSignal.NEUTRAL);
 
         MessageResponse response;
         try {
             response = tx.execute(status -> {
-                AffinityChange affinity = relationCommands.applyChat(userId, characterId, sessionId, requestId, score);
+                AffinityChange affinity =
+                        relationCommands.applyChatSignal(userId, characterId, sessionId, requestId, signal);
                 if (sessions.find(sessionId).filter(SessionInfo::inProgress).isEmpty()) {
                     status.setRollbackOnly(); // 답하는 사이 공부가 끝났다: 정산·요약이 끝난 세션에 남기지 않는다
                     return null;
@@ -428,6 +442,10 @@ public class DialogueService {
         String due =
                 m.dueDate() == null ? "" : " (" + m.dueDate() + (m.dueTime() == null ? "" : " " + m.dueTime()) + ")";
         return type + ": " + m.title() + due;
+    }
+
+    private static List<ChatLine> tail(List<ChatLine> lines, int n) {
+        return lines.subList(Math.max(0, lines.size() - n), lines.size());
     }
 
     private static List<ChatLine> lines(List<ChatMessage> chat) {

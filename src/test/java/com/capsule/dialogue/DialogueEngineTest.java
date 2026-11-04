@@ -16,6 +16,7 @@ import com.capsule.dialogue.service.PromptService;
 import com.capsule.relation.api.RelationCommands;
 import com.capsule.relation.api.RelationQuery;
 import com.capsule.relation.api.RelationTypes.AffinityChange;
+import com.capsule.relation.api.RelationTypes.ChatSignal;
 import com.capsule.relation.api.RelationTypes.RelationView;
 import com.capsule.session.api.SessionClosingHandler;
 import com.capsule.session.api.SessionQuery;
@@ -93,7 +94,8 @@ class DialogueEngineTest {
                         Optional.of(new CharacterInfo(CHARACTER_ID, 1, "채린", null, List.of("츤데레"), "짝꿍", true, null)));
         when(relationQuery.view(userId, CHARACTER_ID))
                 .thenReturn(new RelationView(CHARACTER_ID, 1, "아는 사이", 80, 0, 100));
-        when(relationCommands.applyChat(eq(userId), eq(CHARACTER_ID), eq(sessionId), any(), eq(0)))
+        when(relationCommands.applyChatSignal(
+                        eq(userId), eq(CHARACTER_ID), eq(sessionId), any(), eq(ChatSignal.NEUTRAL)))
                 .thenReturn(new AffinityChange(0, 80, 1, false));
         prompts.importEnginePack(
                 CHARACTER_ID,
@@ -111,7 +113,7 @@ class DialogueEngineTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content").value("「안녕」… 그렇구나."))
                 .andExpect(jsonPath("$.fallback").value(false))
-                .andExpect(jsonPath("$.affinity.delta").value(0)); // J-06 전: 엔진은 호감도 점수를 내지 않음
+                .andExpect(jsonPath("$.affinity.delta").value(0)); // 신호는 SIMPLE과 같은 읽기 (Fake 결정 = NEUTRAL)
         assertThat(historySize()).isEqualTo(2);
 
         send("수학 숙제 중").andExpect(status().isOk());

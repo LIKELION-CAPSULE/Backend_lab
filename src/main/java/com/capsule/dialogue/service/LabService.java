@@ -33,6 +33,7 @@ import com.capsule.dialogue.engine.DialogueState;
 import com.capsule.dialogue.repository.LabSessionRepository;
 import com.capsule.dialogue.repository.LabTurnRepository;
 import com.capsule.dialogue.repository.LlmUsageRepository;
+import com.capsule.relation.api.RelationQuery;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -91,6 +92,8 @@ public class LabService {
     private final LabTurnRepository turns;
     private final LlmUsageRepository usages;
     private final Map<String, ChatPipeline> pipelines;
+    private final ChatReplier replier;
+    private final RelationQuery relationQuery;
     private final ReactionWriter reactionWriter;
     private final ClosingWriter closingWriter;
     private final LlmGateway gateway;
@@ -106,6 +109,8 @@ public class LabService {
             LabTurnRepository turns,
             LlmUsageRepository usages,
             List<ChatPipeline> pipelines,
+            ChatReplier replier,
+            RelationQuery relationQuery,
             ReactionWriter reactionWriter,
             ClosingWriter closingWriter,
             LlmGateway gateway,
@@ -119,6 +124,8 @@ public class LabService {
         this.turns = turns;
         this.usages = usages;
         this.pipelines = pipelines.stream().collect(Collectors.toMap(ChatPipeline::name, Function.identity()));
+        this.replier = replier;
+        this.relationQuery = relationQuery;
         this.reactionWriter = reactionWriter;
         this.closingWriter = closingWriter;
         this.gateway = gateway;
@@ -227,7 +234,8 @@ public class LabService {
         ChatOutcome out = null;
         String error = null;
         try {
-            out = pipeline(s.pipeline()).reply(input(character(s.characterId()), config, history, text, state), ctx);
+            out = chatTurn(
+                    pipeline(s.pipeline()), input(character(s.characterId()), config, history, text, state), ctx);
         } catch (RuntimeException e) {
             error = e.toString();
         }
@@ -239,7 +247,7 @@ public class LabService {
                 text,
                 out == null ? null : out.reply(),
                 out == null ? null : out.emotion(),
-                out == null ? null : out.affinity(),
+                points(out),
                 error,
                 ms,
                 cost(used),
@@ -273,9 +281,18 @@ public class LabService {
                 ChatPipeline p = pipeline(r.pipeline() == null ? dialogueProps.chatPipeline() : r.pipeline());
                 String message = required(r.message(), "message");
                 yield ctx -> {
-                    ChatOutcome o = p.reply(input(c, config, history, message, null), ctx);
+                    ChatOutcome o = chatTurn(p, input(c, config, history, message, null), ctx);
                     return map(
-                            "reply", o.reply(), "emotion", o.emotion(), "affinity", o.affinity(), "trace", o.trace());
+                            "reply",
+                            o.reply(),
+                            "emotion",
+                            o.emotion(),
+                            "signal",
+                            o.signal(),
+                            "affinity",
+                            points(o),
+                            "trace",
+                            o.trace());
                 };
             }
             case "reaction" -> {
@@ -283,7 +300,15 @@ public class LabService {
                 Integer intensity = "AWAY".equals(trigger) ? (r.intensity() == null ? 1 : r.intensity()) : null;
                 yield ctx -> {
                     ReactionLine l = reactionWriter.generate(
-                            c, trigger, intensity, config.relationLevelOrDefault(), nickname, pinned, ctx);
+                            c,
+                            trigger,
+                            intensity,
+                            config.relationLevelOrDefault(),
+                            nickname,
+                            config.summary(),
+                            history,
+                            pinned,
+                            ctx);
                     return map("content", l.content(), "emotion", l.emotion());
                 };
             }
@@ -355,6 +380,16 @@ public class LabService {
 
     static LabConfig config(String json) {
         return json == null ? LabConfig.EMPTY : LlmJson.read(json, LabConfig.class);
+    }
+
+    /** 서비스(20)와 같은 한 턴: 답장 + 신호 */
+    ChatOutcome chatTurn(ChatPipeline pipeline, ChatInput in, LlmContext ctx) {
+        return replier.reply(pipeline, in, ctx);
+    }
+
+    /** 서비스였다면 이 턴의 호감도 점수 (하루 상한 전). 실험실은 호감도를 바꾸지 않는다 */
+    Integer points(ChatOutcome o) {
+        return o == null || o.signal() == null ? null : relationQuery.chatPoints(o.signal());
     }
 
     ChatPipeline pipeline(String name) {

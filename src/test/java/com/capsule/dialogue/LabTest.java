@@ -1,6 +1,8 @@
 package com.capsule.dialogue;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.contains;
+import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -102,19 +104,24 @@ class LabTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.reply").value("「안녕」… 그렇구나. 한 문제만 더 해보자."))
                 .andExpect(jsonPath("$.emotion").value("NEUTRAL"))
-                .andExpect(jsonPath("$.affinity").value(1))
+                // 호감도: 결정(Fake = NEUTRAL) → 서비스였다면 0점. 답장과 결정은 동시에 나가서 기록 순서는 정해지지 않는다
+                .andExpect(jsonPath("$.affinity").value(0))
+                .andExpect(jsonPath("$.trace.signal").value("NEUTRAL"))
                 .andExpect(jsonPath("$.overBudget").value(false))
                 .andExpect(jsonPath("$.trace.prompts['chat.system'].id").value(draft))
-                .andExpect(jsonPath("$.usages[0].purpose").value("CHAT"))
-                .andExpect(jsonPath("$.usages[0].request.system[0].text").value("너는 채린. 실험 버전"))
-                .andExpect(jsonPath("$.usages[0].request.system[0].cache").value(true)));
+                .andExpect(jsonPath("$.usages[*].purpose").value(containsInAnyOrder("CHAT", "DECIDE")))
+                .andExpect(jsonPath("$.usages[?(@.purpose == 'CHAT')].request.system[0].text")
+                        .value(contains("너는 채린. 실험 버전")))
+                .andExpect(jsonPath("$.usages[?(@.purpose == 'CHAT')].request.system[0].cache")
+                        .value(contains(true))));
         long turnId = ((Number) JsonPath.read(turn, "$.id")).longValue();
         call(patch(API + "/turns/" + turnId), Map.of("score", 5, "note", "좋음"))
                 .andExpect(jsonPath("$.rating").value(5));
 
         // 두 번째 턴에는 앞 대화가 메시지로 들어간다
         call(post(API + "/sessions/" + session + "/turns"), Map.of("text", "수학 하는 중"))
-                .andExpect(jsonPath("$.usages[0].request.messages.length()").value(3));
+                .andExpect(jsonPath("$.usages[?(@.purpose == 'CHAT')].request.messages.length()")
+                        .value(contains(3)));
 
         // 켜면 이 캐릭터는 공통 시드보다 캐릭터 전용 버전을 쓴다
         call(post(API + "/prompts/" + draft + "/activate"), null)
@@ -144,7 +151,7 @@ class LabTest {
         call(post(API + "/sessions/" + session + "/turns"), Map.of("text", "야 안녕"))
                 .andExpect(jsonPath("$.reply").value("「야 안녕」… 그렇구나."))
                 .andExpect(jsonPath("$.trace.pipeline").value("ENGINE"))
-                .andExpect(jsonPath("$.usages[*].purpose").value(org.hamcrest.Matchers.contains("DIRECTOR", "ACTOR")));
+                .andExpect(jsonPath("$.usages[*].purpose").value(containsInAnyOrder("DIRECTOR", "ACTOR", "DECIDE")));
         call(post(API + "/sessions/" + session + "/turns"), Map.of("text", "공부 중이야"))
                 .andExpect(jsonPath("$.error").doesNotExist());
 

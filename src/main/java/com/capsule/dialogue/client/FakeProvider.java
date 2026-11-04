@@ -36,8 +36,7 @@ class FakeProvider implements LlmProvider {
         String last = r.messages().isEmpty() ? "" : r.messages().getLast().text();
         String text = switch (r.purpose()) {
             case CHAT ->
-                LlmJson.write(Map.of(
-                        "reply", "「" + head(last, 20) + "」… 그렇구나. 한 문제만 더 해보자.", "emotion", "NEUTRAL", "affinity", 1));
+                LlmJson.write(Map.of("reply", "「" + head(last, 20) + "」… 그렇구나. 한 문제만 더 해보자.", "emotion", "NEUTRAL"));
             case DIRECTOR -> DIRECTOR_PLAN;
             case ACTOR -> "「" + head(lastLine(last).replaceFirst("^사용자: ", ""), 20) + "」… 그렇구나.";
             case JUDGE -> "{\"scores\":[7,6,5],\"pick\":1,\"why\":\"가짜 심사\"}";
@@ -45,6 +44,7 @@ class FakeProvider implements LlmProvider {
             case SUMMARY -> "(가짜 요약) " + head(last, 60);
             case CLOSING -> "(가짜 완료 대사) 오늘 공부 수고했어."; // 대체 문구(fixed.lines)와 달라야 테스트가 둘을 구분한다
             case EVAL_JUDGE -> "{\"score\":7,\"reason\":\"가짜 심사\"}";
+            case DECIDE -> firstChoices(last);
         };
         if (onText != null) onText.accept(text);
         int input = length(r.system().stream().map(Llm.SystemBlock::text).toList())
@@ -56,6 +56,17 @@ class FakeProvider implements LlmProvider {
                 0,
                 "end_turn",
                 false);
+    }
+
+    /** 결정: 질문마다 첫 보기를 확신도 0.9로 (신호 질문이면 첫 보기 NEUTRAL → 호감도 0) */
+    private static String firstChoices(String payload) {
+        Map<String, Object> out = new java.util.LinkedHashMap<>();
+        LlmJson.tree(payload).path("questions").properties().forEach(q -> {
+            String first =
+                    q.getValue().path("criteria").propertyNames().iterator().next();
+            out.put(q.getKey(), Map.of("choice", first, "confidence", 0.9));
+        });
+        return LlmJson.write(out);
     }
 
     private static String head(String s, int codePoints) {

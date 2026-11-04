@@ -22,8 +22,7 @@
 
 <출력>
 JSON 한 줄만 출력한다. 앞뒤에 다른 글을 쓰지 않는다.
-{"reply": "대사", "emotion": "감정", "affinity": 점수}
-- reply: {{characterName}}의 대사
+{"reply": "대사", "emotion": "감정"}
+- reply: {{characterName}}의 대사. 상황 블록의 호감도 단계에 맞는 거리감으로 말한다 (단계가 낮으면 조심스럽게, 높으면 편하게)
 - emotion: 대사의 감정. {{emotions}} 중 하나
-- affinity: 이 메시지로 {{characterName}}와 사용자가 얼마나 가까워졌는지 −5~5 정수. 평범한 대화는 0, 고마움·응원·진심은 +, 무례함은 −
 </출력>
