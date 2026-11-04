@@ -3,7 +3,8 @@
 # 둘과 프론트가 같은 데이터를 본다. 운영 Supabase 프로젝트와는 다른 프로젝트다
 spring:
   datasource:
-    # Supabase 개발 프로젝트 Connect > Type: JDBC, Method: Session pooler 주소 + ?sslmode=require
+    # Supabase 개발 프로젝트 Connect > Type: JDBC, Method: Session pooler(5432, Transaction pooler 아님)
+    # 대시보드 문자열의 ?user=...&password=... 는 빼고 jdbc:postgresql://<pooler 호스트>:5432/postgres?sslmode=require
     url: ${CAPSULE_DEV_DB_URL}
     username: ${CAPSULE_DEV_DB_USERNAME} # postgres.<개발 project-ref>
     password: ${CAPSULE_DEV_DB_PASSWORD}
@@ -12,5 +13,6 @@ spring:
   flyway:
     # 앱은 공용 DB에 마이그레이션하지 않는다. 머지 전 마이그레이션이 들어가면 상대 앱이 시작할 때 실패하기 때문
     # 마이그레이션 · 예시 시드는 develop에 머지될 때 GitHub Actions(dev-db-migrate)만 넣는다
-    # 내 브랜치에 아직 머지 안 된 테이블이 있으면 ddl-auto: validate가 시작할 때 알려준다 → 그 작업은 Docker 로컬 DB로
+    # 머지 전 마이그레이션 작업은 Docker 로컬 DB로. 테이블 · 컬럼이 없으면 ddl-auto: validate가 시작할 때 알려주지만
+    # 제약(CHECK) · 인덱스 · 데이터 변경은 못 잡고 실행 중 오류로 난다
     enabled: false
