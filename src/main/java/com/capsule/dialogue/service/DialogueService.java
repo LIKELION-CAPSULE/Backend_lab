@@ -110,9 +110,12 @@ public class DialogueService {
         }
 
         // 호감도는 상태 변화 전송(18)이 반영하고 그 응답으로 돌려준다. 여기서는 다루지 않음
-        Reaction reaction = reactions.pick(characterId, trigger, awayLevel);
         CharacterInfo character = character(characterId);
         Optional<LlmReaction> generated = callLlm(() -> llm.reaction(character, trigger, awayLevel));
+        // 명세 19: 모션·표정은 대사의 감정으로 고른다 (trigger 기준 '알아채는' 동작은 18이 줌). 강도는 대사에만 쓴다
+        // ponytail: 감정 후보를 그 캐릭터의 반응 표에서 가져와 LLM에 주는 건 content.api 계약이 생긴 뒤 (#9, #33)
+        String emotion = generated.map(LlmReaction::emotion).orElse(null);
+        Reaction reaction = emotionReaction(characterId, emotion);
 
         // 뼈대는 세션당 캐릭터 1명
         return new ReactionResponse(
@@ -122,7 +125,7 @@ public class DialogueService {
                         generated
                                 .map(LlmReaction::content)
                                 .orElseGet(() -> LlmClient.FIXED_REACTION_LINES.get(trigger)),
-                        generated.map(LlmReaction::emotion).orElse(null),
+                        emotion,
                         reaction.motion(),
                         reaction.expression(),
                         generated.isEmpty(),
@@ -141,13 +144,14 @@ public class DialogueService {
         if (answered.isPresent()) {
             return answered.get();
         }
+        List<ChatLine> history =
+                lines(messages.findByConversationIdAndSessionIdOrderById(conversation.id(), sessionId));
+        // 한도 검사보다 먼저 저장한다: 같은 requestId가 아직 처리 중이면 여기서 UNIQUE를 기다렸다 막혀서
+        // 컨트롤러가 그 답장을 돌려준다. 그래서 처리 중 재전송도 횟수에 세지 않는다(명세 20). 429면 롤백돼 이 저장도 사라진다
+        messages.save(new ChatMessage(conversation.id(), sessionId, requestId, USER, content, Instant.now(clock)));
         if (!rateLimiter.tryAcquire("rate:chat:" + userId, MESSAGES_PER_MINUTE, Duration.ofMinutes(1))) {
             throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "TOO_MANY_REQUESTS");
         }
-
-        List<ChatLine> history =
-                lines(messages.findByConversationIdAndSessionIdOrderById(conversation.id(), sessionId));
-        messages.save(new ChatMessage(conversation.id(), sessionId, requestId, USER, content, Instant.now(clock)));
         ReplyContext context = new ReplyContext(
                 character(characterId),
                 conversation.summary(),
@@ -162,18 +166,24 @@ public class DialogueService {
         AffinityChange affinity = reply.map(
                         r -> relationCommands.applyChat(userId, characterId, sessionId, requestId, r.affinityScore()))
                 .orElseGet(() -> unchanged(userId, characterId));
-        // TODO(judgment): J-07 답장 감정(LlmReply.emotion) → 모션·표정 고르는 규칙. 지금은 없음
-        Reaction reaction = Reaction.NONE;
+        // TODO(judgment): J-07 엔진의 표정 태그 → 반응 표 감정 이름. 지금 Fake는 감정을 안 정함(null → 동작 없음)
+        String emotion = reply.map(LlmReply::emotion).orElse(null);
+        Reaction reaction = emotionReaction(characterId, emotion);
         return new MessageResponse(
                 requestId,
                 characterId,
                 answer,
-                reply.map(LlmReply::emotion).orElse(null),
+                emotion,
                 reaction.motion(),
                 reaction.expression(),
                 affinity,
                 reply.isEmpty(),
                 audio(tts));
+    }
+
+    /** 명세 19·20: 감정 이름으로 반응 표에서 모션·표정을 고른다. 감정이 없거나 그 감정 행이 없으면 동작 없음 */
+    private Reaction emotionReaction(long characterId, String emotion) {
+        return emotion == null ? Reaction.NONE : reactions.pick(characterId, emotion, null);
     }
 
     /** 명세 20: 대화할 캐릭터는 그 세션 캐릭터만 (뼈대는 세션당 1명) */

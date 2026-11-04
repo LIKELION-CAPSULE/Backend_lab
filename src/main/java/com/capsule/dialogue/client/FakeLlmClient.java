@@ -27,7 +27,10 @@ class FakeLlmClient implements LlmClient {
             "AWAY", "SAD",
             "RETURN", "HAPPY",
             "BREAK", "NEUTRAL",
-            "BREAK_END", "NEUTRAL");
+            "BREAK_END", "NEUTRAL",
+            "DROWSY", "NEUTRAL",
+            "YAWN", "NEUTRAL",
+            "WAVE", "HAPPY");
 
     @Override
     public LlmReply reply(ReplyContext context) {
