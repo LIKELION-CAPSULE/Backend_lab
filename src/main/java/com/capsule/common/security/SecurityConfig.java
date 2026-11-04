@@ -53,6 +53,10 @@ class SecurityConfig {
                 // 리프레시 쿠키만으로 처리. 액세스 토큰이 만료돼도 쿠키를 지워야 공용 시연 기기에서 다음 사람이 이전 계정으로 갱신되지 않음
                 path.matcher(HttpMethod.POST, "/api/auth/logout"),
                 path.matcher("/actuator/health/**"),
+                // Swagger(ADR 0019). springdoc을 켠 local 프로필에서만 응답하고, 꺼진 prod에서는 404
+                path.matcher(HttpMethod.GET, "/swagger-ui.html"),
+                path.matcher(HttpMethod.GET, "/swagger-ui/**"),
+                path.matcher(HttpMethod.GET, "/v3/api-docs/**"),
                 path.matcher("/error")); // 필터 단계 예외가 /error로 넘어올 때 401로 덮이지 않게
     }
 

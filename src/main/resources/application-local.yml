@@ -7,6 +7,10 @@ spring:
   flyway:
     locations: classpath:db/migration,classpath:db/seed # 예시값 시드는 로컬·테스트 전용 (A6)
 
+springdoc: # Swagger: /swagger-ui.html (ADR 0019). 개발 서버(local,shared-db,dev-server)에서도 켜진다
+  api-docs.enabled: true
+  swagger-ui.enabled: true
+
 capsule:
   fake-integrations: true
   auth:
