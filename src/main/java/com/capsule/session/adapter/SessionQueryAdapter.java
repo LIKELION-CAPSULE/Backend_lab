@@ -50,4 +50,13 @@ class SessionQueryAdapter implements SessionQuery {
         }
         return Optional.empty();
     }
+
+    @Override
+    public boolean onBreak(long sessionId) {
+        return events.findBySessionIdOrderByOccurredAtAscIdAsc(sessionId).stream()
+                .filter(SessionEvent::isState)
+                .reduce((a, b) -> b)
+                .map(e -> SessionEvent.BREAK.equals(e.type()))
+                .orElse(false);
+    }
 }

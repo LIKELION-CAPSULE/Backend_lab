@@ -25,6 +25,7 @@ public class ChatMessage {
     private UUID requestId;
     private String sender;
     private String content;
+    private String signal; // 사용자 말의 종류 (SignalType 이름). 답장을 저장할 때 채운다
     private Instant createdAt;
 
     protected ChatMessage() {}
@@ -39,11 +40,27 @@ public class ChatMessage {
         this.createdAt = now;
     }
 
+    public UUID requestId() {
+        return requestId;
+    }
+
     public String sender() {
         return sender;
     }
 
     public String content() {
         return content;
+    }
+
+    public Instant createdAt() {
+        return createdAt;
+    }
+
+    public String signal() {
+        return signal;
+    }
+
+    public long sessionId() {
+        return sessionId;
     }
 }

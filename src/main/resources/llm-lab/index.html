@@ -1,0 +1,885 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>캡슐 LLM 실험실</title>
+<style>
+:root{--bg:#f5f5f3;--fg:#1c1c1e;--mut:#6e6e73;--card:#fff;--line:#deded9;--acc:#3563e9;--ok:#1d9a5b;--warn:#b7791f;--bad:#d64545;--user:#e3ebfd;--bot:#efefec;--code:#f4f4f1;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#141518;--fg:#e4e4e6;--mut:#9b9ba3;--card:#1d1e22;--line:#34363c;--acc:#7c9dff;--ok:#4cc38a;--warn:#e3b341;--bad:#ff6b6b;--user:#26345a;--bot:#2a2b30;--code:#17181b}}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,-apple-system,"Segoe UI","Malgun Gothic","Apple SD Gothic Neo",sans-serif}
+pre,.mono{font-family:ui-monospace,"D2Coding",Consolas,"SF Mono",Menlo,monospace;font-size:12.5px}
+pre{white-space:pre-wrap;word-break:break-word;background:var(--code);border:1px solid var(--line);border-radius:6px;padding:8px;margin:4px 0;max-height:480px;overflow:auto}
+h2,h3,h4{margin:0 0 6px}h2{font-size:18px}h3{font-size:15px}h4{font-size:13px;margin-top:12px;color:var(--mut)}
+hr{border:0;border-top:1px solid var(--line);margin:14px 0}
+header{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:10px 16px;background:var(--card);border-bottom:1px solid var(--line)}
+.logo{font-size:15px;margin-right:8px}
+nav{display:flex;gap:2px;padding:0 16px;background:var(--card);border-bottom:1px solid var(--line);overflow-x:auto}
+nav button{border:0;border-bottom:2px solid transparent;border-radius:0;background:none;padding:10px 14px;white-space:nowrap}
+nav button.on{border-bottom-color:var(--acc);color:var(--acc);font-weight:600}
+main{padding:16px;max-width:1600px;margin:0 auto}
+input,select,textarea,button{font:inherit;color:inherit;background:var(--card);border:1px solid var(--line);border-radius:6px;padding:5px 8px;min-width:0}
+textarea{width:100%;resize:vertical}
+textarea.big{min-height:55vh;line-height:1.45}
+button{cursor:pointer;background:var(--bot)}
+button:disabled{opacity:.5;cursor:default}
+button.primary{background:var(--acc);border-color:var(--acc);color:#fff}
+button.danger{color:var(--bad)}
+button.ghost{background:none}
+summary{cursor:pointer;color:var(--mut);margin:4px 0}
+.card>summary{color:var(--fg);font-weight:600}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:12px;min-width:0}
+.cols{display:grid;grid-template-columns:340px minmax(0,1fr);gap:12px;align-items:start}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:12px;align-items:start}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:12px;align-items:start}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:10px;align-items:start}
+.cmp{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:start}
+@media (max-width:900px){.cols,.split,.cmp,.grid2{grid-template-columns:minmax(0,1fr)}}
+.row{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}
+.grow{flex:1}
+.f{display:flex;flex-direction:column;gap:2px;margin-bottom:8px;min-width:0}
+.f>span{font-size:12px;color:var(--mut)}
+.f>button{align-self:flex-start}
+.chk{display:inline-flex;gap:4px;align-items:center;margin:0 12px 8px 0;white-space:nowrap}
+.chk input[type=number]{width:6em}
+.cfg{border:1px dashed var(--line);border-radius:8px;padding:2px 10px;margin:6px 0 10px}
+.cfggrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:0 10px}
+.wide{grid-column:1/-1}
+.muted{color:var(--mut)}.small{font-size:12px}.strong{font-weight:600}
+.empty{color:var(--mut);padding:48px;text-align:center}
+.item{padding:6px 8px;border-radius:8px;cursor:pointer}
+.li{padding:4px 0;border-bottom:1px solid var(--line);align-items:center}
+.item:hover,.item.on,tr.click:hover,tr.on{background:color-mix(in srgb,var(--acc) 10%,transparent)}
+.tall{max-height:70vh;overflow:auto}
+.turn{display:flex;flex-direction:column;padding:10px 0;border-bottom:1px dashed var(--line)}
+.tx{display:flex;flex-direction:column}
+.bubble{padding:8px 12px;border-radius:14px;width:fit-content;max-width:85%;white-space:pre-wrap;word-break:break-word;margin:3px 0}
+.bubble.user{align-self:flex-end;background:var(--user);border-bottom-right-radius:4px}
+.bubble.bot{background:var(--bot);border-bottom-left-radius:4px}
+.pre{white-space:pre-wrap}
+.thinking{color:var(--mut);font-style:italic;padding:4px 0}
+.errbox{border:1px solid var(--bad);color:var(--bad);background:color-mix(in srgb,var(--bad) 8%,transparent);border-radius:8px;padding:8px;margin:4px 0;white-space:pre-wrap;word-break:break-word}
+.chips{display:flex;flex-wrap:wrap;gap:4px;margin:4px 0}
+.chip{font-size:12px;padding:1px 8px;border:1px solid var(--line);border-radius:999px;color:var(--mut);white-space:nowrap}
+.chip.over{color:var(--bad);border-color:var(--bad);font-weight:600}
+.chip.okc{color:var(--ok);border-color:var(--ok)}
+.chip.off{opacity:.6}
+.warn{font-size:12px;color:var(--warn);border:1px solid var(--warn);border-radius:6px;padding:2px 8px}
+.acts{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.rate{display:flex;align-items:center;gap:2px;flex:1;min-width:260px}
+.rate input{flex:1;margin-left:6px}
+.star{border:0;background:none;padding:0 1px;font-size:18px;line-height:1;color:var(--line)}
+.star.on{color:#f5b301}
+.badge{display:inline-block;font-size:11px;font-weight:600;padding:0 6px;border-radius:4px;background:var(--line);color:var(--mut)}
+.badge.active,.badge.done,.badge.ok{background:color-mix(in srgb,var(--ok) 20%,transparent);color:var(--ok)}
+.badge.draft{background:color-mix(in srgb,var(--warn) 22%,transparent);color:var(--warn)}
+.badge.running,.badge.cache{background:color-mix(in srgb,var(--acc) 20%,transparent);color:var(--acc)}
+.badge.failed,.badge.error{background:color-mix(in srgb,var(--bad) 20%,transparent);color:var(--bad)}
+.scroll{overflow-x:auto}
+.tbl{border-collapse:collapse;width:100%;font-size:12.5px}
+.tbl th,.tbl td{border-bottom:1px solid var(--line);padding:4px 6px;text-align:left;vertical-align:top}
+.tbl th{color:var(--mut);font-weight:500;white-space:nowrap}
+tr.click{cursor:pointer}
+tr.sub>td{background:var(--bg);padding:8px}
+.role{font-size:12px;color:var(--mut);display:flex;gap:6px;align-items:center;margin-top:6px}
+.chathead{display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap;margin-bottom:8px}
+.composer{position:sticky;bottom:0;display:flex;gap:8px;align-items:flex-end;padding:10px 0;background:var(--bg)}
+.routes{position:relative}
+.routes .pop{position:absolute;right:0;top:30px;z-index:20;width:min(760px,92vw);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px;box-shadow:0 8px 24px rgba(0,0,0,.2)}
+.tokenbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 16px;background:color-mix(in srgb,var(--warn) 15%,var(--card));border-bottom:1px solid var(--line)}
+.toasts{position:fixed;right:16px;bottom:16px;z-index:50;display:flex;flex-direction:column;gap:8px;max-width:min(520px,92vw)}
+.toast{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--bad);border-radius:8px;padding:8px 12px;box-shadow:0 6px 20px rgba(0,0,0,.25);word-break:break-word}
+.toast.ok{border-left-color:var(--ok)}.toast.info{border-left-color:var(--acc)}
+.toast .x{float:right;border:0;padding:0 4px;margin-left:8px}
+.toast pre{max-height:220px}
+.diff div{min-height:1.4em}
+.diff .add{background:color-mix(in srgb,var(--ok) 20%,transparent)}
+.diff .del{background:color-mix(in srgb,var(--bad) 20%,transparent)}
+</style>
+</head>
+<body>
+<header id="hdr"><b class="logo">캡슐 LLM 실험실</b><span class="muted small">불러오는 중…</span></header>
+<div id="tokenbar" class="tokenbar" hidden>
+  <span>실험실 토큰이 필요해요.</span>
+  <input id="tokenInput" type="password" autocomplete="off" placeholder="X-Lab-Token">
+  <button id="tokenSave" class="primary">저장하고 다시 불러오기</button>
+</div>
+<nav id="tabs">
+  <button data-tab="chat">대화 실험</button>
+  <button data-tab="play">한 번 실행</button>
+  <button data-tab="prompts">프롬프트</button>
+  <button data-tab="eval">평가</button>
+  <button data-tab="usage">호출 기록</button>
+  <button data-tab="character">캐릭터 설정</button>
+</nav>
+<main>
+  <section class="tab" id="tab-chat"></section>
+  <section class="tab" id="tab-play" hidden></section>
+  <section class="tab" id="tab-prompts" hidden></section>
+  <section class="tab" id="tab-eval" hidden></section>
+  <section class="tab" id="tab-usage" hidden></section>
+  <section class="tab" id="tab-character" hidden></section>
+</main>
+<div id="toasts" class="toasts"></div>
+<script>
+'use strict';
+// 캡슐 LLM 실험실 (내부 도구). 빌드·외부 스크립트 없음. 서버: GET /internal/llm-lab, API: /internal/llm-lab/api/*
+// 화면에 넣는 글자는 전부 h()가 텍스트 노드로 넣는다. innerHTML은 쓰지 않는다.
+const BASE = '/internal/llm-lab/api';
+const $ = s => document.querySelector(s);
+const TABS = Object.create(null);
+let META = null, active = 'chat', TOKEN = '';
+try { TOKEN = localStorage.getItem('llmLabToken') || ''; } catch { /* 저장소가 막힘: 메모리에만 둔다 */ }
+
+/* ---------- DOM · 형식 도우미 ---------- */
+function h(tag, attrs, ...kids) {
+  const el = document.createElement(tag);
+  for (const c of kids.flat(Infinity)) if (c != null && c !== false) el.append(c instanceof Node ? c : String(c));
+  for (const [k, v] of Object.entries(attrs || {})) {  // 자식 다음에 속성: select.value가 옵션을 찾을 수 있게
+    if (v == null) continue;
+    if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
+    else if (k === 'class') el.className = v;
+    else if (k in el) el[k] = v;
+    else if (v !== false) el.setAttribute(k, v === true ? '' : v);
+  }
+  return el;
+}
+const sel = (items, value, attrs) => h('select', {...attrs, value}, items.map(it => {
+  const [v, t] = Array.isArray(it) ? it : [it, it];
+  return h('option', {value: v}, t);
+}));
+const field = (label, el, cls = '') => h('label', {class: 'f ' + cls}, h('span', null, label), el);
+const chk = (el, label) => h('label', {class: 'chk'}, el, label);
+const muted = t => h('div', {class: 'muted small'}, t);
+const badge = s => h('span', {class: 'badge ' + String(s).toLowerCase()}, s);
+const jsonPre = o => h('pre', null, o == null ? '—' : JSON.stringify(o, null, 2));
+const tr = (cells, attrs) => h('tr', attrs, cells.map(c => h('td', null, c ?? '—')));
+const table = (head, rows) => h('div', {class: 'scroll'}, h('table', {class: 'tbl'},
+  h('thead', null, h('tr', null, head.map(x => h('th', null, x)))), h('tbody', null, rows)));
+const mark = (box, id) => box.querySelectorAll('[data-id]').forEach(e => e.classList.toggle('on', e.dataset.id === String(id)));
+const fmtCost = v => v == null ? '—' : '$' + Number(v).toFixed(6);
+const fmtMs = v => v == null ? '—' : Math.round(v) + 'ms';
+const fmtNum = v => v == null ? '—' : Number(v).toFixed(2);
+const fmtTime = s => s ? new Date(s).toLocaleString('ko-KR', {month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false}) : '—';
+const signed = v => (v > 0 ? '+' : '') + v;
+const lines = s => s.split('\n').map(x => x.trim()).filter(Boolean);
+const clampInt = (v, lo, hi) => Math.min(hi, Math.max(lo, Math.round(Number(v)) || lo));
+const sum = (xs, f) => xs.reduce((a, x) => a + (Number(f(x)) || 0), 0);
+const avg = xs => { const v = xs.filter(x => x != null); return v.length ? sum(v, x => x) / v.length : null; };
+function groupBy(xs, f) { const m = new Map(); for (const x of xs || []) { const k = f(x); m.has(k) ? m.get(k).push(x) : m.set(k, [x]); } return m; }
+const charName = id => id == null ? '공통' : META.characters.find(c => String(c.id) === String(id))?.name ?? '#' + id;
+const charSel = (value, common) => sel([...(common ? [['', '공통']] : []), ...META.characters.map(c => [c.id, c.name])], value);
+
+/* ---------- 알림 · API ---------- */
+function toast(msg, kind = 'err', detail = null) {
+  const box = h('div', {class: 'toast ' + kind}, h('button', {class: 'x ghost', title: '닫기', onclick: () => box.remove()}, '×'),
+    h('div', null, msg), detail && h('pre', null, detail));
+  $('#toasts').append(box);
+  setTimeout(() => box.remove(), kind === 'err' ? 20000 : 3500);
+}
+function fail(err) {
+  toast(`${err.code} · ${err.message || ''}`, 'err', err.detail == null ? null : JSON.stringify(err.detail, null, 2));
+  return Object.assign(new Error(err.message || err.code), {shown: true});
+}
+async function api(method, path, body) {
+  const headers = {};
+  if (TOKEN) headers['X-Lab-Token'] = TOKEN;
+  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  let res;
+  try {
+    res = await fetch(BASE + path, {method, headers, body: body === undefined ? undefined : JSON.stringify(body)});
+  } catch (e) {
+    throw fail({code: 'NETWORK', message: '서버에 연결하지 못했어요', detail: String(e)});
+  }
+  if (res.status === 401) { askToken(); throw Object.assign(new Error('토큰 필요'), {shown: true}); }
+  const text = await res.text();
+  let data = text;
+  try { data = text ? JSON.parse(text) : null; } catch { /* JSON이 아니면 글자 그대로 */ }
+  if (!res.ok) {
+    const e = data && typeof data === 'object' ? data : {};
+    throw fail({code: e.code || 'HTTP_' + res.status, message: e.message || e.error || (typeof data === 'string' ? data.slice(0, 300) : ''), detail: e.detail});
+  }
+  return data;
+}
+async function busy(btn, fn) {
+  if (btn) btn.disabled = true;
+  try { return await fn(); } catch (e) { if (!e.shown) toast(e.message || String(e)); } finally { if (btn) btn.disabled = false; }
+}
+function askToken() { $('#tokenInput').value = TOKEN; $('#tokenbar').hidden = false; $('#tokenInput').focus(); }
+// 지우기 같은 위험한 버튼: 3초 안에 한 번 더 눌러야 실행
+function confirmBtn(label, fn) {
+  let timer = null;
+  const reset = () => { clearTimeout(timer); timer = null; b.textContent = label; };
+  const b = h('button', {class: 'danger', onclick: () => {
+    if (!timer) { b.textContent = `한 번 더 누르면 ${label}`; timer = setTimeout(reset, 3000); return; }
+    reset();
+    busy(b, fn);
+  }}, label);
+  return b;
+}
+
+/* ---------- 공용 부품 ---------- */
+const USER_F = ['nickname', 'relationLevel', 'onBreak', 'chatty', 'summary', 'facts', 'memories'];
+const MODEL_F = ['provider', 'model', 'temperature', 'maxTokens', 'pinnedPrompts', 'engine'];
+// 실험 조건(LabConfig) 편집기. 빈 칸 = null = 서버 기본값
+function configEditor(cfg, fields = [...USER_F, ...MODEL_F], title = '실험 조건', open = false) {
+  const c = cfg || {}, e = c.engine || {}, has = f => fields.includes(f);
+  const num = (v, a) => h('input', {type: 'number', value: v ?? '', placeholder: '기본', ...a});
+  const i = {
+    nickname: h('input', {value: c.nickname ?? '', placeholder: '기본'}),
+    relationLevel: num(c.relationLevel),
+    onBreak: h('input', {type: 'checkbox', checked: c.onBreak === true}),
+    chatty: h('input', {type: 'checkbox', checked: c.chatty === true}),
+    summary: h('textarea', {rows: 2, value: c.summary ?? '', placeholder: '11/03 55분, 3단원 하다 지쳐서 일찍 끝냄 (한 줄에 한 장, 최근 2장)'}),
+    facts: h('textarea', {rows: 3, value: (c.facts || []).join('\n'), placeholder: '사용자는 이번 달 토익 800 목표 (한 줄에 하나, 최대 20개)'}),
+    memories: h('textarea', {rows: 2, value: (c.memories || []).join('\n'), placeholder: '시험: 중간고사 (2026-11-20)'}),
+    provider: sel([['', '(기본)'], ...META.providers.map(p => p.name)], c.provider ?? ''),
+    model: h('input', {value: c.model ?? '', placeholder: '기본'}),
+    temperature: num(c.temperature, {step: 0.1, min: 0}),
+    maxTokens: num(c.maxTokens, {min: 1}),
+    pinnedPrompts: h('textarea', {rows: 2, class: 'mono', spellcheck: false, value: c.pinnedPrompts ? JSON.stringify(c.pinnedPrompts) : '', placeholder: '{"chat.system": 12}'}),
+    quality: h('input', {type: 'checkbox', checked: e.quality === true}),
+    noDirector: h('input', {type: 'checkbox', checked: e.useDirector === false}),
+    eventFreq: num(e.eventFreq, {step: 0.05, min: 0, max: 1}),
+  };
+  const el = h('details', {class: 'cfg', open}, h('summary', null, title), h('div', {class: 'cfggrid'},
+    has('nickname') && field('닉네임', i.nickname),
+    has('relationLevel') && field('관계 단계 (1~4, 호감도 0 · 30 · 70 · 90)', i.relationLevel),
+    has('onBreak') && field('쉬는 시간 (2~4문장 수다 · 끄면 공부 중 1~2문장)', chk(i.onBreak, '쉬는 중')),
+    has('chatty') && field('수다가 길어짐 (공부 중 최근 10분에 8번 이상 → 공부로 돌려보냄)', chk(i.chatty, '수다 많음')),
+    has('provider') && field('공급자', i.provider),
+    has('model') && field('모델', i.model),
+    has('temperature') && field('temperature', i.temperature),
+    has('maxTokens') && field('최대 토큰', i.maxTokens),
+    has('summary') && field('지난 세션 카드', i.summary, 'wide'),
+    has('facts') && field('캐릭터가 아는 사실 (답장 전에 결정 모델이 하나를 고름)', i.facts, 'wide'),
+    has('memories') && field('일정 (한 줄에 하나)', i.memories, 'wide'),
+    has('pinnedPrompts') && field('프롬프트 버전 고정 (키 → 버전 id, JSON)', i.pinnedPrompts, 'wide'),
+    has('engine') && h('div', {class: 'f wide'}, h('span', null, '대화 엔진 (ENGINE 파이프라인만 · 비우면 기본값)'),
+      h('div', null, chk(i.quality, '품질 모드 (후보 3개 + 심사)'), chk(i.noDirector, '감독 끄기'), h('label', {class: 'chk'}, '사건 빈도', i.eventFreq)))));
+  const txt = x => x.value.trim() || null, nv = x => x.value === '' ? null : Number(x.value);
+  return {el, get() {
+    const o = {};
+    if (has('nickname')) o.nickname = txt(i.nickname);
+    if (has('relationLevel')) o.relationLevel = nv(i.relationLevel);
+    if (has('onBreak')) o.onBreak = i.onBreak.checked || null;
+    if (has('chatty')) o.chatty = i.chatty.checked || null;
+    if (has('summary')) o.summary = txt(i.summary);
+    if (has('facts')) { const f = lines(i.facts.value); o.facts = f.length ? f : null; }
+    if (has('memories')) { const m = lines(i.memories.value); o.memories = m.length ? m : null; }
+    if (has('provider')) o.provider = i.provider.value || null;
+    if (has('model')) o.model = txt(i.model);
+    if (has('temperature')) o.temperature = nv(i.temperature);
+    if (has('maxTokens')) o.maxTokens = nv(i.maxTokens);
+    if (has('pinnedPrompts')) o.pinnedPrompts = parsePinned(i.pinnedPrompts.value);
+    if (has('engine')) {
+      const en = {quality: i.quality.checked || null, useDirector: i.noDirector.checked ? false : null, eventFreq: nv(i.eventFreq)};
+      o.engine = Object.values(en).some(v => v != null) ? en : null;
+    }
+    return o;
+  }};
+}
+function parsePinned(s) {
+  if (!s.trim()) return null;
+  let o;
+  try { o = JSON.parse(s); } catch { throw new Error('프롬프트 버전 고정 JSON을 확인해 주세요. 예: {"chat.system": 12}'); }
+  if (!o || typeof o !== 'object' || Array.isArray(o)) throw new Error('프롬프트 버전 고정은 {"키": 버전 id} 모양이어야 해요');
+  return o;
+}
+function historyEditor(label) {
+  const rows = h('div');
+  const add = () => {
+    const prev = rows.lastElementChild?.querySelector('select').value;
+    const r = h('div', {class: 'row'}, sel(['USER', 'CHARACTER'], prev === 'USER' ? 'CHARACTER' : 'USER'),
+      h('input', {class: 'grow', placeholder: '내용'}), h('button', {class: 'ghost', title: '이 줄 빼기', onclick: () => r.remove()}, '×'));
+    rows.append(r);
+    r.querySelector('input').focus();
+  };
+  return {
+    el: h('div', {class: 'f wide'}, h('span', null, label), rows, h('button', {class: 'ghost', onclick: add}, '+ 줄 추가')),
+    get: () => [...rows.children].map(r => ({sender: r.querySelector('select').value, content: r.querySelector('input').value.trim()})).filter(x => x.content),
+  };
+}
+// LLM 호출 표. 줄을 누르면 실제로 보낸 system·messages와 받은 응답을 펼친다
+function usageTable(us, withTime) {
+  if (!us?.length) return muted('LLM 호출 없음');
+  const head = ['목적', '공급자', '모델', '상태', '입력', '캐시 읽기', '캐시 쓰기', '출력', '비용', '지연', 'TTFT'];
+  return table(withTime ? ['시각', ...head] : head, us.map(u => {
+    let det = null;
+    const cells = [u.purpose, u.provider, u.model, badge(u.status), u.inputTokens, u.cacheReadTokens, u.cacheWriteTokens, u.outputTokens, fmtCost(u.costUsd), fmtMs(u.latencyMs), fmtMs(u.ttftMs)];
+    const row = tr(withTime ? [fmtTime(u.createdAt), ...cells] : cells, {class: 'click', title: '눌러서 요청·응답 보기', onclick: () => {
+      if (det) det.hidden = !det.hidden;
+      else row.after(det = h('tr', {class: 'sub'}, h('td', {colspan: row.children.length}, usageDetail(u))));
+    }});
+    return row;
+  }));
+}
+function usageDetail(u) {
+  const r = u.request;
+  const block = (role, text, cache) => h('div', null, h('div', {class: 'role'}, role, cache && h('span', {class: 'badge cache'}, '캐시')), h('pre', null, text ?? ''));
+  return h('div', null,
+    u.error && h('div', {class: 'errbox'}, u.error),
+    muted([`id ${u.id}`, `stop ${u.stopReason ?? '—'}`, `프롬프트 버전 ${(u.promptVersionIds || []).join(', ') || '—'}`,
+      r && `maxTokens ${r.maxTokens ?? '—'}`, r && `temperature ${r.temperature ?? '—'}`, r?.reasoningEffort && `reasoning ${r.reasoningEffort}`].filter(Boolean).join(' · ')),
+    r ? [h('h4', null, `system (${(r.system || []).length})`), (r.system || []).map((s, k) => block('#' + (k + 1), s.text, s.cache)),
+      h('h4', null, `messages (${(r.messages || []).length})`), (r.messages || []).map(m => block(m.role, m.text))]
+      : muted('요청 내용은 기록하지 않았어요 (capsule.llm.log-content=false)'),
+    h('h4', null, 'response'), u.response == null ? muted('—') : h('pre', null, u.response));
+}
+function rating(score, note, save) {
+  let cur = score || 0;
+  const noteEl = h('input', {value: note ?? '', placeholder: '메모 (Enter로 저장)', onchange: () => cur ? store() : toast('별점을 먼저 골라 주세요', 'info')});
+  const stars = [1, 2, 3, 4, 5].map(n => h('button', {class: 'star', title: `${n}점`, onclick: () => { cur = n; paint(); store(); }}, '★'));
+  const paint = () => stars.forEach((s, k) => s.classList.toggle('on', k < cur));
+  const store = () => busy(null, async () => { await save(cur, noteEl.value.trim() || null); toast(`${cur}점 저장했어요`, 'ok'); });
+  paint();
+  return h('div', {class: 'rate'}, stars, noteEl);
+}
+function metaChips(x, calls) {
+  return h('div', {class: 'chips'},
+    x.emotion != null && h('span', {class: 'chip'}, '감정 ' + x.emotion),
+    x.affinity != null && h('span', {class: 'chip'}, '호감도 ' + signed(x.affinity)),
+    h('span', {class: 'chip' + (x.overBudget ? ' over' : '')}, fmtMs(x.latencyMs) + (x.overBudget ? ' · 5초 초과: 서비스였다면 대체 대사' : '')),
+    'costUsd' in x && h('span', {class: 'chip'}, fmtCost(x.costUsd)),
+    calls != null && h('span', {class: 'chip'}, `LLM 호출 ${calls}회`));
+}
+// ponytail: 평가 대본은 턴별 overBudget이 없어 5초를 여기서 잰다. 서버가 주게 되면 그 값으로
+const transcript = ts => h('div', {class: 'tx'}, (ts || []).map(t => [
+  h('div', {class: 'bubble user'}, t.user),
+  t.error ? h('div', {class: 'errbox'}, t.error) : h('div', {class: 'bubble bot'}, t.reply ?? ''),
+  metaChips({emotion: t.emotion, affinity: t.affinity, latencyMs: t.latencyMs, overBudget: t.latencyMs > 5000})]));
+function turnView(t) {
+  const det = h('div', {hidden: true});
+  return h('div', {class: 'turn'},
+    h('div', {class: 'bubble user'}, t.userText),
+    t.error ? h('div', {class: 'errbox'}, t.error) : h('div', {class: 'bubble bot'}, t.reply ?? ''),
+    metaChips(t, (t.usages || []).length),
+    h('div', {class: 'acts'},
+      rating(t.rating, t.ratingNote, (score, note) => api('PATCH', `/turns/${t.id}`, {score, note})),
+      h('button', {class: 'ghost', onclick: () => {
+        if (!det.firstChild) det.append(muted(`traceId ${t.traceId} · ${fmtTime(t.createdAt)}`), h('h4', null, 'trace'), jsonPre(t.trace), h('h4', null, 'LLM 호출'), usageTable(t.usages));
+        det.hidden = !det.hidden;
+      }}, '자세히')),
+    det);
+}
+// ponytail: O(n·m) LCS 줄 비교. 프롬프트 크기(수백 줄)면 충분, 수천 줄이 되면 Myers diff로
+function diffLines(a, b) {
+  const n = a.length, m = b.length, L = Array.from({length: n + 1}, () => new Uint32Array(m + 1));
+  for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) L[i][j] = a[i] === b[j] ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
+  const out = [];
+  let i = 0, j = 0;
+  while (i < n && j < m) {
+    if (a[i] === b[j]) { out.push([' ', a[i]]); i++; j++; }
+    else if (L[i + 1][j] >= L[i][j + 1]) out.push(['-', a[i++]]);
+    else out.push(['+', b[j++]]);
+  }
+  while (i < n) out.push(['-', a[i++]]);
+  while (j < m) out.push(['+', b[j++]]);
+  return out;
+}
+
+/* ---------- 1. 대화 실험 ---------- */
+function chatTab() {
+  let current = null;
+  const list = h('div'), main = h('div');
+  const title = h('input', {placeholder: '예: 시험 전날 불안'}), ch = charSel(), pipe = sel(META.pipelines, META.defaultPipeline), cfg = configEditor();
+  const createBtn = h('button', {class: 'primary', onclick: () => busy(createBtn, async () => {
+    const s = await api('POST', '/sessions', {title: title.value.trim() || `${charName(ch.value)} · ${pipe.value}`,
+      characterId: Number(ch.value), pipeline: pipe.value, config: cfg.get()});
+    title.value = '';
+    await loadList();
+    await open(s.id);
+  })}, '만들기');
+  async function loadList() {
+    const ss = await api('GET', '/sessions') || [];
+    list.replaceChildren(...ss.map(s => h('div', {class: 'item', 'data-id': s.id, onclick: () => busy(null, () => open(s.id))},
+      h('div', {class: 'strong'}, s.title), muted(`${charName(s.characterId)} · ${s.pipeline} · ${s.turnCount}턴 · ${fmtTime(s.updatedAt)}`))));
+    if (!ss.length) list.append(muted('아직 대화방이 없어요'));
+    mark(list, current?.id);
+    return ss;
+  }
+  async function open(id) {
+    current = await api('GET', '/sessions/' + id);
+    current.turns ||= [];
+    renderMain();
+    mark(list, id);
+  }
+  function renderMain() {
+    if (!current) { main.replaceChildren(h('div', {class: 'empty'}, '왼쪽에서 대화방을 고르거나 새로 만드세요.')); return; }
+    const s = current, c = s.config || {};
+    let lastText = null, sending = false;
+    const turns = h('div');
+    const again = h('button', {class: 'ghost', title: '마지막 말을 그대로 다시 보내 답이 얼마나 달라지는지 봐요', onclick: () => send(lastText)}, '같은 말 다시');
+    const input = h('textarea', {rows: 2, placeholder: '캐릭터에게 말 걸기 (Enter 보내기 · Shift+Enter 줄바꿈)', onkeydown: e => {
+      if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); send(input.value, true); }
+    }});
+    const sendBtn = h('button', {class: 'primary', onclick: () => send(input.value, true)}, '보내기');
+    const add = t => { const v = turnView(t); turns.append(v); v.querySelector('.acts').append(again); lastText = t.userText; };
+    s.turns.forEach(t => add(t));
+    async function send(text, fromInput) {
+      text = (text || '').trim();
+      if (!text || sending) return;
+      sending = sendBtn.disabled = again.disabled = true;
+      if (fromInput) input.value = '';
+      const pending = h('div', {class: 'turn'}, h('div', {class: 'bubble user'}, text), h('div', {class: 'thinking'}, '생각 중…'));
+      turns.append(pending);
+      scrollTo(0, document.body.scrollHeight);
+      try {
+        const t = await api('POST', `/sessions/${s.id}/turns`, {text});
+        pending.remove();
+        s.turns.push(t);
+        add(t);
+        scrollTo(0, document.body.scrollHeight);
+        loadList().catch(() => {});
+      } catch (e) {
+        pending.remove();
+        if (!e.shown) toast(e.message);
+        if (fromInput && !input.value) input.value = text;
+      } finally {
+        sending = sendBtn.disabled = again.disabled = false;
+        input.focus();
+      }
+    }
+    const et = h('input', {value: s.title}), ep = sel(META.pipelines, s.pipeline), ec = configEditor(c, undefined, '실험 조건', true);
+    const saveBtn = h('button', {class: 'primary', onclick: () => busy(saveBtn, async () => {
+      await api('PATCH', '/sessions/' + s.id, {title: et.value.trim() || null, pipeline: ep.value, config: ec.get()});
+      toast('조건을 바꿨어요', 'ok');
+      await open(s.id);
+      loadList().catch(() => {});
+    })}, '저장');
+    const editBox = h('div', {class: 'card', hidden: true}, h('div', {class: 'row'}, field('제목', et, 'grow'), field('파이프라인', ep)), ec.el, saveBtn);
+    main.replaceChildren(
+      h('div', {class: 'chathead'},
+        h('div', {class: 'grow'}, h('h2', null, s.title),
+          muted(`${charName(s.characterId)} · ${s.pipeline} · 공급자 ${c.provider || '기본'} · 모델 ${c.model || '기본'}`)),
+        h('button', {onclick: () => { editBox.hidden = !editBox.hidden; }}, '조건 수정'),
+        confirmBtn('초기화', async () => { await api('POST', `/sessions/${s.id}/reset`); toast('대화를 초기화했어요', 'ok'); await open(s.id); loadList().catch(() => {}); }),
+        confirmBtn('삭제', async () => { await api('DELETE', '/sessions/' + s.id); current = null; renderMain(); await loadList(); })),
+      editBox, turns, h('div', {class: 'composer'}, input, sendBtn));
+  }
+  return {
+    el: h('div', {class: 'cols'},
+      h('aside', null,
+        h('details', {class: 'card', open: true}, h('summary', null, '새 대화방'), field('제목', title), field('캐릭터', ch), field('파이프라인', pipe), cfg.el, createBtn),
+        h('div', {class: 'card'}, h('h3', null, '대화방'), list)),
+      main),
+    show: () => busy(null, async () => {
+      const ss = await loadList();
+      if (!current && ss.length) await open(ss[0].id);
+      else if (!current) renderMain();
+    }),
+  };
+}
+
+/* ---------- 2. 한 번 실행 ---------- */
+function playTab() {
+  const kinds = [['chat', '답장 (chat)'], ['memory', '기억 만들기 미리보기 (memory)'], ['reaction', '상태 반응 AI (reaction, 서비스는 상태 변화 5종만 AI)'], ['summary', '세션 카드 (summary)'], ['closing', '완료 대사 AI (closing)']];
+  const kind = sel(kinds, 'chat', {onchange: sync}), ch = charSel(), repeat = h('input', {type: 'number', min: 1, max: 10, value: 1}), cfg = configEditor();
+  const pipe = sel(META.pipelines, META.defaultPipeline), msg = h('textarea', {rows: 2, placeholder: '사용자 말'});
+  const hist = historyEditor('대화 기록 (chat: 앞선 대화 · reaction: 이번 공부에서 방금 나눈 대화, 최근 몇 줄만 들어감 · summary: 요약에 합칠 대화)');
+  const trig = sel(META.triggers, undefined, {onchange: sync}), inten = sel(['1', '2', '3'], '1');
+  const prev = h('textarea', {rows: 3, placeholder: '비우면 첫 요약'}), secs = h('input', {type: 'number', min: 0, value: 3300}), endT = sel(['NORMAL', 'AUTO_CLOSED'], 'NORMAL');
+  const parts = {pipe: field('파이프라인', pipe), msg: field('메시지', msg, 'wide'), hist: hist.el, trig: field('트리거', trig), inten: field('강도 (AWAY만)', inten),
+    prev: field('지난 요약', prev, 'wide'), secs: field('공부한 시간 (초)', secs), endT: field('종료 방식', endT)};
+  // memory: 실험 조건의 '캐릭터가 아는 사실'을 이미 아는 기억으로 보고 결정 · 한 줄을 보여 준다 (저장 안 함)
+  const shown = {chat: ['pipe', 'msg', 'hist'], memory: ['msg', 'hist'], reaction: ['trig', 'inten', 'hist'], summary: ['prev', 'hist'], closing: ['secs', 'endT']};
+  function sync() {
+    for (const [k, el] of Object.entries(parts)) el.hidden = !shown[kind.value].includes(k) || (k === 'inten' && trig.value !== 'AWAY');
+  }
+  sync();
+  const out = h('div', {class: 'cards'});
+  const runBtn = h('button', {class: 'primary', onclick: () => busy(runBtn, async () => {
+    const k = kind.value, is = (...ks) => ks.includes(k);
+    const body = {kind: k, characterId: Number(ch.value), repeat: clampInt(repeat.value, 1, 10), config: cfg.get(),
+      pipeline: is('chat') ? pipe.value : null, message: is('chat', 'memory') ? msg.value.trim() : null, history: is('chat', 'memory', 'reaction', 'summary') ? hist.get() : null,
+      trigger: is('reaction') ? trig.value : null, intensity: is('reaction') && trig.value === 'AWAY' ? Number(inten.value) : null,
+      previousSummary: is('summary') ? prev.value.trim() || null : null, studySeconds: is('closing') ? Number(secs.value) : null, endType: is('closing') ? endT.value : null};
+    out.replaceChildren(muted(`${body.repeat}번 실행 중…`));
+    try { render(k, await api('POST', '/playground', body) || []); } catch (e) { out.replaceChildren(); throw e; }
+  })}, '실행');
+  function render(k, rs) {
+    const head = muted(`${rs.length}번 · 평균 ${fmtMs(avg(rs.map(r => r.latencyMs)))} · 합계 ${fmtCost(sum(rs, r => r.costUsd))}`
+      + ` · 5초 초과 ${rs.filter(r => r.overBudget).length}번 · 실패 ${rs.filter(r => r.error).length}번`);
+    head.classList.add('wide');
+    out.replaceChildren(head, ...rs.map(r => {
+      const o = r.output || {}, text = {chat: o.reply, reaction: o.content, summary: o.summary, closing: o.closingLine,
+        memory: `${o.choice ?? '-'}${o.confidence != null ? ` (확신 ${o.confidence})` : ''}${o.line ? ` → ${o.line}` : ''}${o.overflow ? ' · 20개 넘음: 하나 버림' : ''}`}[k];
+      return h('div', {class: 'card'},
+        h('div', {class: 'strong'}, '#' + r.n),
+        r.error && h('div', {class: 'errbox'}, r.error),
+        r.output && h('div', {class: k === 'summary' ? 'pre' : 'bubble bot'}, text ?? ''),
+        metaChips({...r, emotion: o.emotion, affinity: o.affinity}, (r.usages || []).length),
+        o.trace && h('details', null, h('summary', null, 'trace'), jsonPre(o.trace)),
+        h('details', null, h('summary', null, 'LLM 호출'), usageTable(r.usages)));
+    }));
+  }
+  return {el: h('div', null,
+    h('div', {class: 'card'}, h('div', {class: 'cfggrid'}, field('종류', kind), field('캐릭터', ch), field('반복 (1~10)', repeat), Object.values(parts)), cfg.el, runBtn),
+    out)};
+}
+
+/* ---------- 3. 프롬프트 ---------- */
+function promptsTab() {
+  let versions = [], cur = null;
+  const fChar = charSel('', true), fKey = sel([['', '(모든 키)'], ...META.promptKeys.map(p => p.key)], '');
+  const keyInfo = muted(''), listBox = h('div', {class: 'tall'});
+  fChar.onchange = fKey.onchange = () => busy(null, loadVersions);
+  async function loadVersions() {
+    const p = META.promptKeys.find(k => k.key === fKey.value);
+    keyInfo.textContent = p ? `${p.description} · .${p.format}${p.characterOnly ? ' · 캐릭터 전용' : ''}` : '키를 고르면 설명이 나와요';
+    const q = new URLSearchParams();
+    if (fKey.value) q.set('key', fKey.value);
+    if (fChar.value) q.set('characterId', fChar.value);
+    const qs = q.toString();
+    versions = await api('GET', '/prompts' + (qs ? '?' + qs : '')) || [];
+    listBox.replaceChildren(versions.length
+      ? table(['키', '버전', '상태', '메모', '캐릭터', '만든 때', '켠 때'], versions.map(v => tr([v.key, 'v' + v.version, badge(v.status), v.note,
+        charName(v.characterId), fmtTime(v.createdAt), fmtTime(v.activatedAt)], {class: 'click', 'data-id': v.id, onclick: () => edit(v)})))
+      : muted('버전이 없어요'));
+    mark(listBox, cur?.id);
+  }
+  const head = h('div', {class: 'strong'}), pinHint = muted(''), body = h('textarea', {class: 'mono big', spellcheck: false});
+  const note = h('input', {class: 'grow', placeholder: '이번 버전 메모 (무엇을 바꿨나)'}), diffBox = h('div', {hidden: true});
+  const saveBtn = activate => {
+    const b = h('button', {class: activate ? 'primary' : '', onclick: () => busy(b, async () => {
+      const v = await api('POST', '/prompts', {key: cur.key, characterId: cur.characterId ?? null, body: body.value, note: note.value.trim() || null, activate});
+      toast(`${v.key} v${v.version} ${activate ? '저장하고 켰어요' : '저장했어요 (DRAFT)'}`, 'ok');
+      await reload(v);
+    })}, activate ? '저장하고 켜기' : '새 버전으로 저장');
+    return b;
+  };
+  const actBtn = h('button', {title: '예전 버전을 켜면 되돌리기', onclick: () => busy(actBtn, async () => {
+    const v = await api('POST', `/prompts/${cur.id}/activate`);
+    toast(`켰어요: ${v.key} v${v.version}`, 'ok');
+    await reload(v);
+  })}, '이 버전 켜기');
+  const diffBtn = h('button', {class: 'ghost', onclick: () => busy(diffBtn, showDiff)}, '켜진 버전과 비교');
+  const edEmpty = muted('목록에서 버전을 고르세요. 예전 버전을 다시 켜면 되돌리기예요.');
+  const edBox = h('div', {hidden: true}, head, pinHint, body, h('div', {class: 'row'}, note, saveBtn(false), saveBtn(true), actBtn, diffBtn), diffBox);
+  async function reload(v) { await loadVersions(); edit(v); loadActive().catch(() => {}); }
+  function edit(v) {
+    cur = v; body.value = v.body ?? ''; note.value = ''; diffBox.hidden = true;
+    head.replaceChildren(...(v.id
+      ? [`${v.key} v${v.version} `, badge(v.status), ` · ${charName(v.characterId)} · id ${v.id}`, v.note ? ` · ${v.note}` : '']
+      : [`새 프롬프트: ${v.key} · ${charName(v.characterId)}`]));
+    pinHint.textContent = v.id ? `켜기 전에 시험하려면 실험 조건의 버전 고정에 {"${v.key}": ${v.id}}` : '';
+    actBtn.hidden = !v.id || v.status === 'ACTIVE';
+    edBox.hidden = false;
+    edEmpty.hidden = true;
+    mark(listBox, v.id);
+  }
+  async function showDiff() {
+    const same = v => v.status === 'ACTIVE' && v.key === cur.key && (v.characterId ?? null) === (cur.characterId ?? null);
+    let act = versions.find(same);
+    if (!act) {
+      const q = new URLSearchParams({key: cur.key});
+      if (cur.characterId != null) q.set('characterId', cur.characterId);
+      act = (await api('GET', '/prompts?' + q) || []).find(same);
+    }
+    diffBox.hidden = false;
+    if (!act) { diffBox.replaceChildren(muted('켜진 버전이 없어요')); return; }
+    const d = diffLines((act.body ?? '').split('\n'), body.value.split('\n'));
+    diffBox.replaceChildren(
+      muted(`켜진 v${act.version} → 편집기 내용 · 추가 ${d.filter(x => x[0] === '+').length}줄 · 삭제 ${d.filter(x => x[0] === '-').length}줄`),
+      h('pre', {class: 'diff'}, d.map(([op, t]) => h('div', {class: op === '+' ? 'add' : op === '-' ? 'del' : ''}, op + ' ' + t))));
+  }
+  const newBtn = h('button', {class: 'ghost', onclick: () => {
+    const p = META.promptKeys.find(k => k.key === fKey.value);
+    if (!p) return toast('키를 먼저 고르세요', 'info');
+    if (p.characterOnly && !fChar.value) return toast('캐릭터 전용 키예요. 캐릭터를 고르세요', 'info');
+    edit({key: p.key, characterId: fChar.value ? Number(fChar.value) : null, body: ''});
+  }}, '빈 버전 쓰기');
+  const aChar = charSel('', true), aBox = h('div');
+  aChar.onchange = () => busy(null, loadActive);
+  async function loadActive() {
+    const rows = Object.entries(await api('GET', '/prompts/active' + (aChar.value ? '?characterId=' + aChar.value : '')) || {});
+    aBox.replaceChildren(rows.length
+      ? table(['키', '버전', '캐릭터', '메모', '켠 때'], rows.map(([k, v]) => tr([k, `v${v.version} · id ${v.id}`, charName(v.characterId), v.note, fmtTime(v.activatedAt)],
+        {class: 'click', title: '편집기에서 열기', onclick: () => edit(v)})))
+      : muted('없음'));
+  }
+  const pChar = charSel(), pNote = h('input', {class: 'grow', placeholder: '메모'}), pAct = h('input', {type: 'checkbox'});
+  const files = [['characterYml', 'character.yml'], ['actor', 'actor.md'], ['director', 'director.md'], ['judge', 'judge.md']];
+  const pTa = {};
+  const pFields = files.map(([k, name]) => {
+    const ta = pTa[k] = h('textarea', {class: 'mono', rows: 5, spellcheck: false, placeholder: `${name} 내용 (붙여넣기 또는 파일 고르기)`});
+    const file = h('input', {type: 'file', accept: '.yml,.yaml,.md,.txt', onchange: () => file.files[0]?.text().then(t => { ta.value = t; })});
+    return h('div', {class: 'f'}, h('span', null, name, ' ', file), ta);
+  });
+  const packBtn = h('button', {class: 'primary', onclick: () => busy(packBtn, async () => {
+    const b = {characterId: Number(pChar.value), note: pNote.value.trim() || null, activate: pAct.checked};
+    for (const [k] of files) b[k] = pTa[k].value.trim() ? pTa[k].value : null;
+    const vs = await api('POST', '/prompts/engine-pack', b) || [];
+    toast('올렸어요: ' + vs.map(v => `${v.key} v${v.version}`).join(', '), 'ok');
+    await loadVersions();
+    loadActive().catch(() => {});
+  })}, '올리기');
+  return {
+    el: h('div', null,
+      h('div', {class: 'split'},
+        h('div', {class: 'card'}, h('div', {class: 'row'}, field('캐릭터', fChar), field('키', fKey), newBtn), keyInfo, listBox),
+        h('div', {class: 'card'}, edEmpty, edBox)),
+      h('div', {class: 'grid2'},
+        h('div', {class: 'card'}, h('h3', null, '지금 쓰는 프롬프트'), field('캐릭터', aChar), aBox),
+        h('div', {class: 'card'}, h('h3', null, '대화 엔진 파일 올리기'), field('캐릭터', pChar), pFields,
+          h('div', {class: 'row'}, pNote, chk(pAct, '바로 켜기'), packBtn)))),
+    show: () => busy(null, () => Promise.all([loadVersions(), loadActive()])),
+  };
+}
+
+/* ---------- 4. 평가 ---------- */
+function evalTab() {
+  let editing = null, detailId = null, detailStatus = null, poll = null, cCtx = null;
+  const picked = new Set();
+  const cName = h('input', {placeholder: '예: 시험 불안 3턴'}), cChar = charSel();
+  const cTurns = h('textarea', {rows: 4, placeholder: '사용자 말을 한 줄에 하나씩 (한 줄 = 한 턴)'});
+  const cRubric = h('textarea', {rows: 3, placeholder: '심사 기준 (LLM 심사관에게 그대로 들어가요)'});
+  const ctxSlot = h('div'), formTitle = h('h4'), caseList = h('div'), caseChecks = h('div');
+  function fillCase(c) {
+    editing = c?.id ?? null;
+    formTitle.textContent = c ? `케이스 수정: ${c.name}` : '새 케이스';
+    cName.value = c?.name ?? '';
+    cTurns.value = (c?.turns || []).join('\n');
+    cRubric.value = c?.rubric ?? '';
+    if (c) cChar.value = c.characterId;
+    cCtx = configEditor(c?.context, USER_F, '가상 사용자 정보', true);
+    ctxSlot.replaceChildren(cCtx.el);
+  }
+  fillCase(null);
+  const saveCase = h('button', {class: 'primary', onclick: () => busy(saveCase, async () => {
+    const body = {name: cName.value.trim(), characterId: Number(cChar.value), turns: lines(cTurns.value), context: cCtx.get(), rubric: cRubric.value.trim() || null};
+    await api(editing ? 'PUT' : 'POST', '/eval/cases' + (editing ? '/' + editing : ''), body);
+    toast('케이스를 저장했어요', 'ok');
+    fillCase(null);
+    await loadCases();
+  })}, '저장');
+  async function loadCases() {
+    const keep = new Set([...caseChecks.querySelectorAll('input:checked')].map(x => x.value));
+    const cases = await api('GET', '/eval/cases') || [];
+    caseList.replaceChildren(...cases.map(c => h('div', {class: 'row li'},
+      h('div', {class: 'grow'}, h('div', {class: 'strong'}, c.name), muted(`${charName(c.characterId)} · ${(c.turns || []).length}턴${c.rubric ? ' · 기준 있음' : ''}`)),
+      h('button', {class: 'ghost', onclick: () => fillCase(c)}, '수정'),
+      confirmBtn('삭제', async () => { await api('DELETE', '/eval/cases/' + c.id); if (editing === c.id) fillCase(null); await loadCases(); }))));
+    if (!cases.length) caseList.append(muted('케이스가 없어요. 아래에서 만드세요.'));
+    caseChecks.replaceChildren(...cases.map(c => chk(h('input', {type: 'checkbox', value: c.id, checked: keep.has(String(c.id))}), c.name)));
+  }
+  const rLabel = h('input', {placeholder: '예: chat.system v4 · sonnet'}), rRepeats = h('input', {type: 'number', min: 1, max: 20, value: 3});
+  const rPipe = sel(META.pipelines, META.defaultPipeline), rCfg = configEditor(null, MODEL_F), rJudge = h('input', {type: 'checkbox', checked: true});
+  const startBtn = h('button', {class: 'primary', onclick: () => busy(startBtn, async () => {
+    const caseIds = [...caseChecks.querySelectorAll('input:checked')].map(x => Number(x.value));
+    if (!caseIds.length) throw new Error('케이스를 하나 이상 고르세요');
+    const r = await api('POST', '/eval/runs', {label: rLabel.value.trim() || `${rPipe.value} ${fmtTime(new Date())}`, caseIds,
+      repeats: clampInt(rRepeats.value, 1, 20), pipeline: rPipe.value, config: rCfg.get(), judge: rJudge.checked});
+    toast('평가를 시작했어요', 'ok');
+    await loadRuns();
+    await openRun(r.id);
+  })}, '실행');
+  const runsBox = h('div'), detail = h('div');
+  const cmpBtn = h('button', {disabled: true, onclick: () => busy(cmpBtn, compare)}, '고른 두 실행 비교');
+  async function loadRuns() {
+    clearTimeout(poll);
+    const runs = await api('GET', '/eval/runs') || [];
+    for (const id of picked) if (!runs.some(r => r.id === id)) picked.delete(id);
+    runsBox.replaceChildren(runs.length ? table(['비교', '이름표', '상태', '진행', '오류', '심사 평균', '사람 평균', '평균 지연', '비용', '시작'], runs.map(r => tr([
+      h('input', {type: 'checkbox', checked: picked.has(r.id), onclick: e => e.stopPropagation(), onchange: e => {
+        if (e.target.checked) picked.add(r.id); else picked.delete(r.id);
+        cmpBtn.disabled = picked.size !== 2;
+      }}),
+      r.label, badge(r.status), `${r.done}/${r.expected}`, r.errors, fmtNum(r.avgJudge), fmtNum(r.avgHuman), fmtMs(r.avgLatencyMs), fmtCost(r.costUsd), fmtTime(r.createdAt)],
+    {class: 'click', 'data-id': r.id, onclick: () => busy(null, () => openRun(r.id))}))) : muted('아직 실행이 없어요'));
+    mark(runsBox, detailId);
+    cmpBtn.disabled = picked.size !== 2;
+    // ponytail: 3초마다 목록 전체를 다시 받는다. 실행이 많아지면 진행 중인 것만 주는 API로
+    if ((runs.some(r => r.status === 'RUNNING') || detailStatus === 'RUNNING') && active === 'eval') poll = setTimeout(() => tick().catch(() => {}), 3000);
+  }
+  async function tick() {
+    await loadRuns();
+    if (detailId && detailStatus === 'RUNNING' && !detail.contains(document.activeElement)) await openRun(detailId);
+  }
+  const byRepeat = (a, b) => a.repeatNo - b.repeatNo;
+  function resultCard(x, rate) {
+    return h('div', {class: 'card'},
+      h('div', {class: 'strong'}, `#${x.repeatNo}`, x.judgeScore != null ? ` · 심사 ${x.judgeScore}점` : ''),
+      x.judgeNote && muted(x.judgeNote),
+      x.error && h('div', {class: 'errbox'}, x.error),
+      transcript(x.transcript),
+      h('div', {class: 'chips'}, h('span', {class: 'chip'}, '전체 ' + fmtMs(x.latencyMs)), h('span', {class: 'chip'}, fmtCost(x.costUsd))),
+      rate && rating(x.humanScore, x.humanNote, async (score, note) => { await api('PATCH', `/eval/results/${x.id}`, {score, note}); loadRuns().catch(() => {}); }));
+  }
+  async function openRun(id) {
+    const r = await api('GET', '/eval/runs/' + id);
+    detailId = id;
+    detailStatus = r.status;
+    mark(runsBox, id);
+    detail.replaceChildren(h('div', {class: 'card'},
+      h('h3', null, r.label, ' ', badge(r.status)),
+      muted(`${r.pipeline} · 케이스 ${(r.caseIds || []).length}개 × ${r.repeats}번 · LLM 심사 ${r.judge ? '켬' : '끔'} · 진행 ${r.done}/${r.expected} · 오류 ${r.errors}`
+        + ` · 심사 평균 ${fmtNum(r.avgJudge)} · 사람 평균 ${fmtNum(r.avgHuman)} · 평균 지연 ${fmtMs(r.avgLatencyMs)} · ${fmtCost(r.costUsd)}`),
+      h('details', null, h('summary', null, '실험 조건'), jsonPre(r.config)),
+      [...groupBy(r.results, x => x.caseId).values()].map(rs => h('div', null,
+        h('h4', null, `${rs[0].caseName} · 심사 평균 ${fmtNum(avg(rs.map(x => x.judgeScore)))}`),
+        h('div', {class: 'cards'}, rs.sort(byRepeat).map(x => resultCard(x, true)))))));
+  }
+  async function compare() {
+    const [a, b] = await Promise.all([...picked].map(id => api('GET', '/eval/runs/' + id)));
+    const ga = groupBy(a.results, x => x.caseId), gb = groupBy(b.results, x => x.caseId);
+    detailId = detailStatus = null;
+    mark(runsBox, null);
+    const col = (r, rs = []) => h('div', null, h('div', {class: 'strong'}, `${r.label} · 심사 평균 ${fmtNum(avg(rs.map(x => x.judgeScore)))}`),
+      rs.sort(byRepeat).map(x => resultCard(x, false)));
+    detail.replaceChildren(h('div', {class: 'card'}, h('h3', null, '두 실행 비교'),
+      h('div', {class: 'cmp'}, [a, b].map(r => h('div', null, h('div', {class: 'strong'}, r.label, ' ', badge(r.status)),
+        muted(`${r.pipeline} · 심사 ${fmtNum(r.avgJudge)} · 사람 ${fmtNum(r.avgHuman)} · 평균 지연 ${fmtMs(r.avgLatencyMs)} · ${fmtCost(r.costUsd)}`),
+        h('details', null, h('summary', null, '실험 조건'), jsonPre(r.config))))),
+      [...new Set([...ga.keys(), ...gb.keys()])].map(id => h('div', null, h('h4', null, (ga.get(id) || gb.get(id))[0].caseName),
+        h('div', {class: 'cmp'}, col(a, ga.get(id)), col(b, gb.get(id)))))));
+  }
+  return {
+    el: h('div', null,
+      h('div', {class: 'grid2'},
+        h('div', {class: 'card'}, h('h3', null, '평가 케이스'), caseList, h('hr'), formTitle, field('이름', cName), field('캐릭터', cChar),
+          field('사용자 말', cTurns), ctxSlot, field('심사 기준', cRubric), h('div', {class: 'row'}, saveCase, h('button', {class: 'ghost', onclick: () => fillCase(null)}, '비우기'))),
+        h('div', {class: 'card'}, h('h3', null, '새 실행'), field('이름표', rLabel), h('div', {class: 'f'}, h('span', null, '케이스'), caseChecks),
+          h('div', {class: 'row'}, field('반복 (1~20)', rRepeats), field('파이프라인', rPipe), chk(rJudge, 'LLM 심사')), rCfg.el, startBtn)),
+      h('div', {class: 'card'}, h('div', {class: 'row'}, h('h3', {class: 'grow'}, '실행 목록'), cmpBtn), runsBox),
+      detail),
+    show: () => busy(null, () => Promise.all([loadCases(), loadRuns()])),
+  };
+}
+
+/* ---------- 5. 호출 기록 ---------- */
+function usageTab() {
+  const days = h('input', {type: 'number', min: 1, value: 7, onchange: () => busy(null, load)});
+  const sumBox = h('div'), recentBox = h('div');
+  const cols = ['day', 'source', 'provider', 'model', 'purpose', 'calls', 'errors', 'inputTokens', 'outputTokens', 'cacheReadTokens', 'cacheWriteTokens', 'costUsd', 'avgLatencyMs', 'p95LatencyMs', 'over5s'];
+  const head = ['날짜', '출처', '공급자', '모델', '목적', '호출', '오류', '입력', '출력', '캐시 읽기', '캐시 쓰기', '비용', '평균 지연', 'p95 지연', '5초 초과'];
+  async function load() {
+    const [rows, recent] = await Promise.all([api('GET', '/usages/summary?days=' + clampInt(days.value, 1, 365)), api('GET', '/usages')]);
+    sumBox.replaceChildren(h('div', {class: 'strong'}, `합계 ${fmtCost(sum(rows || [], r => r.costUsd))} · 호출 ${sum(rows || [], r => r.calls)}번 · 오류 ${sum(rows || [], r => r.errors)}번`),
+      table(head, (rows || []).map(r => tr(cols.map(c => c === 'costUsd' ? fmtCost(r[c]) : c.endsWith('LatencyMs') ? fmtMs(r[c]) : r[c])))));
+    recentBox.replaceChildren(usageTable(recent, true));
+  }
+  const refresh = h('button', {onclick: () => busy(refresh, load)}, '새로고침');
+  return {
+    el: h('div', null,
+      h('div', {class: 'card'}, h('div', {class: 'row'}, h('h3', {class: 'grow'}, '날짜별 요약'), h('label', {class: 'chk'}, '최근', days, '일'), refresh), sumBox),
+      h('div', {class: 'card'}, h('h3', null, '최근 호출 100개 (줄을 누르면 요청·응답)'), recentBox)),
+    show: () => busy(null, load),
+  };
+}
+
+/* ---------- 6. 캐릭터 설정 (DB의 세계관 · 캐릭터, ADR 0022 결정 15) ---------- */
+function characterTab() {
+  const ch = charSel(), view = h('div', null, muted('캐릭터를 고르고 불러오기')), json = h('textarea', {class: 'mono big', spellcheck: false});
+  let current = null;
+  const join = xs => (xs || []).join(', ');
+  const text = t => h('div', {class: 'pre'}, t || '—');
+  const sec = (title, ...body) => h('details', {class: 'card', open: true}, h('summary', null, title), body);
+  function render(c) {
+    const w = c.world || {};
+    view.replaceChildren(
+      sec('기본',
+        table(['항목', '값'], [
+          tr(['말하는 이름', c.speaker]), tr(['코드', c.code]), tr(['안전 기준', c.safety]),
+          tr(['표정', join(c.expressions)]),
+          tr(['대체 표정', Object.entries(c.expressionFallbacks || {}).map(([k, v]) => `${k} → ${v}`).join(', ')])])),
+      sec('관계 단계 말투 (장면 카드 · 반응 카드에 한 줄)',
+        table(['단계부터', '말투'], Object.entries(c.stageTones || {}).map(([k, v]) => tr([k, v])))),
+      sec('공부 중 · 쉬는 시간 (장면 카드 맨 끝 \'지금:\' 줄)',
+        h('h4', null, '공부 중 (study_style)'), text(c.studyStyle), h('h4', null, '쉬는 시간 (break_style)'), text(c.breakStyle)),
+      sec('바이블 (고정 블록)', text(c.bible)),
+      sec('절대 규칙 (고정 블록)', text(c.rules)),
+      sec(`세계: ${w.name || ''}`, text(w.setting),
+        h('h4', null, `세계 지식 ${(w.lore || []).length}장 (키워드가 맞으면 한 턴에 최대 4장)`),
+        table(['코드', '제목', '키워드', '본문'], (w.lore || []).map(l => tr([l.code, l.title, join(l.keywords), l.body]))),
+        h('h4', null, `세계 사건 ${(w.events || []).length}개 (공부 중 15% · 쉬는 시간 30%)`),
+        table(['코드', '사건', '어울리는 반응', '같이 꺼낼 지식', '빈도'], (w.events || []).map(e => tr([e.code, e.text, e.hook, e.loreCode, e.weight])))),
+      sec(`대화 기술 ${(c.moves || []).length}개 (한 턴에 하나 + 예시 2개)`,
+        table(['코드', '이름', '쓰는 법', '어울리는 말', '쓰는 때', '예시'], (c.moves || []).map(m => tr([m.code, m.name, m.how,
+          join(m.signals) || '평소', join(m.modes) || '언제나',
+          h('div', null, (m.examples || []).map(e => h('div', {class: 'small'}, `사용자: ${e.user} → ${e.reply}`)))])))),
+      sec(`미리 쓴 대사 ${(c.lines || []).length}줄 (순간 동작은 그대로, 상태 변화는 AI 예시 · 5초 대체)`,
+        table(['상황', '단계부터', '순서', '대사', '표정'], (c.lines || []).map(l => tr([l.situation, l.minStage, l.sort, l.text, l.expression])))),
+      sec('대화 점수표',
+        table(['말의 종류', '점수', '감점 %', '세션 1번', '반복 시'], Object.entries(c.scores || {}).map(([k, s]) => tr([k, s.points, s.lossPercent || '', s.oncePerSession ? '예' : '', s.repeatPoints])))),
+      sec('피할 말버릇',
+        table(['말', '규칙'], Object.entries(c.habits || {}).map(([k, v]) => tr([k, v === 'NO_OPENING' ? '첫마디 금지' : v === 'ONCE_PER_SESSION' ? '세션에 한 번' : v])))));
+  }
+  async function load() {
+    current = await api('GET', `/characters/${ch.value}/content`);
+    render(current);
+    json.value = JSON.stringify(current, null, 2);
+  }
+  const loadBtn = h('button', {class: 'primary', onclick: () => busy(loadBtn, load)}, '불러오기');
+  const saveBtn = h('button', {class: 'primary', onclick: () => busy(saveBtn, async () => {
+    let body;
+    try { body = JSON.parse(json.value); } catch (e) { throw fail({code: 'JSON', message: 'JSON 형식이 틀렸어요', detail: String(e)}); }
+    await api('PUT', `/characters/${ch.value}/content`, body);
+    toast('저장했어요. 다음 대화부터 반영 (캐시 30초)', 'ok');
+    await load();
+  })}, '저장');
+  const reseed = confirmBtn('git 처음 값으로 되돌리기', async () => {
+    if (!current) throw fail({code: 'EMPTY', message: '먼저 불러오기'});
+    await api('POST', `/characters/reseed/${current.code}`);
+    toast('처음 값(characters/' + current.code + ')으로 되돌렸어요', 'ok');
+    await load();
+  });
+  return {
+    el: h('div', null,
+      h('div', {class: 'card'}, h('div', {class: 'row'}, field('캐릭터', ch), loadBtn, h('span', {class: 'grow'}),
+        muted('DB가 원본. 처음 값은 git의 characters/<코드>/profile.yml'))),
+      view,
+      h('details', {class: 'card'}, h('summary', null, '고치기 (JSON 전체, 저장하면 DB에 바로)'), json,
+        h('div', {class: 'acts'}, saveBtn, reseed))),
+    show: () => { if (!current) busy(null, load); },
+  };
+}
+
+/* ---------- 머리줄 · 시작 ---------- */
+function header() {
+  const m = META;
+  $('#hdr').replaceWith(h('header', {id: 'hdr'},  // h()로 감싸야 배열·null 자식이 정리된다 (replaceChildren은 글자로 바꿈)
+    h('b', {class: 'logo'}, '캡슐 LLM 실험실'),
+    h('span', {class: 'chip'}, '기본 공급자 ' + m.defaultProvider),
+    m.providers.map(p => h('span', {class: 'chip ' + (p.ready ? 'okc' : 'off')}, p.ready ? p.name : `${p.name} · 키 없음`)),
+    m.defaultProvider === 'fake' && h('span', {class: 'warn'}, '가짜 LLM: 형식만 확인. 실제 품질은 CAPSULE_LLM_PROVIDER=anthropic 또는 openai로'),
+    h('span', {class: 'grow'}),
+    h('details', {class: 'routes'}, h('summary', null, '모델 설정'), h('div', {class: 'pop'},
+      table(['목적', '등급', '최대 토큰', 'temperature', 'anthropic', 'openai'], (m.routes || []).map(r => tr([r.purpose, r.tier, r.maxTokens, r.temperature, r.models?.anthropic, r.models?.openai]))))),
+    m.tokenRequired || TOKEN ? h('button', {class: 'ghost', onclick: askToken}, '토큰') : null));
+}
+function showTab(k) {
+  active = k;
+  document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === k));
+  document.querySelectorAll('.tab').forEach(s => { s.hidden = s.id !== 'tab-' + k; });
+  history.replaceState(null, '', '#' + k);
+  TABS[k].show?.();
+}
+async function init() {
+  try { META = await api('GET', '/meta'); } catch {
+    $('#hdr').replaceChildren(h('b', {class: 'logo'}, '캡슐 LLM 실험실'), muted('메타 정보를 못 불러왔어요'));
+    return;
+  }
+  header();
+  if (META.tokenRequired && !TOKEN) askToken();
+  const makers = {chat: chatTab, play: playTab, prompts: promptsTab, eval: evalTab, usage: usageTab, character: characterTab};
+  for (const k in makers) { TABS[k] = makers[k](); $('#tab-' + k).replaceChildren(TABS[k].el); }
+  const k = location.hash.slice(1);
+  showTab(TABS[k] ? k : 'chat');
+}
+function saveToken() {
+  TOKEN = $('#tokenInput').value.trim();
+  try { localStorage.setItem('llmLabToken', TOKEN); } catch { /* 저장소가 막힘: 이 창에서만 쓴다 */ }
+  $('#tokenbar').hidden = true;
+  init();
+}
+document.querySelectorAll('#tabs button').forEach(b => { b.onclick = () => { if (TABS[b.dataset.tab]) showTab(b.dataset.tab); }; });
+$('#tokenSave').onclick = saveToken;
+$('#tokenInput').onkeydown = e => { if (e.key === 'Enter') saveToken(); };
+console.assert(diffLines(['a', 'b', 'c'], ['a', 'x', 'c']).map(d => d[0]).join('') === ' -+ ', 'diffLines 자체 검사 실패');
+init();
+</script>
+</body>
+</html>

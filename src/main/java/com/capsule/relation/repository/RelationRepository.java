@@ -3,6 +3,7 @@ package com.capsule.relation.repository;
 import com.capsule.relation.domain.Relation;
 import jakarta.persistence.LockModeType;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -13,7 +14,7 @@ public interface RelationRepository extends JpaRepository<Relation, Long> {
 
     Optional<Relation> findByUserIdAndCharacterId(long userId, long characterId);
 
-    /** 관계 하나의 반영을 줄 세운다: 중복 확인 후 기록(FIRST_MEET은 UNIQUE가 없음)이 겹치지 않게 */
+    /** 관계 하나의 반영을 줄 세운다: 중복 확인 후 기록이 겹치지 않게 */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Relation findLockedByUserIdAndCharacterId(long userId, long characterId);
 
@@ -37,8 +38,14 @@ public interface RelationRepository extends JpaRepository<Relation, Long> {
     @Query("update Relation r set r.relationPoints = r.relationPoints + :delta where r.id = :id")
     void addPoints(long id, int delta);
 
+    /** level 컬럼은 계산값(자리 지킴 시간)을 같이 저장해 둔다: DB만 보고도 알 수 있게 */
     @Modifying(flushAutomatically = true)
-    @Query("update Relation r set r.totalStudySeconds = r.totalStudySeconds + :seconds, r.lastMetAt = :now"
+    @Query("update Relation r set r.totalStudySeconds = r.totalStudySeconds + :study,"
+            + " r.totalPresentSeconds = r.totalPresentSeconds + :present, r.level = :level, r.lastMetAt = :now"
             + " where r.id = :id")
-    void addStudySeconds(long id, int seconds, Instant now);
+    void addStudy(long id, int study, int present, int level, Instant now);
+
+    @Modifying(flushAutomatically = true)
+    @Query("update Relation r set r.streakDays = :days, r.lastStudyDate = :date where r.id = :id")
+    void updateStreak(long id, int days, LocalDate date);
 }

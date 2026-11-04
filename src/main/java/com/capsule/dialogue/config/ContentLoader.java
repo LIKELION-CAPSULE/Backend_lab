@@ -41,15 +41,26 @@ public final class ContentLoader {
 
     public static Loaded fromClasspath(String characterId) {
         String base = "characters/" + characterId + "/";
-        Object tree = new Yaml().load(read(base + "character.yml"));
+        return fromTexts(
+                read(base + "character.yml"),
+                read(base + "actor.md"),
+                read(base + "director.md"),
+                read(base + "judge.md"));
+    }
+
+    /** 파일 네 개의 내용으로 만든다. 서비스는 DB 프롬프트 버전(engine.*)에서 읽어 이걸 부른다. 콘텐츠가 틀리면 IllegalStateException */
+    public static Loaded fromTexts(String characterYml, String actor, String director, String judge) {
+        Object tree = new Yaml().load(characterYml);
         CharacterFile f = JSON.convertValue(tree, CharacterFile.class);
+        if (f.moves() == null || f.beats() == null || f.lore() == null || f.events() == null || f.fixedLines() == null)
+            throw new IllegalStateException("character.yml에 moves · beats · lore · events · fixedLines가 모두 있어야 함");
         Content.Character c = new Content.Character(
                 f.id(),
                 f.displayName(),
                 f.speaker(),
-                read(base + "actor.md").strip(),
-                read(base + "director.md").strip(),
-                read(base + "judge.md").strip(),
+                actor.strip(),
+                director.strip(),
+                judge.strip(),
                 f.moves(),
                 f.beats(),
                 f.lore(),

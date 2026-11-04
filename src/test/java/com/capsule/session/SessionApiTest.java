@@ -98,7 +98,7 @@ class SessionApiTest {
             "https://cdn.capsule.invalid/avatar1.png",
             true,
             new ModelInfo("https://cdn.capsule.invalid/live2d/avatar1/v1/avatar1.model3.json", 1.0, 0, 0));
-    static final StudySettlement SETTLEMENT = new StudySettlement(1, 1, "아는 사이", 0, 55, 100, false);
+    static final StudySettlement SETTLEMENT = new StudySettlement(1, 1, "아는 사이", 0, 55, null, false, 1, "아는 사이", 3600);
     static final String CLOSING_LINE = "오늘도 같이 공부해서 좋았어.";
     static final Reaction GREETING_REACTION = new Reaction(
             new MotionRef("TapBody", "motions/wave.motion3.json"), new ExpressionRef("smile", "exp/smile.exp3.json"));
@@ -156,9 +156,10 @@ class SessionApiTest {
         given(roomQuery.defaultBackground(1L)).willReturn(Optional.of(BACKGROUND));
         given(roomQuery.background(1L)).willReturn(Optional.of(BACKGROUND));
         given(characterQuery.find(1L)).willReturn(Optional.of(CHAERIN));
-        given(relationQuery.view(anyLong(), eq(1L))).willReturn(new RelationView(1, 1, "아는 사이", 0, 0, 100));
+        given(relationQuery.view(anyLong(), eq(1L)))
+                .willReturn(new RelationView(1, 1, "아는 사이", 50, 0, null, 1, "아는 사이", 0, 3600));
         given(relationQuery.settlementOf(anyLong(), anyLong(), anyLong())).willReturn(SETTLEMENT);
-        given(relationCommands.settleStudyTime(anyLong(), anyLong(), anyLong(), anyInt()))
+        given(relationCommands.settleStudy(anyLong(), anyLong(), anyLong(), anyInt(), anyInt()))
                 .willReturn(SETTLEMENT);
         given(closingHandler.close(any())).willReturn(CLOSING_LINE);
         given(reactionQuery.pick(anyLong(), anyString(), any())).willReturn(Reaction.NONE);
@@ -222,8 +223,8 @@ class SessionApiTest {
         long sessionId = start(userId);
         Instant t0 = startedAt(sessionId);
         given(reactionQuery.pick(1L, "GREETING", null)).willReturn(GREETING_REACTION);
-        given(relationCommands.applySessionEvent(any())).willReturn(new AffinityChange(5, 5, 1, false));
-        given(relationQuery.changeOf(any())).willReturn(new AffinityChange(5, 5, 1, false));
+        given(relationCommands.applySessionEvent(any())).willReturn(new AffinityChange(5, 5, 1, false, 1, "아는 사이"));
+        given(relationQuery.changeOf(any())).willReturn(new AffinityChange(5, 5, 1, false, 1, "아는 사이"));
 
         String first = postEvent(userId, sessionId, "FOCUS", t0)
                 .andExpect(status().isCreated())
@@ -243,7 +244,7 @@ class SessionApiTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.eventId").value(focus))
                 .andExpect(jsonPath("$.characters[0].affinity.delta").value(5));
-        SessionEventRef ref = new SessionEventRef(userId, 1, sessionId, focus, "FOCUS", true);
+        SessionEventRef ref = new SessionEventRef(userId, 1, sessionId, focus, "FOCUS", true, null);
         verify(relationCommands, times(1)).applySessionEvent(any());
         verify(relationQuery).changeOf(ref);
 
@@ -261,7 +262,8 @@ class SessionApiTest {
 
         long focus = event(sessionId, "FOCUS", t0, 201);
         assertThat(event(sessionId, "FOCUS", t0, 200)).isEqualTo(focus); // 재전송
-        verify(relationCommands).applySessionEvent(new SessionEventRef(userId, 1, sessionId, focus, "FOCUS", true));
+        verify(relationCommands)
+                .applySessionEvent(new SessionEventRef(userId, 1, sessionId, focus, "FOCUS", true, null));
 
         event(sessionId, "BREAK", t0.plusSeconds(60), 201);
         postEvent(userId, sessionId, "AWAY", t0.plusSeconds(70))
@@ -288,13 +290,33 @@ class SessionApiTest {
     }
 
     @Test
+    void stateEventEndingAnAwayCarriesHowLongItWas() throws Exception {
+        long sessionId = start(userId);
+        Instant t0 = startedAt(sessionId);
+        event(sessionId, "FOCUS", t0, 201);
+        long away = event(sessionId, "AWAY", t0.plusSeconds(10), 201);
+        verify(relationCommands)
+                .applySessionEvent(new SessionEventRef(userId, 1, sessionId, away, "AWAY", false, null));
+        event(sessionId, "YAWN", t0.plusSeconds(20), 201); // 동작 이벤트는 자리 비움을 끝내지 않는다
+        long back = event(sessionId, "RETURN", t0.plusSeconds(80), 201);
+        // relation이 1분 넘게 비웠는지 보고 감점한다 (호감도 최종안)
+        verify(relationCommands)
+                .applySessionEvent(new SessionEventRef(userId, 1, sessionId, back, "RETURN", false, 70));
+        // 늦게 도착한 이벤트는 이미 끝난 자리 비움을 다시 끝내지 않는다 (두 번 감점 방지)
+        long late = event(sessionId, "BREAK", t0.plusSeconds(50), 201);
+        verify(relationCommands)
+                .applySessionEvent(new SessionEventRef(userId, 1, sessionId, late, "BREAK", false, null));
+    }
+
+    @Test
     void motionEventsHaveCooldownAndAreIgnoredDuringBreak() throws Exception {
         long sessionId = start(userId);
         Instant t0 = startedAt(sessionId);
         event(sessionId, "FOCUS", t0, 201);
 
         long yawn = event(sessionId, "YAWN", t0.plusSeconds(30), 201);
-        verify(relationCommands).applySessionEvent(new SessionEventRef(userId, 1, sessionId, yawn, "YAWN", false));
+        verify(relationCommands)
+                .applySessionEvent(new SessionEventRef(userId, 1, sessionId, yawn, "YAWN", false, null));
         // 같은 동작 1분 안 → 무시 (서버 쿨다운). 다른 동작은 따로 셈
         postEvent(userId, sessionId, "YAWN", t0.plusSeconds(60))
                 .andExpect(status().isOk())
@@ -441,8 +463,8 @@ class SessionApiTest {
                         .andExpect(status().isOk()),
                 sessionId);
 
-        verify(relationCommands, times(1)).settleStudyTime(anyLong(), anyLong(), anyLong(), anyInt());
-        verify(relationCommands).settleStudyTime(userId, 1L, sessionId, 3300);
+        verify(relationCommands, times(1)).settleStudy(anyLong(), anyLong(), anyLong(), anyInt(), anyInt());
+        verify(relationCommands).settleStudy(userId, 1L, sessionId, 3300, 2880);
         verify(closingHandler, times(1)).close(any());
         verify(closingHandler).close(new SessionClosing(sessionId, userId, 1L, "채린", "NORMAL", 3300));
         assertThat(jdbc.queryForMap(
@@ -543,7 +565,7 @@ class SessionApiTest {
                 .containsEntry("at_heartbeat", true)
                 .containsEntry("focus_seconds", 3600)
                 .containsEntry("closing_line", CLOSING_LINE);
-        verify(relationCommands).settleStudyTime(userId, 1L, sessionId, 3600);
+        verify(relationCommands).settleStudy(userId, 1L, sessionId, 3600, 3600);
         verify(closingHandler).close(new SessionClosing(sessionId, userId, 1L, "채린", "AUTO_CLOSED", 3600));
         assertThat(sessionQuery.find(freshSessionId)).get().matches(SessionInfo::inProgress);
     }
@@ -569,7 +591,7 @@ class SessionApiTest {
                 .containsEntry("end_type", "AUTO_CLOSED")
                 .containsEntry("focus_seconds", 2700)
                 .containsEntry("distract_seconds", 300);
-        verify(relationCommands).settleStudyTime(userId, 1L, sessionId, 3000);
+        verify(relationCommands).settleStudy(userId, 1L, sessionId, 3000, 2700);
         verify(closingHandler).close(new SessionClosing(sessionId, userId, 1L, "채린", "AUTO_CLOSED", 3000));
     }
 

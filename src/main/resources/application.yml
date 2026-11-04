@@ -19,7 +19,6 @@ springdoc:
 capsule:
   # LLM (ADR 0022). 공급자 전환 = provider 한 줄. 키는 환경변수로만 (ANTHROPIC_API_KEY · OPENAI_API_KEY)
   llm:
-    mode: fake # fake | real (real은 dialogue 담당이 도메인 단계에서 구현)
     provider: ${CAPSULE_LLM_PROVIDER:fake} # fake | anthropic | openai (jev는 결정 전용: routes.DECIDE.provider)
     fallback-provider: ${CAPSULE_LLM_FALLBACK_PROVIDER:} # 기본 공급자가 실패하면 한 번 더 (비우면 없음)
     http-timeout: 30s # 공급자 HTTP 한 번의 한도. 명세의 5초 대체 대사는 서비스가 따로 지킨다

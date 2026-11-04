@@ -6,9 +6,13 @@ import com.capsule.TestcontainersConfiguration;
 import com.capsule.relation.api.RelationCommands;
 import com.capsule.relation.api.RelationQuery;
 import com.capsule.relation.api.RelationTypes.AffinityChange;
+import com.capsule.relation.api.RelationTypes.ChatScore;
 import com.capsule.relation.api.RelationTypes.RelationView;
 import com.capsule.relation.api.RelationTypes.SessionEventRef;
+import com.capsule.relation.api.RelationTypes.SignalType;
 import com.capsule.relation.api.RelationTypes.StudySettlement;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -18,12 +22,14 @@ import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
+/** 호감도 최종안 (application.yml capsule.relation 값 기준: 하루 +15, 자리 비움 1분 넘게 −1 · 하루 −3, 단계 0/30/70/90) */
 @SpringBootTest
 @ActiveProfiles("test")
 @Import(TestcontainersConfiguration.class)
 class RelationServiceTest {
 
     static final long CHARACTER = 1; // 시드 캐릭터 채린 (룸 1)
+    static final ChatScore PLUS_ONE = new ChatScore(SignalType.COMPLIMENT, 1, 0);
 
     @Autowired
     RelationCommands commands;
@@ -53,144 +59,158 @@ class RelationServiceTest {
                 userId);
     }
 
-    SessionEventRef event(long sessionId, String type, boolean firstFocus) {
+    SessionEventRef event(long sessionId, String type, boolean firstFocus, Integer awaySeconds) {
         long eventId = jdbc.queryForObject(
                 "INSERT INTO session_events (session_id, type) VALUES (?, ?) RETURNING id",
                 Long.class,
                 sessionId,
                 type);
-        return new SessionEventRef(userId, CHARACTER, sessionId, eventId, type, firstFocus);
+        return new SessionEventRef(userId, CHARACTER, sessionId, eventId, type, firstFocus, awaySeconds);
     }
 
-    int logCount() {
+    AffinityChange chat(long session, ChatScore score) {
+        return commands.applyChatScore(userId, CHARACTER, session, UUID.randomUUID(), score);
+    }
+
+    int logSum() {
         return jdbc.queryForObject(
-                "SELECT count(*) FROM relation_logs l JOIN user_character_relations r ON r.id = l.relation_id"
-                        + " WHERE r.user_id = ?",
+                "SELECT coalesce(sum(delta), 0) FROM relation_logs l JOIN user_character_relations r"
+                        + " ON r.id = l.relation_id WHERE r.user_id = ?",
                 Integer.class,
                 userId);
     }
 
+    void studiedYesterday(int streakDays) {
+        LocalDate yesterday = LocalDate.now(ZoneId.of("Asia/Seoul")).minusDays(1);
+        jdbc.update(
+                "UPDATE user_character_relations SET last_study_date = ?, streak_days = ? WHERE user_id = ?",
+                yesterday,
+                streakDays,
+                userId);
+    }
+
     @Test
-    void meetThenView() {
-        RelationView unmet = new RelationView(CHARACTER, 1, "아는 사이", 0, 0, 100);
+    void startsAt50() {
+        RelationView unmet = new RelationView(CHARACTER, 1, "친한 사이", 50, 0, null, 2, "친한 사이", 0, 3600);
         assertThat(query.view(userId, CHARACTER)).isEqualTo(unmet);
-
         commands.meet(userId, CHARACTER);
-        commands.meet(userId, CHARACTER);
-
         assertThat(query.view(userId, CHARACTER)).isEqualTo(unmet);
     }
 
     @Test
-    void firstMeetBonusOnlyOnce() {
-        commands.meet(userId, CHARACTER);
-        SessionEventRef first = event(newSession(), "FOCUS", true);
-
-        assertThat(commands.applySessionEvent(first)).isEqualTo(new AffinityChange(5, 5, 1, false));
-        assertThat(commands.applySessionEvent(first)).isEqualTo(new AffinityChange(5, 5, 1, false));
-
-        SessionEventRef nextSession = event(newSession(), "FOCUS", true);
-        assertThat(commands.applySessionEvent(nextSession)).isEqualTo(new AffinityChange(0, 5, 1, false));
-        assertThat(logCount()).isEqualTo(1);
-    }
-
-    @Test
-    void awayReturnBreak() {
+    void chatGainsAreCappedPerDayButLossesAreNot() {
         long session = newSession();
-        SessionEventRef away = event(session, "AWAY", false);
+        UUID once = UUID.randomUUID();
+        assertThat(commands.applyChatScore(userId, CHARACTER, session, once, PLUS_ONE)
+                        .delta())
+                .isEqualTo(1);
+        assertThat(commands.applyChatScore(userId, CHARACTER, session, once, PLUS_ONE)
+                        .points())
+                .isEqualTo(51); // 같은 요청은 한 번만
+        for (int i = 0; i < 20; i++) chat(session, PLUS_ONE);
+        assertThat(query.view(userId, CHARACTER).points()).isEqualTo(65); // 하루 +15까지
 
-        assertThat(commands.applySessionEvent(away)).isEqualTo(new AffinityChange(-1, -1, 1, false));
-        assertThat(commands.applySessionEvent(event(session, "RETURN", false)))
-                .isEqualTo(new AffinityChange(1, 0, 1, false));
-        assertThat(commands.applySessionEvent(event(session, "BREAK", false)))
-                .isEqualTo(new AffinityChange(0, 0, 1, false));
-
-        // 같은 이벤트를 다시 반영하거나 다시 읽어도 처음 반영한 변화량만 보인다
-        assertThat(commands.applySessionEvent(away)).isEqualTo(new AffinityChange(-1, 0, 1, false));
-        assertThat(query.changeOf(away)).isEqualTo(new AffinityChange(-1, 0, 1, false));
-        assertThat(logCount()).isEqualTo(2);
+        // 내려가는 쪽은 상한 없음
+        for (int i = 0; i < 10; i++) chat(session, new ChatScore(SignalType.RUDE, -2, 0));
+        assertThat(query.view(userId, CHARACTER).points()).isEqualTo(45);
+        assertThat(logSum() + 50).isEqualTo(45); // 기록의 합 + 50 = 지금 점수
     }
 
     @Test
-    void chatIsClampedAndAppliedOnce() {
+    void severeWordsCutByPercentAndFreezeGainsForTheDay() {
         long session = newSession();
-        UUID requestId = UUID.randomUUID();
+        ChatScore severe = new ChatScore(SignalType.HATE_OR_SEXUAL, -5, 30);
+        AffinityChange cut = chat(session, severe); // 50의 30% = 15
+        assertThat(cut.delta()).isEqualTo(-15);
+        assertThat(cut.points()).isEqualTo(35);
+        assertThat(cut.stage()).isEqualTo(2);
+        assertThat(chat(session, PLUS_ONE).delta()).isZero(); // 그날은 더 오르지 않음
 
-        assertThat(commands.applyChat(userId, CHARACTER, session, requestId, 9))
-                .isEqualTo(new AffinityChange(5, 5, 1, false));
-        assertThat(commands.applyChat(userId, CHARACTER, session, requestId, 9))
-                .isEqualTo(new AffinityChange(5, 5, 1, false));
-        assertThat(commands.applyChat(userId, CHARACTER, session, UUID.randomUUID(), 0))
-                .isEqualTo(new AffinityChange(0, 5, 1, false));
-        assertThat(logCount()).isEqualTo(1);
+        // 낮을 때는 최소 감점 −5
+        jdbc.update("UPDATE user_character_relations SET relation_points = 10 WHERE user_id = ?", userId);
+        jdbc.update(
+                "INSERT INTO relation_logs (relation_id, delta, reason) SELECT id, -25, 'STREAK' FROM"
+                        + " user_character_relations WHERE user_id = ?",
+                userId); // 합을 맞춰 둔다 (10 = 50 − 15 − 25)
+        assertThat(chat(session, severe).points()).isEqualTo(5);
+        assertThat(query.view(userId, CHARACTER).stageName()).isEqualTo("아는 사이");
     }
 
     @Test
-    void settleStudyTimeMatchesSettlementOf() {
-        commands.meet(userId, CHARACTER);
+    void awayCostsOnlyWhenLongerThanAMinuteAndAtMost3ADay() {
         long session = newSession();
-        commands.applySessionEvent(event(session, "FOCUS", true));
-
-        StudySettlement settled = commands.settleStudyTime(userId, CHARACTER, session, 3300);
-
-        assertThat(settled).isEqualTo(new StudySettlement(1, 1, "아는 사이", 0, 60, 100, false));
-        assertThat(query.settlementOf(userId, CHARACTER, session)).isEqualTo(settled);
-        assertThat(query.view(userId, CHARACTER)).isEqualTo(new RelationView(CHARACTER, 1, "아는 사이", 60, 3300, 100));
+        assertThat(commands.applySessionEvent(event(session, "AWAY", false, null))
+                        .delta())
+                .isZero();
+        assertThat(commands.applySessionEvent(event(session, "RETURN", false, 30))
+                        .delta())
+                .isZero(); // 1분 안
+        SessionEventRef back = event(session, "RETURN", false, 61);
+        assertThat(commands.applySessionEvent(back)).isEqualTo(new AffinityChange(-1, 49, 1, false, 2, "친한 사이"));
+        assertThat(query.changeOf(back).delta()).isEqualTo(-1); // 다시 읽어도 같은 변화
+        assertThat(commands.applySessionEvent(event(session, "BREAK", false, 300))
+                        .delta())
+                .isEqualTo(-1);
+        assertThat(commands.applySessionEvent(event(session, "FOCUS", false, 300))
+                        .delta())
+                .isEqualTo(-1);
+        assertThat(commands.applySessionEvent(event(session, "RETURN", false, 300))
+                        .delta())
+                .isZero(); // 하루 −3까지
+        assertThat(query.view(userId, CHARACTER).points()).isEqualTo(47);
     }
 
     @Test
-    void levelUpPast100AndNeverDown() {
+    void streakFromTheSecondDayOncePerDay() {
         long first = newSession();
-        commands.settleStudyTime(userId, CHARACTER, first, 5940); // +99
+        assertThat(commands.applySessionEvent(event(first, "FOCUS", true, null)).delta())
+                .isZero(); // 1일째
 
-        long second = newSession();
-        SessionEventRef back = event(second, "RETURN", false);
-        assertThat(commands.applySessionEvent(back)).isEqualTo(new AffinityChange(1, 100, 2, true));
-        assertThat(query.changeOf(back).levelUp()).isTrue();
+        studiedYesterday(1);
+        long today = newSession();
+        SessionEventRef focus = event(today, "FOCUS", true, null);
+        assertThat(commands.applySessionEvent(focus).delta()).isEqualTo(1); // 2일째 +1
+        assertThat(query.changeOf(focus).delta()).isEqualTo(1);
+        assertThat(commands.applySessionEvent(event(newSession(), "FOCUS", true, null))
+                        .delta())
+                .isZero(); // 같은 날 두 번째 세션
 
-        StudySettlement settled = commands.settleStudyTime(userId, CHARACTER, second, 59); // 1분 미만은 기록 없음
-        assertThat(settled).isEqualTo(new StudySettlement(1, 2, "친한 사이", 99, 100, 300, true));
-        assertThat(query.settlementOf(userId, CHARACTER, first))
-                .isEqualTo(new StudySettlement(1, 1, "아는 사이", 0, 99, 100, false));
-
-        // 점수가 기준 아래로 내려가도 저장된 단계는 유지
-        commands.applySessionEvent(event(second, "AWAY", false));
-        assertThat(query.view(userId, CHARACTER)).isEqualTo(new RelationView(CHARACTER, 2, "친한 사이", 99, 5999, 300));
+        // 끊기면 다시 1일째
+        jdbc.update("UPDATE user_character_relations SET last_study_date = current_date - 3 WHERE user_id = ?", userId);
+        assertThat(commands.applySessionEvent(event(newSession(), "FOCUS", true, null))
+                        .delta())
+                .isZero();
+        assertThat(jdbc.queryForObject(
+                        "SELECT streak_days FROM user_character_relations WHERE user_id = ?", Integer.class, userId))
+                .isEqualTo(1);
     }
 
     @Test
-    void settlementOfQuietSessionDoesNotChangeLater() {
-        commands.settleStudyTime(userId, CHARACTER, newSession(), 600); // +10
-        long quiet = newSession();
-        StudySettlement atEnd = commands.settleStudyTime(userId, CHARACTER, quiet, 30); // 1분 미만: 기록 없음
-        assertThat(atEnd).isEqualTo(new StudySettlement(1, 1, "아는 사이", 10, 10, 100, false));
-
-        commands.settleStudyTime(userId, CHARACTER, newSession(), 6000); // 뒤 세션 +100 → Lv.2
-        assertThat(query.settlementOf(userId, CHARACTER, quiet)).isEqualTo(atEnd);
-    }
-
-    @Test
-    void oscillatingAround100LevelsUpOnce() {
-        commands.settleStudyTime(userId, CHARACTER, newSession(), 5940); // +99
-
+    void levelIsPresentTimeAndSettlementIsStable() {
         long session = newSession();
-        SessionEventRef up = event(session, "RETURN", false); // 100
-        SessionEventRef down = event(session, "AWAY", false); // 99
-        SessionEventRef upAgain = event(session, "RETURN", false); // 100
-        assertThat(commands.applySessionEvent(up).levelUp()).isTrue();
-        assertThat(commands.applySessionEvent(down)).isEqualTo(new AffinityChange(-1, 99, 2, false));
-        assertThat(commands.applySessionEvent(upAgain)).isEqualTo(new AffinityChange(1, 100, 2, false));
-        // 나중에 다시 읽어도 그 이벤트 당시 기준
-        assertThat(query.changeOf(up).levelUp()).isTrue();
-        assertThat(query.changeOf(upAgain).levelUp()).isFalse();
+        chat(session, PLUS_ONE);
+        StudySettlement settled = commands.settleStudy(userId, CHARACTER, session, 4000, 3700); // 자리 지킴 61분 → Lv.2
+        assertThat(settled).isEqualTo(new StudySettlement(1, 2, "친한 사이", 50, 51, null, true, 2, "친한 사이", 7200));
+        assertThat(commands.settleStudy(userId, CHARACTER, session, 4000, 3700)).isEqualTo(settled); // 한 번만
 
-        // 리포트도 같은 규칙: 이 세션에서 99 → 100, 단계 1 → 2. 다음 세션에서 다시 넘어도 단계는 그대로
-        assertThat(query.settlementOf(userId, CHARACTER, session))
-                .isEqualTo(new StudySettlement(1, 2, "친한 사이", 99, 100, 300, true));
         long next = newSession();
-        commands.applySessionEvent(event(next, "AWAY", false)); // 99
-        StudySettlement again = commands.settleStudyTime(userId, CHARACTER, next, 60); // 100
-        assertThat(again).isEqualTo(new StudySettlement(2, 2, "친한 사이", 100, 100, 300, false));
-        assertThat(query.view(userId, CHARACTER).level()).isEqualTo(again.levelAfter());
+        commands.settleStudy(userId, CHARACTER, next, 4000, 3600); // 뒤 세션이 쌓여도
+        assertThat(query.settlementOf(userId, CHARACTER, session)).isEqualTo(settled); // 리포트는 그대로
+        RelationView view = query.view(userId, CHARACTER);
+        assertThat(view.level()).isEqualTo(3);
+        assertThat(view.totalStudySeconds()).isEqualTo(8000);
+        assertThat(view.totalPresentSeconds()).isEqualTo(7300);
+    }
+
+    @Test
+    void stagesFollowAffinityUpAndDown() {
+        long session = newSession();
+        commands.meet(userId, CHARACTER);
+        jdbc.update("UPDATE user_character_relations SET relation_points = 89 WHERE user_id = ?", userId);
+        AffinityChange up = chat(session, PLUS_ONE);
+        assertThat(up.stage()).isEqualTo(4);
+        assertThat(up.stageName()).isEqualTo("Lv.4");
+        AffinityChange down = chat(session, new ChatScore(SignalType.RUDE, -2, 0));
+        assertThat(down.stage()).isEqualTo(3);
     }
 }

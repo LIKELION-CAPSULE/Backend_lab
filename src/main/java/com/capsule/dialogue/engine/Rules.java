@@ -25,6 +25,18 @@ public final class Rules {
     public static final Pattern NEGATIVE = Pattern.compile("(힘들|우울|지쳐|지친|그만두|포기|죽겠|무서|불안)", U);
     public static final Pattern RUDE = Pattern.compile("(ㅗ|ㅅㅂ|씨발|시발|꺼져|닥쳐|미친|병신|ㅈ같)", U);
     public static final Pattern COMPLIMENT = Pattern.compile("(이쁘|예쁘|귀엽|멋있|멋지|잘한다|천재|대단)", U);
+    /** 호감도 신호 THANKS (엔진 원본에는 없음, PM 2026-11-04) */
+    public static final Pattern THANKS = Pattern.compile("(고마워|고맙|감사|땡큐|ㄱㅅ|ㄳ|thank)", U | Pattern.CASE_INSENSITIVE);
+    /**
+     * 호감도 신호 HATE_OR_SEXUAL 후보. 걸리면 결정 모델이 한 번 더 확인한다(오탐이면 RUDE).
+     * 공부 대화에 흔한 말(자위대 · 자위권 · 한남동 · 사과 따먹었어)은 걸리지 않게 뒤를 막는다 (ChatScorerTest).
+     * ponytail: 짧은 단어 목록. 놓치는 말은 실험실 평가로 모아 늘린다
+     */
+    public static final Pattern HATE_OR_SEXUAL = Pattern.compile(
+            "(섹스|섹드립|야동|자위(?!대|권|함)|따먹(자|을래|고 ?싶|어 ?줄)|가슴 ?(만지|보여)|벗어 ?봐|몸매 ?(좋|보여)|니애미|느금"
+                    + "|한남(?!동|대|산|역)|김치녀|틀딱|급식충|장애인 ?새끼|게이 ?새끼)",
+            U);
+
     public static final Pattern DISCLOSURE =
             Pattern.compile("(나 |내가|나는|오늘|요즘|방금).{0,20}(했|끝|망했|풀었|틀렸|힘들|무서|피곤|졸려|기뻐|좋아|싫어)", U);
     public static final Pattern REPEAT_WORD = Pattern.compile("(\\S{2,})(\\s+\\1){2,}", U);

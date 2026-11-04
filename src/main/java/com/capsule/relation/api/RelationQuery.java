@@ -15,6 +15,6 @@ public interface RelationQuery {
      */
     AffinityChange changeOf(SessionEventRef event);
 
-    /** 끝난 세션의 정산 결과를 기록(relation_logs)에서 다시 계산한다 (공부 종료 재호출·리포트 조회, api.md 22·23) */
+    /** 끝난 세션의 정산 결과를 기록에서 다시 읽는다 (공부 종료 재호출·리포트 조회, api.md 22·23) */
     StudySettlement settlementOf(long userId, long characterId, long sessionId);
 }

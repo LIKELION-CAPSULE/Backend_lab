@@ -110,7 +110,7 @@ POST {{host}}/api/sessions/{{sessionId}}/messages
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
-{ "requestId": "{{$uuid}}", "content": "이거 너무 어려워", "inputType": "QUICK", "tts": false }
+{ "requestId": "{{$uuid}}", "characterId": 1, "content": "이거 너무 어려워", "inputType": "QUICK", "tts": false }
 
 ### 17. 내 정보 (새로고침 → activeSession 있으면 H18)
 GET {{host}}/api/me

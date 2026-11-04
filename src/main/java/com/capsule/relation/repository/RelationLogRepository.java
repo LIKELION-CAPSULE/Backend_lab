@@ -1,6 +1,7 @@
 package com.capsule.relation.repository;
 
 import com.capsule.relation.domain.RelationLog;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -8,8 +9,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
 public interface RelationLogRepository extends JpaRepository<RelationLog, Long> {
-
-    boolean existsByRelationIdAndReason(long relationId, String reason);
 
     boolean existsByRelationIdAndSessionEventId(long relationId, long sessionEventId);
 
@@ -19,12 +18,22 @@ public interface RelationLogRepository extends JpaRepository<RelationLog, Long> 
 
     Optional<RelationLog> findFirstByRelationIdAndSessionIdAndReason(long relationId, long sessionId, String reason);
 
+    /** 이 시각 이후 이 종류의 말이 있었는지 (심한 말 뒤 그날 오름 멈춤) */
+    boolean existsByRelationIdAndSignalAndCreatedAtGreaterThanEqual(long relationId, String signal, Instant since);
+
     @Query("select coalesce(sum(l.delta), 0) from RelationLog l"
             + " where l.relationId = :relationId and l.sessionId = :sessionId")
     int sumBySession(long relationId, long sessionId);
 
-    @Query("select min(l.id) from RelationLog l where l.relationId = :relationId and l.sessionId = :sessionId")
-    Long firstIdBySession(long relationId, long sessionId);
+    /** 이 시각 이후 대화로 오른 점수 합 (내려간 것은 빼지 않음): 하루 상한용 */
+    @Query("select coalesce(sum(l.delta), 0) from RelationLog l where l.relationId = :relationId"
+            + " and l.reason = 'CHAT' and l.delta > 0 and l.createdAt >= :since")
+    int chatGainSince(long relationId, Instant since);
+
+    /** 이 시각 이후 이벤트로 깎인 점수 합 (0 이하). 이벤트 점수는 자리 비움 감점뿐이다: 하루 상한용 */
+    @Query("select coalesce(sum(l.delta), 0) from RelationLog l where l.relationId = :relationId"
+            + " and l.reason = 'SESSION_EVENT' and l.delta < 0 and l.createdAt >= :since")
+    int eventLossSince(long relationId, Instant since);
 
     @Query("select max(l.id) from RelationLog l where l.relationId = :relationId and l.sessionId = :sessionId")
     Long lastIdBySession(long relationId, long sessionId);
@@ -35,14 +44,4 @@ public interface RelationLogRepository extends JpaRepository<RelationLog, Long> 
 
     @Query("select coalesce(sum(l.delta), 0) from RelationLog l where l.relationId = :relationId and l.id <= :lastId")
     int sumUpTo(long relationId, long lastId);
-
-    /**
-     * 이 기록(포함)까지 점수가 가장 높았던 값 (처음 0점 포함).
-     * 단계는 내려가지 않으므로(저장된 level 규칙) 그 시점의 단계 = 이 값의 단계.
-     */
-    @Query(value = """
-            SELECT GREATEST(0, COALESCE(MAX(running), 0)) FROM (
-                SELECT SUM(delta) OVER (ORDER BY id) AS running
-                FROM relation_logs WHERE relation_id = :relationId AND id <= :lastId) t""", nativeQuery = true)
-    int peakUpTo(long relationId, long lastId);
 }

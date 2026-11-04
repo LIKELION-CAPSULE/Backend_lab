@@ -155,7 +155,13 @@ public class SessionService {
                             c.name(),
                             c.profileImageUrl(),
                             c.personality(),
-                            new RelationBrief(v.level(), v.levelName(), v.totalStudySeconds()));
+                            new RelationBrief(
+                                    v.level(),
+                                    v.stageName(),
+                                    v.totalStudySeconds(),
+                                    v.points(),
+                                    v.stage(),
+                                    v.stageName()));
                 })
                 .toList();
         // 다른 룸의 진행 중 세션이면 이 룸 버튼은 그대로 둔다 (시작하면 409 → H18 팝업)
@@ -298,7 +304,24 @@ public class SessionService {
         }
 
         SessionEvent saved = events.save(new SessionEvent(s.id(), type, at));
-        SessionEventRef ref = eventRef(s, saved.id(), type, firstFocus(list, saved.id(), type, at));
+        // 자리 비움을 끝낸 상태 이벤트면 비운 시간을 같이 넘긴다 (relation이 오래 비웠으면 감점).
+        // 늦게 도착한 이벤트가 이미 다른 상태 이벤트로 끝난 AWAY를 또 끝내지 않게, 그 AWAY 뒤에 상태 이벤트가 없을 때만
+        SessionEvent away = stateAt;
+        boolean closesAway = !motion
+                && away != null
+                && AWAY.equals(away.type())
+                && !AWAY.equals(type)
+                && list.stream().noneMatch(e -> e.isState() && e.occurredAt().isAfter(away.occurredAt()));
+        Integer awaySeconds =
+                closesAway ? (int) Duration.between(away.occurredAt(), at).toSeconds() : null;
+        SessionEventRef ref = new SessionEventRef(
+                s.userId(),
+                s.characterId(),
+                s.id(),
+                saved.id(),
+                type,
+                firstFocus(list, saved.id(), type, at),
+                awaySeconds);
         return new EventResponse(saved.id(), eventCharacters(ref, relationCommands.applySessionEvent(ref)), true);
     }
 
@@ -394,7 +417,8 @@ public class SessionService {
         s.close(endedAt, endType, present, away, breakSeconds, (int)
                 list.stream().filter(e -> RETURN.equals(e.type())).count());
         long characterId = s.characterId();
-        StudySettlement settlement = relationCommands.settleStudyTime(s.userId(), characterId, s.id(), present + away);
+        StudySettlement settlement =
+                relationCommands.settleStudy(s.userId(), characterId, s.id(), present + away, present);
         s.recordClosingLine(closingHandler.close(new SessionClosing(
                 s.id(), s.userId(), characterId, character(characterId).name(), endType, present + away)));
         return toReport(s, settlement);
@@ -443,8 +467,9 @@ public class SessionService {
                                 && !e.occurredAt().isAfter(at));
     }
 
+    /** 이미 반영된 이벤트를 다시 읽을 때 (changeOf는 비운 시간을 쓰지 않음) */
     private static SessionEventRef eventRef(StudySession s, long eventId, String type, boolean firstFocus) {
-        return new SessionEventRef(s.userId(), s.characterId(), s.id(), eventId, type, firstFocus);
+        return new SessionEventRef(s.userId(), s.characterId(), s.id(), eventId, type, firstFocus, null);
     }
 
     /** 18 응답의 캐릭터별 모션·표정·호감도. 뼈대는 세션당 캐릭터 1명 */
