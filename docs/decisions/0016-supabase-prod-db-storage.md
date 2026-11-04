@@ -1,0 +1,31 @@
+# 0016 배포 DB는 Supabase PostgreSQL, 정적 파일은 Supabase Storage (0002 보완)
+
+- 결정
+  - 배포(운영) DB는 Supabase의 PostgreSQL로 한다. `prod` 프로필(`application-prod.yml`)이 주소 · 계정 · 비밀번호를 환경변수로만 받는다. 레포에는 값을 두지 않는다
+  - 연결은 Session pooler(포트 5432) + `sslmode=require`, 커넥션 풀은 기본 5. 주소는 Supabase Connect 화면에서 Type: JDBC로 복사한다(`jdbc:postgresql://` 접두사, user · password는 따로)
+  - Supabase는 DB 호스팅으로만 쓴다. 스키마는 Flyway가 `public`에 만들고(0002), 인증은 Spring Security + JWT 그대로(0011). Supabase Auth, 대시보드에서 테이블 직접 고치기는 쓰지 않는다
+  - Supabase Data API(PostgREST)는 끈다. 기본으로 켜져 있어서 `public` 스키마를 REST로 공개하고, Flyway가 만든 테이블은 RLS가 꺼져 있어 프로젝트 주소와 anon 키만 있으면 users 같은 테이블을 읽고 쓸 수 있다. 프로젝트 설정에서 Data API를 끄거나 노출 스키마에서 `public`을 뺀다
+  - Live2D 모델 · 이미지 같은 정적 파일은 Supabase Storage 공개(Public) 버킷에 둔다. 백엔드는 파일을 받지 않고 주소만 내려주므로 `capsule.cdn.base-url`에 버킷 공개 주소를 넣는 것으로 끝난다(코드 변경 없음)
+  - 로컬 실행은 Docker PostgreSQL(`run-local.sh`), 테스트 · CI는 Testcontainers(0003) 그대로
+- 이유
+  - 2인 팀이라 DB 서버를 직접 띄우고 패치할 여력이 없다. Supabase는 일반 PostgreSQL이라 IDENTITY, text[], 부분 인덱스 같은 스키마(0002)가 그대로 돌고, 무료 플랜으로 시작할 수 있다
+  - DB와 정적 파일을 한 곳에서 관리하면 계정 · 대시보드가 하나로 끝난다
+  - Supabase Auth나 Data API를 쓰면 이미 만든 인증과 겹치고, 프론트가 DB에 바로 붙어 모듈 경계(0001)를 우회한다
+- 연결 방식을 고른 이유
+  - Direct connection: IPv4 애드온(유료) 없이는 IPv6 전용이라 배포 환경에 따라 연결이 안 된다
+  - Transaction pooler(6543): 요청마다 연결이 바뀌어 JDBC prepared statement를 끄는 설정(`prepareThreshold=0`)이 따로 필요하고, Flyway의 세션 단위 잠금이 불안정하다
+  - Session pooler: IPv4로 되고 일반 PostgreSQL 연결처럼 동작한다. 연결 수 한도가 작아 풀을 작게 둔다
+  - `sslmode=require`는 암호화만 하고 서버 인증서는 검증하지 않는다. 검증까지 하려면 Supabase CA 인증서로 `verify-full`
+- 버린 대안
+  - 로컬 개발도 Supabase 하나를 같이 쓰기: 둘이 동시에 마이그레이션을 돌리면 서로 깨지고, worktree별 DB 분리(run-local.sh)가 안 된다
+  - AWS RDS · 직접 띄운 PostgreSQL: 비용과 운영 부담
+  - S3 + CloudFront: 계정 · 설정이 하나 더 늘어남. 트래픽이 커지면 다시 본다
+- 대가 (무료 플랜 한계)
+  - 자동 일일 백업이 없다(Pro부터). DB 용량 500MB. 7일 동안 활동이 없으면 프로젝트가 일시 중지된다. 실사용자를 받기 전에 Pro 전환이나 백업 방법을 정한다
+- 남은 일
+  - prod 프로필은 아직 단독으로 뜨지 않는다. `fake-integrations: false`라 Fake 카카오 · 메일 클라이언트가 빠지는데 실제 구현이 없다(user 모듈). LLM도 공용 기본값 `fake`
+  - Redis(0009)는 Supabase에 없다. 배포용 Redis(Upstash 등)는 배포 환경을 정할 때 따로 정한다. 연결 값은 `SPRING_DATA_REDIS_*` 환경변수
+  - 리프레시 쿠키 SameSite(공용 기본 `Lax`), HTTPS 프록시 뒤의 `server.forward-headers-strategy`는 프론트 · 백엔드 도메인과 배포 환경이 정해지면 본다(B12)
+  - 운영 DB의 콘텐츠 데이터(룸 · 캐릭터 · 아바타 · Live2D 모델 행)는 시드(`db/seed`, 로컬 · 테스트 전용)로 들어가지 않는다. 실제 에셋이 정해지면 content 담당이 마이그레이션으로 넣는다
+  - 주소 저장 방식이 둘이다. Live2D는 `cdn.base-url` + `storage_prefix` + `model_json_path`로 조합하고, 이미지 컬럼(`thumbnail_url` · `profile_image_url` · `image_url` · `asset_url`)은 지금 스키마대로 전체 주소를 저장한다. 버킷을 옮기면 이미지 쪽만 데이터 마이그레이션이 필요하다. 상대 경로로 맞출지는 content 담당이 에셋을 넣을 때 정한다
+  - 배포 환경(앱 서버를 어디서 돌릴지)은 아직 정하지 않았다

@@ -1,0 +1,21 @@
+# 배포(운영) 프로필. DB는 Supabase PostgreSQL, 정적 파일은 Supabase Storage 공개 버킷 (ADR 0016)
+# 비밀값 없음. 값은 전부 배포 환경의 시크릿(환경변수)으로 받고, 기본값을 두지 않아 빠지면 시작할 때 바로 실패한다
+# 아직 이 프로필만으로는 앱이 뜨지 않는다: 실제 카카오 · 메일 클라이언트가 없음 (ADR 0016 '남은 일')
+spring:
+  datasource:
+    # Supabase Connect > Type: JDBC, Method: Session pooler(포트 5432) 주소에 ?sslmode=require
+    # Transaction pooler(6543)와 Direct connection(IPv6 전용)은 쓰지 않는다 (ADR 0016)
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME} # postgres.<project-ref>
+    password: ${SPRING_DATASOURCE_PASSWORD}
+    hikari:
+      maximum-pool-size: ${CAPSULE_DB_POOL_SIZE:5} # Supabase pooler 연결 수 한도가 작다
+  flyway:
+    locations: classpath:db/migration # 예시값 시드(db/seed)는 운영에 넣지 않는다. 공용 설정이 바뀌어도 여기서 막는다
+
+capsule:
+  cdn:
+    # https://<project-ref>.supabase.co/storage/v1/object/public/<버킷 이름>
+    base-url: ${CAPSULE_CDN_BASE_URL}
+  cors:
+    allowed-origins: ${CAPSULE_CORS_ORIGINS} # 비면 모든 프론트 요청이 조용히 막히므로 운영에서는 필수
