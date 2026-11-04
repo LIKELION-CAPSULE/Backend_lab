@@ -17,6 +17,8 @@ capsule:
     refresh-cookie-same-site: ${CAPSULE_REFRESH_COOKIE_SAME_SITE:None} # 프론트와 도메인이 다르면 None이어야 쿠키가 실린다 (B12)
   cors:
     allowed-origins: ${CAPSULE_CORS_ORIGINS} # 프론트 주소, 쉼표로 여러 개. 로컬 프론트도 붙이려면 http://localhost:3000 추가
+  frontend:
+    url: ${CAPSULE_FRONTEND_URL} # 필수. 배포된 프론트 주소 하나. 비밀번호 재설정 메일 링크의 앞부분 (api.md 25)
   brevo:
     key: ${CAPSULE_BREVO_KEY} # 필수. Brevo > SMTP & API > API Keys
   mail:
