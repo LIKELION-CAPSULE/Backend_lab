@@ -310,12 +310,13 @@
 | 화면 요소 | 이 API가 하는 일 |
 | --- | --- |
 | H01 '카카오로 계속하기' | 카카오 로그인 화면으로 이동 → 돌아온 인가 코드로 이 API 호출 |
-| (신규 가입자) 필수 약관 동의 | `agreedTermVersionIds` |
 | 로그인 후 분기 | `onboardingRequired`면 H02, 아니면 H03 |
 
-> ⚠️ 현재 H01은 카카오 버튼 주변에 약관 동의가 없음. 신규 가입자의 동의를 받으려면 카카오 버튼 아래에 '[필수] 이용약관 · 개인정보 처리방침 동의' 체크를 추가하거나, 신규일 때만 동의 팝업을 띄워야 함
+> ⚠️ 카카오 가입은 지금 우리 약관 동의를 받지 않음 (H01 카카오 버튼 주변에 약관 체크 없음). 추후 **카카오싱크**로 카카오 동의 화면에서 이용약관 · 개인정보 처리방침 동의를 받아 `user_terms`에 저장할 예정. 카카오싱크는 비즈 앱 전환 · 신청 · 심사가 필요함 (신청 가능 여부 · 시점 확정 필요)
 
-- 테이블: `users`(이메일 · 비밀번호 NULL), `user_social_accounts`(provider · provider_user_id), `user_terms` · 인증: 불필요
+> 2026-11-05: 카카오 로그인에서 약관 동의(`agreedTermVersionIds`, 400 TERMS_REQUIRED) 제거. 추후 카카오싱크로 받음
+
+- 테이블: `users`(이메일 · 비밀번호 NULL), `user_social_accounts`(provider · provider_user_id) · 인증: 불필요
 
 #### [POST] /api/auth/social/KAKAO
 
@@ -325,10 +326,9 @@
 | --- | --- | --- | --- |
 | code | String | O | 카카오가 리다이렉트로 준 인가 코드 |
 | redirectUri | String | O | 카카오 앱에 등록한 리다이렉트 주소 |
-| agreedTermVersionIds | Array | 신규만 | 처음 가입하는 사용자는 필수 약관 동의가 있어야 함. 기존 회원은 무시 |
 
 ```json
-{ "code": "Kx8...", "redirectUri": "https://capsule.app/oauth/kakao", "agreedTermVersionIds": [3, 4] }
+{ "code": "Kx8...", "redirectUri": "https://capsule.app/oauth/kakao" }
 ```
 
 #### 🛬 Response
@@ -346,18 +346,18 @@
 
 > ✅ **200 OK**
 
-> ❌ **400** TERMS_REQUIRED (신규인데 약관 동의 없음) · **401** SOCIAL_AUTH_FAILED (인가 코드 만료 · 오류)
+> ❌ **401** SOCIAL_AUTH_FAILED (인가 코드 만료 · 오류)
 
 #### 서버가 하는 일
 
 1. 인가 코드를 카카오에 보내 카카오 회원번호와 닉네임을 받음
 2. `user_social_accounts`에서 (KAKAO, 회원번호) 조회
-3. 있으면 그 사용자로 로그인, 없으면 `users` + `user_social_accounts` + `user_terms`를 한 트랜잭션으로 생성. 닉네임은 카카오 프로필 닉네임으로 저장 (DB `users.nickname` NOT NULL, 프로필 설정에서 변경 가능). 카카오 닉네임이 비어 있으면 '카카오 사용자', 20자를 넘으면 앞 20자만 저장 (가입을 막지 않음)
+3. 있으면 그 사용자로 로그인, 없으면 `users` + `user_social_accounts`를 한 트랜잭션으로 생성 (약관 동의 기록 없음, 카카오싱크 도입 때 `user_terms` 추가). 닉네임은 카카오 프로필 닉네임으로 저장 (DB `users.nickname` NOT NULL, 프로필 설정에서 변경 가능). 카카오 닉네임이 비어 있으면 '카카오 사용자', 20자를 넘으면 앞 20자만 저장 (가입을 막지 않음)
 4. 이메일이 같아도 이메일 가입 계정과 자동으로 합치지 않음 (다른 계정으로 취급)
 
 #### 프론트 참고
 
-- 카카오로 이동하기 전에 체크한 약관은 sessionStorage에 두었다가 리다이렉트로 돌아온 뒤 같이 보냄
+- 카카오 로그인 전후로 약관 화면을 띄우지 않음 (약관 체크는 이메일 회원가입에만)
 - **시연은 공용 기기**라, 로그아웃할 때 카카오 계정 로그아웃까지 같이 해야 다음 체험자가 이전 사람 계정으로 자동 로그인되지 않음
 - 카카오 디벨로퍼스에 시연 도메인의 리다이렉트 URI를 미리 등록해야 함
 - 카카오 디벨로퍼스 동의 항목에서 '닉네임'(profile_nickname)을 **필수 동의**로 설정해야 함 (가입 닉네임으로 씀)

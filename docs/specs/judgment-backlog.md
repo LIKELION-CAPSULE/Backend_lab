@@ -34,6 +34,7 @@
 |---|---|---|
 | 실제 시드: 이미지·Live2D 파일과 모션 목록, CDN 주소, 약관 문구를 정식 마이그레이션으로 (A6) | seonguk(content) + 에셋 제공자 | 시연 서버 배포 전 |
 | 실제 카카오 로그인 어댑터 (`KakaoClient`, 카카오 앱 키·리다이렉트 URI, 동의 항목 '닉네임' 필수). 없으면 운영 프로필에서 앱이 뜨지 않음 | seonguk(user) | 카카오 앱 등록 후 |
+| 카카오 가입 약관 동의를 카카오싱크로 받기 (비즈 앱 전환 · 카카오싱크 신청 · 심사 → 카카오 동의 화면에 이용약관 · 개인정보 처리방침, 로그인 때 동의 내역을 `user_terms`에 저장). 그 전까지 카카오 가입자는 약관 동의 기록 없음 (api.md 6번) | seonguk(user) | 카카오싱크 신청 가능 여부 확정 후 |
 | 실제 인증 메일 어댑터 (`EmailSender`, 발송 서비스 선택). 없으면 운영 프로필에서 앱이 뜨지 않음 | seonguk(user) | 발송 서비스 정한 뒤 |
 | 실제 LLM 어댑터 (`LlmClient`, `capsule.llm.mode=real`) + `llm_usages` 기록 | seunghee(dialogue) | Phase B |
 
