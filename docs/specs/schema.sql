@@ -521,9 +521,10 @@ CREATE TABLE character_profiles (
     safety               text        NOT NULL CHECK (safety IN ('MINOR', 'ADULT')),  -- 미성년 설정이면 연애 · 성적 표현 금지
     expressions          text[]      NOT NULL,           -- 고를 수 있는 표정 (19 · 20 응답 emotion 값)
     expression_fallbacks jsonb       NOT NULL DEFAULT '{}',  -- 에셋이 없는 표정 → 대신 쓸 표정
-    stage_tones          jsonb       NOT NULL DEFAULT '{}',  -- 관계 단계 → 말투 지시 한 줄
+    stage_tones          jsonb       NOT NULL DEFAULT '{}',  -- 관계 단계 → 그 단계의 관계 설명 (거리감 · 호칭 · 챙김 수위, ADR 0022 결정 19)
     study_style          text        NOT NULL,           -- 공부 중 답 길이 · 구성 (예: 1~2문장, 공부 얘기 중심)
     break_style          text        NOT NULL,           -- 쉬는 시간 답 길이 · 구성 (예: 2~4문장, 공부 재촉 없이 수다)
+    samples              jsonb       NOT NULL DEFAULT '[]',  -- 관계 단계별 말투 샘플 [{"minStage", "user", "reply"}] (ADR 0022 결정 19)
     updated_at           timestamptz NOT NULL DEFAULT now()
 );
 
@@ -542,6 +543,7 @@ CREATE TABLE character_moves (
 
 -- 상황별 미리 쓴 대사: 같은 상황이면 sort 순서대로 돌려 쓴다
 --   situation: GREETING · AWAY · AWAY_2 · AWAY_3 · RETURN · BREAK · BREAK_END · DROWSY · YAWN · WAVE · HEAD_TURN · REPLY_FALLBACK · CLOSING
+--              · GIVE_UP(공부 포기 완료 대사) · TODAY(캐릭터의 오늘 근황, sort = 요일 월 0 ~ 일 6)
 CREATE TABLE character_lines (
     id           bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     character_id bigint NOT NULL REFERENCES character_profiles (character_id) ON DELETE CASCADE,

@@ -90,6 +90,8 @@ public class DialogueService {
     // TODO(judgment): J-14 '수다가 길어졌다'의 기준 (승희 2026-11-05 임시: 최근 10분에 사용자 말 8번, 이번 말 포함)
     static final int CHATTY_MESSAGES = 8;
     static final Duration CHATTY_WINDOW = Duration.ofMinutes(10);
+    // TODO(judgment): J-15 '공부 포기'의 기준 (승희 2026-11-05 임시: 직접 끝냈는데 목표 시간의 절반 미만)
+    static final double GIVE_UP_RATIO = 0.5;
     private static final ZoneId DAY_ZONE = ZoneId.of("Asia/Seoul");
     /** 세션 카드 머리말 날짜 (예: "11/03 52분") */
     private static final DateTimeFormatter CARD_DATE = DateTimeFormatter.ofPattern("MM/dd");
@@ -302,7 +304,8 @@ public class DialogueService {
                 Map.of(),
                 EngineOptions.DEFAULT,
                 sessions.onBreak(sessionId),
-                chatty(earlier));
+                chatty(earlier),
+                (int) Duration.between(session.startedAt(), Instant.now(clock)).toMinutes());
         LlmContext ctx = LlmContext.app(userId, sessionId, deadline());
         Optional<ChatOutcome> outcome = withinBudget(() -> replier.reply(chat, input, ctx));
         String reply = outcome.map(ChatOutcome::reply)
@@ -457,9 +460,17 @@ public class DialogueService {
                         lines(pending),
                         Map.of(),
                         ctx));
-        // 캐릭터 설정에 완료 대사가 있으면 그것 (PM: 말포이는 고정 문장), 없으면 LLM
+        // 캐릭터 설정에 완료 대사가 있으면 그것 (PM: 말포이는 고정 문장, 관계 단계별), 없으면 LLM.
+        // 목표 시간의 절반도 못 채우고 직접 끝냈으면 공부 포기 대사(GIVE_UP, 없으면 완료 대사)
+        int stage = relationQuery.view(closing.userId(), closing.characterId()).stage();
         Optional<String> scriptedClosing = characterContents
-                .next(closing.characterId(), "CLOSING", null, 1, String.valueOf(closing.sessionId()), nickname)
+                .next(
+                        closing.characterId(),
+                        gaveUp(closing) ? "GIVE_UP" : "CLOSING",
+                        "CLOSING",
+                        stage,
+                        String.valueOf(closing.sessionId()),
+                        nickname)
                 .map(ReactionLine::content);
         CompletableFuture<String> line = scriptedClosing.isPresent()
                 ? CompletableFuture.completedFuture(scriptedClosing.get())
@@ -562,6 +573,15 @@ public class DialogueService {
 
     private static List<ChatLine> tail(List<ChatLine> lines, int n) {
         return lines.subList(Math.max(0, lines.size() - n), lines.size());
+    }
+
+    /** 직접 끝냈는데 목표 시간의 절반도 못 채웠으면 공부 포기 (자동 종료는 포기로 보지 않는다) */
+    static boolean gaveUp(SessionClosing closing) {
+        Integer target = closing.targetMinutes();
+        return "NORMAL".equals(closing.endType())
+                && target != null
+                && target > 0
+                && closing.studySeconds() < target * 60 * GIVE_UP_RATIO;
     }
 
     private static List<ChatLine> lines(List<ChatMessage> chat) {

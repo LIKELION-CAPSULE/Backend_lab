@@ -401,7 +401,8 @@ public class LabService {
                 config.pinnedOrEmpty(),
                 config.engineOrDefault(),
                 config.onBreakOrDefault(),
-                config.chattyOrDefault());
+                config.chattyOrDefault(),
+                config.sessionMinutesOrDefault());
     }
 
     static BigDecimal cost(List<LlmUsage> used) {

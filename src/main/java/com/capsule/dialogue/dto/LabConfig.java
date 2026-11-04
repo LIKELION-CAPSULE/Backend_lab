@@ -23,10 +23,15 @@ public record LabConfig(
         EngineOptions engine,
         List<String> facts,
         Boolean onBreak,
-        Boolean chatty) {
+        Boolean chatty,
+        Integer sessionMinutes) {
 
     public static final LabConfig EMPTY =
-            new LabConfig(null, null, null, null, null, null, null, null, null, null, null, null, null);
+            new LabConfig(null, null, null, null, null, null, null, null, null, null, null, null, null, null);
+
+    public int sessionMinutesOrDefault() {
+        return sessionMinutes == null ? 0 : sessionMinutes;
+    }
 
     public boolean onBreakOrDefault() {
         return Boolean.TRUE.equals(onBreak);

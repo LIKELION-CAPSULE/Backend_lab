@@ -8,6 +8,7 @@ import com.capsule.dialogue.dto.CharacterContent.Example;
 import com.capsule.dialogue.dto.CharacterContent.Line;
 import com.capsule.dialogue.dto.CharacterContent.Lore;
 import com.capsule.dialogue.dto.CharacterContent.Move;
+import com.capsule.dialogue.dto.CharacterContent.Sample;
 import com.capsule.dialogue.dto.CharacterContent.World;
 import com.capsule.relation.api.RelationTypes.SignalType;
 import java.sql.Array;
@@ -33,6 +34,7 @@ public class CharacterContentRepository {
 
     private static final TypeReference<List<Example>> EXAMPLES = new TypeReference<>() {};
     private static final TypeReference<Map<String, String>> STRING_MAP = new TypeReference<>() {};
+    private static final TypeReference<List<Sample>> SAMPLES = new TypeReference<>() {};
 
     private final JdbcClient jdbc;
 
@@ -71,10 +73,12 @@ public class CharacterContentRepository {
                 String fallbacks,
                 String tones,
                 String studyStyle,
-                String breakStyle) {}
+                String breakStyle,
+                String samples) {}
         Optional<Row> profile = jdbc.sql("""
                         SELECT world_id, code, speaker, bible, rules, safety, expressions,
-                               expression_fallbacks::text AS fallbacks, stage_tones::text AS tones, study_style, break_style
+                               expression_fallbacks::text AS fallbacks, stage_tones::text AS tones, study_style, break_style,
+                               samples::text AS samples
                         FROM character_profiles WHERE character_id = ?""")
                 .param(characterId)
                 .query((rs, n) -> new Row(
@@ -88,7 +92,8 @@ public class CharacterContentRepository {
                         rs.getString("fallbacks"),
                         rs.getString("tones"),
                         rs.getString("study_style"),
-                        rs.getString("break_style")))
+                        rs.getString("break_style"),
+                        rs.getString("samples")))
                 .optional();
         if (profile.isEmpty()) return Optional.empty();
         Row p = profile.get();
@@ -160,6 +165,7 @@ public class CharacterContentRepository {
                 world,
                 moves,
                 lines,
+                LlmJson.JSON.readValue(p.samples(), SAMPLES),
                 scores,
                 habits));
     }
@@ -219,9 +225,9 @@ public class CharacterContentRepository {
         jdbc.sql("""
                         INSERT INTO character_profiles
                             (character_id, world_id, code, speaker, bible, rules, safety, expressions,
-                             expression_fallbacks, stage_tones, study_style, break_style)
+                             expression_fallbacks, stage_tones, study_style, break_style, samples)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ARRAY(SELECT jsonb_array_elements_text(CAST(? AS jsonb))),
-                                CAST(? AS jsonb), CAST(? AS jsonb), ?, ?)""")
+                                CAST(? AS jsonb), CAST(? AS jsonb), ?, ?, CAST(? AS jsonb))""")
                 .params(
                         id,
                         worldId,
@@ -234,7 +240,8 @@ public class CharacterContentRepository {
                         LlmJson.write(c.expressionFallbacks()),
                         LlmJson.write(c.stageTones()),
                         c.studyStyle(),
-                        c.breakStyle())
+                        c.breakStyle(),
+                        LlmJson.write(c.samples() == null ? List.of() : c.samples()))
                 .update();
         for (Move m : c.moves()) {
             jdbc.sql("""
