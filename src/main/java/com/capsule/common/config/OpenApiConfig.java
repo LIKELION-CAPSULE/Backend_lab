@@ -1,12 +1,15 @@
 package com.capsule.common.config;
 
+import com.capsule.common.security.LoginUser;
 import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.security.SecurityRequirement;
 import io.swagger.v3.oas.models.security.SecurityScheme;
 import io.swagger.v3.oas.models.servers.Server;
+import io.swagger.v3.oas.models.tags.Tag;
 import java.util.List;
+import org.springdoc.core.utils.SpringDocUtils;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -19,6 +22,11 @@ class OpenApiConfig {
 
     private static final String BEARER = "bearer";
 
+    static {
+        // @LoginUser long userId는 액세스 토큰에서 채운다. 화면에 userId 입력칸으로 나오지 않게
+        SpringDocUtils.getConfig().addAnnotationsToIgnore(LoginUser.class);
+    }
+
     @Bean
     OpenAPI capsuleOpenApi() {
         return new OpenAPI()
@@ -28,6 +36,13 @@ class OpenApiConfig {
                         .title("캡슐 API")
                         .description("명세 원본: docs/specs/api.md")
                         .version("dev"))
+                // 묶음 순서 = 명세 흐름 (ApiTags)
+                .tags(List.of(
+                        new Tag().name(ApiTags.AUTH),
+                        new Tag().name(ApiTags.ONBOARDING_HOME),
+                        new Tag().name(ApiTags.STUDY_SESSION),
+                        new Tag().name(ApiTags.DIALOGUE),
+                        new Tag().name(ApiTags.REPORT)))
                 .components(new Components()
                         .addSecuritySchemes(
                                 BEARER,

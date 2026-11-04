@@ -53,6 +53,16 @@ class SwaggerTest {
         }
 
         @Test
+        void loginUserIsNotAnInput() throws Exception {
+            // @LoginUser long userId는 토큰에서 채우므로 화면 입력칸(파라미터)이 아니다
+            mvc.perform(get("/v3/api-docs"))
+                    .andExpect(jsonPath("$.paths['/api/me'].get.parameters").doesNotExist())
+                    .andExpect(jsonPath("$.paths['/api/sessions/{sessionId}/end'].post.parameters[*].name")
+                            .value(org.hamcrest.Matchers.contains("sessionId")))
+                    .andExpect(jsonPath("$.tags[0].name").value("인증"));
+        }
+
+        @Test
         void swaggerUiOpenWithoutLogin() throws Exception {
             mvc.perform(get("/swagger-ui.html"))
                     .andExpect(status().is3xxRedirection())
