@@ -36,6 +36,7 @@
 --     chat_messages.signal 추가, conversations.summary는 더 쓰지 않음 (삭제는 다음 단계), llm_usages.purpose에 MEMORY
 --   - 세계관 · 캐릭터 설정을 데이터로 (ADR 0022 결정 15): worlds · world_lore · world_events · character_profiles
 --     · character_moves · character_lines · character_scores · character_habits 추가. characters는 화면용 정보만
+--   - relation_logs.reason에 ADJUST 추가 (local 흐름 테스트에서 호감도를 손으로 맞춘 만큼)
 -- =====================================================================
 
 BEGIN;
@@ -355,6 +356,7 @@ CREATE INDEX idx_session_events_session ON session_events (session_id, occurred_
 --   STREAK: 연속 출석 (2일째부터 하루 한 번, 세션 첫 FOCUS)
 --   EVENT: 기간 한정 이벤트(character_contents의 EVENT)로 받은 점수
 --   STUDY_TIME · FIRST_MEET · FOCUS_BONUS: 더 기록하지 않음 (호감도 최종안. 공부 시간은 레벨에만)
+--   ADJUST: 손으로 맞춘 점수 (local 흐름 테스트의 '호감도를 N으로'). 지금 점수와 기록의 합이 계속 맞게 맞춘 만큼을 남김
 CREATE TABLE relation_logs (
     id               bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     relation_id      bigint      NOT NULL REFERENCES user_character_relations (id),
@@ -364,7 +366,7 @@ CREATE TABLE relation_logs (
     signal           text,                                      -- CHAT일 때 말의 종류 (COMPLIMENT, HATE_OR_SEXUAL 등). 그날 오름 멈춤 · 문의 대응
     delta            int         NOT NULL,                      -- 음수 가능
     reason           text        NOT NULL CHECK (reason IN (
-                         'STUDY_TIME', 'STREAK', 'FOCUS_BONUS', 'FIRST_MEET', 'EVENT', 'CHAT', 'SESSION_EVENT')),
+                         'STUDY_TIME', 'STREAK', 'FOCUS_BONUS', 'FIRST_MEET', 'EVENT', 'CHAT', 'SESSION_EVENT', 'ADJUST')),
     created_at       timestamptz NOT NULL DEFAULT now(),
     CHECK ((reason = 'CHAT') = (request_id IS NOT NULL)),
     CHECK ((reason = 'SESSION_EVENT') = (session_event_id IS NOT NULL)),
