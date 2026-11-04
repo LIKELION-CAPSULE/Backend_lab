@@ -244,7 +244,7 @@ skeleton 스킬이 하는 일:
 ### 4-3. 승희의 LLM 파트 (dialogue 모듈)
 - 뼈대에는 `dialogue/api`(대화 계약) + `dialogue/client/LlmClient`(포트) + `FakeLlmClient`만 있음
 - 실제 LLM 어댑터는 `capsule.llm.mode=real`일 때 주입되는 새 구현으로 추가 → Fake는 테스트·로컬 기본값으로 계속 유지 (E2E가 API 비용 없이 돎)
-- API 키는 `.env.local` (Claude는 읽지 못하게 막혀 있음)
+- API 키는 `.env.local` (Claude는 읽지 못하게 막혀 있음). `scripts/run-local.sh`가 LLM 줄만 읽어 환경변수로 넘긴다: `CAPSULE_LLM_PROVIDER` · `CAPSULE_LLM_FALLBACK_PROVIDER` · `CAPSULE_LLM_DECIDE_PROVIDER` · `ANTHROPIC_API_KEY` · `OPENAI_API_KEY` · `JEV_API_KEY` · `CAPSULE_LLM_LAB_TOKEN`. worktree에 `.env.local`이 없으면 메인 체크아웃의 것을 쓴다(worktree마다 복사하지 않음). 셸에 이미 있는 값이 이긴다
 - 대화 품질 평가(골든 대화 세트)는 Phase C에서 하네스에 추가 예정
 
 ---

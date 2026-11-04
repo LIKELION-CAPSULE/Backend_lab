@@ -17,21 +17,32 @@ if [ "${1:-}" = "--info" ]; then
   exit 0
 fi
 
+# .env.local에서 정해 둔 이름의 줄만 읽는다(다른 값은 건드리지 않음). 이미 환경변수에 있으면 그 값을 쓴다
+# 이 worktree에 .env.local이 없으면 원래 레포(메인 체크아웃)의 .env.local을 쓴다: worktree마다 복사하지 않게
+# 첫 '='에서만 나눈다. 값 안이나 끝의 '='(base64 비밀번호 등)를 지키려고 IFS='=' read를 쓰지 않음
+ENV_LOCAL=.env.local
+if [ ! -f "$ENV_LOCAL" ]; then
+  main_root="$(cd "$(git rev-parse --git-common-dir)/.." && pwd)"
+  ENV_LOCAL="$main_root/.env.local"
+fi
+load_env_local() {
+  [ -f "$ENV_LOCAL" ] || return 0
+  while IFS= read -r line; do
+    key="${line%%=*}"
+    value="${line#*=}"
+    if [ -z "${!key:-}" ]; then export "$key=$value"; fi
+  done < <(tr -d '\r' < "$ENV_LOCAL" | grep -E "^($1)=" || true)
+}
+# LLM 공급자 · 키 (ADR 0022). 키는 .env.local(gitignore)에만, 레포 · 채팅에 남기지 않는다. 없으면 fake
+load_env_local 'CAPSULE_LLM_PROVIDER|CAPSULE_LLM_FALLBACK_PROVIDER|CAPSULE_LLM_DECIDE_PROVIDER|ANTHROPIC_API_KEY|OPENAI_API_KEY|JEV_API_KEY|CAPSULE_LLM_LAB_TOKEN'
+
 if [ "${1:-}" = "--shared" ]; then
   # shared-db 프로필 파일이 없는 옛 브랜치면 프로필 없이 local로 떠서 Docker 기본 DB에 마이그레이션해 버린다. 막는다
   if [ ! -f src/main/resources/application-shared-db.yml ]; then
     echo "✖ application-shared-db.yml 이 없음. git rebase origin/develop 후 다시 (ADR 0017)" >&2
     exit 1
   fi
-  # .env.local에서 공용 개발 DB 세 줄만 읽는다(다른 값은 건드리지 않음). 이미 환경변수에 있으면 그 값을 쓴다
-  # 첫 '='에서만 나눈다. 값 안이나 끝의 '='(base64 비밀번호 등)를 지키려고 IFS='=' read를 쓰지 않음
-  if [ -f .env.local ]; then
-    while IFS= read -r line; do
-      key="${line%%=*}"
-      value="${line#*=}"
-      if [ -z "${!key:-}" ]; then export "$key=$value"; fi
-    done < <(tr -d '\r' < .env.local | grep -E '^CAPSULE_DEV_DB_(URL|USERNAME|PASSWORD)=' || true)
-  fi
+  load_env_local 'CAPSULE_DEV_DB_URL|CAPSULE_DEV_DB_USERNAME|CAPSULE_DEV_DB_PASSWORD'
   for key in CAPSULE_DEV_DB_URL CAPSULE_DEV_DB_USERNAME CAPSULE_DEV_DB_PASSWORD; do
     if [ -z "${!key:-}" ]; then
       echo "✖ $key 가 비어 있음. .env.local에 공용 개발 DB 값을 넣는다 (.env.example 참고, ADR 0017)" >&2
@@ -63,7 +74,7 @@ if [ "$exists" != "1" ]; then
   echo "ℹ 로컬 DB 생성: $DB_NAME"
 fi
 
-echo "▶ http://localhost:$PORT  (DB: $DB_NAME)"
+echo "▶ http://localhost:$PORT  (DB: $DB_NAME, LLM: ${CAPSULE_LLM_PROVIDER:-fake})"
 export SPRING_PROFILES_ACTIVE=local
 export SPRING_DATASOURCE_URL="jdbc:postgresql://localhost:5432/$DB_NAME"
 export SERVER_PORT="$PORT"
