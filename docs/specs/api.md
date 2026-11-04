@@ -456,7 +456,7 @@
   "nickname": "승희",
   "email": "name@example.com",
   "onboardingRequired": false,
-  "activeSession": { "sessionId": 512, "roomId": 1, "roomName": "쌀쌀맞은 갸루짝꿍이 나에게만 친절하다!", "characterName": "채린", "startedAt": "2026-11-07T05:00:02Z" },
+  "activeSession": { "sessionId": 512, "roomId": 1, "roomName": "밤의 호그와트 도서관", "characterName": "말포이", "startedAt": "2026-11-07T05:00:02Z" },
   "profileImage" : "profile_image_url.com"
 }
 ```
@@ -596,8 +596,8 @@ H02에서 아바타를 저장하면 `onboardingRequired`가 false가 되고 H03 
   "todayStudySeconds": 3300,
   "activeSession": null,
   "rooms": [
-    { "id": 1, "name": "쌀쌀맞은 갸루짝꿍이 나에게만 친절하다!", "thumbnailUrl": "https://cdn.../room1.png",
-      "characters": [ { "id": 1, "name": "채린", "profileImageUrl": "https://cdn.../chaerin.png" } ] }
+    { "id": 1, "name": "밤의 호그와트 도서관", "thumbnailUrl": "https://cdn.../room1.png",
+      "characters": [ { "id": 1, "name": "말포이", "profileImageUrl": "https://cdn.../chaerin.png" } ] }
   ]
 }
 ```
@@ -640,19 +640,19 @@ H02에서 아바타를 저장하면 `onboardingRequired`가 false가 되고 H03 
 | characters[].id · name · profileImageUrl |  | 캐릭터 (이번 시연은 1명) |
 | characters[].personality | Array | 성격 태그 (`characters.personality text[]`) |
 | characters[].relation | Object | `level`(함께 공부한 자리 지킴 시간 레벨), `totalStudySeconds`, `points`(호감도 0~100), `stage` · `stageName`(관계 단계 = 호감도 구간), `levelName`(옛 필드, `stageName`과 같은 값, 지울 예정). 아직 안 만났으면 Lv.1 · 0초 · 50 |
+| activeSessionId | Long | 이 룸에서 진행 중인 내 세션 id. 없거나 다른 룸에서 진행 중이면 null (그때 공부 시작을 누르면 409 → H18 팝업) |
 
 > 2026-11-04 (호감도 최종안): 레벨과 관계 단계를 나눔. 레벨 = 이 캐릭터와 함께 공부한 자리 지킴 시간(60분당 1, 상한 없음), 관계 단계 = 호감도 구간(0 · 30 · 70 · 90). 단계 이름을 화면에 보일지는 확정 필요 (PM은 숨기기로 함)
-| activeSessionId | Long | 이 룸에서 진행 중인 내 세션 id. 없거나 다른 룸에서 진행 중이면 null (그때 공부 시작을 누르면 409 → H18 팝업) |
 
 ```json
 {
   "id": 1,
-  "name": "쌀쌀맞은 갸루짝꿍이 나에게만 친절하다!",
-  "description": "차갑게 굴지만 나한테만 다정한 짝꿍과 같이 공부해요.",
+  "name": "밤의 호그와트 도서관",
+  "description": "지기 싫어하는 슬리데린 라이벌 말포이와 촛불 아래에서 같이 공부해요.",
   "thumbnailUrl": "https://cdn.../room1.png",
   "characters": [
-    { "id": 1, "name": "채린", "profileImageUrl": "https://cdn.../chaerin.png",
-      "personality": ["츤데레", "같은 반 친구"],
+    { "id": 1, "name": "말포이", "profileImageUrl": "https://cdn.../chaerin.png",
+      "personality": ["츤데레", "슬리데린 5학년", "라이벌"],
       "relation": { "level": 1, "levelName": "친한 사이", "totalStudySeconds": 0,
                     "points": 50, "stage": 2, "stageName": "친한 사이" } }
   ],
@@ -862,8 +862,8 @@ GET /api/me/memories?date=2026-11-12
   "sessionId": 512,
   "startedAt": "2026-11-07T05:00:02Z",
   "targetMinutes": 50,
-  "room": { "id": 1, "name": "쌀쌀맞은 갸루짝꿍이 나에게만 친절하다!", "backgroundImageUrl": "https://cdn.../room1-bg.png" },
-  "character": { "id": 1, "name": "채린", "profileImageUrl": "https://cdn.../chaerin.png", "modelJsonUrl": "https://cdn.../live2d/chaerin/v1/chaerin.model3.json", "scale": 1.0, "offsetX": 0, "offsetY": 12 },
+  "room": { "id": 1, "name": "밤의 호그와트 도서관", "backgroundImageUrl": "https://cdn.../room1-bg.png" },
+  "character": { "id": 1, "name": "말포이", "profileImageUrl": "https://cdn.../chaerin.png", "modelJsonUrl": "https://cdn.../live2d/chaerin/v1/chaerin.model3.json", "scale": 1.0, "offsetX": 0, "offsetY": 12 },
   "avatar": { "id": 1, "name": "기본 아바타", "profileImageUrl": "https://cdn.../avatar1.png", "modelJsonUrl": "https://cdn.../live2d/avatar1/v1/avatar1.model3.json", "scale": 1.0, "offsetX": 0, "offsetY": 12 },
   "me": { "nickname": "승희", "profileImageUrl": "https://cdn.../avatar1.png" },
   "serverTime": "2026-11-07T05:00:02Z"
@@ -916,8 +916,8 @@ GET /api/me/memories?date=2026-11-12
 ```json
 {
   "sessionId": 512, "targetMinutes": 50,
-  "room": { "id": 1, "name": "쌀쌀맞은 갸루짝꿍이 나에게만 친절하다!", "backgroundImageUrl": "https://cdn.../room1-bg.png" },
-  "character": { "id": 1, "name": "채린", "profileImageUrl": "https://cdn.../chaerin.png", "modelJsonUrl": "https://cdn.../live2d/chaerin/v1/chaerin.model3.json", "scale": 1.0, "offsetX": 0, "offsetY": 12 },
+  "room": { "id": 1, "name": "밤의 호그와트 도서관", "backgroundImageUrl": "https://cdn.../room1-bg.png" },
+  "character": { "id": 1, "name": "말포이", "profileImageUrl": "https://cdn.../chaerin.png", "modelJsonUrl": "https://cdn.../live2d/chaerin/v1/chaerin.model3.json", "scale": 1.0, "offsetX": 0, "offsetY": 12 },
   "avatar": { "id": 1, "name": "기본 아바타", "profileImageUrl": "https://cdn.../avatar1.png", "modelJsonUrl": "https://cdn.../live2d/avatar1/v1/avatar1.model3.json", "scale": 1.0, "offsetX": 0, "offsetY": 12 },
   "me": { "nickname": "승희", "profileImageUrl": "https://cdn.../avatar1.png" },
   "studySeconds": 1043, "breakSeconds": 420,
@@ -1392,14 +1392,14 @@ json
 | returnCount | Integer | 자리 비운 뒤 돌아온 횟수 (`RETURN` 이벤트 수) |
 | character | Object | `id`, `name` |
 | relation | Object | `levelBefore` · `levelAfter` · `levelUp`(공부 시간 레벨, 이 세션 자리 지킴 시간 반영) · `nextLevelSeconds`(다음 레벨이 되는 누적 자리 지킴 시간) · `pointsBefore`(공부 시작 때) · `pointsAfter`(이벤트 · 대화 반영 후) · `stage` · `stageName`(끝날 때 관계 단계) · `levelName`(옛 필드, `stageName`과 같은 값) · `nextLevelPoints`(옛 필드, 늘 null) |
+| closingLine | String | 완료 대사 (리포트 · 카드 공용). 캐릭터 설정에 완료 대사(`character_lines` CLOSING)가 있으면 지금 관계 단계의 그 문장(PM: 말포이는 고정. 단계별 문장은 확정 필요), 없으면 AI. 직접 끝냈는데 목표 시간의 절반도 못 채웠으면 공부 포기 대사(GIVE_UP, 임시 J-15). 절반은 `studySeconds`(자리 지킴 + 자리 비움) 기준, 목표 시간을 정하지 않은 세션은 포기로 보지 않음 (기준 시간 확정 필요) |
 
 > 2026-11-04 (호감도 최종안): 공부 시간은 호감도를 올리지 않고 레벨에만 씀. 레벨 = 자리 지킴 60분당 1 (임시, PM 확인 필요)
-| closingLine | String | 완료 대사 (리포트 · 카드 공용). 캐릭터 설정에 완료 대사(`character_lines` CLOSING)가 있으면 지금 관계 단계의 그 문장(PM: 말포이는 고정. 단계별 문장은 확정 필요), 없으면 AI. 직접 끝냈는데 목표 시간의 절반도 못 채웠으면 공부 포기 대사(GIVE_UP, 임시 J-15). 절반은 `studySeconds`(자리 지킴 + 자리 비움) 기준, 목표 시간을 정하지 않은 세션은 포기로 보지 않음 (기준 시간 확정 필요) |
 
 json
 
 ```json
-{  "sessionId": 512, "roomName": "쌀쌀맞은 갸루짝꿍이 나에게만 친절하다!",  "startedAt": "2026-11-07T05:00:02Z", "endedAt": "2026-11-07T06:05:10Z", "endType": "NORMAL",  "studySeconds": 3300, "presentSeconds": 2880, "awaySeconds": 420,  "returnCount": 2,  "character": { "id": 1, "name": "채린" },  "relation": { "levelBefore": 1, "levelAfter": 2, "levelUp": true, "nextLevelSeconds": 7200, "pointsBefore": 50, "pointsAfter": 53, "stage": 2, "stageName": "친한 사이", "levelName": "친한 사이", "nextLevelPoints": null },  "closingLine": "오늘도 같이 공부해서 좋았어. 다음에도 함께하자."}
+{  "sessionId": 512, "roomName": "밤의 호그와트 도서관",  "startedAt": "2026-11-07T05:00:02Z", "endedAt": "2026-11-07T06:05:10Z", "endType": "NORMAL",  "studySeconds": 3300, "presentSeconds": 2880, "awaySeconds": 420,  "returnCount": 2,  "character": { "id": 1, "name": "채린" },  "relation": { "levelBefore": 1, "levelAfter": 2, "levelUp": true, "nextLevelSeconds": 7200, "pointsBefore": 50, "pointsAfter": 53, "stage": 2, "stageName": "친한 사이", "levelName": "친한 사이", "nextLevelPoints": null },  "closingLine": "오늘도 같이 공부해서 좋았어. 다음에도 함께하자."}
 ```
 
 > ✅ **200 OK** (이미 끝난 세션도 200 + 같은 결과)
@@ -1487,7 +1487,7 @@ json
 - 와이어프레임: H01 로그인 폼 '비밀번호 찾기' (추가 필요)
 - 백엔드: Not started
 - 프론트: Not started
-- 노션: (spec-sync 때 추가)
+- 노션: https://app.notion.com/p/40eb9a07e5928130ad08d117dd508bbc
 
 > 2026-11-04: 비밀번호 찾기 추가 (25 · 26). 메일 링크 방식, 가입하지 않은 이메일도 같은 응답, 카카오 전용 계정은 대상 아님, 바꾸면 모든 기기 로그아웃
 
@@ -1545,7 +1545,7 @@ json
 - 와이어프레임: '새 비밀번호' 페이지 (추가 필요)
 - 백엔드: Not started
 - 프론트: Not started
-- 노션: (spec-sync 때 추가)
+- 노션: https://app.notion.com/p/40eb9a07e592812492d1d69352fcce68
 
 #### 설명
 

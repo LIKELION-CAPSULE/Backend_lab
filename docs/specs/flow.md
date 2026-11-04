@@ -12,7 +12,7 @@
 5. 아바타 보기 (H02) → `GET /api/avatars` → 1개
 6. 이 모습으로 시작 → `PATCH /api/me` → `onboardingRequired: false`
 7. 홈 (H03) → `GET /api/home` → 룸 1개, `activeSession: null`
-8. 룸 상세 (H04) → `GET /api/rooms/1` → 채린, Lv.1 · 0초
+8. 룸 상세 (H04) → `GET /api/rooms/1` → 말포이, Lv.1 · 0초
 9. 시험 일정 (H06) → `POST /api/me/memories` (EXAM) → 201, `dDay`
 10. 공부 시작 (H06 → H07) → `POST /api/sessions` → 201, `sessionId`
 11. 시작 직후 → `FOCUS` 전송 → `eventId`, `characters[].affinity` +5 (FIRST_MEET, J-01 Fake) → 반응(19) → 인사 대사
