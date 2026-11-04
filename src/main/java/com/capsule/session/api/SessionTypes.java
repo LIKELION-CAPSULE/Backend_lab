@@ -16,9 +16,9 @@ public final class SessionTypes {
     }
 
     /**
-     * 상태 이벤트 (api.md 18).
+     * 상태 변화 전송으로 저장된 이벤트 (api.md 18).
      *
-     * @param type FOCUS · AWAY · RETURN · BREAK
+     * @param type 상태 FOCUS · AWAY · RETURN · BREAK 또는 순간 동작 DROWSY · YAWN · WAVE · HEAD_TURN
      * @param firstFocusOfSession 이 세션의 첫 FOCUS (반응 trigger GREETING)
      * @param afterBreak 바로 앞 이벤트가 BREAK인 FOCUS (반응 trigger BREAK_END)
      */
