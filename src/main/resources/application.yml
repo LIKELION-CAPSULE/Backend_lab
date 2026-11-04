@@ -61,10 +61,11 @@ capsule:
       token: ${CAPSULE_LLM_LAB_TOKEN:} # 공용 서버에서 켤 때만: X-Lab-Token 헤더 검사
       eval-parallelism: 3
   dialogue:
-    chat-pipeline: SIMPLE # SIMPLE(LLM 한 번, 명세 20) | ENGINE(감독·배우 엔진. 캐릭터별 engine.* 프롬프트 필요)
-    # 상태 반응(19)을 LLM으로 만들 trigger. 합의: 상태 변화는 LLM(호감도 + 대화 맥락), 동작 이벤트는 고정 대사
-    #   (DROWSY · YAWN · WAVE · HEAD_TURN은 넣지 않는다). LLM이 5초를 넘기면 같은 trigger의 고정 대사
-    reaction-llm-triggers: [GREETING, AWAY, RETURN, BREAK, BREAK_END]
+    # SCENE(DB 캐릭터 설정 + 장면 카드, 기본, ADR 0022 결정 15) | SIMPLE(LLM 한 번, 공통 프롬프트) | ENGINE(감독 · 배우, 비교용)
+    chat-pipeline: SCENE
+    # 상태 반응(19)을 LLM으로 만들 trigger. PM 확정(2026-11-04): 데모데이는 미리 쓴 대사를 순서대로, AI 생성은 끔.
+    #   캐릭터 설정(character_lines)에 그 상황 대사가 있으면 이 설정과 상관없이 그 대사를 쓴다. 켜려면 [GREETING, AWAY, RETURN, BREAK, BREAK_END]
+    reaction-llm-triggers: []
     reaction-context-lines: 6 # 상태 반응 LLM에 같이 넣을 이번 세션 최근 대화 수
     # 답장 감정 후보 (명세 19·20). TODO: #9 반응 매핑(live2d_reaction_maps)에서 캐릭터별로 읽기
     emotions: [HAPPY, SHY, ANGRY, SAD, SURPRISED, NEUTRAL]
