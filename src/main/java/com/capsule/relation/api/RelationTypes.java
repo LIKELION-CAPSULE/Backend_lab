@@ -71,7 +71,20 @@ public final class RelationTypes {
             int stage,
             String stageName,
             int totalPresentSeconds,
-            int nextLevelSeconds) {}
+            int nextLevelSeconds) {
+
+        /** @deprecated 단계 · 레벨 칸이 있는 생성자를 쓸 것. 옛 테스트 · 브랜치가 옮기면 지운다 */
+        @Deprecated(forRemoval = true)
+        public RelationView(
+                long characterId,
+                int level,
+                String levelName,
+                int points,
+                int totalStudySeconds,
+                Integer nextLevelPoints) {
+            this(characterId, level, levelName, points, totalStudySeconds, nextLevelPoints, 1, levelName, 0, 3600);
+        }
+    }
 
     /**
      * 한 번의 이벤트·대화로 바뀐 호감도 (api.md 18·20의 affinity). delta는 실제로 바뀐 만큼이다:
@@ -79,7 +92,14 @@ public final class RelationTypes {
      * level은 공부 시간 레벨이라 이벤트·대화로는 바뀌지 않는다 (levelUp은 늘 false, 지울 예정)
      */
     public record AffinityChange(
-            int delta, int points, int level, @Deprecated boolean levelUp, int stage, String stageName) {}
+            int delta, int points, int level, @Deprecated boolean levelUp, int stage, String stageName) {
+
+        /** @deprecated 단계 칸이 있는 생성자를 쓸 것. 옛 테스트 · 브랜치가 옮기면 지운다 */
+        @Deprecated(forRemoval = true)
+        public AffinityChange(int delta, int points, int level, boolean levelUp) {
+            this(delta, points, level, levelUp, 1, null);
+        }
+    }
 
     /**
      * 상태 이벤트 하나 (api.md 18).
@@ -128,5 +148,29 @@ public final class RelationTypes {
             boolean levelUp,
             int stage,
             String stageName,
-            int nextLevelSeconds) {}
+            int nextLevelSeconds) {
+
+        /** @deprecated 단계 · 레벨 칸이 있는 생성자를 쓸 것. 옛 테스트 · 브랜치가 옮기면 지운다 */
+        @Deprecated(forRemoval = true)
+        public StudySettlement(
+                int levelBefore,
+                int levelAfter,
+                String levelName,
+                int pointsBefore,
+                int pointsAfter,
+                Integer nextLevelPoints,
+                boolean levelUp) {
+            this(
+                    levelBefore,
+                    levelAfter,
+                    levelName,
+                    pointsBefore,
+                    pointsAfter,
+                    nextLevelPoints,
+                    levelUp,
+                    1,
+                    levelName,
+                    3600);
+        }
+    }
 }

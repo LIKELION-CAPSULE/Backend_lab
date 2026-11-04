@@ -30,9 +30,15 @@ class AffinityPolicy {
         return Math.clamp(points, MIN_POINTS, MAX_POINTS);
     }
 
-    /** 자르기 전 변화량. 비율 감점이면 지금 값의 %를 올림해서 깎되, 최소 감점(points)보다 덜 깎지 않는다 */
+    /** 대화 한 번에 오를 수 있는 최대 (DB CHECK relation_logs_chat_range와 같음) */
+    static final int CHAT_MAX_GAIN = 5;
+
+    /**
+     * 자르기 전 변화량. 비율 감점이면 지금 값의 %를 올림해서 깎되, 최소 감점(points)보다 덜 깎지 않는다.
+     * 오르는 쪽은 설정에 큰 값이 들어와도 CHAT_MAX_GAIN까지만 (DB CHECK에 걸려 답장 저장이 실패하지 않게)
+     */
     static int chatDelta(int current, ChatScore score) {
-        if (score.lossPercent() <= 0) return score.points();
+        if (score.lossPercent() <= 0) return Math.min(score.points(), CHAT_MAX_GAIN);
         int loss = (current * score.lossPercent() + 99) / 100;
         return Math.min(score.points(), -loss);
     }

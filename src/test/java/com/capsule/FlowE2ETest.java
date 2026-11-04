@@ -137,7 +137,7 @@ class FlowE2ETest {
         // 16 채팅 → 같은 requestId 재전송은 한 번만
         String requestId = UUID.randomUUID().toString();
         String message = "{\"requestId\":\"" + requestId
-                + "\",\"characterId\":1,\"content\":\"이거 너무 어려워\",\"inputType\":\"QUICK\"}";
+                + "\",\"characterId\":1,\"content\":\"너 설명 진짜 멋있다\",\"inputType\":\"TEXT\"}";
         MvcResult reply = call(post(s + "/messages"), token, message, 200);
         assertThat(((Number) JsonPath.read(body(reply), "$.characterId")).longValue())
                 .isEqualTo(1);
@@ -157,10 +157,10 @@ class FlowE2ETest {
         MvcResult end = call(post(s + "/end"), token, endBody, 200);
         assertThat((Integer) JsonPath.read(body(end), "$.returnCount")).isEqualTo(1);
         assertThat((Integer) JsonPath.read(body(end), "$.studySeconds")).isEqualTo(60);
-        // 호감도 0~100, 50에서 시작: 연속 출석 1일째 0, 짧은 자리 비움 0, 복귀 0, 채팅 0(평범한 말), 공부 시간은 레벨에만
+        // 호감도 0~100, 50에서 시작: 연속 출석 1일째 0, 짧은 자리 비움 0, 복귀 0, 칭찬 +1, 공부 시간은 레벨에만
         assertThat((Integer) JsonPath.read(body(end), "$.relation.pointsBefore"))
                 .isEqualTo(50);
-        assertThat((Integer) JsonPath.read(body(end), "$.relation.pointsAfter")).isEqualTo(50);
+        assertThat((Integer) JsonPath.read(body(end), "$.relation.pointsAfter")).isEqualTo(51);
         assertThat((String) JsonPath.read(body(end), "$.relation.stageName")).isEqualTo("친한 사이");
         assertThat((Integer) JsonPath.read(body(end), "$.relation.levelAfter")).isEqualTo(1); // 자리 지킴 1분
         assertThat((String) JsonPath.read(body(end), "$.closingLine")).isNotBlank();

@@ -20,6 +20,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param memoryMax 캐릭터가 아는 사실 최대 개수
  * @param recapMax 지난 세션 흐름 카드 최대 장수
  * @param memoryAsync 기억 정리를 답장 뒤 따로 돌릴지 (false면 요청 안에서 바로)
+ * @param memoryEnabled 매 턴 아는 사실을 정리할지. 끄면 새 기억을 만들지 않는다 (호출 비용 0, PM이 데모데이 뒤로 미룰 때)
  */
 @ConfigurationProperties("capsule.dialogue")
 public record DialogueProperties(
@@ -35,7 +36,8 @@ public record DialogueProperties(
         int reactionContextLines,
         int memoryMax,
         int recapMax,
-        boolean memoryAsync) {
+        boolean memoryAsync,
+        boolean memoryEnabled) {
 
     public static final String PATTERN = "PATTERN";
     public static final String DECIDER = "DECIDER";

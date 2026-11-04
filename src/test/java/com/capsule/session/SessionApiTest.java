@@ -302,6 +302,10 @@ class SessionApiTest {
         // relation이 1분 넘게 비웠는지 보고 감점한다 (호감도 최종안)
         verify(relationCommands)
                 .applySessionEvent(new SessionEventRef(userId, 1, sessionId, back, "RETURN", false, 70));
+        // 늦게 도착한 이벤트는 이미 끝난 자리 비움을 다시 끝내지 않는다 (두 번 감점 방지)
+        long late = event(sessionId, "BREAK", t0.plusSeconds(50), 201);
+        verify(relationCommands)
+                .applySessionEvent(new SessionEventRef(userId, 1, sessionId, late, "BREAK", false, null));
     }
 
     @Test

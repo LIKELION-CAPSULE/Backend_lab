@@ -342,6 +342,7 @@ public class DialogueService {
                 request.content(),
                 tail(history, ChatReplier.CONTEXT_LINES),
                 LlmContext.app(userId, sessionId, null));
+        if (!props.memoryEnabled()) return response;
         if (props.memoryAsync()) LLM_THREADS.execute(remember);
         else remember.run();
         return response;

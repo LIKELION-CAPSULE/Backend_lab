@@ -304,10 +304,16 @@ public class SessionService {
         }
 
         SessionEvent saved = events.save(new SessionEvent(s.id(), type, at));
-        // 자리 비움을 끝낸 상태 이벤트면 비운 시간을 같이 넘긴다 (relation이 오래 비웠으면 감점)
-        Integer awaySeconds = !motion && stateAt != null && AWAY.equals(stateAt.type()) && !AWAY.equals(type)
-                ? (int) Duration.between(stateAt.occurredAt(), at).toSeconds()
-                : null;
+        // 자리 비움을 끝낸 상태 이벤트면 비운 시간을 같이 넘긴다 (relation이 오래 비웠으면 감점).
+        // 늦게 도착한 이벤트가 이미 다른 상태 이벤트로 끝난 AWAY를 또 끝내지 않게, 그 AWAY 뒤에 상태 이벤트가 없을 때만
+        SessionEvent away = stateAt;
+        boolean closesAway = !motion
+                && away != null
+                && AWAY.equals(away.type())
+                && !AWAY.equals(type)
+                && list.stream().noneMatch(e -> e.isState() && e.occurredAt().isAfter(away.occurredAt()));
+        Integer awaySeconds =
+                closesAway ? (int) Duration.between(away.occurredAt(), at).toSeconds() : null;
         SessionEventRef ref = new SessionEventRef(
                 s.userId(),
                 s.characterId(),

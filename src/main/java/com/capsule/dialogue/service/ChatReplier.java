@@ -77,7 +77,11 @@ public class ChatReplier {
         // TODO(judgment): J-06 B안: 확신이 낮으면 0점. 기준값은 실험실 평가로 정한다
         if (d == null || d.confidence() < props.signalMinConfidence())
             return outcome.withSignal(SignalType.NEUTRAL, confidence);
-        return outcome.withSignal(SignalType.valueOf(d.choice()), confidence);
+        SignalType chosen = SignalType.valueOf(d.choice());
+        // 비율 감점은 A안과 같은 확신 기준을 넘어야 한다
+        if (chosen == SignalType.HATE_OR_SEXUAL && d.confidence() < props.severeMinConfidence())
+            chosen = SignalType.RUDE;
+        return outcome.withSignal(chosen, confidence);
     }
 
     private Decision read(ChatInput in, Decider.Question q, LlmContext ctx) {

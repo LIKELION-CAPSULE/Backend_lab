@@ -25,9 +25,10 @@ DECLARE c text;
 BEGIN
     SELECT conname INTO c FROM pg_constraint
         WHERE conrelid = 'relation_logs'::regclass AND contype = 'c' AND pg_get_constraintdef(oid) LIKE '%-5%';
-    IF c IS NOT NULL THEN
-        EXECUTE format('ALTER TABLE relation_logs DROP CONSTRAINT %I', c);
+    IF c IS NULL THEN
+        RAISE EXCEPTION '옛 대화 점수 범위 CHECK(-5~5)를 못 찾음: 그대로 두면 비율 감점 기록이 실패한다';
     END IF;
+    EXECUTE format('ALTER TABLE relation_logs DROP CONSTRAINT %I', c);
 END $$;
 ALTER TABLE relation_logs
     ADD CONSTRAINT relation_logs_chat_range CHECK (reason <> 'CHAT' OR delta BETWEEN -100 AND 5);
