@@ -96,8 +96,9 @@ class SceneChatPipelineTest {
                 List.of(new ChatLine(ChatMessage.USER, "안녕"), new ChatLine(ChatMessage.CHARACTER, "아버지가 그러셨지. 공부나 해."));
         String card = card(input("오늘 뭐 해", history, List.of()), null);
         assertThat(card).doesNotContain("중간고사").doesNotContain("꺼낼 수 있는 기억");
-        assertThat(card).doesNotContain("말포이 오늘"); // 근황은 첫 대화와 쉬는 시간에만
-        assertThat(card(input("오늘 뭐 해", history, List.of(), true, false), null)).contains("말포이 오늘");
+        assertThat(card).doesNotContain("말포이 오늘"); // 근황은 첫 대화에만
+        assertThat(card(input("오늘 뭐 해", history, List.of(), true, false), null))
+                .doesNotContain("말포이 오늘"); // 쉬는 시간에도 안 넣음
         assertThat(card).contains("\"아버지\" 쓰지 않기 (이번 세션에 이미 씀)");
     }
 
