@@ -1,12 +1,12 @@
 ---
 name: review-pr
-description: 상대가 올린 PR을 "내 작업 맥락"까지 반영해서 리뷰한다. "PR 12 리뷰해줘", "성욱 PR 봐줘", "/review-pr 12"처럼 PR 번호와 함께 리뷰를 요청할 때 반드시 사용. CI의 Claude 리뷰는 내 진행 중 작업을 모르므로, 그 빈칸을 이 스킬이 채운다.
+description: 상대가 올린 PR을 "내 작업 맥락"까지 반영해서 리뷰한다. "PR 12 리뷰해줘", "성욱 PR 봐줘", "/review-pr 12"처럼 PR 번호와 함께 리뷰를 요청할 때 반드시 사용. PR CI · 자동 리뷰가 없으므로(ADR 0023) 상대 PR을 볼 때는 이 스킬을 쓴다.
 ---
 
 # 상대 PR 리뷰 (내 맥락으로)
 
 ## 절차
-1. PR 읽기: `gh pr view <N>`(본문 = 작성자의 맥락), `gh pr diff <N>`, PR 댓글에 Claude 자동 리뷰가 있으면 그것도.
+1. PR 읽기: `gh pr view <N>`(본문 = 작성자의 맥락), `gh pr diff <N>`, PR 댓글이 있으면 그것도.
 2. 구역: `gh pr diff <N> --name-only | python3 .harness/zones.py classify --author <작성자 GitHub 아이디>`
 3. **내 맥락 수집** (이 스킬의 핵심)
    - 지금 내 브랜치 작업: `git diff --stat origin/develop...HEAD`, 이 세션에서 하던 일
