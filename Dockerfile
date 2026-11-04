@@ -1,5 +1,5 @@
 # 배포 이미지 (Railway가 이 파일로 빌드, ADR 0018). 로컬에서도 같은 이미지: docker build -t capsule .
-# 테스트는 CI(verify)가 이미 돌리므로 여기서는 빌드만 한다
+# 테스트는 PR 전에 로컬 scripts/verify.sh가 돌리므로(ADR 0021 · 0023) 여기서는 빌드만 한다
 
 FROM eclipse-temurin:21-jdk AS build
 WORKDIR /workspace
