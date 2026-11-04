@@ -159,10 +159,8 @@ class AuthApiTest extends UserApiTestSupport {
         String kakaoId = UUID.randomUUID().toString();
         String code = "fake-kakao:%s:카카오닉네임".formatted(kakaoId);
 
-        postJson("/api/auth/social/KAKAO", kakaoBody(code, null))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("TERMS_REQUIRED"));
-        MvcResult created = postJson("/api/auth/social/KAKAO", kakaoBody(code, "[3,4]"))
+        // 약관 동의 없이 가입된다 (api.md 6, 추후 카카오싱크)
+        MvcResult created = postJson("/api/auth/social/KAKAO", kakaoBody(code))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.isNewUser").value(true))
                 .andExpect(jsonPath("$.onboardingRequired").value(true))
@@ -173,20 +171,30 @@ class AuthApiTest extends UserApiTestSupport {
                 .andExpect(jsonPath("$.nickname").value("카카오닉네임"))
                 .andExpect(jsonPath("$.email").value(nullValue()));
 
-        postJson("/api/auth/social/KAKAO", kakaoBody(code, null))
+        postJson("/api/auth/social/KAKAO", kakaoBody(code))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.isNewUser").value(false))
                 .andExpect(jsonPath("$.userId").value(userId));
 
-        postJson("/api/auth/social/KAKAO", kakaoBody("expired-code", "[3,4]"))
+        postJson("/api/auth/social/KAKAO", kakaoBody("expired-code"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("SOCIAL_AUTH_FAILED"));
     }
 
-    private static String kakaoBody(String code, String termIds) {
+    @Test
+    void kakaoIgnoresLegacyTermsField() throws Exception {
+        String code = "fake-kakao:%s:옛프론트".formatted(UUID.randomUUID());
+        postJson("/api/auth/social/KAKAO", """
+                        {"code":"%s","redirectUri":"http://localhost/oauth/kakao","agreedTermVersionIds":[3,4]}
+                        """.formatted(code))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.isNewUser").value(true));
+    }
+
+    private static String kakaoBody(String code) {
         return """
-                {"code":"%s","redirectUri":"http://localhost/oauth/kakao","agreedTermVersionIds":%s}
-                """.formatted(code, termIds);
+                {"code":"%s","redirectUri":"http://localhost/oauth/kakao"}
+                """.formatted(code);
     }
 
     private static String wrong(String code) {

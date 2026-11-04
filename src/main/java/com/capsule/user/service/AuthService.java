@@ -178,17 +178,18 @@ public class AuthService {
     }
 
     /**
-     * 처음이면 users + user_social_accounts + user_terms를 한 트랜잭션으로 (api.md 6 '서버가 하는 일').
+     * 처음이면 users + user_social_accounts를 한 트랜잭션으로 (api.md 6 '서버가 하는 일').
+     * 약관 동의는 받지 않는다. 추후 카카오싱크로 받아 user_terms에 기록 (judgment-backlog).
      * 카카오 호출(네트워크 왕복 2번)은 트랜잭션 밖에서 한다. 카카오가 느려도 DB 커넥션을 붙잡지 않게
      */
     public Login kakao(KakaoRequest req) {
         KakaoProfile profile = kakaoClient
                 .fetchProfile(req.code(), req.redirectUri())
                 .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "SOCIAL_AUTH_FAILED"));
-        return tx.execute(status -> loginOrSignUp(profile, req));
+        return tx.execute(status -> loginOrSignUp(profile));
     }
 
-    private Login loginOrSignUp(KakaoProfile profile, KakaoRequest req) {
+    private Login loginOrSignUp(KakaoProfile profile) {
         Instant now = Instant.now(clock);
         Optional<Long> existingId = users.findUserIdBySocialAccount(KAKAO, profile.providerUserId());
         if (existingId.isPresent()) {
@@ -198,7 +199,6 @@ public class AuthService {
             user.loggedIn(now);
             return new Login(user.id(), user.onboardingRequired(), false);
         }
-        List<Long> agreed = agreedLatestTerms(req.agreedTermVersionIds(), now);
         String nickname = User.fitNickname(profile.nickname());
         if (nickname.isEmpty()) {
             // 닉네임 동의는 필수 항목(api.md 6)이지만 비어 올 수 있어 NOT NULL을 지키려고 둔 기본값. 프로필 설정에서 바꿀 수 있다
@@ -206,7 +206,6 @@ public class AuthService {
         }
         User user = users.save(User.socialUser(nickname, now));
         users.insertSocialAccount(KAKAO, profile.providerUserId(), user.id());
-        terms.recordAgreements(user.id(), agreed);
         return new Login(user.id(), true, true);
     }
 
