@@ -35,6 +35,9 @@ public class ReactionWriter {
     private final PromptService prompts;
     private final FixedLines fixed;
     private final DialogueProperties props;
+    /** 오늘 근황을 넣는 상태 변화: 공부 시작 인사 · 쉬기 시작 (자리 비움 · 돌아옴에선 어색하다) */
+    static final List<String> TODAY_TRIGGERS = List.of("GREETING", "BREAK");
+
     private final CharacterContents contents;
     private final Clock clock;
 
@@ -122,7 +125,13 @@ public class ReactionWriter {
                                                 s -> fixed.situation(c.characterId(), s, null, pinned))),
                                 true),
                         new Llm.SystemBlock(
-                                card(c, nickname, summary, recent, SceneChatPipeline.today(c, clock)), false)),
+                                card(
+                                        c,
+                                        nickname,
+                                        summary,
+                                        recent,
+                                        TODAY_TRIGGERS.contains(trigger) ? SceneChatPipeline.today(c, clock) : null),
+                                false)),
                 messages,
                 ctx.withPrompts(List.of(system.id())),
                 null);

@@ -124,7 +124,7 @@ class FlowE2ETest {
         assertThat((String) JsonPath.read(body(drowsyLine), "$.characters[0].content"))
                 .isEqualTo("졸지 마. 너 졸면 내가 이기는 게 재미없잖아.");
         assertThat((String) JsonPath.read(body(drowsyLine), "$.characters[0].emotion"))
-                .isEqualTo("찡그림");
+                .isEqualTo("경멸");
 
         // 12 heartbeat
         call(post(s + "/heartbeat"), token, "{\"studySeconds\":0,\"presentSeconds\":0}", 204);

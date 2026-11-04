@@ -133,11 +133,11 @@ class SceneChatPipeline implements ChatPipeline {
                         .map(s -> "사용자: " + s.user() + "\n" + c.speaker() + ": " + named(s.reply(), nickname))
                         .collect(Collectors.joining("\n\n")));
         List<String> events = new ArrayList<>();
+        // 상황마다 예시 두 줄: 한 줄만 주면 실제 키 평가에서 그대로 따라 했다
         for (String s : STATE_SITUATIONS)
             c.linesFor(s, stage).stream()
-                    .findFirst()
-                    .ifPresent(
-                            l -> events.add("(방금 일어난 일: " + situation.apply(s) + ") → " + named(l.text(), nickname)));
+                    .limit(2)
+                    .forEach(l -> events.add("(방금 일어난 일: " + situation.apply(s) + ") → " + named(l.text(), nickname)));
         vars.put("events", String.join("\n", events));
         return vars;
     }
@@ -152,7 +152,8 @@ class SceneChatPipeline implements ChatPipeline {
         L.add("<상황>");
         L.add("사용자: " + in.nickname() + " / 시각: " + now
                 + (in.sessionMinutes() > 0 ? " / 공부한 지: " + in.sessionMinutes() + "분" : ""));
-        if (today != null) L.add(c.speaker() + " 오늘: " + today);
+        // 근황은 이 세션 첫 대화와 쉬는 시간에만: 매 턴 넣었더니 묻지 않아도 매번 꺼냈다(실제 키 평가)
+        if (today != null && (in.history().isEmpty() || in.onBreak())) L.add(c.speaker() + " 오늘: " + today);
         // 기억 (ADR 0022 결정 16): 아는 사실은 결정 모델이 이번 말에 맞춰 고른 하나만, 세션 카드는 최근 2장, 원문은 메시지로 15줄
         if (fact != null) L.add("<꺼낼 수 있는 기억> " + fact + " (자연스러울 때만, 단정하지 말고)");
         if (in.summary() != null && !in.summary().isBlank())

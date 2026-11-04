@@ -52,7 +52,7 @@ class CharacterContentTest {
         CharacterContent c = contents.find(1).orElseThrow();
         assertThat(c.speaker()).isEqualTo("말포이");
         assertThat(c.safety()).isEqualTo(CharacterContent.MINOR);
-        assertThat(c.expressions()).containsExactly("웃음", "찡그림", "화남", "삐짐", "수줍음", "집중");
+        assertThat(c.expressions()).containsExactly("삐짐", "행복", "경멸", "하품", "화남", "웃음", "수줍음", "집중");
         assertThat(c.world().lore()).extracting(CharacterContent.Lore::code).contains("pince", "library");
         assertThat(c.moves())
                 .extracting(CharacterContent.Move::code)
@@ -60,7 +60,7 @@ class CharacterContentTest {
                 .doesNotContain("callback");
         assertThat(c.habits()).containsEntry("흥", CharacterContent.NO_OPENING);
         assertThat(c.rules()).contains("정답을 물으면 정답"); // PM: 답 대신 힌트만 → 정답은 정답, 힌트는 힌트
-        assertThat(c.fallbackExpression("화남")).isEqualTo("찡그림");
+        assertThat(c.fallbackExpression("화남")).isEqualTo("화남"); // 8개 모두 에셋이 있어 대체 표정 없음
     }
 
     @Test
@@ -78,7 +78,8 @@ class CharacterContentTest {
         assertThat(contents.next(1, "BREAK", null, 4, session, "민수")
                         .orElseThrow()
                         .content())
-                .startsWith("쉬자. 오늘 진짜 열심히 했어");
+                .startsWith("쉬자.") // 단계 4 묶음 (두 줄 중 순서대로)
+                .doesNotContain("체력도 실력");
         // 강도 칸(AWAY_2)이 있으면 그 칸, 없는 상황은 빈 값 (공통 고정 대사로)
         assertThat(contents.next(1, "AWAY_2", "AWAY", 1, session, "민수")
                         .orElseThrow()
@@ -88,7 +89,7 @@ class CharacterContentTest {
         assertThat(contents.next(1, "GREETING", null, 1, session, "민수")
                         .orElseThrow()
                         .content())
-                .startsWith("뭐야, 민수.");
+                .startsWith("뭐야, 너."); // 단계 1은 이름을 부르지 않는다
     }
 
     @Test

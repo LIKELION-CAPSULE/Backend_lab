@@ -55,10 +55,12 @@ class SceneChatPipelineTest {
         assertThat(one.get("relation")).contains("단계 1").contains("이름은 부르지 않는다");
         assertThat(four.get("relation")).contains("단계 4 · 특별한 관계").contains("질투도 숨기지 않는다");
         // 말투 샘플은 그 단계 묶음만, {name}은 닉네임으로
-        assertThat(one.get("samples")).contains("…어. 왔으면 조용히 앉아.").doesNotContain("기다렸어");
-        assertThat(four.get("samples")).contains("민수, 왔구나. 기다렸어.").doesNotContain("왔으면 조용히 앉아");
+        assertThat(one.get("samples")).contains("…또 왔냐. 조용히 앉아.").doesNotContain("기다렸어");
+        assertThat(four.get("samples")).contains("민수, 왔구나. 기다렸어.").doesNotContain("조용히 앉아");
         // 상태 변화 예시: 단계 1은 PM 대사, 단계 4는 단계 4 대사. 순간 동작은 넣지 않는다
-        assertThat(one.get("events")).contains("(방금 일어난 일: 상황 AWAY) → 야 어디가?!");
+        assertThat(one.get("events"))
+                .contains("(방금 일어난 일: 상황 AWAY) → 야 어디가?!")
+                .contains("(방금 일어난 일: 상황 AWAY) → …말도 없이 가네."); // 상황마다 예시 두 줄
         assertThat(four.get("events")).contains("(방금 일어난 일: 상황 AWAY) → 어디 가? 빨리 와, 너 없으면 재미없단 말이야.");
         assertThat(four.get("events")).doesNotContain("DROWSY").doesNotContain("졸려");
     }
@@ -94,6 +96,8 @@ class SceneChatPipelineTest {
                 List.of(new ChatLine(ChatMessage.USER, "안녕"), new ChatLine(ChatMessage.CHARACTER, "아버지가 그러셨지. 공부나 해."));
         String card = card(input("오늘 뭐 해", history, List.of()), null);
         assertThat(card).doesNotContain("중간고사").doesNotContain("꺼낼 수 있는 기억");
+        assertThat(card).doesNotContain("말포이 오늘"); // 근황은 첫 대화와 쉬는 시간에만
+        assertThat(card(input("오늘 뭐 해", history, List.of(), true, false), null)).contains("말포이 오늘");
         assertThat(card).contains("\"아버지\" 쓰지 않기 (이번 세션에 이미 씀)");
     }
 
