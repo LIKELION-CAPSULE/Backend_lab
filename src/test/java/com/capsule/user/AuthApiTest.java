@@ -192,6 +192,14 @@ class AuthApiTest extends UserApiTestSupport {
     }
 
     @Test
+    void unknownSocialProviderWithoutTokenIs401() throws Exception {
+        // 공통 규칙: 토큰 없이 없는 경로를 부르면 404보다 401이 먼저
+        postJson("/api/auth/social/GOOGLE", kakaoBody("fake-kakao:x:y"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+    }
+
+    @Test
     void kakaoIgnoresLegacyTermsField() throws Exception {
         String code = "fake-kakao:%s:옛프론트".formatted(UUID.randomUUID());
         postJson("/api/auth/social/KAKAO", """
