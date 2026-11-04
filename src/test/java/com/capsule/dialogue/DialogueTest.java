@@ -191,7 +191,8 @@ class DialogueTest {
         String[][] cases = {
             {"DROWSY", "졸려? 기지개 한 번 켜고 하자.", "NEUTRAL"},
             {"YAWN", "하품했지? 물 한 모금 마시고 와.", "NEUTRAL"},
-            {"WAVE", "나도 안녕! 계속 해 보자.", "HAPPY"}
+            {"WAVE", "나도 안녕! 계속 해 보자.", "HAPPY"},
+            {"HEAD_TURN", "어디 봐? 여기 집중!", "NEUTRAL"}
         };
         long eventId = 20;
         for (String[] c : cases) {
