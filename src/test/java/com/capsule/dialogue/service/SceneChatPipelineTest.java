@@ -122,6 +122,7 @@ class SceneChatPipelineTest {
         CharacterContent assetFallback = new CharacterContent(
                 c.characterId(),
                 c.code(),
+                c.version(),
                 c.speaker(),
                 c.bible(),
                 c.rules(),

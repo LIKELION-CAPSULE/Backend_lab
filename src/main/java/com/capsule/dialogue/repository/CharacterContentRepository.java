@@ -36,28 +36,27 @@ public class CharacterContentRepository {
         this.jdbc = JdbcClient.create(jdbcTemplate);
     }
 
-    /** 이 캐릭터에 설정이 있는지 (어느 폴더에서 왔든) */
-    public boolean existsCharacter(long characterId) {
-        return jdbc.sql("SELECT count(*) FROM character_profiles WHERE character_id = ?")
-                        .param(characterId)
-                        .query(Integer.class)
-                        .single()
-                > 0;
+    /** 이 캐릭터에 붙은 설정의 폴더(code). 없으면 빈 값 */
+    public Optional<String> codeOf(long characterId) {
+        return jdbc.sql("SELECT code FROM character_profiles WHERE character_id = ?")
+                .param(characterId)
+                .query(String.class)
+                .optional();
     }
 
-    /** 이 콘텐츠 폴더(code)의 설정이 이미 들어갔는지 */
-    public boolean existsCode(String code) {
-        return jdbc.sql("SELECT count(*) FROM character_profiles WHERE code = ?")
-                        .param(code)
-                        .query(Integer.class)
-                        .single()
-                > 0;
+    /** 이 콘텐츠 폴더(code)에서 불러온 설정의 버전. 아직 안 들어갔으면 빈 값 */
+    public Optional<Integer> versionOf(String code) {
+        return jdbc.sql("SELECT content_version FROM character_profiles WHERE code = ?")
+                .param(code)
+                .query(Integer.class)
+                .optional();
     }
 
     @Transactional(readOnly = true)
     public Optional<CharacterContent> find(long characterId) {
         record Row(
                 String code,
+                int version,
                 String speaker,
                 String bible,
                 String rules,
@@ -69,13 +68,14 @@ public class CharacterContentRepository {
                 String breakStyle,
                 String samples) {}
         Optional<Row> profile = jdbc.sql("""
-                        SELECT code, speaker, bible, rules, safety, expressions,
+                        SELECT code, content_version, speaker, bible, rules, safety, expressions,
                                expression_fallbacks::text AS fallbacks, stage_tones::text AS tones, study_style, break_style,
                                samples::text AS samples
                         FROM character_profiles WHERE character_id = ?""")
                 .param(characterId)
                 .query((rs, n) -> new Row(
                         rs.getString("code"),
+                        rs.getInt("content_version"),
                         rs.getString("speaker"),
                         rs.getString("bible"),
                         rs.getString("rules"),
@@ -124,6 +124,7 @@ public class CharacterContentRepository {
         return Optional.of(new CharacterContent(
                 characterId,
                 p.code(),
+                p.version(),
                 p.speaker(),
                 p.bible(),
                 p.rules(),
@@ -139,7 +140,7 @@ public class CharacterContentRepository {
                 habits));
     }
 
-    /** 이 캐릭터의 설정을 통째로 바꾼다 (실험실 저장 · 시드) */
+    /** 이 캐릭터의 설정을 통째로 바꾼다 (실험실 저장 · 시드). 버전도 c.version()으로 */
     @Transactional
     public void replace(CharacterContent c) {
         long id = c.characterId();
@@ -149,13 +150,14 @@ public class CharacterContentRepository {
                 .update(); // 하위 행은 CASCADE
         jdbc.sql("""
                         INSERT INTO character_profiles
-                            (character_id, code, speaker, bible, rules, safety, expressions,
+                            (character_id, code, content_version, speaker, bible, rules, safety, expressions,
                              expression_fallbacks, stage_tones, study_style, break_style, samples)
-                        VALUES (?, ?, ?, ?, ?, ?, ARRAY(SELECT jsonb_array_elements_text(CAST(? AS jsonb))),
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ARRAY(SELECT jsonb_array_elements_text(CAST(? AS jsonb))),
                                 CAST(? AS jsonb), CAST(? AS jsonb), ?, ?, CAST(? AS jsonb))""")
                 .params(
                         id,
                         c.code(),
+                        c.version(),
                         c.speaker(),
                         c.bible(),
                         c.rules(),

@@ -142,9 +142,10 @@ class CharacterContentTest {
         CharacterContent edited = withBible(c, c.bible() + "\n- 실험: 모든 문장을 '흠'으로 끝낸다.");
         mvc.perform(put(API + "/1/content")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(LlmJson.write(edited)))
+                        .content(LlmJson.write(edited.withVersion(999))))
                 .andExpect(status().isOk());
         assertThat(contents.find(1).orElseThrow().bible()).endsWith("'흠'으로 끝낸다.");
+        assertThat(contents.find(1).orElseThrow().version()).isEqualTo(c.version()); // 실험실 저장은 버전을 바꾸지 않는다
 
         mvc.perform(post(API + "/reseed/malfoy")).andExpect(status().isOk());
         assertThat(contents.find(1).orElseThrow().bible()).doesNotContain("'흠'으로");
@@ -166,10 +167,33 @@ class CharacterContentTest {
         assertThat(repository.find(1).orElseThrow().bible()).isEqualTo(git.bible());
     }
 
+    @Test
+    void higherFileVersionReplacesTheDatabaseAtStartup() {
+        CharacterContent git = CharacterContentSeeder.load("malfoy", 1);
+        assertThat(git.version()).isPositive();
+        try {
+            // 공용 DB처럼 옛 버전이 들어가 있고 실험실에서 고친 값 → 파일 버전이 높으니 파일로 다시 불러옴
+            repository.replace(withBible(git, git.bible() + "\n- 옛 버전").withVersion(git.version() - 1));
+            assertThat(seeder.seed("malfoy", false)).contains(1L);
+            CharacterContent upgraded = repository.find(1).orElseThrow();
+            assertThat(upgraded.bible()).isEqualTo(git.bible());
+            assertThat(upgraded.version()).isEqualTo(git.version());
+
+            // 같은 버전이면 그대로 둔다 (실험실에서 고친 값 유지)
+            repository.replace(withBible(git, git.bible() + "\n- 같은 버전"));
+            assertThat(seeder.seed("malfoy", false)).isEmpty();
+            assertThat(repository.find(1).orElseThrow().bible()).endsWith("같은 버전");
+        } finally {
+            seeder.seed("malfoy", true); // 다른 테스트를 위해 git 값으로 되돌림
+            contents.evict(1);
+        }
+    }
+
     private static CharacterContent withBible(CharacterContent c, String bible) {
         return new CharacterContent(
                 c.characterId(),
                 c.code(),
+                c.version(),
                 c.speaker(),
                 bible,
                 c.rules(),

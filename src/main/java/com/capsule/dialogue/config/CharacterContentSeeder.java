@@ -29,9 +29,11 @@ import tools.jackson.databind.json.JsonMapper;
 
 /**
  * classpath:characters/<code>/의 처음 값(profile.yml)을 DB 캐릭터 설정으로 불러온다 (ADR 0022 결정 15).
- * DB에 그 캐릭터 설정(code)이 없을 때만 파일을 읽어 넣는다: 그 뒤로는 DB가 원본이고 실험실에서 고친다 (git 파일을 고쳐도 덮지 않음).
+ * 시작할 때 DB에 그 캐릭터 설정(code)이 없으면 넣고, 있으면 버전을 본다: profile.yml의 version이 DB의 content_version보다
+ * 높으면 파일로 다시 불러오고(실험실에서 고친 값은 덮임), 같거나 낮으면 그대로 둔다. 실험실 저장은 버전을 바꾸지 않으므로
+ * 문구를 git에서 고쳤으면 version을 올려야 공용 DB · 개발 서버에 들어간다 (그곳은 실험실 reseed가 꺼져 있다).
  * 붙을 characters 행(content 모듈)은 profile.yml의 characterName으로 찾는다 (id는 DB마다 다르다). 없으면 건너뛴다.
- * 다시 불러오려면 실험실 reseed. 파일이 깨졌거나 DB가 준비되지 않았어도 앱은 뜬다: 그 캐릭터만 건너뛰고(설정이 없으면 SIMPLE로 답함) 로그를 남긴다.
+ * 버전과 상관없이 다시 불러오려면 실험실 reseed. 파일이 깨졌거나 DB가 준비되지 않았어도 앱은 뜬다: 그 캐릭터만 건너뛰고(설정이 없으면 SIMPLE로 답함) 로그를 남긴다.
  */
 @Component
 public class CharacterContentSeeder implements ApplicationRunner {
@@ -44,6 +46,7 @@ public class CharacterContentSeeder implements ApplicationRunner {
 
     /** profile.yml 모양 */
     record ProfileFile(
+            Integer version,
             String characterName,
             String speaker,
             String safety,
@@ -85,12 +88,17 @@ public class CharacterContentSeeder implements ApplicationRunner {
     }
 
     /**
-     * @return 불러온 캐릭터 id. 이미 DB에 있거나(overwrite가 아닐 때) 붙을 캐릭터 행이 없으면 빈 값.
-     * overwrite(실험실 reseed)면 DB에 있어도 git의 처음 값으로 덮는다.
+     * @return 불러온 캐릭터 id. DB 버전이 파일 버전 이상이거나(overwrite가 아닐 때) 붙을 캐릭터 행이 없으면 빈 값.
+     * overwrite(실험실 reseed)면 버전과 상관없이 git 값으로 덮는다.
      */
     public Optional<Long> seed(String code, boolean overwrite) {
-        if (!overwrite && contents.existsCode(code)) return Optional.empty(); // DB가 원본: 파일을 읽지도 않는다
         ProfileFile p = profile(code);
+        int fileVersion = p.version() == null ? 0 : p.version();
+        Optional<Integer> dbVersion = contents.versionOf(code);
+        if (!overwrite && dbVersion.isPresent() && dbVersion.get() >= fileVersion) {
+            log.info("캐릭터 설정 {}은 그대로 둠 (DB 버전 {} ≥ 파일 버전 {})", code, dbVersion.get(), fileVersion);
+            return Optional.empty();
+        }
         if (p.characterName() == null || p.characterName().isBlank())
             throw new IllegalStateException("characters/" + code + "/profile.yml에 characterName이 없음");
         Optional<Long> id = characterIdOf(p.characterName());
@@ -99,12 +107,16 @@ public class CharacterContentSeeder implements ApplicationRunner {
             return Optional.empty();
         }
         // 그 캐릭터에 다른 폴더(code)의 설정이 이미 있으면 덮지 않는다: 실험실에서 고친 DB 원본을 지키려고
-        if (!overwrite && contents.existsCharacter(id.get())) {
-            log.warn("캐릭터 {}에 다른 설정이 이미 있어 {}을 불러오지 않음 (덮으려면 실험실 reseed)", id.get(), code);
+        Optional<String> attached = contents.codeOf(id.get());
+        if (!overwrite && attached.isPresent() && !attached.get().equals(code)) {
+            log.warn("캐릭터 {}에 다른 설정({})이 이미 있어 {}을 불러오지 않음 (덮으려면 실험실 reseed)", id.get(), attached.get(), code);
             return Optional.empty();
         }
         contents.replace(build(code, p, id.get()));
-        log.info("캐릭터 설정을 불러옴: {} → 캐릭터 {}", code, id.get());
+        if (overwrite) log.info("캐릭터 설정을 파일로 덮음 (reseed): {} 버전 {} → 캐릭터 {}", code, fileVersion, id.get());
+        else if (dbVersion.isPresent())
+            log.info("캐릭터 설정을 새 버전으로 다시 불러옴: {} 버전 {} → {} (캐릭터 {})", code, dbVersion.get(), fileVersion, id.get());
+        else log.info("캐릭터 설정을 불러옴: {} 버전 {} → 캐릭터 {}", code, fileVersion, id.get());
         return id;
     }
 
@@ -153,6 +165,7 @@ public class CharacterContentSeeder implements ApplicationRunner {
         return new CharacterContent(
                 characterId,
                 code,
+                p.version() == null ? 0 : p.version(),
                 p.speaker(),
                 p.bible().strip(),
                 p.rules().strip(),

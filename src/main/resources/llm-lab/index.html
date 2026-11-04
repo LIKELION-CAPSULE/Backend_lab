@@ -752,7 +752,7 @@ function characterTab() {
     view.replaceChildren(
       sec('기본',
         table(['항목', '값'], [
-          tr(['말하는 이름', c.speaker]), tr(['코드', c.code]), tr(['안전 기준', c.safety]),
+          tr(['말하는 이름', c.speaker]), tr(['코드', c.code]), tr(['버전 (profile.yml version, 저장해도 그대로)', c.version]), tr(['안전 기준', c.safety]),
           tr(['표정', join(c.expressions)]),
           tr(['대체 표정', Object.entries(c.expressionFallbacks || {}).map(([k, v]) => `${k} → ${v}`).join(', ')])])),
       sec('관계 단계별 관계 설명 (고정 블록, 지금 단계 것만)',
