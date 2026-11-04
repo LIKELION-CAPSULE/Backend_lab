@@ -2,7 +2,8 @@
 -- 반복 마이그레이션(R__): 내용이 바뀌면 다시 실행되므로 다시 실행해도 안전하게 쓴다
 -- 값은 api.md 예시(룸 1 · 캐릭터 1 · 기본 아바타). 캐릭터 1은 첫 캐릭터 말포이(PM 2026-11-04, 모델 · 이미지 주소는 그대로).
 --   화면 문구(성격 · 소개 · 룸 · 배경 이름)는 말포이 설정(characters/malfoy/profile.yml의 세계 · 바이블)에 맞춤
--- 이미지 주소는 가짜(.invalid). 실제 에셋은 정식 마이그레이션으로 따로 넣을 것
+-- 룸 1 썸네일 · 배경, 캐릭터 1 프로필은 프론트 에셋 전달본(2026-11-05)의 실제 이미지 (Supabase 버킷 live2d-model/images/,
+--   전달본 runtime/ 경로 그대로): 마법학교 포스터 · 촛불 도서관 배경 · 금발 채린 그림. 배포 DB는 정식 마이그레이션으로 따로 넣을 것
 -- 캐릭터 1 Live2D(모델 1)는 실제 에셋 (2026-11-05, Supabase 버킷 live2d-model의 chaerin/v1/, #9).
 --   CAPSULE_CDN_BASE_URL=https://<project-ref>.supabase.co/storage/v1/object/public/live2d-model 이면 그대로 열린다
 --   모션 파일은 없음 (api.md 19: 말포이 동작은 기본 동작뿐, motion은 보통 null). 반응은 표정만
@@ -63,19 +64,21 @@ ON CONFLICT (id) DO UPDATE SET model_id = EXCLUDED.model_id, name = EXCLUDED.nam
 
 INSERT INTO study_rooms (id, name, description, thumbnail_url, sort_order) OVERRIDING SYSTEM VALUE
 VALUES (1, '밤의 호그와트 도서관', '지기 싫어하는 슬리데린 라이벌 말포이와 촛불 아래에서 같이 공부해요.',
-        'https://cdn.capsule.invalid/room1.png', 1)
+        'https://belbmclzeenlntgpekww.supabase.co/storage/v1/object/public/live2d-model/images/auth-posters/fantasy.webp', 1)
 ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description,
     thumbnail_url = EXCLUDED.thumbnail_url, sort_order = EXCLUDED.sort_order;
 
 INSERT INTO room_backgrounds (id, room_id, name, image_url, is_default, sort_order) OVERRIDING SYSTEM VALUE
-VALUES (1, 1, '밤의 도서관', 'https://cdn.capsule.invalid/room1-bg.png', true, 1)
+VALUES (1, 1, '밤의 도서관',
+        'https://belbmclzeenlntgpekww.supabase.co/storage/v1/object/public/live2d-model/images/scenes/fantasy-background-v1.webp',
+        true, 1)
 ON CONFLICT (id) DO UPDATE SET room_id = EXCLUDED.room_id, name = EXCLUDED.name, image_url = EXCLUDED.image_url,
     is_default = EXCLUDED.is_default, sort_order = EXCLUDED.sort_order;
 
 INSERT INTO characters (id, room_id, model_id, name, personality, intro, profile_image_url, sort_order)
     OVERRIDING SYSTEM VALUE
 VALUES (1, 1, 1, '말포이', '{츤데레, 슬리데린 5학년, 라이벌}', '지기 싫어서 일부러 내 옆자리에 앉는 슬리데린 라이벌',
-        'https://cdn.capsule.invalid/chaerin.png', 1)
+        'https://belbmclzeenlntgpekww.supabase.co/storage/v1/object/public/live2d-model/images/characters/kang-study.webp', 1)
 ON CONFLICT (id) DO UPDATE SET room_id = EXCLUDED.room_id, model_id = EXCLUDED.model_id, name = EXCLUDED.name,
     personality = EXCLUDED.personality, intro = EXCLUDED.intro, profile_image_url = EXCLUDED.profile_image_url,
     sort_order = EXCLUDED.sort_order;

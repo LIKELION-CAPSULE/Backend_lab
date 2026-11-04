@@ -91,7 +91,12 @@ class ContentTest {
         assertThat(room.characters()).extracting(CharacterInfo::name).containsExactly("말포이");
 
         assertThat(roomQuery.defaultBackground(1))
-                .contains(new BackgroundInfo(1, 1, "밤의 도서관", "https://cdn.capsule.invalid/room1-bg.png"));
+                .contains(
+                        new BackgroundInfo(
+                                1,
+                                1,
+                                "밤의 도서관",
+                                "https://belbmclzeenlntgpekww.supabase.co/storage/v1/object/public/live2d-model/images/scenes/fantasy-background-v1.webp"));
         assertThat(roomQuery.find(999)).isEmpty();
     }
 
