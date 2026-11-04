@@ -1,6 +1,6 @@
 # 배포(운영) 프로필. DB는 Supabase PostgreSQL, 정적 파일은 Supabase Storage 공개 버킷 (ADR 0016)
 # 비밀값 없음. 값은 전부 배포 환경의 시크릿(환경변수)으로 받고, 기본값을 두지 않아 빠지면 시작할 때 바로 실패한다
-# 아직 이 프로필만으로는 앱이 뜨지 않는다: 실제 메일 클라이언트가 없음 (ADR 0016 '남은 일'). 카카오는 HttpKakaoClient
+# 카카오는 HttpKakaoClient, 인증 메일은 BrevoEmailSender(ADR 0020)
 spring:
   datasource:
     # Supabase Connect > Type: JDBC, Method: Session pooler(포트 5432) 주소에 ?sslmode=require
@@ -19,6 +19,10 @@ capsule:
     base-url: ${CAPSULE_CDN_BASE_URL}
   cors:
     allowed-origins: ${CAPSULE_CORS_ORIGINS} # 비면 모든 프론트 요청이 조용히 막히므로 운영에서는 필수
+  brevo:
+    key: ${CAPSULE_BREVO_KEY} # Brevo > SMTP & API > API Keys. 빠지면 시작 실패 (ADR 0020)
+  mail:
+    from: ${CAPSULE_MAIL_FROM} # Brevo에서 인증한 보내는 사람 이메일
   kakao:
     rest-api-key: ${CAPSULE_KAKAO_REST_API_KEY} # 카카오 디벨로퍼스 > 앱 키 > REST API 키
     client-secret: ${CAPSULE_KAKAO_CLIENT_SECRET:} # 콘솔에서 Client Secret을 '사용함'으로 켰을 때만. 켰는데 비우면 로그인이 500(KOE010)
