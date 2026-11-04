@@ -112,6 +112,7 @@ tr.sub>td{background:var(--bg);padding:8px}
   <button data-tab="prompts">프롬프트</button>
   <button data-tab="eval">평가</button>
   <button data-tab="usage">호출 기록</button>
+  <button data-tab="character">캐릭터 설정</button>
 </nav>
 <main>
   <section class="tab" id="tab-chat"></section>
@@ -119,6 +120,7 @@ tr.sub>td{background:var(--bg);padding:8px}
   <section class="tab" id="tab-prompts" hidden></section>
   <section class="tab" id="tab-eval" hidden></section>
   <section class="tab" id="tab-usage" hidden></section>
+  <section class="tab" id="tab-character" hidden></section>
 </main>
 <div id="toasts" class="toasts"></div>
 <script>
@@ -768,6 +770,73 @@ function usageTab() {
   };
 }
 
+/* ---------- 6. 캐릭터 설정 (DB의 세계관 · 캐릭터, ADR 0022 결정 15) ---------- */
+function characterTab() {
+  const ch = charSel(), view = h('div', null, muted('캐릭터를 고르고 불러오기')), json = h('textarea', {class: 'mono big', spellcheck: false});
+  let current = null;
+  const join = xs => (xs || []).join(', ');
+  const text = t => h('div', {class: 'pre'}, t || '—');
+  const sec = (title, ...body) => h('details', {class: 'card', open: true}, h('summary', null, title), body);
+  function render(c) {
+    const w = c.world || {};
+    view.replaceChildren(
+      sec('기본',
+        table(['항목', '값'], [
+          tr(['말하는 이름', c.speaker]), tr(['코드', c.code]), tr(['안전 기준', c.safety]),
+          tr(['표정', join(c.expressions)]),
+          tr(['대체 표정', Object.entries(c.expressionFallbacks || {}).map(([k, v]) => `${k} → ${v}`).join(', ')])])),
+      sec('관계 단계 말투 (장면 카드 · 반응 카드에 한 줄)',
+        table(['단계부터', '말투'], Object.entries(c.stageTones || {}).map(([k, v]) => tr([k, v])))),
+      sec('공부 중 · 쉬는 시간 (장면 카드 맨 끝 \'지금:\' 줄)',
+        h('h4', null, '공부 중 (study_style)'), text(c.studyStyle), h('h4', null, '쉬는 시간 (break_style)'), text(c.breakStyle)),
+      sec('바이블 (고정 블록)', text(c.bible)),
+      sec('절대 규칙 (고정 블록)', text(c.rules)),
+      sec(`세계: ${w.name || ''}`, text(w.setting),
+        h('h4', null, `세계 지식 ${(w.lore || []).length}장 (키워드가 맞으면 한 턴에 최대 4장)`),
+        table(['코드', '제목', '키워드', '본문'], (w.lore || []).map(l => tr([l.code, l.title, join(l.keywords), l.body]))),
+        h('h4', null, `세계 사건 ${(w.events || []).length}개 (공부 중 15% · 쉬는 시간 30%)`),
+        table(['코드', '사건', '어울리는 반응', '같이 꺼낼 지식', '빈도'], (w.events || []).map(e => tr([e.code, e.text, e.hook, e.loreCode, e.weight])))),
+      sec(`대화 기술 ${(c.moves || []).length}개 (한 턴에 하나 + 예시 2개)`,
+        table(['코드', '이름', '쓰는 법', '어울리는 말', '쓰는 때', '예시'], (c.moves || []).map(m => tr([m.code, m.name, m.how,
+          join(m.signals) || '평소', join(m.modes) || '언제나',
+          h('div', null, (m.examples || []).map(e => h('div', {class: 'small'}, `사용자: ${e.user} → ${e.reply}`)))])))),
+      sec(`미리 쓴 대사 ${(c.lines || []).length}줄 (순간 동작은 그대로, 상태 변화는 AI 예시 · 5초 대체)`,
+        table(['상황', '단계부터', '순서', '대사', '표정'], (c.lines || []).map(l => tr([l.situation, l.minStage, l.sort, l.text, l.expression])))),
+      sec('대화 점수표',
+        table(['말의 종류', '점수', '감점 %', '세션 1번', '반복 시'], Object.entries(c.scores || {}).map(([k, s]) => tr([k, s.points, s.lossPercent || '', s.oncePerSession ? '예' : '', s.repeatPoints])))),
+      sec('피할 말버릇',
+        table(['말', '규칙'], Object.entries(c.habits || {}).map(([k, v]) => tr([k, v === 'NO_OPENING' ? '첫마디 금지' : v === 'ONCE_PER_SESSION' ? '세션에 한 번' : v])))));
+  }
+  async function load() {
+    current = await api('GET', `/characters/${ch.value}/content`);
+    render(current);
+    json.value = JSON.stringify(current, null, 2);
+  }
+  const loadBtn = h('button', {class: 'primary', onclick: () => busy(loadBtn, load)}, '불러오기');
+  const saveBtn = h('button', {class: 'primary', onclick: () => busy(saveBtn, async () => {
+    let body;
+    try { body = JSON.parse(json.value); } catch (e) { throw fail({code: 'JSON', message: 'JSON 형식이 틀렸어요', detail: String(e)}); }
+    await api('PUT', `/characters/${ch.value}/content`, body);
+    toast('저장했어요. 다음 대화부터 반영 (캐시 30초)', 'ok');
+    await load();
+  })}, '저장');
+  const reseed = confirmBtn('git 처음 값으로 되돌리기', async () => {
+    if (!current) throw fail({code: 'EMPTY', message: '먼저 불러오기'});
+    await api('POST', `/characters/reseed/${current.code}`);
+    toast('처음 값(characters/' + current.code + ')으로 되돌렸어요', 'ok');
+    await load();
+  });
+  return {
+    el: h('div', null,
+      h('div', {class: 'card'}, h('div', {class: 'row'}, field('캐릭터', ch), loadBtn, h('span', {class: 'grow'}),
+        muted('DB가 원본. 처음 값은 git의 characters/<코드>/profile.yml'))),
+      view,
+      h('details', {class: 'card'}, h('summary', null, '고치기 (JSON 전체, 저장하면 DB에 바로)'), json,
+        h('div', {class: 'acts'}, saveBtn, reseed))),
+    show: () => { if (!current) busy(null, load); },
+  };
+}
+
 /* ---------- 머리줄 · 시작 ---------- */
 function header() {
   const m = META;
@@ -795,7 +864,7 @@ async function init() {
   }
   header();
   if (META.tokenRequired && !TOKEN) askToken();
-  const makers = {chat: chatTab, play: playTab, prompts: promptsTab, eval: evalTab, usage: usageTab};
+  const makers = {chat: chatTab, play: playTab, prompts: promptsTab, eval: evalTab, usage: usageTab, character: characterTab};
   for (const k in makers) { TABS[k] = makers[k](); $('#tab-' + k).replaceChildren(TABS[k].el); }
   const k = location.hash.slice(1);
   showTab(TABS[k] ? k : 'chat');
