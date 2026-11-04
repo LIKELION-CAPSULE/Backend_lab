@@ -41,12 +41,19 @@ class SceneChatPipeline implements ChatPipeline {
     private final PromptService prompts;
     private final CharacterContents contents;
     private final SimpleChatPipeline generic;
+    private final FactPicker factPicker;
 
-    SceneChatPipeline(LlmGateway llm, PromptService prompts, CharacterContents contents, SimpleChatPipeline generic) {
+    SceneChatPipeline(
+            LlmGateway llm,
+            PromptService prompts,
+            CharacterContents contents,
+            SimpleChatPipeline generic,
+            FactPicker factPicker) {
         this.llm = llm;
         this.prompts = prompts;
         this.contents = contents;
         this.generic = generic;
+        this.factPicker = factPicker;
     }
 
     @Override
@@ -70,7 +77,8 @@ class SceneChatPipeline implements ChatPipeline {
         vars.put("worldSetting", c.world().setting());
         vars.put("expressions", String.join(", ", c.expressions()));
 
-        Scene scene = scene(c, in, ThreadLocalRandom.current().nextDouble() < EVENT_CHANCE);
+        String fact = factPicker.pick(in, ctx).orElse(null); // 아는 사실은 결정 모델이 고른 하나만 (없으면 안 넣음)
+        Scene scene = scene(c, in, fact, ThreadLocalRandom.current().nextDouble() < EVENT_CHANCE);
         List<Llm.SystemBlock> blocks = List.of(
                 new Llm.SystemBlock(PromptService.render(system.body(), vars), true),
                 new Llm.SystemBlock(scene.card(), false));
@@ -92,6 +100,7 @@ class SceneChatPipeline implements ChatPipeline {
         trace.put("move", scene.move() == null ? null : scene.move().code());
         trace.put("lore", scene.lore().stream().map(Lore::code).toList());
         trace.put("event", scene.event() == null ? null : scene.event().code());
+        trace.put("fact", fact);
         trace.put("scene", scene.card());
         trace.put("raw", r.text());
         return ChatOutcome.of(reply.strip(), emotion, null, trace);
@@ -100,7 +109,7 @@ class SceneChatPipeline implements ChatPipeline {
     record Scene(String card, Move move, List<Lore> lore, Event event) {}
 
     /** 이번 턴에 쓸 것만 고른다. 장면 카드는 매 턴 수십 줄 */
-    static Scene scene(CharacterContent c, ChatInput in, boolean eventHappens) {
+    static Scene scene(CharacterContent c, ChatInput in, String fact, boolean eventHappens) {
         SignalType signal = ChatScorer.detect(in.userMessage());
         Event event = eventHappens ? pickEvent(c.world().events()) : null;
         String hay = in.userMessage() + " "
@@ -119,9 +128,9 @@ class SceneChatPipeline implements ChatPipeline {
         if (!lore.isEmpty())
             L.add("<세계 지식>\n" + lore.stream().map(l -> "- " + l.body()).collect(Collectors.joining("\n"))
                     + "\n</세계 지식>");
-        // 기억 세 겹은 전부 넣는다 (ADR 0022 결정 14): 아는 사실 최대 20개 · 세션 카드 최근 5장 · 원문 20줄(메시지).
-        // 크기가 정해져 있어 다 넣어도 1천 자 남짓. 쓸지 말지는 답장 모델이 정한다 (시스템 블록 <읽는 법>)
-        if (!in.facts().isEmpty()) L.add("<아는 사실>\n- " + String.join("\n- ", in.facts()) + "\n</아는 사실>");
+        // 기억 (ADR 0022 결정 16): 아는 사실은 결정 모델이 이번 말에 맞춰 고른 하나만, 세션 카드는 최근 recap-max(2)장,
+        // 이번 세션 원문은 메시지로 최근 15줄. 프롬프트가 길수록 지시를 덜 따르므로 작게 둔다
+        if (fact != null) L.add("<꺼낼 수 있는 기억> " + fact + " (자연스러울 때만, 단정하지 말고)");
         if (in.summary() != null && !in.summary().isBlank())
             L.add("<지난 세션 흐름 (최근 것이 아래)>\n" + in.summary() + "\n</지난 세션 흐름>");
         // 사용자 일정은 공부 시작(이 세션 첫 대화)에만 (PM 확정: 시작과 끝에만)

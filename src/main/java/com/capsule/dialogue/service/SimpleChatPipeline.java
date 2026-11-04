@@ -25,18 +25,21 @@ import tools.jackson.databind.JsonNode;
 @Component
 class SimpleChatPipeline implements ChatPipeline {
 
-    // TODO(judgment): J-05 LLM에 넘길 대화 수. 지금은 추천안(최근 20개)
-    static final int HISTORY_LIMIT = 20;
+    // TODO(judgment): J-05 LLM에 넘길 대화 수 (승희 2026-11-04: 15줄. 프롬프트가 길수록 지시를 덜 따름)
+    static final int HISTORY_LIMIT = 15;
 
     private final LlmGateway llm;
     private final PromptService prompts;
     private final DialogueProperties props;
+    private final FactPicker factPicker;
     private final Clock clock;
 
-    SimpleChatPipeline(LlmGateway llm, PromptService prompts, DialogueProperties props, Clock clock) {
+    SimpleChatPipeline(
+            LlmGateway llm, PromptService prompts, DialogueProperties props, FactPicker factPicker, Clock clock) {
         this.llm = llm;
         this.prompts = prompts;
         this.props = props;
+        this.factPicker = factPicker;
         this.clock = clock;
     }
 
@@ -56,7 +59,8 @@ class SimpleChatPipeline implements ChatPipeline {
         vars.put("nickname", in.nickname());
         vars.put("relationLevel", "Lv." + in.relationLevel());
         vars.put("summary", PromptVars.orNone(in.summary(), "없음 (처음 만남)"));
-        vars.put("facts", in.facts().isEmpty() ? "없음" : "- " + String.join("\n- ", in.facts()));
+        // 아는 사실은 결정 모델이 이번 말에 맞춰 고른 하나만 (ADR 0022 결정 16)
+        vars.put("facts", factPicker.pick(in, ctx).map(f -> "- " + f).orElse("없음"));
         vars.put("memories", in.memories().isEmpty() ? "없음" : "- " + String.join("\n- ", in.memories()));
 
         List<Llm.SystemBlock> system = List.of(

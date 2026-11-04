@@ -1262,11 +1262,12 @@ GET /api/me/memories?date=2026-11-12
 #### 서버가 하는 일
 
 1. 사용자 메시지 저장 (`chat_messages`)
-2. LLM: 캐릭터 설정 + 캐릭터가 아는 사실(최대 20개) + 지난 세션 흐름(최근 5장) + 이번 세션 대화(최근 20줄) + 일정 → 답장 + 감정
-3. 감정에 맞는 모션 · 표정을 `live2d_reaction_maps`에서 고름
-4. 말의 종류(`chat_messages.signal`) → 점수 → 0~100에서 실제로 바뀐 만큼 `relation_logs`(CHAT, `request_id`, `signal`)에 기록
-5. 5초 넘으면 대체 대사 + `fallback: true`, 호감도 변화 없음
-6. 답장을 보낸 뒤 따로: 이번 말에서 기억할 것을 결정 모델이 고름 (무시 · 추가 · 고치기 · 지우기) → `character_memories`. 20개를 넘으면 가장 덜 중요한 하나를 버림. 전화번호 같은 긴 숫자는 저장하지 않음
+2. 결정 모델: 캐릭터가 아는 사실(최대 20개) + "선택 안 함" 중 이번 말에 꺼낼 사실 하나를 고름 (1.5초 안에 못 고르면 선택 안 함)
+3. LLM: 캐릭터 설정 + 고른 사실 하나(있을 때만) + 지난 세션 흐름(최근 2장) + 이번 세션 대화(최근 15줄) + 일정(세션 첫 대화만) → 답장 + 감정
+4. 감정에 맞는 모션 · 표정을 `live2d_reaction_maps`에서 고름
+5. 말의 종류(`chat_messages.signal`) → 점수 → 0~100에서 실제로 바뀐 만큼 `relation_logs`(CHAT, `request_id`, `signal`)에 기록
+6. 5초 넘으면 대체 대사 + `fallback: true`, 호감도 변화 없음
+7. 답장을 보낸 뒤 따로: 이번 말에서 기억할 것을 결정 모델이 고름 (무시 · 추가 · 고치기 · 지우기) → `character_memories`. 20개를 넘으면 가장 덜 중요한 하나를 버림. 전화번호 같은 긴 숫자는 저장하지 않음
 
 #### 규칙
 
@@ -1402,7 +1403,7 @@ json
 1. `ended_at IS NULL`일 때만 종료 (두 번 눌러도 한 번만 정산)
 2. 받은 값 검증: `0 ≤ presentSeconds ≤ studySeconds ≤ (종료 시각 − 시작 시각)` → 통과하면 `focus_seconds` · `distract_seconds` 저장, `RETURN` 이벤트 수로 `return_count` 저장
 3. 함께한 시간 누적(`total_study_seconds` · `total_present_seconds`) → 레벨 갱신, `relation_settlements`에 이 세션 레벨 전후 저장 (호감도는 바꾸지 않음)
-4. 이번 세션 대화를 흐름 카드 한 장으로 써서 `conversation_recaps`에 저장(최근 5장만 남김)하고 `chat_messages` 삭제. 카드 앞에 날짜 · 공부 시간을 붙임 (예: "11/03 55분, …")
+4. 이번 세션 대화를 흐름 카드 한 장으로 써서 `conversation_recaps`에 저장(최근 2장만 남김)하고 `chat_messages` 삭제. 카드 앞에 날짜 · 공부 시간을 붙임 (예: "11/03 55분, …")
 5. 완료 대사(`closingLine`)를 만들어 `study_sessions.closing_line`에 저장
 6. LLM이 실패하거나 5초를 넘겨도 종료는 성공: 카드를 못 쓰면 메시지를 지우지 않고 남김 → 다음 종료 때 그 세션 카드에 같이 들어감. 완료 대사는 고정 문구
 

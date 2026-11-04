@@ -620,8 +620,8 @@ class DialogueTest {
                 conversationId,
                 earlier,
                 UUID.randomUUID());
-        // 카드는 최근 5장만 남는다
-        for (long s = 1; s <= 5; s++) {
+        // 카드는 최근 recap-max(2)장만 남는다
+        for (long s = 1; s <= 3; s++) {
             jdbc.update(
                     "INSERT INTO conversation_recaps (conversation_id, session_id, content) VALUES (?, ?, ?)",
                     conversationId,
@@ -637,7 +637,7 @@ class DialogueTest {
                 "SELECT content FROM conversation_recaps WHERE conversation_id = ? ORDER BY id DESC",
                 String.class,
                 conversationId);
-        assertThat(cards).hasSize(5).doesNotContain("옛 카드 1");
+        assertThat(cards).hasSize(2).containsExactly(cards.getFirst(), "옛 카드 3");
         // 머리말(날짜 · 공부 시간)은 코드가 붙인다. Fake 요약은 입력 앞부분을 돌려준다
         assertThat(cards.getFirst()).matches("\\d{2}/\\d{2} 55분, \\(가짜 요약\\) <아는 사실>.*");
         assertThat(jdbc.queryForObject(

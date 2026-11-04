@@ -37,7 +37,10 @@ class SceneChatPipelineTest {
     @Test
     void sceneCardCarriesOnlyWhatThisTurnNeeds() {
         String card = SceneChatPipeline.scene(
-                        MALFOY, input("사서 핀스 부인 지나갔어", List.of(), List.of("사용자는 토익 800 목표", "사용자는 밤에 공부가 잘 됨")), false)
+                        MALFOY,
+                        input("사서 핀스 부인 지나갔어", List.of(), List.of("사용자는 토익 800 목표", "사용자는 밤에 공부가 잘 됨")),
+                        "사용자는 토익 800 목표",
+                        false)
                 .card();
         assertThat(card).contains("핀스 부인: 깐깐한 도서관 사서"); // 키워드가 맞는 지식 카드만
         assertThat(card).doesNotContain("퀴디치"); // 안 맞는 카드는 안 들어감
@@ -45,44 +48,25 @@ class SceneChatPipelineTest {
         assertThat(card).contains("시험: 중간고사"); // 세션 첫 대화에만 일정
         assertThat(card).contains("\"흥\"로 말을 시작하지 않기"); // 말버릇은 데이터
         assertThat(card).contains("이번 대화 기술: ");
-        // 기억 세 겹은 전부 (아는 사실 · 세션 카드). 원문 20줄은 메시지로 따로 간다
-        assertThat(card).contains("사용자는 토익 800 목표", "사용자는 밤에 공부가 잘 됨");
+        // 아는 사실은 결정 모델이 고른 하나만, 고르지 않은 사실은 안 들어감. 세션 카드는 들어감
+        assertThat(card).contains("<꺼낼 수 있는 기억> 사용자는 토익 800 목표");
+        assertThat(card).doesNotContain("밤에 공부가 잘 됨");
         assertThat(card).contains("11/03 55분, 3단원 하다 일찍 끝냄");
     }
 
     @Test
-    void allTwentyFactsAndFiveCardsFit() {
-        List<String> facts = java.util.stream.IntStream.rangeClosed(1, 20)
-                .mapToObj(i -> "사용자에 대한 사실 " + i + "번은 사십 자 정도 되는 꽤 긴 한 줄짜리 기억이다")
-                .toList();
-        ChatInput base = input("오늘 뭐 해", List.of(), facts);
-        String cards = String.join(
-                "\n",
-                java.util.stream.IntStream.rangeClosed(1, 5)
-                        .mapToObj(i -> "11/0" + i + " 55분, 지난번엔 3단원 하다 지쳐서 일찍 끝냈고 놀렸더니 삐짐")
-                        .toList());
-        ChatInput in = new ChatInput(
-                base.character(),
-                base.nickname(),
-                base.relationLevel(),
-                cards,
-                facts,
-                base.memories(),
-                base.history(),
-                base.userMessage(),
-                null,
-                Map.of(),
-                EngineOptions.DEFAULT);
-        String card = SceneChatPipeline.scene(MALFOY, in, false).card();
-        assertThat(card).contains("사실 1번", "사실 20번", "11/01", "11/05");
-        assertThat(card.length()).isLessThan(3_000); // 다 넣어도 장면 카드는 작다
+    void noPickedFactMeansNoMemoryBlock() {
+        String card = SceneChatPipeline.scene(
+                        MALFOY, input("오늘 뭐 해", List.of(), List.of("사용자는 토익 800 목표")), null, false)
+                .card();
+        assertThat(card).doesNotContain("꺼낼 수 있는 기억").doesNotContain("토익");
     }
 
     @Test
     void scheduleOnlyOnFirstTurnAndOncePerSessionHabit() {
         List<ChatLine> history =
                 List.of(new ChatLine(ChatMessage.USER, "안녕"), new ChatLine(ChatMessage.CHARACTER, "아버지가 그러셨지. 공부나 해."));
-        String card = SceneChatPipeline.scene(MALFOY, input("오늘 뭐 해", history, List.of()), false)
+        String card = SceneChatPipeline.scene(MALFOY, input("오늘 뭐 해", history, List.of()), null, false)
                 .card();
         assertThat(card).doesNotContain("중간고사");
         assertThat(card).contains("\"아버지\" 쓰지 않기 (이번 세션에 이미 씀)");
