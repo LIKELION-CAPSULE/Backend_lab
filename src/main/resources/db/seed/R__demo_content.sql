@@ -3,33 +3,55 @@
 -- 값은 api.md 예시(룸 1 · 캐릭터 1 · 기본 아바타). 캐릭터 1은 첫 캐릭터 말포이(PM 2026-11-04, 모델 · 이미지 주소는 그대로).
 --   화면 문구(성격 · 소개 · 룸 · 배경 이름)는 말포이 설정(characters/malfoy/profile.yml의 세계 · 바이블)에 맞춤
 -- 이미지 주소는 가짜(.invalid). 실제 에셋은 정식 마이그레이션으로 따로 넣을 것
+-- 캐릭터 1 Live2D(모델 1)는 실제 에셋 (2026-11-05, Supabase 버킷 live2d-model의 chaerin/v1/, #9).
+--   CAPSULE_CDN_BASE_URL=https://<project-ref>.supabase.co/storage/v1/object/public/live2d-model 이면 그대로 열린다
+--   모션 파일은 없음 (api.md 19: 말포이 동작은 기본 동작뿐, motion은 보통 null). 반응은 표정만
+
+-- 옛 가짜 모션 · 반응 행을 지우고 다시 넣는다 (반복 마이그레이션이라 이미 들어간 DB에도 맞춰지게)
+DELETE FROM live2d_reaction_maps WHERE model_id = 1;
+DELETE FROM live2d_motions WHERE model_id = 1;
 
 INSERT INTO live2d_models (id, storage_prefix, model_json_path, scale, offset_x, offset_y) OVERRIDING SYSTEM VALUE
-VALUES (1, 'live2d/chaerin/v1/', 'chaerin.model3.json', 1.00, 0, 12),
+VALUES (1, 'chaerin/v1/', 'chaerin.model3.json', 1.00, 0, 12),
        (2, 'live2d/avatar1/v1/', 'avatar1.model3.json', 1.00, 0, 0)
 ON CONFLICT (id) DO UPDATE SET storage_prefix = EXCLUDED.storage_prefix, model_json_path = EXCLUDED.model_json_path,
     scale = EXCLUDED.scale, offset_x = EXCLUDED.offset_x, offset_y = EXCLUDED.offset_y;
 
-INSERT INTO live2d_motions (id, model_id, group_name, name, file_path) OVERRIDING SYSTEM VALUE
-VALUES (1, 1, 'Idle', '두리번거리기', 'motions/look_around.motion3.json'),
-       (2, 1, 'TapBody', '손 흔들기', 'motions/wave.motion3.json')
-ON CONFLICT (id) DO UPDATE SET model_id = EXCLUDED.model_id, group_name = EXCLUDED.group_name,
-    name = EXCLUDED.name, file_path = EXCLUDED.file_path;
-
+-- 표정 8개: 이름 = 감정 이름 (api.md 19 말포이 표정 목록, 디자이너 파일 expression1~8 순서)
 INSERT INTO live2d_expressions (id, model_id, name, file_path) OVERRIDING SYSTEM VALUE
-VALUES (1, 1, '삐짐', 'exp/pout.exp3.json'),
-       (2, 1, '웃음', 'exp/smile.exp3.json')
+VALUES (1, 1, '삐짐', 'exp/expression1.exp3.json'),
+       (2, 1, '행복', 'exp/expression2.exp3.json'),
+       (3, 1, '경멸', 'exp/expression3.exp3.json'),
+       (4, 1, '하품', 'exp/expression4.exp3.json'),
+       (5, 1, '화남', 'exp/expression5.exp3.json'),
+       (6, 1, '웃음', 'exp/expression6.exp3.json'),
+       (7, 1, '수줍음', 'exp/expression7.exp3.json'),
+       (8, 1, '집중', 'exp/expression8.exp3.json')
 ON CONFLICT (id) DO UPDATE SET model_id = EXCLUDED.model_id, name = EXCLUDED.name, file_path = EXCLUDED.file_path;
 
--- trigger는 api.md 19의 서버 enum (GREETING · AWAY · RETURN · BREAK · BREAK_END)
+-- trigger: 18 응답의 '알아채는' 동작(상태 · 동작 이벤트) + 19 · 20의 감정 이름 (schema.sql live2d_reaction_maps)
+-- 이벤트별 표정은 예시값 (실제 연출은 정식 시드 #19에서)
 INSERT INTO live2d_reaction_maps (id, model_id, trigger_type, intensity, motion_id, expression_id) OVERRIDING SYSTEM VALUE
-VALUES (1, 1, 'GREETING', NULL, 2, 2),
-       (2, 1, 'AWAY', 1, 1, NULL),
-       (3, 1, 'AWAY', 2, 1, 1),
+VALUES (1, 1, 'GREETING', NULL, NULL, 6),
+       (2, 1, 'AWAY', 1, NULL, 3),
+       (3, 1, 'AWAY', 2, NULL, 1),
        (4, 1, 'AWAY', 3, NULL, 1),
-       (5, 1, 'RETURN', NULL, NULL, 2),
-       (6, 1, 'BREAK', NULL, 2, NULL),
-       (7, 1, 'BREAK_END', NULL, NULL, 2)
+       (5, 1, 'RETURN', NULL, NULL, 6),
+       (6, 1, 'BREAK', NULL, NULL, 2),
+       (7, 1, 'BREAK_END', NULL, NULL, 8),
+       (8, 1, 'DROWSY', NULL, NULL, 4),
+       (9, 1, 'YAWN', NULL, NULL, 4),
+       (10, 1, 'WAVE', NULL, NULL, 6),
+       (11, 1, 'HEAD_TURN', NULL, NULL, 3),
+       -- 감정 이름 → 같은 이름의 표정 (19 · 20, #9)
+       (12, 1, '삐짐', NULL, NULL, 1),
+       (13, 1, '행복', NULL, NULL, 2),
+       (14, 1, '경멸', NULL, NULL, 3),
+       (15, 1, '하품', NULL, NULL, 4),
+       (16, 1, '화남', NULL, NULL, 5),
+       (17, 1, '웃음', NULL, NULL, 6),
+       (18, 1, '수줍음', NULL, NULL, 7),
+       (19, 1, '집중', NULL, NULL, 8)
 ON CONFLICT (id) DO UPDATE SET model_id = EXCLUDED.model_id, trigger_type = EXCLUDED.trigger_type,
     intensity = EXCLUDED.intensity, motion_id = EXCLUDED.motion_id, expression_id = EXCLUDED.expression_id;
 
