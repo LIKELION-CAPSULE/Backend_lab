@@ -49,6 +49,21 @@ class BrevoEmailSenderTest {
     }
 
     @Test
+    void sendsPasswordResetLink() {
+        BrevoEmailSender sender = new BrevoEmailSender(builder, "brevo-key", "capsule.team@example.com");
+        String link = "https://front.example.com/password/reset?token=pr_abc";
+        brevo.expect(requestTo(BrevoEmailSender.SEND_URL))
+                .andExpect(jsonPath("$.to[0].email").value("user@example.com"))
+                .andExpect(jsonPath("$.subject").value("[캡슐] 비밀번호 재설정"))
+                .andExpect(jsonPath("$.textContent").value(org.hamcrest.Matchers.containsString(link)))
+                .andRespond(withStatus(HttpStatus.CREATED));
+
+        sender.sendPasswordResetLink("user@example.com", link);
+
+        brevo.verify();
+    }
+
+    @Test
     void wrongKeyIsServerError() {
         BrevoEmailSender sender = new BrevoEmailSender(builder, "wrong-key", "capsule.team@example.com");
         brevo.expect(requestTo(BrevoEmailSender.SEND_URL))

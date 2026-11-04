@@ -11,10 +11,12 @@ import com.capsule.user.dto.KakaoResponse;
 import com.capsule.user.dto.Login;
 import com.capsule.user.dto.LoginRequest;
 import com.capsule.user.dto.LoginResponse;
+import com.capsule.user.dto.PasswordResetRequest;
 import com.capsule.user.dto.SignupRequest;
 import com.capsule.user.dto.TermsResponse;
 import com.capsule.user.dto.VerificationResponse;
 import com.capsule.user.service.AuthService;
+import com.capsule.user.service.PasswordResetService;
 import com.capsule.user.service.TokenService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -28,17 +30,33 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-/** api.md 1~7, 24 */
+/** api.md 1~7, 24~26 */
 @RestController
 @Tag(name = ApiTags.AUTH)
 class AuthController {
 
     private final AuthService auth;
     private final TokenService tokens;
+    private final PasswordResetService passwordReset;
 
-    AuthController(AuthService auth, TokenService tokens) {
+    AuthController(AuthService auth, TokenService tokens, PasswordResetService passwordReset) {
         this.auth = auth;
         this.tokens = tokens;
+        this.passwordReset = passwordReset;
+    }
+
+    @Operation(summary = "25. 비밀번호 재설정 메일 요청", description = "이메일로 비밀번호 재설정 링크 발송. 가입 여부와 상관없이 같은 응답 (명세: api.md 25)")
+    @PostMapping("/api/auth/password/reset-request")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    void requestPasswordReset(@RequestBody EmailRequest req) {
+        passwordReset.requestReset(req.email());
+    }
+
+    @Operation(summary = "26. 비밀번호 재설정", description = "메일 링크의 토큰과 새 비밀번호로 변경. 바꾸면 모든 기기에서 로그아웃 (명세: api.md 26)")
+    @PostMapping("/api/auth/password/reset")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void resetPassword(@RequestBody PasswordResetRequest req) {
+        passwordReset.reset(req.token(), req.newPassword());
     }
 
     @Operation(summary = "1. 약관 조회", description = "회원가입 화면에 띄울 필수 약관 2종 최신 버전 (명세: api.md 1)")

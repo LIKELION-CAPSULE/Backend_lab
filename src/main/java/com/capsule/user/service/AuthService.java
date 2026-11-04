@@ -83,7 +83,7 @@ public class AuthService {
     /** 6자리 번호를 5분 보관하고 메일로 보낸다. 돌려주는 값 = 유효 시간(초) */
     public int requestVerification(String rawEmail) {
         String email = normalize(rawEmail);
-        if (!EMAIL.matcher(email).matches()) {
+        if (!isEmail(email)) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_EMAIL");
         }
         if (users.existsByEmail(email)) {
@@ -135,11 +135,7 @@ public class AuthService {
             throw new ApiException(HttpStatus.BAD_REQUEST, "VERIFICATION_EXPIRED");
         }
         String password = req.password();
-        if (password == null
-                || password.length() < PASSWORD_MIN
-                || password.getBytes(StandardCharsets.UTF_8).length > BCRYPT_MAX_BYTES) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_PASSWORD");
-        }
+        requireValidPassword(password);
         String nickname = User.validNickname(req.nickname());
         Instant now = Instant.now(clock);
         List<Long> agreed = agreedLatestTerms(req.agreedTermVersionIds(), now);
@@ -156,8 +152,8 @@ public class AuthService {
     @Transactional
     public Login login(String rawEmail, String password) {
         String email = normalize(rawEmail);
-        String lockKey = "auth:login-lock:" + email;
-        String failKey = "auth:login-fail:" + email;
+        String lockKey = loginLockKeys(email).get(0);
+        String failKey = loginLockKeys(email).get(1);
         if (Boolean.TRUE.equals(redis.hasKey(lockKey))) {
             throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "LOGIN_LOCKED");
         }
@@ -229,8 +225,26 @@ public class AuthService {
                 .toList();
     }
 
-    private static String normalize(String email) {
+    /** 가입 · 비밀번호 재설정 공통: 8자 이상, 72바이트 이하(bcrypt 한계) */
+    static void requireValidPassword(String password) {
+        if (password == null
+                || password.length() < PASSWORD_MIN
+                || password.getBytes(StandardCharsets.UTF_8).length > BCRYPT_MAX_BYTES) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_PASSWORD");
+        }
+    }
+
+    static String normalize(String email) {
         return email == null ? "" : email.strip().toLowerCase(Locale.ROOT);
+    }
+
+    static boolean isEmail(String normalizedEmail) {
+        return EMAIL.matcher(normalizedEmail).matches();
+    }
+
+    /** 로그인 5회 실패 잠금 키 (비밀번호를 바꾸면 푼다) */
+    static List<String> loginLockKeys(String normalizedEmail) {
+        return List.of("auth:login-lock:" + normalizedEmail, "auth:login-fail:" + normalizedEmail);
     }
 
     private static String codeKey(String email) {
