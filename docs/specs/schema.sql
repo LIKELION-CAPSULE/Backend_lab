@@ -28,6 +28,14 @@
 --   - session_events.type에 동작 이벤트 DROWSY · YAWN · WAVE 추가 (졸음 · 하품 · 손 흔들기. 상태를 바꾸지 않음)
 --   - session_events.type에 동작 이벤트 HEAD_TURN 추가 (고개 돌림. 다른 동작 이벤트와 같이 상태 · 시간 계산에 안 씀)
 --   - 주석: 동작 이벤트 서버 쿨다운(같은 type 1분), live2d_reaction_maps.trigger_type에 감정 이름 (API 19 · 20의 감정 동작. 목록은 데이터, 디자이너 에셋에 따라 바뀜)
+--   - 호감도 최종안 (ADR 0022): 호감도와 레벨을 나눔
+--     user_character_relations: relation_points 0~100 · 기본 50, level = 자리 지킴 시간 레벨, total_present_seconds · streak_days · last_study_date 추가
+--     relation_logs: signal 추가(CHAT의 말의 종류), CHAT 범위 −100~5 (비율 감점), 공부 시간 · 첫 만남 점수는 더 기록하지 않음
+--     relation_settlements 추가 (공부 종료 때 레벨 전후, 리포트 재조회용)
+--   - 대화 기억 세 겹 (ADR 0022): character_memories(아는 사실 최대 20개) · conversation_recaps(세션 카드 최근 2장) 추가,
+--     chat_messages.signal 추가, conversations.summary는 더 쓰지 않음 (삭제는 다음 단계), llm_usages.purpose에 MEMORY
+--   - 세계관 · 캐릭터 설정을 데이터로 (ADR 0022 결정 15): worlds · world_lore · world_events · character_profiles
+--     · character_moves · character_lines · character_scores · character_habits 추가. characters는 화면용 정보만
 -- =====================================================================
 
 BEGIN;
@@ -242,15 +250,20 @@ CREATE INDEX idx_character_contents_character ON character_contents (character_i
 
 -- 사용자 × 캐릭터 관계: 처음 만날 때 행을 만듦. 행이 없으면 아직 안 만난 것
 -- 호감도는 세션이 끝나도 여기에 계속 남음 (사용자마다 다르므로 characters가 아니라 여기)
+-- 호감도(캐릭터가 나를 어떻게 보는가)와 레벨(함께 공부한 시간)은 따로: 관계 단계 = 호감도 구간, 레벨 = 자리 지킴 시간
 CREATE TABLE user_character_relations (
-    id                  bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    user_id             bigint      NOT NULL REFERENCES users (id),
-    character_id        bigint      NOT NULL REFERENCES characters (id),
-    relation_points     int         NOT NULL DEFAULT 0,    -- 호감도 (갱신은 relation_points = relation_points + n)
-    level               int         NOT NULL DEFAULT 1,    -- 저장해 둠: 기준이 바뀌어도 이미 오른 단계는 유지
-    total_study_seconds int         NOT NULL DEFAULT 0,    -- 함께한 공부 시간 (쉬는 시간 제외, 세션 합계와 같아야 함)
-    first_met_at        timestamptz NOT NULL DEFAULT now(),
-    last_met_at         timestamptz NOT NULL DEFAULT now(),
+    id                    bigint      GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id               bigint      NOT NULL REFERENCES users (id),
+    character_id          bigint      NOT NULL REFERENCES characters (id),
+    relation_points       int         NOT NULL DEFAULT 50    -- 호감도 0~100, 50에서 시작. 대화 · 자리 비움 · 연속 출석으로만 바뀜. 범위를 넘는 만큼은 잘라 반영
+                                      CHECK (relation_points BETWEEN 0 AND 100),
+    level                 int         NOT NULL DEFAULT 1,    -- 레벨 = 1 + 자리 지킴 시간 ÷ 60분 (계산값을 같이 저장, 상한 없음)
+    total_study_seconds   int         NOT NULL DEFAULT 0,    -- 함께한 공부 시간 (쉬는 시간 제외, 세션 합계와 같아야 함)
+    total_present_seconds int         NOT NULL DEFAULT 0 CHECK (total_present_seconds >= 0),  -- 그중 자리 지킴 (레벨 기준)
+    streak_days           int         NOT NULL DEFAULT 0 CHECK (streak_days >= 0),            -- 연속 출석 일수 (한국 날짜)
+    last_study_date       date,                              -- 마지막으로 공부를 시작한 날 (한국 날짜)
+    first_met_at          timestamptz NOT NULL DEFAULT now(),
+    last_met_at           timestamptz NOT NULL DEFAULT now(),
     UNIQUE (user_id, character_id)
 );
 CREATE INDEX idx_relations_character ON user_character_relations (character_id);
@@ -336,15 +349,19 @@ CREATE TABLE session_events (
 );
 CREATE INDEX idx_session_events_session ON session_events (session_id, occurred_at);
 
--- 호감도 변화 이력 (계속 남음). 대화 점수는 LLM이 주고 서버가 범위 안으로 자른 뒤 기록
---   SESSION_EVENT: 공부 중 이벤트(자리 비움, 복귀 등) 하나로 바뀐 점수. 1:3 룸이면 캐릭터마다 한 행씩
+-- 호감도 변화 이력 (계속 남음). delta는 실제로 바뀐 만큼(0~100 밖으로 나간 몫은 잘림) → 50 + 기록의 합 = 지금 점수
+--   CHAT: 말 패턴으로 고른 말의 종류(signal) → 캐릭터 점수표 → 오르는 쪽만 하루 상한. 심한 말은 지금 값의 %로 깎음
+--   SESSION_EVENT: 자리 비움을 끝낸 상태 이벤트에서, 1분 넘게 비웠으면 감점 (하루 상한). 1:3 룸이면 캐릭터마다 한 행씩
+--   STREAK: 연속 출석 (2일째부터 하루 한 번, 세션 첫 FOCUS)
 --   EVENT: 기간 한정 이벤트(character_contents의 EVENT)로 받은 점수
+--   STUDY_TIME · FIRST_MEET · FOCUS_BONUS: 더 기록하지 않음 (호감도 최종안. 공부 시간은 레벨에만)
 CREATE TABLE relation_logs (
     id               bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     relation_id      bigint      NOT NULL REFERENCES user_character_relations (id),
     session_id       bigint      REFERENCES study_sessions (id),
     session_event_id bigint      REFERENCES session_events (id),   -- SESSION_EVENT일 때 원인 이벤트
     request_id       uuid,                                      -- CHAT일 때 메시지 전송 요청 id (메시지는 지워지므로 FK 아님)
+    signal           text,                                      -- CHAT일 때 말의 종류 (COMPLIMENT, HATE_OR_SEXUAL 등). 그날 오름 멈춤 · 문의 대응
     delta            int         NOT NULL,                      -- 음수 가능
     reason           text        NOT NULL CHECK (reason IN (
                          'STUDY_TIME', 'STREAK', 'FOCUS_BONUS', 'FIRST_MEET', 'EVENT', 'CHAT', 'SESSION_EVENT')),
@@ -352,7 +369,8 @@ CREATE TABLE relation_logs (
     CHECK ((reason = 'CHAT') = (request_id IS NOT NULL)),
     CHECK ((reason = 'SESSION_EVENT') = (session_event_id IS NOT NULL)),
     CHECK (delta <> 0),                                        -- 0점이면 기록하지 않음
-    CHECK (reason <> 'CHAT' OR delta BETWEEN -5 AND 5)         -- 대화 한 번의 점수 범위 (기획에 맞게 조정)
+    CONSTRAINT relation_logs_chat_range
+        CHECK (reason <> 'CHAT' OR delta BETWEEN -100 AND 5)   -- 대화 한 번: 오르는 쪽은 작게, 비율 감점은 크게
 );
 CREATE INDEX idx_relation_logs_relation ON relation_logs (relation_id, created_at DESC);
 CREATE UNIQUE INDEX uq_relation_logs_request
@@ -360,21 +378,57 @@ CREATE UNIQUE INDEX uq_relation_logs_request
 CREATE UNIQUE INDEX uq_relation_logs_session_event
     ON relation_logs (relation_id, session_event_id) WHERE session_event_id IS NOT NULL;  -- 같은 이벤트는 캐릭터마다 한 번만
 
+-- 공부 종료 정산 때의 레벨 (세션마다 한 번). 리포트를 다시 볼 때 같은 값을 주려고 남긴다 (레벨은 점수 기록으로 다시 계산할 수 없음)
+CREATE TABLE relation_settlements (
+    relation_id     bigint      NOT NULL REFERENCES user_character_relations (id),
+    session_id      bigint      NOT NULL REFERENCES study_sessions (id),
+    present_seconds int         NOT NULL CHECK (present_seconds >= 0),
+    level_before    int         NOT NULL,
+    level_after     int         NOT NULL,
+    created_at      timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (relation_id, session_id)
+);
+
 -- ---------------------------------------------------------------------
 -- 8. 대화 LLM (S08)
 -- ---------------------------------------------------------------------
--- 사용자 × 캐릭터마다 하나. 세션을 넘어 이어지는 건 요약뿐. 탈퇴 시 서버가 삭제
+-- 사용자 × 캐릭터마다 하나. 탈퇴 시 서버가 삭제
+-- 대화 기억은 세 겹이고 모두 크기가 정해져 있다: 아는 사실(character_memories) · 지난 세션 흐름(conversation_recaps) · 이번 세션 원문(chat_messages)
 CREATE TABLE conversations (
     id                 bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     user_id            bigint      NOT NULL REFERENCES users (id),
     character_id       bigint      NOT NULL REFERENCES characters (id),
-    summary            text,                              -- 지난 세션들까지의 대화 요약
+    summary            text,                              -- 더 쓰지 않음 (conversation_recaps로 바뀜, 삭제는 다음 단계)
     summary_updated_at timestamptz,
     created_at         timestamptz NOT NULL DEFAULT now(),
     UNIQUE (user_id, character_id)
 );
 
--- 현재 세션의 메시지만 보관. 세션이 끝나면 요약에 합친 뒤 한 트랜잭션에서 삭제 (요약에 실패하면 남김)
+-- 지난 세션 흐름: 공부 종료 때 그 세션만 카드 한 장 (예: "11/03 55분, 3단원 하다 지쳐서 일찍 끝냄"). 최근 2장만 남기고 다시 압축하지 않음
+CREATE TABLE conversation_recaps (
+    id              bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    conversation_id bigint      NOT NULL REFERENCES conversations (id) ON DELETE CASCADE,
+    session_id      bigint      NOT NULL,                 -- 다른 모듈(session) 테이블이라 FK 아님
+    content         text        NOT NULL CHECK (char_length(content) BETWEEN 1 AND 200),
+    created_at      timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (conversation_id, session_id)
+);
+
+-- 캐릭터가 사용자에 대해 아는 사실 한 줄씩 (최대 20개). 매 턴 결정 모델이 추가 · 고치기 · 지우기를 고르고, 넘치면 가장 덜 중요한 하나를 버림
+-- 답장에는 다 넣지 않는다: 결정 모델이 이번 말에 꺼낼 사실 하나(또는 선택 안 함)를 골라 그것만 넣는다
+-- 사용자가 직접 넣는 일정(user_memories)과는 따로. 탈퇴 시 서버가 삭제
+CREATE TABLE character_memories (
+    id                bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id           bigint      NOT NULL REFERENCES users (id),
+    character_id      bigint      NOT NULL REFERENCES characters (id),
+    content           text        NOT NULL CHECK (char_length(content) BETWEEN 1 AND 80),
+    source_request_id uuid,                               -- 이 기억을 만든 · 고친 메시지 요청 (메시지는 지워지므로 FK 아님)
+    created_at        timestamptz NOT NULL DEFAULT now(),
+    updated_at        timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_character_memories_owner ON character_memories (user_id, character_id);
+
+-- 이번 세션 원문. 세션이 끝나면 카드에 넣은 뒤 한 트랜잭션에서 삭제 (카드 쓰기에 실패하면 남겨 다음 종료 때 같이 넣음)
 -- 음성(TTS)은 저장하지 않고 응답으로 바로 전달
 CREATE TABLE chat_messages (
     id              bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -383,22 +437,239 @@ CREATE TABLE chat_messages (
     request_id      uuid        NOT NULL,                 -- 사용자 메시지와 그 답변이 같은 값
     sender          text        NOT NULL CHECK (sender IN ('USER', 'CHARACTER')),
     content         text        NOT NULL,
+    signal          text,                                 -- USER일 때 말의 종류 (같은 세션 안 반복 규칙: 고민 1번, 무례 반복, 칭찬 연타)
     created_at      timestamptz NOT NULL DEFAULT now(),
     UNIQUE (conversation_id, request_id, sender)          -- 재전송돼도 질문·답변 각각 한 번만
 );
 CREATE INDEX idx_chat_messages_session ON chat_messages (session_id, id);
 
--- LLM 사용량 (지우지 않고 계속 쌓임, 비용·크레딧 근거)
+-- LLM 호출 기록 (지우지 않고 계속 쌓임, 비용·크레딧 근거 + 품질·지연 분석). 호출 한 번 = 한 행, 실패도 기록
+-- 실험실·평가 호출은 사용자·세션이 없다 (source LAB · EVAL)
 CREATE TABLE llm_usages (
-    id            bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    user_id       bigint      NOT NULL REFERENCES users (id),
-    session_id    bigint      NOT NULL REFERENCES study_sessions (id),
-    purpose       text        NOT NULL CHECK (purpose IN ('CHAT', 'AFFINITY', 'SUMMARY')),  -- 답변 / 호감도 점수 판정 / 세션 종료 요약
-    model         text        NOT NULL,
-    input_tokens  int         NOT NULL CHECK (input_tokens >= 0),
-    output_tokens int         NOT NULL CHECK (output_tokens >= 0),
-    created_at    timestamptz NOT NULL DEFAULT now()
+    id                 bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id            bigint         REFERENCES users (id),
+    session_id         bigint         REFERENCES study_sessions (id),
+    purpose            text           NOT NULL CHECK (purpose IN (
+                           'CHAT', 'DIRECTOR', 'ACTOR', 'JUDGE', 'REACTION', 'SUMMARY', 'CLOSING', 'EVAL_JUDGE', 'DECIDE', 'MEMORY')),
+    source             text           NOT NULL CHECK (source IN ('APP', 'LAB', 'EVAL')),
+    trace_id           uuid           NOT NULL,           -- 한 요청(대화 한 턴 등)에서 나간 호출을 묶음
+    provider           text           NOT NULL,           -- anthropic · openai · jev · fake
+    model              text           NOT NULL,
+    status             text           NOT NULL CHECK (status IN ('OK', 'ERROR')),
+    error              text,
+    stop_reason        text,
+    input_tokens       int            NOT NULL CHECK (input_tokens >= 0),        -- 캐시에 없던 입력
+    output_tokens      int            NOT NULL CHECK (output_tokens >= 0),
+    cache_read_tokens  int            NOT NULL CHECK (cache_read_tokens >= 0),
+    cache_write_tokens int            NOT NULL CHECK (cache_write_tokens >= 0),
+    cost_usd           numeric(12, 6) NOT NULL,
+    latency_ms         int            NOT NULL,
+    ttft_ms            int,                               -- 스트리밍일 때 첫 글자까지
+    prompt_version_ids bigint[]       NOT NULL,           -- 이 호출에 쓴 prompt_versions.id
+    request            jsonb,                             -- 보낸 프롬프트 원문: 실험실·평가, 또는 설정으로 켰을 때만
+    response           text,
+    created_at         timestamptz    NOT NULL DEFAULT now()
 );
 CREATE INDEX idx_llm_usages_user ON llm_usages (user_id, created_at);
+CREATE INDEX idx_llm_usages_trace ON llm_usages (trace_id);
+
+-- 세계관 · 캐릭터 설정 (대사를 만드는 데 쓰는 데이터, ADR 0022 결정 15). 캐릭터를 더해도 코드는 바뀌지 않는다
+-- characters(6장)는 화면용 정보만 둔다. 처음 값은 git의 classpath:characters/<code>/에서 한 번 불러오고, 그 뒤로는 DB가 원본
+-- 세계: 여러 캐릭터가 같은 세계를 쓸 수 있다
+CREATE TABLE worlds (
+    id         bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    code       text        NOT NULL UNIQUE,              -- 예: hogwarts
+    name       text        NOT NULL,
+    setting    text        NOT NULL,                     -- 무대 설명
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+-- 세계 지식 카드: 사용자 말 · 최근 대화에 키워드가 나오면 그 카드만 꺼낸다 (한 턴 최대 4장)
+CREATE TABLE world_lore (
+    id       bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    world_id bigint NOT NULL REFERENCES worlds (id) ON DELETE CASCADE,
+    code     text   NOT NULL,
+    title    text   NOT NULL,
+    keywords text[] NOT NULL DEFAULT '{}',
+    body     text   NOT NULL,
+    UNIQUE (world_id, code)
+);
+
+-- 세계 사건: 가끔 저절로 일어나 캐릭터가 반응할 거리
+CREATE TABLE world_events (
+    id        bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    world_id  bigint NOT NULL REFERENCES worlds (id) ON DELETE CASCADE,
+    code      text   NOT NULL,
+    text      text   NOT NULL,
+    hook      text,                                      -- 어울리는 반응
+    lore_code text,                                      -- 같이 꺼낼 지식 카드
+    weight    int    NOT NULL DEFAULT 1 CHECK (weight > 0),
+    UNIQUE (world_id, code)
+);
+
+-- 캐릭터 설정 (캐릭터당 하나)
+CREATE TABLE character_profiles (
+    character_id         bigint      PRIMARY KEY REFERENCES characters (id),
+    world_id             bigint      NOT NULL REFERENCES worlds (id),
+    code                 text        NOT NULL UNIQUE,    -- 예: malfoy
+    speaker              text        NOT NULL,           -- 대사에서 부르는 이름
+    bible                text        NOT NULL,           -- 정체성 · 화법 · 대화 원칙 · 형식
+    rules                text        NOT NULL,           -- 절대 규칙
+    safety               text        NOT NULL CHECK (safety IN ('MINOR', 'ADULT')),  -- 미성년 설정이면 연애 · 성적 표현 금지
+    expressions          text[]      NOT NULL,           -- 고를 수 있는 표정 (19 · 20 응답 emotion 값)
+    expression_fallbacks jsonb       NOT NULL DEFAULT '{}',  -- 에셋이 없는 표정 → 대신 쓸 표정
+    stage_tones          jsonb       NOT NULL DEFAULT '{}',  -- 관계 단계 → 말투 지시 한 줄
+    study_style          text        NOT NULL,           -- 공부 중 답 길이 · 구성 (예: 1~2문장, 공부 얘기 중심)
+    break_style          text        NOT NULL,           -- 쉬는 시간 답 길이 · 구성 (예: 2~4문장, 공부 재촉 없이 수다)
+    updated_at           timestamptz NOT NULL DEFAULT now()
+);
+
+-- 대화 기술: 한 턴에 하나를 골라 예시 2개와 함께 장면 카드에 넣는다
+CREATE TABLE character_moves (
+    id           bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    character_id bigint NOT NULL REFERENCES character_profiles (character_id) ON DELETE CASCADE,
+    code         text   NOT NULL,
+    name         text   NOT NULL,
+    how          text   NOT NULL,
+    signals      text[] NOT NULL DEFAULT '{}',           -- 어울리는 사용자 말의 종류. 비면 평소에
+    modes        text[] NOT NULL DEFAULT '{}',           -- 쓰는 때: STUDY · BREAK. 비면 언제나
+    examples     jsonb  NOT NULL DEFAULT '[]',           -- [{"user": "…", "reply": "…"}]
+    UNIQUE (character_id, code)
+);
+
+-- 상황별 미리 쓴 대사: 같은 상황이면 sort 순서대로 돌려 쓴다
+--   situation: GREETING · AWAY · AWAY_2 · AWAY_3 · RETURN · BREAK · BREAK_END · DROWSY · YAWN · WAVE · HEAD_TURN · REPLY_FALLBACK · CLOSING
+CREATE TABLE character_lines (
+    id           bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    character_id bigint NOT NULL REFERENCES character_profiles (character_id) ON DELETE CASCADE,
+    situation    text   NOT NULL,
+    min_stage    int    NOT NULL DEFAULT 1 CHECK (min_stage >= 1),  -- 이 관계 단계부터
+    sort         int    NOT NULL DEFAULT 0,
+    text         text   NOT NULL,                        -- {name}은 닉네임으로 바뀜
+    expression   text
+);
+CREATE INDEX idx_character_lines_situation ON character_lines (character_id, situation, sort);
+
+-- 대화 점수표 (말의 종류별). 없으면 서버 설정의 기본 표
+CREATE TABLE character_scores (
+    character_id     bigint  NOT NULL REFERENCES character_profiles (character_id) ON DELETE CASCADE,
+    signal           text    NOT NULL,
+    points           int     NOT NULL,
+    loss_percent     int     NOT NULL DEFAULT 0 CHECK (loss_percent BETWEEN 0 AND 100),
+    once_per_session boolean NOT NULL DEFAULT false,
+    repeat_points    int,
+    PRIMARY KEY (character_id, signal)
+);
+
+-- 피할 말버릇 (예: 첫마디 금지, 세션에 한 번)
+CREATE TABLE character_habits (
+    id           bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    character_id bigint NOT NULL REFERENCES character_profiles (character_id) ON DELETE CASCADE,
+    phrase       text   NOT NULL,
+    rule         text   NOT NULL CHECK (rule IN ('NO_OPENING', 'ONCE_PER_SESSION')),
+    UNIQUE (character_id, phrase)
+);
+
+-- 프롬프트 버전 (배포 없이 바꾸고 되돌리기). 본문은 고치지 않고 새 버전을 만든다.
+-- (키, 캐릭터)마다 ACTIVE는 하나, 새 버전을 켜면 이전 ACTIVE는 ARCHIVED. 캐릭터 전용 ACTIVE가 공통(character_id NULL)보다 먼저
+CREATE TABLE prompt_versions (
+    id           bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    prompt_key   text        NOT NULL,                     -- chat.system · fixed.lines · engine.actor 등
+    character_id bigint      REFERENCES characters (id),
+    version      int         NOT NULL CHECK (version > 0),
+    status       text        NOT NULL CHECK (status IN ('DRAFT', 'ACTIVE', 'ARCHIVED')),
+    body         text        NOT NULL,
+    note         text,                                     -- 무엇을 왜 바꿨는지
+    created_at   timestamptz NOT NULL DEFAULT now(),
+    activated_at timestamptz,
+    UNIQUE NULLS NOT DISTINCT (prompt_key, character_id, version)
+);
+CREATE UNIQUE INDEX uq_prompt_versions_active ON prompt_versions (prompt_key, character_id) NULLS NOT DISTINCT
+    WHERE status = 'ACTIVE';
+
+-- 대화 엔진 상태 (세션 × 캐릭터). 턴이 성공했을 때만 저장, 세션이 끝나면 삭제
+CREATE TABLE dialogue_states (
+    id             bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    session_id     bigint      NOT NULL REFERENCES study_sessions (id),
+    character_id   bigint      NOT NULL REFERENCES characters (id),
+    engine_version int         NOT NULL,                   -- 상태 JSON 형식 버전
+    state          jsonb       NOT NULL,
+    version        bigint      NOT NULL DEFAULT 0,         -- 낙관적 잠금
+    updated_at     timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (session_id, character_id)
+);
+
+-- LLM 실험실 (내부 품질 테스트. 서비스 데이터와 섞지 않음)
+CREATE TABLE llm_lab_sessions (
+    id           bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    title        text        NOT NULL,
+    character_id bigint      NOT NULL REFERENCES characters (id),
+    pipeline     text        NOT NULL CHECK (pipeline IN ('SIMPLE', 'SCENE', 'ENGINE')),
+    config       jsonb       NOT NULL,                     -- 실험 조건 (공급자·모델·프롬프트 버전 고정·가상 사용자 정보)
+    state        jsonb,                                    -- ENGINE 파이프라인 상태
+    created_at   timestamptz NOT NULL DEFAULT now(),
+    updated_at   timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE llm_lab_turns (
+    id             bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    lab_session_id bigint         NOT NULL REFERENCES llm_lab_sessions (id) ON DELETE CASCADE,
+    trace_id       uuid           NOT NULL,               -- 이 턴의 llm_usages
+    user_text      text           NOT NULL,
+    reply          text,
+    emotion        text,
+    affinity       int,
+    error          text,
+    latency_ms     int            NOT NULL,
+    cost_usd       numeric(12, 6) NOT NULL,
+    trace          jsonb          NOT NULL,               -- 파이프라인 중간 결과
+    rating         int CHECK (rating BETWEEN 1 AND 5),    -- 사람 평가
+    rating_note    text,
+    created_at     timestamptz    NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_llm_lab_turns_session ON llm_lab_turns (lab_session_id, id);
+
+-- 평가: 골든 대본(케이스)을 한 조건으로 여러 번 돌려 LLM 심사·사람 점수로 비교
+CREATE TABLE llm_eval_cases (
+    id           bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    name         text        NOT NULL,
+    character_id bigint      NOT NULL REFERENCES characters (id),
+    turns        jsonb       NOT NULL,                     -- 사용자 말 배열
+    context      jsonb       NOT NULL,                     -- 가상 사용자 정보
+    rubric       text,                                     -- 심사 기준
+    created_at   timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE llm_eval_runs (
+    id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    label       text        NOT NULL,
+    pipeline    text        NOT NULL CHECK (pipeline IN ('SIMPLE', 'SCENE', 'ENGINE')),
+    config      jsonb       NOT NULL,
+    case_ids    bigint[]    NOT NULL,
+    repeats     int         NOT NULL CHECK (repeats BETWEEN 1 AND 20),
+    judge       boolean     NOT NULL,
+    status      text        NOT NULL CHECK (status IN ('RUNNING', 'DONE', 'FAILED')),
+    created_at  timestamptz NOT NULL DEFAULT now(),
+    finished_at timestamptz
+);
+
+CREATE TABLE llm_eval_results (
+    id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    run_id      bigint         NOT NULL REFERENCES llm_eval_runs (id) ON DELETE CASCADE,
+    case_id     bigint         NOT NULL REFERENCES llm_eval_cases (id) ON DELETE CASCADE,
+    repeat_no   int            NOT NULL,
+    trace_id    uuid           NOT NULL,
+    transcript  jsonb          NOT NULL,
+    judge_score numeric(4, 1),                            -- LLM 심사 0~10
+    judge_note  text,
+    human_score int CHECK (human_score BETWEEN 1 AND 5),
+    human_note  text,
+    latency_ms  int            NOT NULL,
+    cost_usd    numeric(12, 6) NOT NULL,
+    error       text,
+    created_at  timestamptz    NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_llm_eval_results_run ON llm_eval_results (run_id, case_id, repeat_no);
 
 COMMIT;

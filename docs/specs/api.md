@@ -635,7 +635,9 @@ H02에서 닉네임과 아바타를 한 번에 저장합니다. 저장하면 `on
 | id · name · description · thumbnailUrl |  | 룸 정보 |
 | characters[].id · name · profileImageUrl |  | 캐릭터 (이번 시연은 1명) |
 | characters[].personality | Array | 성격 태그 (`characters.personality text[]`) |
-| characters[].relation | Object | `level`, `levelName`, `totalStudySeconds`. 아직 안 만났으면 Lv.1 · 0초 |
+| characters[].relation | Object | `level`(함께 공부한 자리 지킴 시간 레벨), `totalStudySeconds`, `points`(호감도 0~100), `stage` · `stageName`(관계 단계 = 호감도 구간), `levelName`(옛 필드, `stageName`과 같은 값, 지울 예정). 아직 안 만났으면 Lv.1 · 0초 · 50 |
+
+> 2026-11-04 (호감도 최종안): 레벨과 관계 단계를 나눔. 레벨 = 이 캐릭터와 함께 공부한 자리 지킴 시간(60분당 1, 상한 없음), 관계 단계 = 호감도 구간(0 · 30 · 70 · 90). 단계 이름을 화면에 보일지는 확정 필요 (PM은 숨기기로 함)
 | activeSessionId | Long | 이 룸에서 진행 중인 내 세션 id. 없거나 다른 룸에서 진행 중이면 null (그때 공부 시작을 누르면 409 → H18 팝업) |
 
 ```json
@@ -647,7 +649,8 @@ H02에서 닉네임과 아바타를 한 번에 저장합니다. 저장하면 `on
   "characters": [
     { "id": 1, "name": "채린", "profileImageUrl": "https://cdn.../chaerin.png",
       "personality": ["츤데레", "같은 반 친구"],
-      "relation": { "level": 1, "levelName": "아는 사이", "totalStudySeconds": 0 } }
+      "relation": { "level": 1, "levelName": "친한 사이", "totalStudySeconds": 0,
+                    "points": 50, "stage": 2, "stageName": "친한 사이" } }
   ],
   "activeSessionId": null
 }
@@ -958,16 +961,21 @@ GET /api/me/memories?date=2026-11-12
 
 > 2026-11-04 (3차): 동작 이벤트 `HEAD_TURN`(고개 돌림) 추가. 프론트 감지가 안정돼서. 다른 동작 이벤트와 같이 상태 · 시간 계산에 쓰지 않음
 
-| type | 종류 | 언제 | 시간 분류 | 호감도 (예시, 기획 확정 필요) |
+> 2026-11-04 (호감도 최종안): 동작 이벤트는 0점(확정). 첫 만남 +5 삭제 → 연속 출석. 돌아옴 0점(확정). 자리 비움은 1분 넘게 비웠을 때만 감점(임시)
+
+| type | 종류 | 언제 | 시간 분류 | 호감도 (숫자는 임시, 설정 `capsule.relation`) |
 | --- | --- | --- | --- | --- |
-| `FOCUS` | 상태 | 공부 시작 직후, 휴식 · 일시정지 끝 | 자리 지킴 | 처음 만난 날 첫 FOCUS만 +5 (FIRST_MEET) |
-| `AWAY` | 상태 | **10초 이상 연속**으로 안 보임 | 자리 비움 | −1 |
-| `RETURN` | 상태 | 자리 비움 뒤 다시 보임 (복귀 횟수 +1) | 자리 지킴 | +1 |
-| `BREAK` | 상태 | 쉬는 시간 · 일시정지 시작 | 휴식 (공부 시간에서 제외) | 0 |
-| `DROWSY` | 동작 | 졸음 감지 | 영향 없음 | 0 (미정) |
-| `YAWN` | 동작 | 하품 감지 | 영향 없음 | 0 (미정) |
-| `WAVE` | 동작 | 카메라 보고 손 흔듦 | 영향 없음 | 0 (미정) |
-| `HEAD_TURN` | 동작 | 고개를 돌려 화면에서 눈을 뗌 | 영향 없음 | 0 (미정) |
+| `FOCUS` | 상태 | 공부 시작 직후, 휴식 · 일시정지 끝 | 자리 지킴 | 세션 첫 FOCUS = 그날 출석. 어제도 출석했으면 연속 2일째부터 하루 한 번 +1 (STREAK). 끊기면 1일째부터 (감점 없음) |
+| `AWAY` | 상태 | **10초 이상 연속**으로 안 보임 | 자리 비움 | 0 (끝날 때 판단) |
+| `RETURN` | 상태 | 자리 비움 뒤 다시 보임 (복귀 횟수 +1) | 자리 지킴 | 0. 직전 `AWAY`부터 **1분 넘게** 비웠으면 −1 (하루 최대 −3) |
+| `BREAK` | 상태 | 쉬는 시간 · 일시정지 시작 | 휴식 (공부 시간에서 제외) | 0. 자리 비운 채 쉬기 시작하면 `RETURN`과 같은 감점 판단 |
+| `DROWSY` | 동작 | 졸음 감지 | 영향 없음 | 0 |
+| `YAWN` | 동작 | 하품 감지 | 영향 없음 | 0 |
+| `WAVE` | 동작 | 카메라 보고 손 흔듦 | 영향 없음 | 0 |
+| `HEAD_TURN` | 동작 | 고개를 돌려 화면에서 눈을 뗌 | 영향 없음 | 0 |
+
+- 자리 비움 감점은 `AWAY`를 끝낸 상태 이벤트(`RETURN` · `BREAK` · `FOCUS`)에서 비운 시간(그 이벤트 `occurredAt` − `AWAY` `occurredAt`)을 보고 정함. 자리 비운 채로 공부를 끝내면 감점 없음 (확정 필요)
+- 날짜(연속 출석 · 하루 상한)는 한국 날짜 기준
 
 - `AWAY`의 `occurredAt`은 **안 보이기 시작한 시각** (10초 기다린 시각이 아님). 10초 안에 다시 보이면 아무것도 안 보냄 (고개 숙임 · 조명으로 잠깐 끊기는 것 무시)
 - 동작 이벤트는 감지된 순간 1건만. `occurredAt`은 감지 시각. **같은 type은 1분에 한 번** (프론트 · 서버 둘 다 적용)
@@ -985,7 +993,7 @@ GET /api/me/memories?date=2026-11-12
 | H19 '일시정지' / '계속하기' | `BREAK` / `FOCUS` |
 | H07 졸음 · 하품 · 손 흔들기 · 고개 돌림 감지 (와이어프레임에 아직 없음) | `DROWSY` · `YAWN` · `WAVE` · `HEAD_TURN` |
 
-- 테이블: `session_events`, `relation_logs`(SESSION_EVENT · FIRST_MEET), `user_character_relations`, `live2d_reaction_maps`(모션 · 표정) · 인증: 필요
+- 테이블: `session_events`, `relation_logs`(SESSION_EVENT · STREAK), `user_character_relations`, `live2d_reaction_maps`(모션 · 표정) · 인증: 필요
 
 #### [POST] /api/sessions/{sessionId}/events
 
@@ -1011,7 +1019,7 @@ GET /api/me/memories?date=2026-11-12
 | characters[].characterId | Long | 캐릭터 id |
 | characters[].motion | Object | `group`, `file` — 받자마자 재생하는 짧은 '알아채는' 동작 (없으면 null) |
 | characters[].expression | Object | `name`, `file` — 모션 위에 겹쳐 적용 (없으면 null) |
-| characters[].affinity | Object | 이 이벤트로 바뀐 호감도: `delta`(0이면 변화 없음), `points`, `level`, `levelUp` |
+| characters[].affinity | Object | 이 이벤트로 바뀐 호감도: `delta`(0이면 변화 없음), `points`(0~100), `stage` · `stageName`(관계 단계, 호감도가 내려가면 같이 내려감), `level`(공부 시간 레벨, 이벤트로는 안 바뀜), `levelUp`(옛 필드, 늘 false, 지울 예정) |
 
 ```json
 {
@@ -1021,7 +1029,7 @@ GET /api/me/memories?date=2026-11-12
       "characterId": 1,
       "motion": { "group": "Idle", "file": "motions/look_around.motion3.json" },
       "expression": { "name": "pout", "file": "exp/pout.exp3.json" },
-      "affinity": { "delta": -1, "points": 79, "level": 1, "levelUp": false }
+      "affinity": { "delta": -1, "points": 79, "stage": 3, "stageName": "Lv.3", "level": 1, "levelUp": false }
     }
   ]
 }
@@ -1041,7 +1049,7 @@ GET /api/me/memories?date=2026-11-12
 - 18의 모션 · 표정은 `live2d_reaction_maps`에서 trigger 기준으로 서버가 고름 (trigger 규칙은 19와 같음, `AWAY`는 강도 1). 어떤 trigger에 어떤 동작이 있는지는 디자이너 에셋에 따라 바뀜. 없으면 null이고 프론트는 재생하지 않음
 - `occurredAt`이 세션 시작보다 이르면 거절하지 않고 시작 시각으로 맞춤 (프론트 시계가 조금 늦어도 시작 직후 FOCUS가 실패하지 않게)
 - 휴식 끝은 `FOCUS`, 자리 비움에서 돌아오면 `RETURN` (복귀 횟수가 휴식 때문에 부풀지 않게)
-- ⚠️ 기획 확인 필요 (J-01): 직전이 `AWAY`가 아닌 `RETURN`에도 +1을 줄지 (지금은 줌. RETURN만 반복하면 계속 오름), 동작 이벤트 3종의 호감도
+- ⚠️ 기획 확인 필요 (J-01): 자리 비움 감점 크기(−1)와 기준(1분) · 하루 최대(−3), 연속 출석 점수(+1)
 - 전송 실패 시 같은 내용으로 재시도 → 서버가 (타입, 시각)으로 중복을 걸러 같은 응답을 돌려줌
 - 카메라를 끄면 `AWAY` · 동작 이벤트를 보내지 않음 (끈 동안은 자리 지킴으로 계산). 영상 · 얼굴 좌표는 보내지 않음
 
@@ -1055,7 +1063,10 @@ GET /api/me/memories?date=2026-11-12
 
 #### 한 줄 요약
 
-18번에서 받은 `eventId`로 그 상황에 맞는 **캐릭터 대사를 LLM으로** 받습니다. **대사의 감정에 맞는 모션 · 표정**을 같이 줍니다. 호감도는 18번 응답에 이미 있어서 여기엔 없습니다.
+18번에서 받은 `eventId`로 그 상황에 맞는 **캐릭터 대사**를 받습니다. **대사의 감정에 맞는 모션 · 표정**을 같이 줍니다. 호감도는 18번 응답에 이미 있어서 여기엔 없습니다.
+
+> 2026-11-04 (PM 결정 · 캐릭터 설정 DB): 대사는 캐릭터 설정(`character_lines`)에 **미리 쓴 대사를 상황마다 순서대로** 돌려 쓴다. AI 생성은 설정으로 꺼 둠(데모데이 이후). 그 캐릭터에 그 상황 대사가 없으면 서버 공통 고정 대사
+> 2026-11-05 (승희, ADR 0022 결정 18): **상태 변화**(인사 · 자리 비움 · 돌아옴 · 쉬기 · 쉬기 끝)는 LLM이 대사와 감정(표정)을 같이 고른다. 미리 쓴 대사는 말투 예시 + 5초 대체 대사. **순간 동작**(졸음 · 하품 · 손 흔들기 · 고개 돌림)은 미리 쓴 대사 · 표정 그대로(매핑). 응답 모양은 그대로
 
 #### 18 모션과 19 모션
 
@@ -1118,7 +1129,7 @@ GET /api/me/memories?date=2026-11-12
 | characters | Array | 이번에 말하는 캐릭터만 (1:1 룸이면 1개) |
 | characters[].characterId | Long | 캐릭터 id |
 | characters[].content | String | 말풍선 대사 (2줄 이내) |
-| characters[].emotion | String | 대사의 감정 이름 (예: `HAPPY` · `SAD`). **목록은 고정이 아니다**: 캐릭터의 Live2D 에셋(디자이너가 만든 표정 · 모션)에 따라 정해지고 바뀔 수 있다 (지금 후보: `HAPPY` · `SHY` · `ANGRY` · `SAD` · `SURPRISED` · `NEUTRAL`). 서버는 그 캐릭터의 반응 매핑에 있는 감정 중에서만 고른다. ⚠️ 고정 대사(`fallback: true`)일 때 값은 확정 필요 (지금 구현은 null) |
+| characters[].emotion | String | 대사의 표정 이름. **목록은 캐릭터 설정(`character_profiles.expressions`)이 정한다** (말포이: `웃음` · `찡그림` · `화남` · `삐짐` · `수줍음` · `집중`, PM 2026-11-04). 에셋이 없는 표정은 서버가 대체 표정(`expression_fallbacks`, 예: 화남 → 찡그림)으로 모션 · 표정을 고른다. 설정이 없는 캐릭터는 공통 후보(`HAPPY` · `SHY` · `ANGRY` · `SAD` · `SURPRISED` · `NEUTRAL`). ⚠️ 고정 대사(`fallback: true`)일 때 값은 확정 필요 (지금 구현은 null) |
 | characters[].motion | Object | `group`, `file` — 감정에 맞는 모션 (없으면 null → 18 동작 유지) |
 | characters[].expression | Object | `name`, `file` — 감정에 맞는 표정 (없으면 null) |
 | characters[].fallback | Boolean | LLM 5초 초과로 고정 대사를 썼는지 |
@@ -1148,7 +1159,7 @@ GET /api/me/memories?date=2026-11-12
 #### 서버가 하는 일
 
 1. 이벤트 타입 + 직전 상태 이벤트로 trigger 결정 (응답에는 넣지 않음): 첫 FOCUS = `GREETING`, 휴식 뒤 FOCUS = `BREAK_END`, `AWAY` · `RETURN` · `BREAK`, 동작은 type 그대로(`DROWSY` · `YAWN` · `WAVE` · `HEAD_TURN`)
-2. LLM으로 대사 + 감정 생성. 감정은 그 캐릭터의 반응 매핑(`live2d_reaction_maps`)에 있는 감정 목록 중에서 고르게 한다 (5초 넘으면 trigger별 고정 대사)
+2. 상태 변화(`GREETING` · `AWAY` · `RETURN` · `BREAK` · `BREAK_END`): LLM이 대사 + 감정을 한 번에 만든다. 감정은 그 캐릭터의 표정 목록(`character_profiles.expressions`) 중에서. 넣는 것: 상황, 관계 단계 말투, 지난 세션 흐름, 이번 세션 최근 대화, 이 상황 · 단계의 미리 쓴 대사(말투 예시). 5초 넘거나 실패하면 미리 쓴 대사(`fallback: true`). 순간 동작(`DROWSY` · `YAWN` · `WAVE` · `HEAD_TURN`): 미리 쓴 대사와 그 칸의 표정을 순서대로 (AI 안 씀)
 3. 감정에 맞는 모션 · 표정을 `live2d_reaction_maps`에서 하나 고름 (같은 감정의 행이 여러 개면 같은 확률)
 4. `tts: true`면 음성 생성
 - 호감도는 바꾸지 않음 (18번에서 끝남). 같은 `eventId`로 intensity를 올려 다시 불러도 마찬가지
@@ -1216,7 +1227,22 @@ GET /api/me/memories?date=2026-11-12
 | requestId | String | 요청 id 그대로 (늦게 온 답 걸러내기) |
 | characterId | Long | 요청의 `characterId` 그대로 |
 | content · emotion · motion · expression · fallback · audioBase64 | | 19번 `characters[]` 한 칸과 같음 |
-| affinity | Object | 이 대화로 바뀐 호감도 (−5~+5): `delta`(0이면 변화 없음), `points`, `level`, `levelUp`. `fallback`이면 `delta` 0 |
+| affinity | Object | 이 대화로 바뀐 호감도: `delta`(0이면 변화 없음), `points`, `stage` · `stageName`, `level`, `levelUp`(옛 필드). 필드는 18번 `affinity`와 같음. `fallback`이면 `delta` 0 |
+
+> 2026-11-04 (호감도 최종안): 점수는 LLM이 주지 않음. 말의 종류를 말 패턴으로 고르고(A안, 확정) 캐릭터 점수표로 정함. 오르기는 어렵고 내려가기는 쉬움
+
+| 말의 종류 | 점수 (임시, 캐릭터마다 다를 수 있음) |
+| --- | --- |
+| 칭찬 `COMPLIMENT` · 고마움 `THANKS` | +1 |
+| 고민 털어놓기 `CONFIDE` | +2 (세션당 1번) |
+| 성의 없는 단답 `LOW_EFFORT` · 짜증 · 불평 `COMPLAINT` · 평범한 말 `NEUTRAL` | 0 |
+| 무례 · 욕 `RUDE` | −2, 같은 세션에서 또 하면 −3 |
+| 혐오 · 성적 `HATE_OR_SEXUAL` | **지금 값의 −30%** (최소 −5). 그날은 더 오르지 않음 (대사는 평소대로) |
+
+- 오르는 쪽만 하루 +15까지 (캐릭터별, 한국 날짜). 내려가는 쪽은 상한 없음
+- 최근 10턴 안에 같은 종류가 세 번째면 0점 (칭찬 연타 방지, 오르는 쪽만)
+- 혐오 · 성적은 말 패턴이 걸리면 결정 모델이 한 번 더 확인 (확신도 0.8 미만이면 무례로)
+- 답이 늦어 기본 대사가 나간 턴은 0점
 
 ```json
 {
@@ -1226,7 +1252,7 @@ GET /api/me/memories?date=2026-11-12
   "emotion": "ANGRY",
   "motion": { "group": "TapBody", "file": "motions/arms_crossed.motion3.json" },
   "expression": { "name": "pout", "file": "exp/pout.exp3.json" },
-  "affinity": { "delta": 1, "points": 81, "level": 1, "levelUp": false },
+  "affinity": { "delta": 1, "points": 81, "stage": 3, "stageName": "Lv.3", "level": 1, "levelUp": false },
   "fallback": false,
   "audioBase64": null
 }
@@ -1239,14 +1265,17 @@ GET /api/me/memories?date=2026-11-12
 #### 서버가 하는 일
 
 1. 사용자 메시지 저장 (`chat_messages`)
-2. LLM: 캐릭터 설정 + 지난 대화 요약 + 이번 세션 대화 + 일정 → 답장 + 감정 + 호감도 점수
-3. 감정에 맞는 모션 · 표정을 `live2d_reaction_maps`에서 고름
-4. 호감도를 −5~+5로 잘라 0이 아니면 `relation_logs`(CHAT, `request_id`)에 기록
-5. 5초 넘으면 대체 대사 + `fallback: true`, 호감도 변화 없음
+2. 결정 모델: 캐릭터가 아는 사실(최대 20개) + "선택 안 함" 중 이번 말에 꺼낼 사실 하나를 고름 (1.5초 안에 못 고르면 선택 안 함)
+3. LLM: 캐릭터 설정 + 고른 사실 하나(있을 때만) + 지난 세션 흐름(최근 2장) + 이번 세션 대화(최근 15줄) + 일정(세션 첫 대화만) → 답장 + 감정
+4. 감정에 맞는 모션 · 표정을 `live2d_reaction_maps`에서 고름
+5. 말의 종류(`chat_messages.signal`) → 점수 → 0~100에서 실제로 바뀐 만큼 `relation_logs`(CHAT, `request_id`, `signal`)에 기록
+6. 5초 넘으면 대체 대사 + `fallback: true`, 호감도 변화 없음
+7. 답장을 보낸 뒤 따로: 이번 말에서 기억할 것을 결정 모델이 고름 (무시 · 추가 · 고치기 · 지우기) → `character_memories`. 20개를 넘으면 가장 덜 중요한 하나를 버림. 전화번호 같은 긴 숫자는 저장하지 않음
 
 #### 규칙
 
-- 답 길이: 공부 중 1\~2문장, 쉬는 시간 2\~4문장
+- 답 길이 · 구성: 공부 중 1\~2문장(공부 얘기 중심), 쉬는 시간 2\~4문장(공부 재촉 없이 수다). 지금 상태는 마지막 상태 이벤트(18)로 판단: `BREAK`면 쉬는 시간
+- 공부 중에 수다가 길어지면(최근 10분에 사용자 말 8번 이상, 이번 말 포함, 임시 J-14) 캐릭터가 짧게 받아 주고 공부로 돌려보낸다. 막지는 않는다 (횟수 제한 없음은 그대로). 쉬는 시간에는 하지 않음
 - 같은 `requestId`를 다시 보내면 저장된 답장을 그대로 돌려줌. 속도 제한(1분에 10번) 횟수에 세지 않음. 이때 `affinity.delta`는 0, `emotion` · `motion` · `expression`은 null (처음 응답의 값은 다시 주지 않음). 첫 요청이 아직 처리 중일 때 온 재전송은 첫 요청이 끝날 때까지 기다렸다가 같은 답장을 받음
 - 일시정지 중에는 프론트가 입력을 막음
 
@@ -1327,7 +1356,7 @@ GET /api/me/memories?date=2026-11-12
 | H09 ‘[완료 대사]’ · H10 ‘[카드 문구]’ | 응답 `closingLine` (같은 문장) |
 | H09 '대화 옵션 · 스탠다드', 다른 캐릭터 탭 | **제거** / 목업 |
 
-- 테이블: `study_sessions`, `user_character_relations`, `relation_logs`(STUDY_TIME), `conversations.summary`, `chat_messages`(요약 후 삭제), `llm_usages` · 인증: 필요
+- 테이블: `study_sessions`, `user_character_relations`, `relation_settlements`, `conversation_recaps`, `chat_messages`(카드에 넣은 뒤 삭제), `llm_usages` · 인증: 필요
 
 ##### [POST] /api/sessions/{sessionId}/end
 
@@ -1358,13 +1387,15 @@ json
 | awaySeconds | Integer | 저장된 자리 비움 시간 (studySeconds − presentSeconds) |
 | returnCount | Integer | 자리 비운 뒤 돌아온 횟수 (`RETURN` 이벤트 수) |
 | character | Object | `id`, `name` |
-| relation | Object | `levelBefore` · `levelAfter` · `levelName` · `pointsBefore`(공부 시작 때) · `pointsAfter`(이벤트 · 대화 · 공부 시간 반영 후) · `nextLevelPoints` · `levelUp` |
-| closingLine | String | 완료 대사 (리포트 · 카드 공용) |
+| relation | Object | `levelBefore` · `levelAfter` · `levelUp`(공부 시간 레벨, 이 세션 자리 지킴 시간 반영) · `nextLevelSeconds`(다음 레벨이 되는 누적 자리 지킴 시간) · `pointsBefore`(공부 시작 때) · `pointsAfter`(이벤트 · 대화 반영 후) · `stage` · `stageName`(끝날 때 관계 단계) · `levelName`(옛 필드, `stageName`과 같은 값) · `nextLevelPoints`(옛 필드, 늘 null) |
+
+> 2026-11-04 (호감도 최종안): 공부 시간은 호감도를 올리지 않고 레벨에만 씀. 레벨 = 자리 지킴 60분당 1 (임시, PM 확인 필요)
+| closingLine | String | 완료 대사 (리포트 · 카드 공용). 캐릭터 설정에 완료 대사(`character_lines` CLOSING)가 있으면 그 문장(PM: 말포이는 고정), 없으면 AI |
 
 json
 
 ```json
-{  "sessionId": 512, "roomName": "쌀쌀맞은 갸루짝꿍이 나에게만 친절하다!",  "startedAt": "2026-11-07T05:00:02Z", "endedAt": "2026-11-07T06:05:10Z", "endType": "NORMAL",  "studySeconds": 3300, "presentSeconds": 2880, "awaySeconds": 420,  "returnCount": 2,  "character": { "id": 1, "name": "채린" },  "relation": { "levelBefore": 1, "levelAfter": 2, "levelName": "친한 사이", "pointsBefore": 80, "pointsAfter": 135, "nextLevelPoints": 300, "levelUp": true },  "closingLine": "오늘도 같이 공부해서 좋았어. 다음에도 함께하자."}
+{  "sessionId": 512, "roomName": "쌀쌀맞은 갸루짝꿍이 나에게만 친절하다!",  "startedAt": "2026-11-07T05:00:02Z", "endedAt": "2026-11-07T06:05:10Z", "endType": "NORMAL",  "studySeconds": 3300, "presentSeconds": 2880, "awaySeconds": 420,  "returnCount": 2,  "character": { "id": 1, "name": "채린" },  "relation": { "levelBefore": 1, "levelAfter": 2, "levelUp": true, "nextLevelSeconds": 7200, "pointsBefore": 50, "pointsAfter": 53, "stage": 2, "stageName": "친한 사이", "levelName": "친한 사이", "nextLevelPoints": null },  "closingLine": "오늘도 같이 공부해서 좋았어. 다음에도 함께하자."}
 ```
 
 > ✅ **200 OK** (이미 끝난 세션도 200 + 같은 결과)
@@ -1375,10 +1406,10 @@ json
 
 1. `ended_at IS NULL`일 때만 종료 (두 번 눌러도 한 번만 정산)
 2. 받은 값 검증: `0 ≤ presentSeconds ≤ studySeconds ≤ (종료 시각 − 시작 시각)` → 통과하면 `focus_seconds` · `distract_seconds` 저장, `RETURN` 이벤트 수로 `return_count` 저장
-3. 함께한 공부 시간(`studySeconds`)만큼 `relation_logs`에 STUDY_TIME 기록 → 호감도 · 단계 · 함께한 시간 갱신
-4. 이번 대화를 `conversations.summary`에 합치고 `chat_messages` 삭제
+3. 함께한 시간 누적(`total_study_seconds` · `total_present_seconds`) → 레벨 갱신, `relation_settlements`에 이 세션 레벨 전후 저장 (호감도는 바꾸지 않음)
+4. 이번 세션 대화를 흐름 카드 한 장으로 써서 `conversation_recaps`에 저장(최근 2장만 남김)하고 `chat_messages` 삭제. 카드 앞에 날짜 · 공부 시간을 붙임 (예: "11/03 55분, …")
 5. 완료 대사(`closingLine`)를 만들어 `study_sessions.closing_line`에 저장
-6. LLM이 실패하거나 5초를 넘겨도 종료는 성공: 요약은 기존 것을 두고 이번 메시지도 지우지 않음, 완료 대사는 고정 문구
+6. LLM이 실패하거나 5초를 넘겨도 종료는 성공: 카드를 못 쓰면 메시지를 지우지 않고 남김 → 다음 종료 때 그 세션 카드에 같이 들어감. 완료 대사는 고정 문구
 
 ---
 
@@ -1409,7 +1440,7 @@ json
 | H10 '이미지 저장' · '스토리 공유' · '링크 복사' · '카드 색' | 프론트 처리 (API 없음) |
 | H09 '홈으로' · H10 '저장하지 않고 홈으로' | H03으로 이동 |
 
-- 테이블: `study_sessions`, `relation_logs` · 인증: 필요
+- 테이블: `study_sessions`, `relation_logs`, `relation_settlements` · 인증: 필요
 
 #### [GET] /api/sessions/{sessionId}/report
 
