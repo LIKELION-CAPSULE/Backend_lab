@@ -189,10 +189,29 @@ class LabTest {
                 .andExpect(jsonPath("$[0].usages[0].request.system[0].text")
                         .value(org.hamcrest.Matchers.containsString("50분")));
 
-        call(post(API + "/playground"), Map.of("kind", "reaction", "characterId", 1, "trigger", "AWAY", "intensity", 3))
+        // 상태 반응에도 방금 나눈 대화가 들어간다 (서비스처럼 최근 몇 줄만)
+        call(
+                        post(API + "/playground"),
+                        Map.of(
+                                "kind",
+                                "reaction",
+                                "characterId",
+                                1,
+                                "trigger",
+                                "AWAY",
+                                "intensity",
+                                3,
+                                "config",
+                                Map.of("nickname", "민수"),
+                                "history",
+                                List.of(
+                                        Map.of("sender", "USER", "content", "수학 3단원 끝내고 쉴게"),
+                                        Map.of("sender", "CHARACTER", "content", "좋아, 끝나면 말해."))))
                 .andExpect(jsonPath("$[0].output.content").value(startsWith("(가짜 반응)")))
                 .andExpect(jsonPath("$[0].usages[0].request.system[0].text")
-                        .value(org.hamcrest.Matchers.containsString("5분째 자리에 없다")));
+                        .value(org.hamcrest.Matchers.containsString("5분째 자리에 없다")))
+                .andExpect(jsonPath("$[0].usages[0].request.system[0].text")
+                        .value(org.hamcrest.Matchers.containsString("민수: 수학 3단원 끝내고 쉴게")));
 
         mvc.perform(get(API + "/usages/summary").param("days", "1"))
                 .andExpect(status().isOk())

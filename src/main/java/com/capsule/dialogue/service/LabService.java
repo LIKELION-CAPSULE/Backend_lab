@@ -306,7 +306,9 @@ public class LabService {
                             config.relationLevelOrDefault(),
                             nickname,
                             config.summary(),
-                            history,
+                            // 서비스(19)처럼 최근 몇 줄만
+                            history.subList(
+                                    Math.max(0, history.size() - dialogueProps.reactionContextLines()), history.size()),
                             pinned,
                             ctx);
                     return map("content", l.content(), "emotion", l.emotion());
