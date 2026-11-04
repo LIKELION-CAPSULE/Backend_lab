@@ -92,7 +92,8 @@ class SessionApiTest {
             "차갑게 굴지만 나한테만 다정한 짝꿍과 같이 공부해요.",
             "https://cdn.capsule.invalid/room1.png",
             true,
-            List.of(CHAERIN));
+            List.of(CHAERIN),
+            "https://cdn.capsule.invalid/room1-banner.webp");
     static final BackgroundInfo BACKGROUND = new BackgroundInfo(1, 1, "교실", "https://cdn.capsule.invalid/room1-bg.png");
     static final AvatarInfo AVATAR = new AvatarInfo(
             1,
@@ -548,6 +549,8 @@ class SessionApiTest {
         mvc.perform(get("/api/rooms/1").with(login(userId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.description").value(ROOM.description()))
+                .andExpect(jsonPath("$.thumbnailUrl").value(ROOM.thumbnailUrl()))
+                .andExpect(jsonPath("$.bannerUrl").value(ROOM.bannerUrl()))
                 .andExpect(jsonPath("$.characters[0].personality[0]").value("츤데레"))
                 .andExpect(jsonPath("$.characters[0].relation.level").value(1))
                 .andExpect(jsonPath("$.characters[0].relation.levelName").value("아는 사이"))

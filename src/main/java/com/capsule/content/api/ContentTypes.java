@@ -22,14 +22,36 @@ public final class ContentTypes {
             boolean active,
             ModelInfo model) {}
 
-    /** characters는 활성 캐릭터만, 정렬 순서대로 */
+    /**
+     * characters는 활성 캐릭터만, 정렬 순서대로.
+     *
+     * @param thumbnailUrl 홈 포스터 카드
+     * @param bannerUrl 룸 상세 가로 배너, 없으면 null (api.md 12, 2026-11-05 확장)
+     */
     public record RoomInfo(
             long id,
             String name,
             String description,
             String thumbnailUrl,
             boolean active,
-            List<CharacterInfo> characters) {}
+            List<CharacterInfo> characters,
+            String bannerUrl) {
+
+        /**
+         * @deprecated 배너를 받는 생성자를 쓴다 (2026-11-05 확장).
+         *     제거 예정 PR: 남은 사용처(테스트)를 옮긴 뒤 content 정리 PR (성욱)
+         */
+        @Deprecated(forRemoval = true)
+        public RoomInfo(
+                long id,
+                String name,
+                String description,
+                String thumbnailUrl,
+                boolean active,
+                List<CharacterInfo> characters) {
+            this(id, name, description, thumbnailUrl, active, characters, null);
+        }
+    }
 
     public record BackgroundInfo(long id, long roomId, String name, String imageUrl) {}
 

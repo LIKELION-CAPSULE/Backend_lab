@@ -89,6 +89,8 @@ class ContentTest {
         assertThat(room.name()).isEqualTo("밤의 호그와트 도서관");
         assertThat(room.characters()).extracting(CharacterInfo::name).containsExactly("말포이");
         assertThat(room.thumbnailUrl()).isEqualTo("https://cdn.capsule.invalid/images/rooms/night-study.webp");
+        assertThat(room.bannerUrl())
+                .isEqualTo("https://cdn.capsule.invalid/images/room-detail-banners/night-detail-banner-v1.webp");
         assertThat(room.characters().get(0).profileImageUrl())
                 .isEqualTo("https://cdn.capsule.invalid/images/characters/kang-study.webp");
 
