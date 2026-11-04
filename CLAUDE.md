@@ -12,10 +12,10 @@ AI 캐릭터와 함께 공부하는 웹서비스의 백엔드. Spring Boot + Pos
 - `domain`: 모듈을 나눠 개발 중 → 내 모듈 안에서 작업. 모듈 담당은 `.harness/zones.conf`
 
 ## 명세
-원본은 레포 `docs/specs/api.md`·`schema.sql`(ADR 0013). 명세를 바꿀 때는 이 파일만 고치는 작은 명세 PR을 먼저 올려 기능 PR보다 먼저 머지하고, 머지되면 spec-sync 스킬로 노션 사본에 반영한다. api.md를 바꾸면 코드 반영까지 챙긴다: `zones.py spec-impact`로 영향받는 API를 찾고, 명세 PR 위에 기능 PR을 이어서 올린다(남의 모듈도 직접 고치고 담당자에게 공유). 명세 PR 본문 `### 코드 반영`이 비면 CI가 실패한다(ADR 0015). 노션은 프론트·기획이 보는 읽기 전용 사본이라 노션을 고치지 않는다(노션에서 고친 흔적이 보이면 사람에게 알린다). 기획 판단이 필요한 내용은 명세에 지어 넣지 않고 "확정 필요"로 표시한다.
+원본은 레포 `docs/specs/api.md`·`schema.sql`(ADR 0013). 명세를 바꿀 때는 이 파일만 고치는 작은 명세 PR을 먼저 올려 기능 PR보다 먼저 머지하고, 머지되면 spec-sync 스킬로 노션 사본에 반영한다. api.md를 바꾸면 코드 반영까지 챙긴다: `zones.py spec-impact`로 영향받는 API를 찾고, 명세 PR 위에 기능 PR을 이어서 올린다(남의 모듈도 직접 고치고 담당자에게 공유). 명세 PR 본문 `### 코드 반영`이 비면 pr-write의 본문 검사가 실패한다(ADR 0015). 노션은 프론트·기획이 보는 읽기 전용 사본이라 노션을 고치지 않는다(노션에서 고친 흔적이 보이면 사람에게 알린다). 기획 판단이 필요한 내용은 명세에 지어 넣지 않고 "확정 필요"로 표시한다.
 
 ## 명령
-- 검증(유일한 기준): `scripts/verify.sh --quick` (작업 중, Stop 훅이 자동) / `scripts/verify.sh` (PR 전, 공용 · 계약 · 마이그레이션 · 여러 모듈을 바꿨을 때). CI는 빌드 · 테스트를 돌리지 않는다(ADR 0021)
+- 검증(유일한 기준): `scripts/verify.sh --quick` (작업 중, Stop 훅이 자동) / `scripts/verify.sh` (PR 전, 공용 · 계약 · 마이그레이션 · 여러 모듈을 바꿨을 때. 머지된 마이그레이션 불변 검사 포함). PR CI는 없다(ADR 0021 · 0023)
 - 마이그레이션 생성: `scripts/new-migration.sh <모듈> <설명>` (파일을 직접 만들지 않는다)
 - 로컬 실행: `scripts/run-local.sh` (Docker 로컬 DB) / `scripts/run-local.sh --shared` (공용 개발 DB, 마이그레이션은 develop 머지 때 Actions만, ADR 0017)
 - 이 파일 누구 담당?: `python3 .harness/zones.py explain <경로>`
@@ -33,7 +33,7 @@ AI 캐릭터와 함께 공부하는 웹서비스의 백엔드. Spring Boot + Pos
 - `main`(배포) ← `develop`(통합) ← `feature/<모듈>-<설명>`. 하네스 변경은 `harness/<설명>`
 - develop/main에서 직접 수정·push 금지. feature 브랜치는 1~2일 안에 머지, 매일 `git rebase origin/develop`
 - 기능 PR에 공용 변경(`common`, `build.gradle`, `application*.yml`)을 섞지 않는다 → 작은 공용 PR로 먼저
-- PR은 pr-write 스킬로(본문은 `.github/PULL_REQUEST_TEMPLATE.md` 양식, '작업 내용'은 CI가 검사). CI(zones: 제목 · 본문 · 마이그레이션 불변, 몇 초)가 초록이면 작성자가 머지한다. 상대 리뷰는 필수가 아니다(원하면 review-pr 스킬)
+- PR은 pr-write 스킬로(본문은 `.github/PULL_REQUEST_TEMPLATE.md` 양식). PR CI는 없다(ADR 0023): pr-write가 PR 전에 검증과 제목 · 본문 검사(`zones.py check-pr-title` · `check-pr-body`)를 로컬에서 돌리고, 통과하면 작성자가 머지한다. 상대 리뷰는 필수가 아니다(원하면 review-pr 스킬)
 
 ## 하지 말 것
 - `.env`·`.env.local` 등 비밀값 파일 읽기(변수 이름은 `.env.example`에서), 실제 LLM API 키 사용

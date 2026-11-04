@@ -349,8 +349,23 @@ public class SessionService {
 
     // ---- 22 공부 종료 · 23 리포트 · 자동 마감
 
-    @Transactional
+    /**
+     * 대화 마무리(LLM, 최대 5초)는 DB 연결을 잡지 않게 트랜잭션 밖에서 먼저 만들고, 잠금 · 검증 · 저장은 한 트랜잭션에서 한다.
+     * 그사이 다른 요청이 먼저 종료하면 초안은 버려지고 이미 끝난 세션의 리포트를 돌려준다.
+     */
     public ReportResponse end(long userId, long sessionId, EndRequest req) {
+        // 짧은 트랜잭션으로 미리 읽고(잠금 없음) 바로 연결을 돌려준다. 틀린 요청에는 LLM을 부르지 않게 검증도 먼저
+        SessionClosing closing = tx.execute(status -> {
+            StudySession s = owned(sessions.findById(sessionId), userId);
+            if (!s.inProgress()) return null;
+            validateStudyTime(s, req.studySeconds(), req.presentSeconds(), now());
+            return closingOf(s, "NORMAL", req.studySeconds()); // studySeconds = present + away
+        });
+        SessionClosingHandler.Draft draft = closing == null ? null : closingHandler.draft(closing);
+        return tx.execute(status -> endLocked(userId, sessionId, req, draft));
+    }
+
+    private ReportResponse endLocked(long userId, long sessionId, EndRequest req, SessionClosingHandler.Draft draft) {
         StudySession s = owned(sessions.findWithLockById(sessionId), userId);
         if (!s.inProgress()) {
             return toReport(s, relationQuery.settlementOf(s.userId(), s.characterId(), s.id()));
@@ -362,7 +377,7 @@ public class SessionService {
         List<SessionEvent> list = events.findBySessionIdOrderByOccurredAtAscIdAsc(s.id());
         StudyTime time = StudyTime.of(s.startedAt(), list, now);
         // TODO(judgment): J-11 프론트 값이 서버 계산값(time)과 "크게" 다를 때의 기준 미정. 지금은 부등식 검증만 하고 프론트 값을 그대로 씀
-        return close(s, now, "NORMAL", present, study - present, time.breakSeconds(), list);
+        return close(s, now, "NORMAL", present, study - present, time.breakSeconds(), list, draft);
     }
 
     @Transactional(readOnly = true)
@@ -381,29 +396,48 @@ public class SessionService {
         Instant cutoff = now().minus(autoCloseAfter);
         for (long id : sessions.findStaleIds(cutoff)) {
             try {
-                tx.executeWithoutResult(status -> autoClose(id, cutoff));
+                // 공부 종료와 같이 대화 마무리(LLM)는 트랜잭션 밖에서 먼저
+                SessionClosing closing = tx.execute(status -> {
+                    StudySession s = sessions.findById(id).orElseThrow();
+                    return autoClosePlan(s, cutoff)
+                            .map(p -> closingOf(s, "AUTO_CLOSED", p.present() + p.away()))
+                            .orElse(null);
+                });
+                SessionClosingHandler.Draft draft = closing == null ? null : closingHandler.draft(closing);
+                tx.executeWithoutResult(status -> autoClose(id, cutoff, draft));
             } catch (RuntimeException e) {
                 log.warn("세션 {} 자동 마감 실패, 다음 배치에서 다시 시도", id, e); // 하나가 실패해도 나머지는 닫히게
             }
         }
     }
 
-    private void autoClose(long sessionId, Instant cutoff) {
-        StudySession s = sessions.findWithLockById(sessionId).orElseThrow();
+    private record AutoClosePlan(Instant end, int present, int away, int breakSeconds, List<SessionEvent> list) {}
+
+    /** 자동 마감할 시각과 시간. 그 사이 종료됐거나 이어하기했으면 빈 값 */
+    private Optional<AutoClosePlan> autoClosePlan(StudySession s, Instant cutoff) {
         Instant end = s.lastHeartbeatAt() != null ? s.lastHeartbeatAt() : s.startedAt();
         if (!s.inProgress() || !end.isBefore(cutoff)) {
-            return; // 그 사이 종료됐거나 이어하기함
+            return Optional.empty();
         }
         List<SessionEvent> list = events.findBySessionIdOrderByOccurredAtAscIdAsc(s.id());
         StudyTime time = StudyTime.of(s.startedAt(), list, end);
         // 마지막 heartbeat가 보낸 프론트 값으로 기록 (api.md 21). 값을 받은 적이 없으면 이벤트로 계산
         Integer study = s.heartbeatStudySeconds();
         Integer present = s.heartbeatPresentSeconds();
-        if (study != null && present != null) {
-            close(s, end, "AUTO_CLOSED", present, study - present, time.breakSeconds(), list);
-        } else {
-            close(s, end, "AUTO_CLOSED", time.presentSeconds(), time.awaySeconds(), time.breakSeconds(), list);
-        }
+        boolean sent = study != null && present != null;
+        return Optional.of(new AutoClosePlan(
+                end,
+                sent ? present : time.presentSeconds(),
+                sent ? study - present : time.awaySeconds(),
+                time.breakSeconds(),
+                list));
+    }
+
+    private void autoClose(long sessionId, Instant cutoff, SessionClosingHandler.Draft draft) {
+        StudySession s = sessions.findWithLockById(sessionId).orElseThrow();
+        autoClosePlan(s, cutoff)
+                .ifPresent(p ->
+                        close(s, p.end(), "AUTO_CLOSED", p.present(), p.away(), p.breakSeconds(), p.list(), draft));
     }
 
     private ReportResponse close(
@@ -413,21 +447,27 @@ public class SessionService {
             int present,
             int away,
             int breakSeconds,
-            List<SessionEvent> list) {
+            List<SessionEvent> list,
+            SessionClosingHandler.Draft draft) {
         s.close(endedAt, endType, present, away, breakSeconds, (int)
                 list.stream().filter(e -> RETURN.equals(e.type())).count());
         long characterId = s.characterId();
         StudySettlement settlement =
                 relationCommands.settleStudy(s.userId(), characterId, s.id(), present + away, present);
-        s.recordClosingLine(closingHandler.close(new SessionClosing(
+        s.recordClosingLine(closingHandler.close(closingOf(s, endType, present + away), draft));
+        return toReport(s, settlement);
+    }
+
+    /** 초안 · 저장 둘 다 이걸로 만든다. 목표 시간을 빠뜨리면 공부 포기(GIVE_UP) 판정이 꺼진다 */
+    private SessionClosing closingOf(StudySession s, String endType, int studySeconds) {
+        return new SessionClosing(
                 s.id(),
                 s.userId(),
-                characterId,
-                character(characterId).name(),
+                s.characterId(),
+                character(s.characterId()).name(),
                 endType,
-                present + away,
-                s.targetMinutes())));
-        return toReport(s, settlement);
+                studySeconds,
+                s.targetMinutes());
     }
 
     private ReportResponse toReport(StudySession s, StudySettlement settlement) {

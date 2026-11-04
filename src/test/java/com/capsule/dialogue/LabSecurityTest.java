@@ -26,6 +26,7 @@ class LabSecurityTest {
     @Test
     void apiNeedsTheTokenButThePageDoesNot() throws Exception {
         mvc.perform(get("/internal/llm-lab")).andExpect(status().isOk());
+        mvc.perform(get("/internal/llm-lab/flow")).andExpect(status().isOk());
 
         mvc.perform(get("/internal/llm-lab/api/meta")).andExpect(status().isUnauthorized());
         mvc.perform(get("/internal/llm-lab/api/meta").header("X-Lab-Token", "wrong"))

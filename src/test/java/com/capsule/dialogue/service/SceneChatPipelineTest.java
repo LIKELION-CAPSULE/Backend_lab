@@ -17,7 +17,7 @@ import org.junit.jupiter.api.Test;
 /** 고정 블록에 지금 관계 단계의 것만, 상황 카드에 이번 턴의 사실만 들어가는지 (DB 없이, 말포이 처음 값으로) */
 class SceneChatPipelineTest {
 
-    static final CharacterContent MALFOY = CharacterContentSeeder.load("malfoy");
+    static final CharacterContent MALFOY = CharacterContentSeeder.load("malfoy", 1);
     static final Function<String, String> SITUATION = s -> "상황 " + s;
 
     static ChatInput input(String message, List<ChatLine> history, List<String> facts) {

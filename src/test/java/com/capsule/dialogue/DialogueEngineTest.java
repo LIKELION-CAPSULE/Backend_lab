@@ -122,7 +122,7 @@ class DialogueEngineTest {
                         sessionId))
                 .isEqualTo(4);
 
-        closingHandler.close(new SessionClosing(sessionId, userId, CHARACTER_ID, "채린", "NORMAL", 600));
+        closingHandler.close(new SessionClosing(sessionId, userId, CHARACTER_ID, "채린", "NORMAL", 600), null);
         assertThat(jdbc.queryForObject(
                         "SELECT count(*) FROM dialogue_states WHERE session_id = ?", Integer.class, sessionId))
                 .isZero();

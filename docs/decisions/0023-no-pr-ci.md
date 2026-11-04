@@ -1,0 +1,23 @@
+# 0023 PR CI를 모두 뺀다. 검사는 로컬로 옮긴다 (0021 이어서)
+
+- 결정
+  - `.github/workflows/pr-zones.yml` · `claude-review.yml` · `claude.yml`을 지운다. PR에서 도는 GitHub Actions가 없다
+  - `dev-db-migrate.yml`은 남긴다. CI가 아니라 develop 머지 때 공용 개발 DB에 마이그레이션을 적용하는 배포 작업이다. 지우면 새 테이블이 DB에 생기지 않아 개발 서버가 시작에 실패한다
+  - pr-zones가 하던 검사는 로컬로 옮긴다. 판정 코드(`.harness/zones.py`)는 그대로다
+    - 머지된 마이그레이션 불변 · `zones.conf` 엄격 검사 → `scripts/verify.sh` full의 첫 단계
+    - PR 제목 · 본문(`### 코드 반영` 포함) · ADR 경고 → pr-write 스킬이 `gh pr create` 전에 돌린다
+  - 머지 조건은 "작성자가 pr-write의 검증과 검사를 통과했다"이다
+- 이유
+  - Actions가 대기열에 10분 넘게 멈춰 PR 화면이 계속 도는 일이 생겼다(2026-11-05). 체크가 머지를 막지 않는데도 기다리게 된다
+  - 2인 팀이고 둘 다 pr-write로 PR을 연다. 같은 판정 코드를 로컬에서 돌리면 CI가 잡던 것을 PR 전에 잡는다
+  - 자동 리뷰(claude-review)는 토큰 비용이 들고, 필요하면 review-pr 스킬로 언제든 한다
+  - 2026-11-05 사용자 결정
+- 버린 대안
+  - pr-zones만 남기기(몇 초짜리 형식 검사): 대기열이 멈추면 똑같이 기다린다
+  - dev-db-migrate까지 지우기: 마이그레이션을 사람이 직접 공용 DB에 적용해야 하고, 빠뜨리면 개발 서버가 멈춘다
+- 대가
+  - pr-write를 거치지 않고 GitHub 웹에서 연 PR은 제목 · 본문 · 마이그레이션 불변 검사를 받지 않는다. 머지된 마이그레이션을 고치면 공용 DB에서 Flyway 체크섬 오류가 나고 dev-db-migrate가 실패해서 그때 안다
+  - `zone_guard` 훅이 Claude의 마이그레이션 수정은 막지만, 사람이 IDE에서 직접 고친 것은 verify full을 돌려야 잡힌다
+  - Railway "Wait for CI"가 그 커밋의 Actions를 기다리는 방식이면, 이제 기다릴 것은 develop push의 dev-db-migrate(`db/**`가 바뀐 머지만)뿐이다. 그 경우 마이그레이션이 끝난 뒤 배포되어 0018의 순서 문제가 줄어든다(Railway 쪽 동작은 확인 안 함)
+- 다시 볼 때
+  - 사람이 늘거나 검사를 건너뛴 PR로 사고가 나면 pr-zones를 되살린다(이 커밋에서 파일을 되돌리면 된다)

@@ -16,6 +16,9 @@ public interface RelationLogRepository extends JpaRepository<RelationLog, Long> 
 
     List<RelationLog> findByRelationIdAndSessionEventId(long relationId, long sessionEventId);
 
+    /** 흐름 테스트 상태판: 최근 변화 기록 */
+    List<RelationLog> findTop30ByRelationIdOrderByIdDesc(long relationId);
+
     Optional<RelationLog> findFirstByRelationIdAndSessionIdAndReason(long relationId, long sessionId, String reason);
 
     /** 이 시각 이후 이 종류의 말이 있었는지 (심한 말 뒤 그날 오름 멈춤) */

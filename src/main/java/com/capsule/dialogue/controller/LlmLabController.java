@@ -98,15 +98,21 @@ class LlmLabController {
     /** git의 처음 값(classpath:characters/{code}/)으로 덮어쓴다 */
     @PostMapping("/api/characters/reseed/{code}")
     CharacterContent reseed(@PathVariable String code) {
-        if (!seeder.seed(code, true)) throw new ApiException(HttpStatus.NOT_FOUND, "CHARACTER_NOT_FOUND");
-        CharacterContent c = CharacterContentSeeder.load(code);
-        contents.evict(c.characterId());
-        return content(c.characterId());
+        long id = seeder.seed(code, true)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "CHARACTER_NOT_FOUND"));
+        contents.evict(id);
+        return content(id);
     }
 
     @GetMapping({"", "/"})
     ResponseEntity<Resource> page() {
         return ResponseEntity.ok().contentType(MediaType.TEXT_HTML).body(new ClassPathResource("llm-lab/index.html"));
+    }
+
+    /** 흐름 테스트: 실제 API(16~23)를 프론트 순서대로 부르고 호감도 · 공부 시간을 상태판으로 본다 */
+    @GetMapping("/flow")
+    ResponseEntity<Resource> flowPage() {
+        return ResponseEntity.ok().contentType(MediaType.TEXT_HTML).body(new ClassPathResource("llm-lab/flow.html"));
     }
 
     @GetMapping("/api/meta")

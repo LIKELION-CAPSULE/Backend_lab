@@ -1,0 +1,461 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>캡슐 흐름 테스트</title>
+<style>
+:root{--bg:#f5f5f3;--fg:#1c1c1e;--mut:#6e6e73;--card:#fff;--line:#deded9;--acc:#3563e9;--ok:#1d9a5b;--warn:#b7791f;--bad:#d64545;--user:#e3ebfd;--bot:#efefec;--code:#f4f4f1;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#141518;--fg:#e4e4e6;--mut:#9b9ba3;--card:#1d1e22;--line:#34363c;--acc:#7c9dff;--ok:#4cc38a;--warn:#e3b341;--bad:#ff6b6b;--user:#26345a;--bot:#2a2b30;--code:#17181b}}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,-apple-system,"Segoe UI","Malgun Gothic","Apple SD Gothic Neo",sans-serif}
+pre{font:12px/1.4 ui-monospace,Consolas,monospace;white-space:pre-wrap;word-break:break-word;background:var(--code);border:1px solid var(--line);border-radius:6px;padding:6px;margin:4px 0;max-height:260px;overflow:auto}
+header{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 16px;background:var(--card);border-bottom:1px solid var(--line)}
+main{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:12px;padding:12px 16px;max-width:1440px;margin:0 auto}
+@media (max-width:960px){main{grid-template-columns:minmax(0,1fr)}}
+section,aside{display:flex;flex-direction:column;gap:12px;min-width:0}
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px}
+h3{font-size:14px;margin:0 0 8px}
+.row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:4px 0}
+.grow{flex:1}
+.mut{color:var(--mut);font-size:12.5px}
+input,select,button{font:inherit;color:inherit;background:var(--card);border:1px solid var(--line);border-radius:6px;padding:5px 8px;min-width:0}
+button{cursor:pointer;background:var(--bot)}
+button:disabled{opacity:.45;cursor:default}
+button.primary{background:var(--acc);border-color:var(--acc);color:#fff}
+button.danger{color:var(--bad)}
+input[type=number]{width:72px}
+.chat{height:46vh;min-height:280px;overflow:auto;display:flex;flex-direction:column;gap:6px;padding:8px;background:var(--bg);border-radius:6px;margin:8px 0}
+.msg{max-width:80%;padding:6px 10px;border-radius:10px}
+.msg.me{align-self:flex-end;background:var(--user)}
+.msg.char{align-self:flex-start;background:var(--bot)}
+.msg .meta{display:block;color:var(--mut);font-size:11.5px;margin-top:2px}
+.note{align-self:center;color:var(--mut);font-size:12px;text-align:center}
+.note.bad{color:var(--bad)}
+.big{font-size:28px;font-weight:700}
+.bar{height:10px;background:var(--bot);border-radius:5px;overflow:hidden;margin:6px 0}
+.bar>i{display:block;height:100%;background:var(--acc)}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+td{padding:3px 4px;border-top:1px solid var(--line);vertical-align:top}
+td.n{text-align:right;font-variant-numeric:tabular-nums}
+.plus{color:var(--ok)}.minus{color:var(--bad)}
+.mode{font-weight:700}.mode.FOCUS{color:var(--ok)}.mode.AWAY{color:var(--bad)}.mode.BREAK{color:var(--warn)}
+details{border-top:1px solid var(--line);padding:3px 0}
+summary{cursor:pointer;font-size:12.5px}
+</style>
+</head>
+<body>
+<header>
+  <b>캡슐 흐름 테스트</b>
+  <span class="mut">실제 API(1 · 6 · 10 · 11 · 12 · 16~23)를 프론트 순서대로 부릅니다. local 전용</span>
+  <span class="grow"></span>
+  <label>닉네임 <input id="nick" value="승희" size="8"></label>
+  <label>회원번호 <input id="member" size="12" placeholder="비우면 새로"></label>
+  <button id="newUser" title="회원번호를 새로 만들어 처음 만나는 상태(호감도 50, Lv.1)로">새 사용자</button>
+  <button id="login" class="primary">로그인</button>
+  <a href="/internal/llm-lab" class="mut">실험실</a>
+</header>
+<main>
+<section>
+  <div class="card">
+    <h3>1. 룸 · 캐릭터 고르고 공부 시작</h3>
+    <div class="row">
+      <label>룸 <select id="room" disabled></select></label>
+      <label>캐릭터 <select id="character" disabled></select></label>
+      <label>목표 <input id="target" type="number" value="50" min="5" max="180" step="5">분</label>
+    </div>
+    <div class="row">
+      <label>시작할 때 호감도 <input id="startPoints" type="number" min="0" max="100" placeholder="그대로"></label>
+      <label>누적 자리 지킴 <input id="startPresent" type="number" min="0" placeholder="그대로">분</label>
+      <button id="start" class="primary" disabled>공부 시작</button>
+    </div>
+    <div id="roomInfo" class="mut">로그인하면 홈(11)의 룸이 나옵니다.</div>
+  </div>
+
+  <div class="card">
+    <h3>2. 공부 중 <span id="modeLabel" class="mode"></span></h3>
+    <div class="row">
+      <button data-ev="AWAY">자리 비움</button>
+      <label class="mut">비운 시점 <input id="awayAgo" type="number" value="0" min="0">초 전</label>
+      <button data-int="2" title="1분 지나면 자동으로도 보냄">말 걸기 (강도 2)</button>
+      <button data-int="3" title="5분 지나면 자동으로도 보냄">서운함 (강도 3)</button>
+      <button data-ev="RETURN">돌아옴</button>
+    </div>
+    <div class="row">
+      <button data-ev="BREAK">쉬기</button>
+      <button data-ev="FOCUS">다시 공부</button>
+      <span class="mut">동작</span>
+      <button data-ev="DROWSY">졸음</button>
+      <button data-ev="YAWN">하품</button>
+      <button data-ev="WAVE">손 흔들기</button>
+      <button data-ev="HEAD_TURN">고개 돌림</button>
+      <span class="grow"></span>
+      <button id="end" class="danger">공부 끝</button>
+    </div>
+    <div id="chat" class="chat"></div>
+    <form id="chatForm" class="row">
+      <input id="msg" class="grow" maxlength="300" placeholder="메시지 (Enter로 보내기, 20번)">
+      <button class="primary">보내기</button>
+    </form>
+    <div class="row mut">빠른 답장
+      <button data-q="파이팅">파이팅</button><button data-q="졸려">졸려</button><button data-q="이거 어려워">이거 어려워</button>
+    </div>
+  </div>
+
+  <div id="report" class="card" hidden></div>
+</section>
+
+<aside>
+  <div class="card">
+    <h3>호감도</h3>
+    <div><span id="points" class="big">-</span> <span class="mut">/ 100</span> <span id="stage"></span></div>
+    <div class="bar"><i id="pointsBar" style="width:0"></i></div>
+    <div id="level" class="mut"></div>
+  </div>
+
+  <div class="card">
+    <h3>이번 세션 시간 <span class="mut">(화면이 프론트처럼 직접 셈)</span></h3>
+    <table>
+      <tr><td>공부 시간 (쉬는 시간 뺌)</td><td class="n" id="tStudy">-</td></tr>
+      <tr><td>그중 자리 지킴</td><td class="n" id="tPresent">-</td></tr>
+      <tr><td>그중 자리 비움</td><td class="n" id="tAway">-</td></tr>
+      <tr><td>쉬는 시간</td><td class="n" id="tBreak">-</td></tr>
+      <tr><td>복귀</td><td class="n" id="tReturns">-</td></tr>
+      <tr><td>heartbeat (1분마다, 21)</td><td class="n" id="tHb">-</td></tr>
+    </table>
+  </div>
+
+  <div class="card">
+    <h3>호감도 맞추기 <span class="mut">(공부 중에만, 기록에 '손으로 맞춤')</span></h3>
+    <div class="row">
+      <label>호감도 <input id="adjPoints" type="number" min="0" max="100"></label>
+      <label>누적 자리 지킴 <input id="adjPresent" type="number" min="0">분</label>
+      <button id="adjust" disabled>적용</button>
+    </div>
+    <div class="row">
+      <button data-p="10">10</button><button data-p="40">40</button><button data-p="75">75</button><button data-p="95">95</button>
+      <span class="mut">단계 경계: 30 · 70 · 90</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>호감도 변화 기록 <span class="mut">(최근 30개)</span></h3>
+    <table id="logs"></table>
+  </div>
+
+  <div class="card">
+    <h3>요청 기록</h3>
+    <div id="reqs"></div>
+  </div>
+</aside>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const esc = v => String(v ?? '').replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+let LAB_TOKEN = '';
+try { LAB_TOKEN = localStorage.getItem('llmLabToken') || ''; } catch { /* 저장소가 막힘 */ }
+
+const EVENT = {FOCUS: '다시 공부', AWAY: '자리 비움', RETURN: '돌아옴', BREAK: '쉬기',
+  DROWSY: '졸음', YAWN: '하품', WAVE: '손 흔들기', HEAD_TURN: '고개 돌림'};
+const REASON = {CHAT: '대화', SESSION_EVENT: '자리 비움', STREAK: '연속 출석', ADJUST: '손으로 맞춤', EVENT: '이벤트'};
+const SIGNAL = {COMPLIMENT: '칭찬', THANKS: '고마움', CONFIDE: '고민', LOW_EFFORT: '단답', COMPLAINT: '불평',
+  RUDE: '무례', HATE_OR_SEXUAL: '혐오 · 성적', NEUTRAL: '평범'};
+
+// S.s = 진행 중 세션: {id, characterId, mode: FOCUS|AWAY|BREAK, study, present, away, brk, returns, awayEventId, awayAt, awayLevel, hb}
+const S = {token: null, userId: null, member: null, rooms: [], s: null, timer: null};
+
+const fmt = sec => { sec = Math.max(0, sec | 0); const h = sec / 3600 | 0, m = (sec % 3600) / 60 | 0, x = sec % 60;
+  return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(x).padStart(2, '0'); };
+const delta = a => !a ? '' : a.delta > 0 ? `<b class="plus">+${a.delta}</b>` : a.delta < 0 ? `<b class="minus">${a.delta}</b>` : '±0';
+const affinityText = a => a ? `호감도 ${delta(a)} → ${a.points} (${a.stage}단계 ${esc(a.stageName)})` : '';
+
+async function call(method, path, body, {lab = false, retry = true} = {}) {
+  const headers = {'Content-Type': 'application/json'};
+  if (lab) { if (LAB_TOKEN) headers['X-Lab-Token'] = LAB_TOKEN; }
+  else if (S.token) headers.Authorization = 'Bearer ' + S.token;
+  const t0 = performance.now();
+  const res = await fetch(path, {method, headers, body: body === undefined ? undefined : JSON.stringify(body)});
+  const text = await res.text();
+  let data = null;
+  try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+  record(method, path, res.status, Math.round(performance.now() - t0), body, data);
+  // 액세스 토큰은 30분: 만료되면 같은 회원번호로 다시 로그인하고 한 번만 다시 보낸다
+  if (res.status === 401 && !lab && retry && S.member) { await login(S.member); return call(method, path, body, {retry: false}); }
+  if (!res.ok) { const e = new Error((data && data.code) || 'HTTP ' + res.status); e.status = res.status; e.data = data; throw e; }
+  return data;
+}
+
+function record(method, path, status, ms, req, res) {
+  const d = document.createElement('details');
+  const ok = status < 400;
+  d.innerHTML = `<summary><b class="${ok ? 'plus' : 'minus'}">${status}</b> ${method} ${esc(path)} <span class="mut">${ms}ms</span></summary>`
+    + (req === undefined ? '' : `<pre>${esc(JSON.stringify(req, null, 1))}</pre>`)
+    + `<pre>${esc(typeof res === 'string' ? res : JSON.stringify(res, null, 1))}</pre>`;
+  $('#reqs').prepend(d);
+  while ($('#reqs').children.length > 60) $('#reqs').lastChild.remove();
+}
+
+function say(cls, html, meta) {
+  const div = document.createElement('div');
+  div.className = cls === 'note' || cls === 'note bad' ? cls : 'msg ' + cls;
+  div.innerHTML = html + (meta ? `<span class="meta">${meta}</span>` : '');
+  $('#chat').append(div);
+  $('#chat').scrollTop = $('#chat').scrollHeight;
+}
+const note = (html, bad) => say(bad ? 'note bad' : 'note', html);
+const fail = (what, e) => note(`${esc(what)} 실패: ${esc(e.message)}`, true);
+
+function looks(c) {
+  return [c.emotion ? '표정 ' + esc(c.emotion) : '표정 없음',
+    c.motion ? '모션 ' + esc(c.motion.file) : null,
+    c.expression ? '얼굴 ' + esc(c.expression.name) : null,
+    c.fallback ? '<b>미리 쓴 대사 (fallback)</b>' : null].filter(Boolean).join(' · ');
+}
+
+// ---- 로그인 · 룸 ----
+
+/** member를 주면 그 회원으로 다시 로그인 (토큰 만료). 입력칸은 읽지 않는다 */
+async function login(member) {
+  if (!member && !$('#member').value.trim()) $('#member').value = 'flow-' + Math.random().toString(36).slice(2, 8);
+  S.member = member || $('#member').value.trim();
+  const nick = $('#nick').value.trim() || '테스트';
+  S.token = null; // 만료된 토큰을 공개 API에 붙이지 않게
+  const terms = await call('GET', '/api/terms');
+  const agreed = terms.terms.filter(t => t.required).map(t => t.termVersionId);
+  const r = await call('POST', '/api/auth/social/KAKAO',
+    {code: `fake-kakao:${S.member}:${nick}`, redirectUri: 'http://localhost/flow', agreedTermVersionIds: agreed}, {retry: false});
+  S.token = r.accessToken;
+  S.userId = r.userId;
+  if (r.onboardingRequired) await call('PATCH', '/api/me', {nickname: nick.slice(0, 20)});
+  return r;
+}
+
+async function enter() {
+  try {
+    const r = await login();
+    note(`로그인: 사용자 #${S.userId} (${r.isNewUser ? '새로 가입' : '기존 회원'})`);
+    const home = await call('GET', '/api/home');
+    S.rooms = home.rooms;
+    $('#room').innerHTML = S.rooms.map(x => `<option value="${x.id}">${esc(x.name)}</option>`).join('');
+    $('#room').disabled = false;
+    if (home.activeSession) note(`진행 중인 세션 #${home.activeSession.sessionId}이 있습니다. 공부 시작을 누르면 그 세션을 먼저 끝냅니다.`);
+    await loadRoom();
+  } catch (e) { fail('로그인', e); }
+}
+
+async function loadRoom() {
+  const room = await call('GET', '/api/rooms/' + $('#room').value);
+  $('#character').innerHTML = room.characters.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+  $('#character').disabled = false;
+  const c = room.characters[0];
+  $('#roomInfo').innerHTML = c ? `${esc(room.description)}<br>성격 태그(12): ${c.personality.map(esc).join(', ')}` : '캐릭터 없음';
+  sync();
+  await refreshRelation();
+}
+
+const characterId = () => Number($('#character').value);
+
+async function refreshRelation() {
+  if (!S.userId || !characterId()) return;
+  try {
+    const snap = await call('GET', `/internal/llm-lab/api/relations?userId=${S.userId}&characterId=${characterId()}`, undefined, {lab: true});
+    const r = snap.relation;
+    $('#points').textContent = r.points;
+    $('#pointsBar').style.width = r.points + '%';
+    $('#stage').innerHTML = `· ${r.stage}단계 <b>${esc(r.stageName)}</b>`;
+    const left = r.nextLevelSeconds - r.totalPresentSeconds;
+    $('#level').innerHTML = `레벨 <b>Lv.${r.level}</b> · 누적 자리 지킴 ${fmt(r.totalPresentSeconds)} (공부 ${fmt(r.totalStudySeconds)})`
+      + ` · 다음 레벨까지 ${fmt(left)}`;
+    $('#logs').innerHTML = snap.logs.length ? snap.logs.map(l => `<tr>
+        <td>${new Date(l.createdAt).toLocaleTimeString()}</td>
+        <td>${esc(REASON[l.reason] || l.reason)}${l.signal ? ' · ' + esc(SIGNAL[l.signal] || l.signal) : ''}</td>
+        <td class="n">${delta(l)}</td><td class="mut">${l.sessionId ? '세션 #' + l.sessionId : ''}</td></tr>`).join('')
+      : '<tr><td class="mut">아직 없음 (0점이면 기록하지 않음)</td></tr>';
+  } catch (e) { fail('호감도 읽기', e); }
+}
+
+async function adjust(points, presentMinutes) {
+  const body = {points, presentMinutes, sessionId: S.s ? S.s.id : null};
+  try {
+    await call('PUT', `/internal/llm-lab/api/relations?userId=${S.userId}&characterId=${characterId()}`, body, {lab: true});
+    note(`호감도 맞춤: ${points ?? '그대로'} · 누적 자리 지킴 ${presentMinutes ?? '그대로'}${presentMinutes == null ? '' : '분'}`);
+    if (S.s && points != null) S.s.adjusted = true;
+  } catch (e) { fail('호감도 맞추기', e); }
+  await refreshRelation();
+}
+const num = el => el.value === '' ? null : Number(el.value);
+
+// ---- 세션 ----
+
+async function start() {
+  $('#start').disabled = true; // 연타로 세션이 두 번 만들어지지 않게
+  const body ={roomId: Number($('#room').value), characterId: characterId(), targetMinutes: Number($('#target').value)};
+  let r;
+  try { r = await call('POST', '/api/sessions', body); }
+  catch (e) {
+    if (e.data && e.data.code === 'SESSION_ALREADY_IN_PROGRESS') {
+      const old = e.data.detail.sessionId;
+      note(`진행 중이던 세션 #${old}을 0분으로 끝내고 다시 시작합니다.`);
+      try { await call('POST', `/api/sessions/${old}/end`, {studySeconds: 0, presentSeconds: 0}); r = await call('POST', '/api/sessions', body); }
+      catch (e2) { sync(); return fail('공부 시작', e2); }
+    } else { sync(); return fail('공부 시작', e); }
+  }
+  S.s = {id: r.sessionId, characterId: body.characterId, mode: 'FOCUS', study: 0, present: 0, away: 0, brk: 0, returns: 0,
+    awayEventId: null, awayAt: 0, awayLevel: 0, hb: '아직', last: Date.now()};
+  $('#report').hidden = true;
+  note(`공부 시작 (16): 세션 #${r.sessionId} · ${esc(r.character.name)} · 목표 ${r.targetMinutes}분`);
+  const p = num($('#startPoints')), m = num($('#startPresent'));
+  if (p != null || m != null) await adjust(p, m); // 인사(FOCUS) 전에 맞춰야 인사도 그 단계 말투로 나온다
+  clearInterval(S.timer);
+  S.timer = setInterval(tick, 1000);
+  sync();
+  await sendEvent('FOCUS', 0, '공부 시작');
+}
+
+async function sendEvent(type, ago = 0, label = EVENT[type]) {
+  const s = S.s;
+  if (!s) return;
+  if (type === 'AWAY') {
+    const back = Math.min(ago, s.present); // 늦게 알아챈 만큼은 자리 지킴 → 자리 비움으로 (프론트도 같게 셈)
+    s.present -= back; s.away += back;
+    // 강도 2 · 3은 이 AWAY의 eventId를 받은 뒤에만 (응답 전 tick이 예전 id로 부르지 않게)
+    s.mode = 'AWAY'; s.awayAt = Date.now() - back * 1000; s.awayLevel = 1; s.awayEventId = null;
+  } else if (type === 'RETURN') { s.mode = 'FOCUS'; s.returns++; }
+  else if (type === 'BREAK') s.mode = 'BREAK';
+  else if (type === 'FOCUS') s.mode = 'FOCUS';
+  sync();
+  try {
+    const occurredAt = new Date(type === 'AWAY' ? s.awayAt : Date.now()).toISOString();
+    const r = await call('POST', `/api/sessions/${s.id}/events`, {type, occurredAt});
+    if (r.eventId == null) return note(`${esc(label)} (18) → 무시됨: 쉬는 중이거나 같은 동작을 1분 안에 또 보냄`);
+    const c = r.characters[0] || {};
+    note(`${esc(label)} (18) · 알아채는 동작 ${c.motion ? esc(c.motion.file) : '없음'} · ${affinityText(c.affinity)}`);
+    await react(r.eventId, type === 'AWAY' ? 1 : undefined);
+    if (type === 'AWAY' && s.mode === 'AWAY') { s.awayEventId = r.eventId; sync(); }
+  } catch (e) { fail(label, e); }
+  refreshRelation();
+}
+
+async function react(eventId, intensity) {
+  const body = {requestId: crypto.randomUUID(), tts: false};
+  if (intensity) body.intensity = intensity;
+  S.lastReact = body.requestId;
+  try {
+    const r = await call('POST', `/api/sessions/${S.s.id}/events/${eventId}/reaction`, body);
+    // 19 프론트 참고: 마지막으로 보낸 요청의 응답이 아니면 버린다 (돌아왔는데 늦게 온 '자리 비웠어?')
+    if (r.requestId !== S.lastReact) return note('늦게 온 반응은 버림 (마지막 요청이 아님)');
+    for (const c of r.characters) say('char', esc(c.content), (intensity ? `강도 ${intensity} · ` : '') + looks(c));
+  } catch (e) { fail('반응 (19)', e); }
+}
+
+async function chat(content, inputType) {
+  if (!S.s || !content.trim()) return;
+  say('me', esc(content), inputType === 'QUICK' ? '빠른 답장' : '');
+  try {
+    const r = await call('POST', `/api/sessions/${S.s.id}/messages`,
+      {requestId: crypto.randomUUID(), characterId: S.s.characterId, content, inputType, tts: false});
+    say('char', esc(r.content), looks(r) + ' · ' + affinityText(r.affinity));
+  } catch (e) { fail('메시지 (20)', e); }
+  refreshRelation();
+}
+
+function tick() {
+  const s = S.s;
+  if (!s) return;
+  // 탭을 숨기면 브라우저가 타이머를 늦추므로 tick 횟수가 아니라 지난 시간으로 센다
+  const dt = Math.floor((Date.now() - s.last) / 1000);
+  if (dt < 1) return;
+  s.last += dt * 1000;
+  const before = s.study + s.brk;
+  if (s.mode === 'BREAK') s.brk += dt;
+  else { s.study += dt; if (s.mode === 'FOCUS') s.present += dt; else s.away += dt; }
+  if (s.mode === 'AWAY' && s.awayEventId) { // 프론트처럼: 1분 지나면 강도 2, 5분이면 강도 3 (한 번에 하나)
+    const gone = (Date.now() - s.awayAt) / 1000;
+    const want = gone >= 300 ? 3 : gone >= 60 ? 2 : 1;
+    if (want > s.awayLevel) { s.awayLevel = want; react(s.awayEventId, want); }
+  }
+  if (Math.floor((s.study + s.brk) / 60) > Math.floor(before / 60)) heartbeat();
+  renderTimes();
+}
+
+async function heartbeat() {
+  const s = S.s;
+  try {
+    await call('POST', `/api/sessions/${s.id}/heartbeat`, {studySeconds: s.study, presentSeconds: s.present});
+    s.hb = new Date().toLocaleTimeString() + ' 204';
+  } catch (e) { s.hb = '실패 ' + e.message; }
+}
+
+function renderTimes() {
+  const s = S.s;
+  $('#tStudy').textContent = s ? fmt(s.study) : '-';
+  $('#tPresent').textContent = s ? fmt(s.present) : '-';
+  $('#tAway').textContent = s ? fmt(s.away) : '-';
+  $('#tBreak').textContent = s ? fmt(s.brk) : '-';
+  $('#tReturns').textContent = s ? s.returns + '회' : '-';
+  $('#tHb').textContent = s ? s.hb : '-';
+}
+
+async function end() {
+  const s = S.s;
+  clearInterval(S.timer);
+  try {
+    const r = await call('POST', `/api/sessions/${s.id}/end`, {studySeconds: s.study, presentSeconds: s.present});
+    const adjusted = s.adjusted ? ' <span class="mut">(이 세션에서 손으로 맞춘 점수도 이번 변화로 셈)</span>' : '';
+    S.s = null;
+    const rel = r.relation;
+    $('#report').hidden = false;
+    $('#report').innerHTML = `<h3>3. 공부 끝 (22) · ${esc(r.endType)}</h3>
+      <table>
+        <tr><td>공부 시간 · 자리 지킴 · 자리 비움</td><td class="n">${fmt(r.studySeconds)} · ${fmt(r.presentSeconds)} · ${fmt(r.awaySeconds)}</td></tr>
+        <tr><td>복귀</td><td class="n">${r.returnCount}회</td></tr>
+        <tr><td>레벨 (자리 지킴 시간)</td><td class="n">Lv.${rel.levelBefore} → Lv.${rel.levelAfter}${rel.levelUp ? ' <b class="plus">레벨업</b>' : ''} · 다음 레벨은 누적 ${fmt(rel.nextLevelSeconds)}</td></tr>
+        <tr><td>호감도 (시작 → 끝)</td><td class="n">${rel.pointsBefore} → ${rel.pointsAfter} · ${rel.stage}단계 ${esc(rel.stageName)}${adjusted}</td></tr>
+      </table>
+      <p>완료 대사: <b>${esc(r.closingLine)}</b></p>`;
+    const again = await call('GET', `/api/sessions/${r.sessionId}/report`);
+    note(`공부 끝 · 리포트 조회 (23)는 ${JSON.stringify(again) === JSON.stringify(r) ? '22 응답과 같음' : '<b>22 응답과 다름</b> (요청 기록 확인)'}`);
+  } catch (e) {
+    fail('공부 끝 (22)', e);
+    if (S.s) { S.s.last = Date.now(); S.timer = setInterval(tick, 1000); } // 안 끝났으면 계속 센다 (다시 누를 수 있게)
+  }
+  sync();
+  renderTimes();
+  refreshRelation();
+}
+
+function sync() {
+  const s = S.s, mode = s ? s.mode : null;
+  $('#start').disabled = !!s || !characterId();
+  $('#room').disabled = $('#character').disabled = !!s || !S.rooms.length;
+  // 점수는 세션 기록으로만 맞춘다 (시작 전에는 '시작할 때 호감도' 칸). 세션 중에는 사용자를 바꾸지 않는다
+  for (const b of $$('#adjust, [data-p]')) b.disabled = !s;
+  for (const b of $$('#login, #newUser')) b.disabled = !!s;
+  $('#modeLabel').className = 'mode ' + (mode || '');
+  $('#modeLabel').textContent = {FOCUS: '· 자리 지킴', AWAY: '· 자리 비움', BREAK: '· 쉬는 중'}[mode] || '';
+  const on = {AWAY: mode === 'FOCUS', RETURN: mode === 'AWAY', BREAK: mode === 'FOCUS' || mode === 'AWAY', FOCUS: mode === 'BREAK'};
+  for (const b of $$('[data-ev]')) b.disabled = !s || (b.dataset.ev in on ? !on[b.dataset.ev] : false);
+  for (const b of $$('[data-int]')) b.disabled = mode !== 'AWAY' || !s.awayEventId;
+  for (const b of $$('#chatForm button, [data-q], #end')) b.disabled = !s;
+  $('#msg').disabled = !s;
+}
+
+$('#login').onclick = enter;
+$('#newUser').onclick = () => { $('#member').value = ''; enter(); };
+$('#room').onchange = () => loadRoom().catch(e => fail('룸 상세 (12)', e));
+$('#character').onchange = refreshRelation;
+$('#start').onclick = start;
+$('#end').onclick = end;
+for (const b of $$('[data-ev]')) b.onclick = () => sendEvent(b.dataset.ev, b.dataset.ev === 'AWAY' ? Number($('#awayAgo').value) || 0 : 0);
+for (const b of $$('[data-int]')) b.onclick = () => { const n = Number(b.dataset.int); S.s.awayLevel = Math.max(S.s.awayLevel, n); react(S.s.awayEventId, n); };
+for (const b of $$('[data-q]')) b.onclick = () => chat(b.dataset.q, 'QUICK');
+for (const b of $$('[data-p]')) b.onclick = () => adjust(Number(b.dataset.p), null);
+$('#adjust').onclick = () => adjust(num($('#adjPoints')), num($('#adjPresent')));
+$('#chatForm').onsubmit = ev => { ev.preventDefault(); const v = $('#msg').value; $('#msg').value = ''; chat(v, 'TEXT'); };
+sync();
+</script>
+</body>
+</html>
