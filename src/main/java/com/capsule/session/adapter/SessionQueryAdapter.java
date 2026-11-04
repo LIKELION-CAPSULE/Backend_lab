@@ -38,8 +38,12 @@ class SessionQueryAdapter implements SessionQuery {
             if (e.id() == eventId) {
                 boolean firstFocus = SessionEvent.FOCUS.equals(e.type())
                         && list.subList(0, i).stream().noneMatch(p -> SessionEvent.FOCUS.equals(p.type()));
-                boolean afterBreak =
-                        i > 0 && SessionEvent.BREAK.equals(list.get(i - 1).type());
+                // 바로 앞 '상태' 이벤트가 BREAK인지 (사이에 낀 동작 이벤트는 건너뜀, api.md 18)
+                boolean afterBreak = list.subList(0, i).stream()
+                        .filter(SessionEvent::isState)
+                        .reduce((a, b) -> b)
+                        .map(p -> SessionEvent.BREAK.equals(p.type()))
+                        .orElse(false);
                 return Optional.of(
                         new SessionEventInfo(e.id(), sessionId, e.type(), e.occurredAt(), firstFocus, afterBreak));
             }

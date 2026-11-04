@@ -287,6 +287,35 @@ class SessionApiTest {
         expectError(postEvent(newUser(), sessionId, "FOCUS", t0), 404, "SESSION_NOT_FOUND");
     }
 
+    @Test
+    void motionEventsHaveCooldownAndAreIgnoredDuringBreak() throws Exception {
+        long sessionId = start(userId);
+        Instant t0 = startedAt(sessionId);
+        event(sessionId, "FOCUS", t0, 201);
+
+        long yawn = event(sessionId, "YAWN", t0.plusSeconds(30), 201);
+        verify(relationCommands).applySessionEvent(new SessionEventRef(userId, 1, sessionId, yawn, "YAWN", false));
+        // 같은 동작 1분 안 → 무시 (서버 쿨다운). 다른 동작은 따로 셈
+        postEvent(userId, sessionId, "YAWN", t0.plusSeconds(60))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.eventId").value(nullValue()))
+                .andExpect(jsonPath("$.characters").isEmpty());
+        event(sessionId, "HEAD_TURN", t0.plusSeconds(60), 201);
+        event(sessionId, "YAWN", t0.plusSeconds(90), 201); // 1분 지남
+        assertThat(event(sessionId, "YAWN", t0.plusSeconds(30), 200)).isEqualTo(yawn); // 재전송은 쿨다운보다 먼저
+
+        // 휴식 중 동작 이벤트는 무시. 휴식 뒤 FOCUS는 그대로 휴식 뒤로 판정
+        event(sessionId, "BREAK", t0.plusSeconds(120), 201);
+        postEvent(userId, sessionId, "WAVE", t0.plusSeconds(130))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.eventId").value(nullValue()));
+        long focusAfterBreak = event(sessionId, "FOCUS", t0.plusSeconds(180), 201);
+        assertThat(sessionQuery.findEvent(sessionId, focusAfterBreak))
+                .get()
+                .extracting(SessionEventInfo::afterBreak)
+                .isEqualTo(true);
+    }
+
     // ---- 17 이어하기 · 21 heartbeat
 
     @Test

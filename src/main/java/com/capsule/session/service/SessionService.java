@@ -219,7 +219,9 @@ public class SessionService {
         StudySession s = inProgress(userId, sessionId);
         Instant now = now();
         List<SessionEvent> list = new ArrayList<>(events.findBySessionIdOrderByOccurredAtAscIdAsc(s.id()));
-        SessionEvent last = list.isEmpty() ? null : list.getLast();
+        // 동작 이벤트는 상태를 바꾸지 않으므로 마지막 '상태' 이벤트로 판단 (api.md 18)
+        SessionEvent last =
+                list.stream().filter(SessionEvent::isState).reduce((a, b) -> b).orElse(null);
         if (last == null || !BREAK.equals(last.type())) {
             // 끊긴 구간 = 휴식. heartbeat 뒤에 온 이벤트가 있으면 그 뒤부터 (그 상태가 끊긴 동안 이어지지 않게)
             Instant breakAt = s.lastHeartbeatAt() != null ? s.lastHeartbeatAt() : s.startedAt();
@@ -276,14 +278,22 @@ public class SessionService {
             SessionEventRef ref = eventRef(s, e.id(), type, firstFocus(list, e.id(), type, at));
             return new EventResponse(e.id(), eventCharacters(ref, relationQuery.changeOf(ref)), false);
         }
-        SessionEvent stateAt = null; // 이 이벤트 시각의 상태 (늦게 도착한 이벤트도 제자리에서 판단)
+        SessionEvent stateAt = null; // 이 이벤트 시각의 상태 (늦게 도착한 이벤트도 제자리에서 판단). 동작 이벤트는 상태가 아님
         for (SessionEvent e : list) {
-            if (!e.occurredAt().isAfter(at)) {
+            if (e.isState() && !e.occurredAt().isAfter(at)) {
                 stateAt = e;
             }
         }
-        if (stateAt != null && BREAK.equals(stateAt.type()) && (AWAY.equals(type) || RETURN.equals(type))) {
+        boolean motion = SessionEvent.MOTION_TYPES.contains(type);
+        if (stateAt != null && BREAK.equals(stateAt.type()) && (AWAY.equals(type) || RETURN.equals(type) || motion)) {
             // 명세는 "서버가 무시"뿐이라 저장하지 않고 eventId null로 돌려준다
+            return EventResponse.ignored();
+        }
+        // 동작 이벤트 쿨다운 (api.md 18): 같은 type이 1분 안에 다시 오면 무시. 늦게 도착한 앞선 이벤트도 걸리게 앞뒤로 본다
+        if (motion
+                && list.stream()
+                        .anyMatch(e -> e.type().equals(type)
+                                && Duration.between(e.occurredAt(), at).abs().compareTo(Duration.ofMinutes(1)) < 0)) {
             return EventResponse.ignored();
         }
 

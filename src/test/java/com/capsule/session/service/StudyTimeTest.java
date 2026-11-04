@@ -32,6 +32,23 @@ class StudyTimeTest {
         assertThat(time.studySeconds()).isEqualTo(40 * 60);
     }
 
+    @Test
+    void motionEventsDoNotChangeState() {
+        List<SessionEvent> events = List.of(
+                event("FOCUS", 0),
+                event("AWAY", 10),
+                event("HEAD_TURN", 12), // 자리 비움 중에 와도 자리 지킴으로 바뀌지 않음
+                event("RETURN", 15),
+                event("BREAK", 20),
+                event("YAWN", 25), // 휴식을 끊지 않음
+                event("FOCUS", 30));
+
+        StudyTime time = StudyTime.of(T0, events, T0.plus(40, MINUTES));
+
+        // 자리 지킴: 0~10 15~20 30~40 / 자리 비움: 10~15 / 휴식: 20~30
+        assertThat(time).isEqualTo(new StudyTime(25 * 60, 5 * 60, 10 * 60));
+    }
+
     static SessionEvent event(String type, int minute) {
         return new SessionEvent(1, type, T0.plus(minute, MINUTES));
     }

@@ -18,6 +18,9 @@ record StudyTime(int presentSeconds, int awaySeconds, int breakSeconds) {
         int state = 0; // 첫 이벤트 전 구간은 자리 지킴
         Instant from = startedAt;
         for (SessionEvent e : events) {
+            if (!e.isState()) {
+                continue; // 동작 이벤트는 구간을 끊지 않는다 (api.md 18)
+            }
             Instant to = e.occurredAt().isBefore(end) ? e.occurredAt() : end;
             if (to.isAfter(from)) {
                 millis[state] += Duration.between(from, to).toMillis();
