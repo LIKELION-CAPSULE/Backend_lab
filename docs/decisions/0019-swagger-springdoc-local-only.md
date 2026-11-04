@@ -15,4 +15,6 @@
   - springdoc 3.2.0: Boot 4.1.2 기준이지만 나온 지 2주가 안 됐다. 3.1.1이 문제를 보이면 올린다
 - 대가
   - 응답 예시 · 설명은 애너테이션을 달기 전까지 비어 있다. 필드 의미는 api.md를 본다
+  - springdoc(swagger-core)이 Jackson 2를 같이 들여온다(앱의 JSON 변환은 Jackson 3 그대로). Boot BOM이 swagger-core가 원하는 2.22보다 낮은 2.21로 맞춘다. 문서 생성에서 `NoSuchMethodError` 같은 오류가 나면 springdoc을 올리는 것부터 본다
+  - 서버 주소는 상대 경로(`/`)로 고정했다. 프록시 뒤에서 http 주소가 캐시되는 문제를 피하려는 것
   - Swagger와 api.md가 다르면 코드가 명세와 어긋난 것이다. 명세가 맞으면 코드를, 코드가 맞으면 명세 PR을 고친다(0015)

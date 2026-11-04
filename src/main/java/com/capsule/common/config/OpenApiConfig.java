@@ -5,6 +5,8 @@ import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.security.SecurityRequirement;
 import io.swagger.v3.oas.models.security.SecurityScheme;
+import io.swagger.v3.oas.models.servers.Server;
+import java.util.List;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -20,6 +22,8 @@ class OpenApiConfig {
     @Bean
     OpenAPI capsuleOpenApi() {
         return new OpenAPI()
+                // 상대 주소로 고정: Railway 프록시 뒤에서 첫 요청의 http 주소가 캐시되어 https 화면에서 막히는 일을 피한다
+                .servers(List.of(new Server().url("/")))
                 .info(new Info()
                         .title("캡슐 API")
                         .description("명세 원본: docs/specs/api.md")
