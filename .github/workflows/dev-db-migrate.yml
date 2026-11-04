@@ -1,13 +1,12 @@
 # develop에 머지된 마이그레이션 · 예시 시드를 공용 개발 DB(Supabase 개발 프로젝트)에 넣는다 (ADR 0017).
 # 공용 개발 DB에 마이그레이션을 넣는 곳은 여기 하나뿐이다. 앱(shared-db 프로필)은 Flyway를 끈다.
-# develop의 verify가 통과한 뒤에만 돈다. 새 마이그레이션이 없으면 Flyway가 아무것도 하지 않는다.
+# develop에 마이그레이션 · 시드가 바뀐 커밋이 push되면 돈다(CI verify는 ADR 0021에서 뺐다). 새 마이그레이션이 없으면 Flyway가 아무것도 하지 않는다.
 name: dev-db-migrate
 
 on:
-  workflow_run:
-    workflows: [verify]
-    types: [completed]
+  push:
     branches: [develop]
+    paths: ['src/main/resources/db/**']
   workflow_dispatch: # 시크릿을 처음 넣었을 때 등 손으로 한 번 돌릴 때 (develop에서만)
 
 permissions:
@@ -19,14 +18,10 @@ concurrency:
 
 jobs:
   migrate:
-    if: >-
-      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
-      || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/develop')
+    if: github.ref == 'refs/heads/develop'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: 시크릿 확인
         id: check

@@ -8,7 +8,10 @@ description: 지금 세션의 작업 맥락으로 PR 본문을 쓰고 PR을 연�
 리뷰어는 diff만 본다. "왜 이렇게 했는지"는 지금 이 세션에만 있다. 그걸 PR 본문에 옮긴다.
 
 ## 절차
-1. `scripts/verify.sh` (full) 실행. 실패하면 PR을 만들지 않고 고친다.
+1. 검증. CI는 빌드 · 테스트를 돌리지 않으므로(ADR 0021) 여기가 머지 전 마지막 테스트다. 실패하면 PR을 만들지 않고 고친다.
+   - 공용(`common`, gradle, yml) · 계약(`*/api/**`) · 마이그레이션 · 여러 모듈을 바꿨으면 `scripts/verify.sh` (full, E2E 포함)
+   - 내 모듈 안만 바꿨으면 `scripts/verify.sh --quick` (Stop 훅이 이미 돌렸으면 그 결과로 갈음)
+   - PR 직전에 `git rebase origin/develop` 후 검증한다. 합친 결과를 보는 CI가 없어서, rebase로 최신 develop 위에서 확인한다
 2. reviewer 서브에이전트로 셀프 리뷰. '반드시 고칠 것'이 있으면 고치고 다시 1.
 3. 정보 수집
    - `git log --oneline origin/develop..HEAD`, `git diff --stat origin/develop...HEAD`
@@ -19,7 +22,7 @@ description: 지금 세션의 작업 맥락으로 PR 본문을 쓰고 PR을 연�
      - 결정과 이유: 코드만 봐서는 모를 선택. "무엇"이 아니라 "왜". 이 세션에서 사람과 합의한 내용 포함
      - 시도했다 버린 것: 되돌린 접근과 이유. 리뷰어의 "이렇게 하면 되잖아?"를 미리 막음
      - 일부러 안 한 것: 범위 밖, 남긴 TODO(judgment)
-     - 검증: verify 결과 한 줄, 직접 확인한 플로우
+     - 검증: 돌린 verify(`--quick`/full)와 결과 한 줄, 직접 확인한 플로우
      - `docs/specs/api.md`를 바꿨으면 끝에 `### 코드 반영`: 영향받는 모듈마다 기능 PR · 이슈 번호, 브랜치, 또는 `없음 (이유)`. 비면 CI가 실패한다 (spec-sync 스킬 A-5, ADR 0015)
    - **스크린샷**: 있으면. 없으면 비워 둔다
    - **💬리뷰 요구사항(선택)**: 3의 구역 판정에 cross-module/zone:contract/zone:shared/zone:migration이 나오면 그 파일과 이유를 반드시 적는다 (PR 라벨은 붙지 않으므로 본문이 유일한 표시)
@@ -31,7 +34,7 @@ description: 지금 세션의 작업 맥락으로 PR 본문을 쓰고 PR을 연�
 7. 본문 초안을 사람에게 보여주고 확인받은 뒤:
    `git push -u origin HEAD` → `gh pr create --base develop --title "<제목>" --body-file <파일>`
    (draft로 만들지 않고 리뷰어도 지정하지 않는다. 상대 리뷰는 필수가 아니다)
-8. 사람에게 안내: CI(verify·zones)가 초록이면 작성자가 머지한다(squash 권장). 위험 구역(계약·공용·마이그레이션·남의 모듈)을 건드렸으면 Claude 자동 리뷰가 의견을 남기지만 머지를 막지는 않는다. 상대에게 한 줄 공유.
+8. 사람에게 안내: CI(zones, 몇 초)가 초록이면 작성자가 머지한다(squash 권장). CI가 끝나기를 기다리며 붙잡지 말고 PR을 열면 바로 보고한다. 위험 구역(계약·공용·마이그레이션·남의 모듈)을 건드렸으면 Claude 자동 리뷰가 의견을 남기지만 머지를 막지는 않는다. 상대에게 한 줄 공유.
 
 ## 하네스 변경 PR
 브랜치가 `harness/*`면 '리뷰 요구사항'에 "이 변경 후 두 사람의 에이전트 동작이 어떻게 달라지는지"를 적는다.
