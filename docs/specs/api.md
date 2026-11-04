@@ -1140,7 +1140,7 @@ GET /api/me/memories?date=2026-11-12
 | characters | Array | 이번에 말하는 캐릭터만 (1:1 룸이면 1개) |
 | characters[].characterId | Long | 캐릭터 id |
 | characters[].content | String | 말풍선 대사 (2줄 이내) |
-| characters[].emotion | String | 대사의 표정 이름. **목록은 캐릭터 설정(`character_profiles.expressions`)이 정한다** (말포이: `삐짐` · `행복`(함박웃음) · `경멸` · `하품` · `화남` · `웃음` · `수줍음` · `집중`, 승희 확정 2026-11-05). 에셋이 없는 표정은 서버가 대체 표정(`expression_fallbacks`)으로 고른다(말포이는 8개 모두 있어 없음). 말포이 동작(모션)은 숨쉬기 같은 기본 동작뿐이라 `motion`은 보통 null. 설정이 없는 캐릭터는 공통 후보(`HAPPY` · `SHY` · `ANGRY` · `SAD` · `SURPRISED` · `NEUTRAL`). ⚠️ 고정 대사(`fallback: true`)일 때 값은 확정 필요 (지금 구현은 null) |
+| characters[].emotion | String | 대사의 표정 이름. **목록은 캐릭터 설정(`character_profiles.expressions`)이 정한다** (말포이: `삐짐` · `행복`(함박웃음) · `경멸` · `하품` · `화남` · `웃음` · `수줍음` · `집중`, 승희 확정 2026-11-05). 에셋이 없는 표정은 서버가 대체 표정(`expression_fallbacks`)으로 고른다(말포이는 8개 모두 있어 없음). LLM이 목록 밖 감정 이름을 쓰면 같은 대체 표로 목록 안 표정으로 바꾸고(말포이: 걱정 → 집중, 질투 · 서운함 → 삐짐 등), 표에도 없으면 null (2026-11-05). 말포이 동작(모션)은 숨쉬기 같은 기본 동작뿐이라 `motion`은 보통 null. 설정이 없는 캐릭터는 공통 후보(`HAPPY` · `SHY` · `ANGRY` · `SAD` · `SURPRISED` · `NEUTRAL`). ⚠️ 고정 대사(`fallback: true`)일 때 값은 확정 필요 (지금 구현은 null) |
 | characters[].motion | Object | `group`, `file` — 감정에 맞는 모션 (없으면 null → 18 동작 유지) |
 | characters[].expression | Object | `name`, `file` — 감정에 맞는 표정 (없으면 null) |
 | characters[].fallback | Boolean | LLM 5초 초과로 고정 대사를 썼는지 |
