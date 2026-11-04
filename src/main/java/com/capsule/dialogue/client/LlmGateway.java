@@ -5,7 +5,6 @@ import com.capsule.dialogue.domain.LlmUsage;
 import com.capsule.dialogue.dto.LlmContext;
 import com.capsule.dialogue.dto.LlmPurpose;
 import com.capsule.dialogue.dto.ProviderRequest;
-import com.capsule.dialogue.engine.Llm;
 import com.capsule.dialogue.repository.LlmUsageRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;

@@ -1,10 +1,11 @@
 package com.capsule.dialogue.engine;
 
-import static com.capsule.dialogue.engine.Llm.Role.ACTOR;
-import static com.capsule.dialogue.engine.Llm.Role.DIRECTOR;
-import static com.capsule.dialogue.engine.Llm.Role.JUDGE;
+import static com.capsule.dialogue.client.Llm.Role.ACTOR;
+import static com.capsule.dialogue.client.Llm.Role.DIRECTOR;
+import static com.capsule.dialogue.client.Llm.Role.JUDGE;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.capsule.dialogue.client.Llm;
 import com.capsule.dialogue.client.LlmJson;
 import com.capsule.dialogue.config.ContentLoader;
 import java.util.ArrayList;

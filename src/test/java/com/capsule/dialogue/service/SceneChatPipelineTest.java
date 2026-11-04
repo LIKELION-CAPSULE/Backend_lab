@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.capsule.content.api.ContentTypes.CharacterInfo;
+import com.capsule.dialogue.client.Llm;
 import com.capsule.dialogue.client.LlmJson;
 import com.capsule.dialogue.config.CharacterContentSeeder;
 import com.capsule.dialogue.domain.ChatMessage;
@@ -11,7 +12,6 @@ import com.capsule.dialogue.dto.CharacterContent;
 import com.capsule.dialogue.dto.ChatInput;
 import com.capsule.dialogue.dto.ChatLine;
 import com.capsule.dialogue.dto.EngineOptions;
-import com.capsule.dialogue.engine.Llm;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;

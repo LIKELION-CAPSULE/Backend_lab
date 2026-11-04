@@ -5,7 +5,6 @@ import static com.capsule.dialogue.client.LlmJson.str;
 
 import com.capsule.dialogue.config.LlmProperties;
 import com.capsule.dialogue.dto.ProviderRequest;
-import com.capsule.dialogue.engine.Llm;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;

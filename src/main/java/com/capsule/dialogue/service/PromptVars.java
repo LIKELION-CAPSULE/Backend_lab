@@ -2,10 +2,10 @@ package com.capsule.dialogue.service;
 
 import com.capsule.common.time.ClockConfig;
 import com.capsule.content.api.ContentTypes.CharacterInfo;
+import com.capsule.dialogue.client.Llm;
 import com.capsule.dialogue.domain.ChatMessage;
 import com.capsule.dialogue.domain.PromptVersion;
 import com.capsule.dialogue.dto.ChatLine;
-import com.capsule.dialogue.engine.Llm;
 import java.time.Clock;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;

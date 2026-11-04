@@ -1,5 +1,9 @@
 package com.capsule.dialogue.engine;
 
+import com.capsule.dialogue.client.Llm;
+import com.capsule.dialogue.client.Llm.ChatTurn;
+import com.capsule.dialogue.client.Llm.Role;
+import com.capsule.dialogue.client.Llm.SystemBlock;
 import com.capsule.dialogue.engine.Analysis.Craft;
 import com.capsule.dialogue.engine.Analysis.Signals;
 import com.capsule.dialogue.engine.Content.Beat;
@@ -8,9 +12,6 @@ import com.capsule.dialogue.engine.Content.LoreCard;
 import com.capsule.dialogue.engine.Content.WorldEvent;
 import com.capsule.dialogue.engine.DialogueState.HistoryMessage;
 import com.capsule.dialogue.engine.DialogueState.TurnSummary;
-import com.capsule.dialogue.engine.Llm.ChatTurn;
-import com.capsule.dialogue.engine.Llm.Role;
-import com.capsule.dialogue.engine.Llm.SystemBlock;
 import com.capsule.dialogue.engine.Planning.DirectorPlan;
 import com.capsule.dialogue.engine.Planning.Plan;
 import com.capsule.dialogue.engine.Planning.SubPlan;

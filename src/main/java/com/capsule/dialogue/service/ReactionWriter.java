@@ -1,6 +1,7 @@
 package com.capsule.dialogue.service;
 
 import com.capsule.content.api.ContentTypes.CharacterInfo;
+import com.capsule.dialogue.client.Llm;
 import com.capsule.dialogue.client.LlmGateway;
 import com.capsule.dialogue.client.LlmJson;
 import com.capsule.dialogue.config.DialogueProperties;
@@ -12,7 +13,6 @@ import com.capsule.dialogue.dto.ChatLine;
 import com.capsule.dialogue.dto.LlmContext;
 import com.capsule.dialogue.dto.LlmPurpose;
 import com.capsule.dialogue.dto.ReactionLine;
-import com.capsule.dialogue.engine.Llm;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;

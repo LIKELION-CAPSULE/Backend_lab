@@ -2,6 +2,7 @@ package com.capsule.dialogue.service;
 
 import com.capsule.common.error.ApiException;
 import com.capsule.content.api.ContentTypes.CharacterInfo;
+import com.capsule.dialogue.client.Llm;
 import com.capsule.dialogue.client.LlmGateway;
 import com.capsule.dialogue.client.LlmJson;
 import com.capsule.dialogue.config.DialogueProperties;
@@ -25,7 +26,6 @@ import com.capsule.dialogue.dto.LlmPurpose;
 import com.capsule.dialogue.dto.RatingRequest;
 import com.capsule.dialogue.dto.TranscriptTurn;
 import com.capsule.dialogue.engine.DialogueState;
-import com.capsule.dialogue.engine.Llm;
 import com.capsule.dialogue.repository.EvalCaseRepository;
 import com.capsule.dialogue.repository.EvalResultRepository;
 import com.capsule.dialogue.repository.EvalRunRepository;

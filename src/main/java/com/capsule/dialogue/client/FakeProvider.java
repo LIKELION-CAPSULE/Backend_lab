@@ -1,7 +1,6 @@
 package com.capsule.dialogue.client;
 
 import com.capsule.dialogue.dto.ProviderRequest;
-import com.capsule.dialogue.engine.Llm;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;

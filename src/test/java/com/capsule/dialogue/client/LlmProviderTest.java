@@ -6,7 +6,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.capsule.dialogue.config.LlmProperties;
 import com.capsule.dialogue.dto.LlmPurpose;
 import com.capsule.dialogue.dto.ProviderRequest;
-import com.capsule.dialogue.engine.Llm;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.io.OutputStream;

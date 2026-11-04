@@ -1,4 +1,4 @@
-package com.capsule.dialogue.engine;
+package com.capsule.dialogue.client;
 
 import java.util.List;
 import java.util.Map;

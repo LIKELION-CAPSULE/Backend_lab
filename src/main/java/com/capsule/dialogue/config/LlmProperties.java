@@ -1,7 +1,7 @@
 package com.capsule.dialogue.config;
 
+import com.capsule.dialogue.client.Llm;
 import com.capsule.dialogue.dto.LlmPurpose;
-import com.capsule.dialogue.engine.Llm;
 import java.time.Duration;
 import java.util.Map;
 import org.springframework.boot.context.properties.ConfigurationProperties;
