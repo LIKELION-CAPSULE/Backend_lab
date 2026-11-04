@@ -45,7 +45,37 @@ class SceneChatPipelineTest {
         assertThat(card).contains("시험: 중간고사"); // 세션 첫 대화에만 일정
         assertThat(card).contains("\"흥\"로 말을 시작하지 않기"); // 말버릇은 데이터
         assertThat(card).contains("이번 대화 기술: ");
-        assertThat(card.lines().count()).isLessThan(40);
+        // 기억 세 겹은 전부 (아는 사실 · 세션 카드). 원문 20줄은 메시지로 따로 간다
+        assertThat(card).contains("사용자는 토익 800 목표", "사용자는 밤에 공부가 잘 됨");
+        assertThat(card).contains("11/03 55분, 3단원 하다 일찍 끝냄");
+    }
+
+    @Test
+    void allTwentyFactsAndFiveCardsFit() {
+        List<String> facts = java.util.stream.IntStream.rangeClosed(1, 20)
+                .mapToObj(i -> "사용자에 대한 사실 " + i + "번은 사십 자 정도 되는 꽤 긴 한 줄짜리 기억이다")
+                .toList();
+        ChatInput base = input("오늘 뭐 해", List.of(), facts);
+        String cards = String.join(
+                "\n",
+                java.util.stream.IntStream.rangeClosed(1, 5)
+                        .mapToObj(i -> "11/0" + i + " 55분, 지난번엔 3단원 하다 지쳐서 일찍 끝냈고 놀렸더니 삐짐")
+                        .toList());
+        ChatInput in = new ChatInput(
+                base.character(),
+                base.nickname(),
+                base.relationLevel(),
+                cards,
+                facts,
+                base.memories(),
+                base.history(),
+                base.userMessage(),
+                null,
+                Map.of(),
+                EngineOptions.DEFAULT);
+        String card = SceneChatPipeline.scene(MALFOY, in, false).card();
+        assertThat(card).contains("사실 1번", "사실 20번", "11/01", "11/05");
+        assertThat(card.length()).isLessThan(3_000); // 다 넣어도 장면 카드는 작다
     }
 
     @Test
@@ -59,14 +89,10 @@ class SceneChatPipelineTest {
     }
 
     @Test
-    void movesFollowTheSignalAndFactsFollowTheWords() {
+    void movesFollowTheSignal() {
         assertThat(SceneChatPipeline.pickMove(
                                 MALFOY.moves(), com.capsule.relation.api.RelationTypes.SignalType.COMPLIMENT)
                         .code())
                 .isEqualTo("flustered");
-        List<String> facts = List.of("사용자는 토익 800 목표", "사용자는 밤에 공부가 잘 됨", "사용자는 수학이 불안함");
-        // 모든 사실에 붙은 "사용자는"으로는 고르지 않는다
-        assertThat(SceneChatPipeline.pickFacts(facts, "토익 점수 걱정돼")).containsExactly("사용자는 토익 800 목표");
-        assertThat(SceneChatPipeline.pickFacts(facts, "오늘 날씨")).hasSize(2); // 겹치는 게 없으면 최근 2개
     }
 }

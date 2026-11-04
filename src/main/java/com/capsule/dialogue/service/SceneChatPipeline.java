@@ -17,12 +17,9 @@ import com.capsule.dialogue.dto.LlmPurpose;
 import com.capsule.dialogue.engine.Llm;
 import com.capsule.relation.api.RelationTypes.SignalType;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
@@ -37,8 +34,6 @@ import tools.jackson.databind.JsonNode;
 class SceneChatPipeline implements ChatPipeline {
 
     static final int MAX_LORE = 4;
-    static final int MAX_FACTS = 3;
-    static final int MAX_RECAPS = 2;
     // TODO(judgment): J-05 세계 사건이 저절로 일어날 확률 (한 턴마다)
     static final double EVENT_CHANCE = 0.15;
 
@@ -124,14 +119,11 @@ class SceneChatPipeline implements ChatPipeline {
         if (!lore.isEmpty())
             L.add("<세계 지식>\n" + lore.stream().map(l -> "- " + l.body()).collect(Collectors.joining("\n"))
                     + "\n</세계 지식>");
-        List<String> facts = pickFacts(in.facts(), hay);
-        if (!facts.isEmpty()) L.add("<아는 사실>\n- " + String.join("\n- ", facts) + "\n</아는 사실>");
-        if (in.summary() != null && !in.summary().isBlank()) {
-            List<String> cards = Arrays.asList(in.summary().split("\n"));
-            L.add("<지난 세션 흐름>\n"
-                    + String.join("\n", cards.subList(Math.max(0, cards.size() - MAX_RECAPS), cards.size()))
-                    + "\n</지난 세션 흐름>");
-        }
+        // 기억 세 겹은 전부 넣는다 (ADR 0022 결정 14): 아는 사실 최대 20개 · 세션 카드 최근 5장 · 원문 20줄(메시지).
+        // 크기가 정해져 있어 다 넣어도 1천 자 남짓. 쓸지 말지는 답장 모델이 정한다 (시스템 블록 <읽는 법>)
+        if (!in.facts().isEmpty()) L.add("<아는 사실>\n- " + String.join("\n- ", in.facts()) + "\n</아는 사실>");
+        if (in.summary() != null && !in.summary().isBlank())
+            L.add("<지난 세션 흐름 (최근 것이 아래)>\n" + in.summary() + "\n</지난 세션 흐름>");
         // 사용자 일정은 공부 시작(이 세션 첫 대화)에만 (PM 확정: 시작과 끝에만)
         if (in.history().isEmpty() && !in.memories().isEmpty())
             L.add("<사용자 일정>\n- " + String.join("\n- ", in.memories()) + "\n</사용자 일정>");
@@ -184,32 +176,6 @@ class SceneChatPipeline implements ChatPipeline {
         return null;
     }
 
-    /**
-     * 아는 사실 중 지금 말과 글자 두 개 이상 겹치는 것부터 최대 3개, 겹치는 게 없으면 최근 2개.
-     * ponytail: 두 글자 겹침으로 고른다. 엉뚱한 기억이 자주 나오면 결정 모델에게 고르게 한다
-     */
-    static List<String> pickFacts(List<String> facts, String hay) {
-        if (facts.isEmpty()) return List.of();
-        Set<String> grams = bigrams(hay);
-        // 모든 사실에 있는 글자(예: "사용자는")는 고르는 데 쓸모가 없다
-        if (facts.size() > 1)
-            facts.stream()
-                    .map(SceneChatPipeline::bigrams)
-                    .reduce((a, b) -> {
-                        Set<String> both = new java.util.HashSet<>(a);
-                        both.retainAll(b);
-                        return both;
-                    })
-                    .ifPresent(grams::removeAll);
-        List<String> related = facts.stream()
-                .filter(f -> bigrams(f).stream().anyMatch(grams::contains))
-                .sorted(Comparator.comparingLong(
-                        f -> -bigrams(f).stream().filter(grams::contains).count()))
-                .limit(MAX_FACTS)
-                .toList();
-        return related.isEmpty() ? facts.subList(Math.max(0, facts.size() - 2), facts.size()) : related;
-    }
-
     /** 말버릇 규칙: 첫마디 금지는 늘, 세션 한 번은 이번 세션 캐릭터 대사에 이미 있으면 */
     static List<String> avoid(CharacterContent c, List<ChatLine> history) {
         List<String> out = new ArrayList<>();
@@ -220,13 +186,6 @@ class SceneChatPipeline implements ChatPipeline {
                             .anyMatch(l -> ChatMessage.CHARACTER.equals(l.sender())
                                     && l.content().contains(phrase))) out.add("\"" + phrase + "\" 쓰지 않기 (이번 세션에 이미 씀)");
         });
-        return out;
-    }
-
-    private static Set<String> bigrams(String s) {
-        String t = s.replaceAll("\\s+", "");
-        Set<String> out = new java.util.HashSet<>();
-        for (int i = 0; i + 1 < t.length(); i++) out.add(t.substring(i, i + 2));
         return out;
     }
 }

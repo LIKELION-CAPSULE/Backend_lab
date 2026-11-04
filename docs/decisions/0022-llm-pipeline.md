@@ -36,7 +36,7 @@
   15. **세계관 · 캐릭터 설정은 DB 데이터, 답장은 장면 카드(SCENE) 파이프라인 (2026-11-04, 승희).** 첫 캐릭터는 말포이(PM 확정).
       - 테이블(dialogue 모듈): `worlds` · `world_lore` · `world_events` · `character_profiles`(정체성 · 화법 · 절대 규칙 · 안전 기준 · 표정 · 대체 표정 · 관계 단계 말투) · `character_moves`(대화 기술 + 어울리는 말의 종류) · `character_lines`(상황별 미리 쓴 대사, 순서대로) · `character_scores`(대화 점수표) · `character_habits`(피할 말버릇). `characters`(content)는 화면용 정보만.
       - 처음 값은 git의 `classpath:characters/<code>/`(profile.yml + 엔진 형식 character.yml)에서 **DB가 비어 있을 때만** 불러온다(`CharacterContentSeeder`). 그 뒤로는 DB가 원본이고 실험실 API(`/internal/llm-lab/api/characters/{id}/content`, GET · PUT, reseed)로 고친다. 운영에도 같은 길로 들어간다(Flyway 시드가 안 도는 운영에서도).
-      - SCENE: 코드가 이번 턴에 쓸 것만 고른다. 키워드가 맞는 지식 ≤4장, 말의 종류에 맞는 대화 기술 1개 + 예시 2개, 가끔 세계 사건 1개, 아는 사실 ≤3개(글자 겹침), 세션 카드 ≤2장, 관계 단계 말투 한 줄, 일정은 세션 첫 대화에만, 피할 말버릇. LLM은 한 번: [바이블 · 규칙 · 세계 · 표정(매번 같아서 캐시)] + [장면 카드] + 이번 세션 대화. 설정이 없는 캐릭터는 SIMPLE로 넘긴다.
+      - SCENE: 코드가 이번 턴에 쓸 것만 고른다. 키워드가 맞는 지식 ≤4장, 말의 종류에 맞는 대화 기술 1개 + 예시 2개, 가끔 세계 사건 1개, 관계 단계 말투 한 줄, 기억 세 겹은 결정 14대로 전부(아는 사실 최대 20개 · 세션 카드 최근 5장 · 원문 20줄), 일정은 세션 첫 대화에만, 피할 말버릇. LLM은 한 번: [바이블 · 규칙 · 세계 · 표정(매번 같아서 캐시)] + [장면 카드] + 이번 세션 대화. 설정이 없는 캐릭터는 SIMPLE로 넘긴다.
       - 상태 반응 · 5초 대체 대사 · 완료 대사는 그 캐릭터의 `character_lines`가 있으면 그것(순서대로, PM 확정), AI 상태 반응은 `reaction-llm-triggers: []`로 끈다. 표정 에셋이 없으면 `expression_fallbacks`로 대신.
       - 대화 점수표는 `character_scores`가 있으면 그것, 없으면 설정의 기본 표.
 - 이유
