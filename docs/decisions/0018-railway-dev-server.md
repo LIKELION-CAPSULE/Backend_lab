@@ -1,0 +1,27 @@
+# 0018 배포는 Railway + Dockerfile, 먼저 프론트 연동용 개발 서버 (0016 · 0017 이어서)
+
+- 결정
+  - 앱 서버는 Railway에서 돌린다. 빌드는 레포의 `Dockerfile`(Java 21, 실행 이미지는 JRE만), 설정은 `railway.json`(Dockerfile 빌드, `/actuator/health` 헬스체크)
+  - 먼저 프론트 연동용 개발 서버(Railway `dev` 환경)를 띄운다. 프로필 `local,shared-db,dev-server`: DB는 공용 개발 DB(0017), 카카오 · 메일은 Fake
+  - Redis는 같은 Railway 프로젝트의 Redis 서비스. 앱은 `REDIS_URL`(= `${{Redis.REDIS_URL}}`)로 붙는다. 0016 '남은 일'의 운영 Redis도 같은 방식으로 한다
+  - 운영(production 환경, `prod` 프로필)은 실제 메일 어댑터(#18)가 생긴 뒤 같은 이미지로 띄운다
+- 이유
+  - Railway는 레포 연결만으로 push마다 배포되고, Redis를 같은 프로젝트에 붙일 수 있다. 2인 팀이 서버 · 네트워크를 직접 관리하지 않아도 된다
+  - Dockerfile을 두면 Java 버전 · 실행 옵션이 레포에 남고, 로컬에서 같은 이미지를 만들어 확인할 수 있다
+  - 운영 프로필은 메일 어댑터가 없어 시작에 실패한다. 프론트는 지금 붙을 서버가 필요하다(2026-11-04 합의)
+- 버린 대안
+  - Railway 자동 빌드(Railpack): 파일이 필요 없지만 빌드 방식이 Railway 설정에 숨고 로컬에서 재현하기 어렵다
+  - Render · Fly.io: Render 무료는 잠들면 첫 요청이 느리고 Redis가 따로다. Fly.io는 설정 파일 · 네트워크를 더 다뤄야 한다
+  - AWS(EC2 · ECS): 비용과 운영 부담
+- Railway 변수 (dev 환경)
+  - `SPRING_PROFILES_ACTIVE=local,shared-db,dev-server`
+  - `CAPSULE_DEV_DB_URL` · `CAPSULE_DEV_DB_USERNAME` · `CAPSULE_DEV_DB_PASSWORD`: 공용 개발 DB(0017)
+  - `REDIS_URL=${{Redis.REDIS_URL}}`
+  - `CAPSULE_JWT_SECRET`: 32바이트 이상 무작위 값. local 기본값을 쓰지 않는다
+  - `CAPSULE_CORS_ORIGINS`: 프론트 주소
+  - `CAPSULE_REFRESH_COOKIE_SAME_SITE`: 기본 `None`(프론트와 도메인이 다를 때). 같은 사이트면 `Lax`
+  - 배포 브랜치: `develop`. Railway의 "Wait for CI"를 켜서 verify가 통과한 커밋만 배포한다
+- 대가
+  - 개발 서버는 Fake 카카오라 주소를 아는 사람은 `fake-kakao:<번호>:<이름>`으로 로그인된다. 개발 데이터만 두고 주소를 널리 공유하지 않는다. 시연 · 실사용자는 운영 환경으로
+  - 개발 서버도 공용 개발 DB를 쓰므로 마이그레이션은 0017대로 Actions가 넣는다. 새 테이블 · 컬럼이 든 머지에서 앱 배포가 마이그레이션보다 먼저 끝나면 `ddl-auto: validate`로 새 배포가 시작에 실패한다. Railway는 헬스체크를 통과 못 한 배포로 바꾸지 않으므로 이전 버전이 계속 돈다. `dev-db-migrate`가 끝난 뒤 Railway에서 Redeploy
+  - Railway 서버 지역은 Supabase 지역과 가깝게 둔다(DB 왕복 시간)
