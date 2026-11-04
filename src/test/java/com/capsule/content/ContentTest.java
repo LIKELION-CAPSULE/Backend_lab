@@ -58,10 +58,13 @@ class ContentTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.avatars[0].id").value(1))
                 .andExpect(jsonPath("$.avatars[0].name").value("기본 아바타"))
-                .andExpect(jsonPath("$.avatars[0].thumbnailUrl").value("https://cdn.capsule.invalid/avatar1.png"))
+                .andExpect(
+                        jsonPath("$.avatars[0].thumbnailUrl")
+                                .value(
+                                        "https://belbmclzeenlntgpekww.supabase.co/storage/v1/object/public/live2d-model/haru/thumbnail.png"))
                 .andExpect(jsonPath("$.avatars[0].active").doesNotExist())
                 .andExpect(jsonPath("$.avatars[0].model.modelJsonUrl")
-                        .value("https://cdn.capsule.invalid/live2d/avatar1/v1/avatar1.model3.json"))
+                        .value("https://cdn.capsule.invalid/haru/v1/Haru.model3.json"))
                 .andExpect(jsonPath("$.avatars[0].model.scale").value(1.0))
                 .andExpect(jsonPath("$.avatars[0].model.offsetX").value(0))
                 .andExpect(jsonPath("$.avatars[0].model.offsetY").value(0));

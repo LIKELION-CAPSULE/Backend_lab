@@ -13,7 +13,7 @@ DELETE FROM live2d_motions WHERE model_id = 1;
 
 INSERT INTO live2d_models (id, storage_prefix, model_json_path, scale, offset_x, offset_y) OVERRIDING SYSTEM VALUE
 VALUES (1, 'chaerin/v1/', 'chaerin.model3.json', 1.00, 0, 12),
-       (2, 'live2d/avatar1/v1/', 'avatar1.model3.json', 1.00, 0, 0)
+       (2, 'haru/v1/', 'Haru.model3.json', 1.00, 0, 0) -- 아바타: Live2D 공식 샘플 Haru (무료 소재 라이선스, 출처 표기 필요, 음성 참조 제거)
 ON CONFLICT (id) DO UPDATE SET storage_prefix = EXCLUDED.storage_prefix, model_json_path = EXCLUDED.model_json_path,
     scale = EXCLUDED.scale, offset_x = EXCLUDED.offset_x, offset_y = EXCLUDED.offset_y;
 
@@ -56,7 +56,8 @@ ON CONFLICT (id) DO UPDATE SET model_id = EXCLUDED.model_id, trigger_type = EXCL
     intensity = EXCLUDED.intensity, motion_id = EXCLUDED.motion_id, expression_id = EXCLUDED.expression_id;
 
 INSERT INTO avatars (id, model_id, name, thumbnail_url, sort_order) OVERRIDING SYSTEM VALUE
-VALUES (1, 2, '기본 아바타', 'https://cdn.capsule.invalid/avatar1.png', 1)
+VALUES (1, 2, '기본 아바타',
+        'https://belbmclzeenlntgpekww.supabase.co/storage/v1/object/public/live2d-model/haru/thumbnail.png', 1)
 ON CONFLICT (id) DO UPDATE SET model_id = EXCLUDED.model_id, name = EXCLUDED.name,
     thumbnail_url = EXCLUDED.thumbnail_url, sort_order = EXCLUDED.sort_order;
 
