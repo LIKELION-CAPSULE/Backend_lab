@@ -605,7 +605,7 @@ CREATE TABLE llm_lab_sessions (
     id           bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     title        text        NOT NULL,
     character_id bigint      NOT NULL REFERENCES characters (id),
-    pipeline     text        NOT NULL CHECK (pipeline IN ('SIMPLE', 'ENGINE')),
+    pipeline     text        NOT NULL CHECK (pipeline IN ('SIMPLE', 'SCENE', 'ENGINE')),
     config       jsonb       NOT NULL,                     -- 실험 조건 (공급자·모델·프롬프트 버전 고정·가상 사용자 정보)
     state        jsonb,                                    -- ENGINE 파이프라인 상태
     created_at   timestamptz NOT NULL DEFAULT now(),
@@ -644,7 +644,7 @@ CREATE TABLE llm_eval_cases (
 CREATE TABLE llm_eval_runs (
     id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     label       text        NOT NULL,
-    pipeline    text        NOT NULL CHECK (pipeline IN ('SIMPLE', 'ENGINE')),
+    pipeline    text        NOT NULL CHECK (pipeline IN ('SIMPLE', 'SCENE', 'ENGINE')),
     config      jsonb       NOT NULL,
     case_ids    bigint[]    NOT NULL,
     repeats     int         NOT NULL CHECK (repeats BETWEEN 1 AND 20),
