@@ -1,0 +1,36 @@
+# 0018 배포는 Railway + Dockerfile, 먼저 프론트 연동용 개발 서버 (0016 · 0017 이어서)
+
+- 결정
+  - 앱 서버는 Railway에서 돌린다. 빌드는 레포의 `Dockerfile`(Java 21, 실행 이미지는 JRE만), 설정은 `railway.json`(Dockerfile 빌드, `/actuator/health` 헬스체크)
+  - 먼저 프론트 연동용 개발 서버(Railway `dev` 환경)를 띄운다. 프로필 `local,shared-db,dev-server`: DB는 공용 개발 DB(0017), 카카오 · 메일은 Fake
+  - Redis는 같은 Railway 프로젝트의 Redis 서비스. 앱은 `REDIS_URL`(= `${{Redis.REDIS_URL}}`)로 붙는다. 0016 '남은 일'의 운영 Redis도 같은 방식으로 한다
+  - 운영(production 환경, `prod` 프로필)은 실제 메일 어댑터(#18)가 생긴 뒤 같은 이미지로 띄운다
+- 이유
+  - Railway는 레포 연결만으로 push마다 배포되고, Redis를 같은 프로젝트에 붙일 수 있다. 2인 팀이 서버 · 네트워크를 직접 관리하지 않아도 된다
+  - 포트는 공용 설정 `server.port: ${PORT:8080}`이라 dev-server · prod 모두 Railway가 넘기는 포트를 쓴다. 힙은 Dockerfile의 `JAVA_TOOL_OPTIONS=-Xmx512m`(Railway 변수로 바꿈). 비율로 잡으면 컨테이너 한도가 플랜 최대치로 보여 힙과 비용이 커진다
+  - `railway.json`의 `watchPatterns`로 코드 · 빌드 파일이 바뀐 머지만 다시 배포한다(문서 · 하네스만 바뀌면 배포 안 함)
+  - Dockerfile을 두면 Java 버전 · 실행 옵션이 레포에 남고, 로컬에서 같은 이미지를 만들어 확인할 수 있다
+  - 운영 프로필은 메일 어댑터가 없어 시작에 실패한다. 프론트는 지금 붙을 서버가 필요하다(2026-11-04 합의)
+- 버린 대안
+  - Railway 자동 빌드(Railpack): 파일이 필요 없지만 빌드 방식이 Railway 설정에 숨고 로컬에서 재현하기 어렵다
+  - Render · Fly.io: Render 무료는 잠들면 첫 요청이 느리고 Redis가 따로다. Fly.io는 설정 파일 · 네트워크를 더 다뤄야 한다
+  - AWS(EC2 · ECS): 비용과 운영 부담
+- Railway 변수 (dev 환경)
+  - `SPRING_PROFILES_ACTIVE=local,shared-db,dev-server`
+  - `CAPSULE_DEV_DB_URL` · `CAPSULE_DEV_DB_USERNAME` · `CAPSULE_DEV_DB_PASSWORD`: 공용 개발 DB(0017)
+  - `REDIS_URL=${{Redis.REDIS_URL}}`
+  - `CAPSULE_JWT_SECRET`: 32바이트 이상 무작위 값. local 기본값을 쓰지 않는다
+  - `CAPSULE_CORS_ORIGINS`: 프론트 주소
+  - `CAPSULE_REFRESH_COOKIE_SAME_SITE`: 기본 `None`(프론트와 도메인이 다를 때). 같은 사이트면 `Lax`
+  - 배포 브랜치: `develop`. Railway의 "Wait for CI"를 켜서 verify가 통과한 커밋만 배포한다
+- 대가
+  - 개발 서버는 Fake 카카오라 주소를 아는 사람은 `fake-kakao:<번호>:<이름>`으로 공용 개발 DB의 이미 있는 카카오 회원 누구로든 로그인된다. 개발 데이터만 두고 주소를 널리 공유하지 않는다. 시연 · 실사용자는 운영 환경으로
+  - 이메일 가입은 개발 서버에서 끝까지 못 한다. Fake 메일은 인증번호를 어디에도 보내거나 남기지 않는다. 개발 서버 로그인은 Fake 카카오로 한다(필요하면 user 모듈에서 따로 정함)
+  - 배포와 마이그레이션의 순서가 보장되지 않는다. "Wait for CI"는 그 커밋의 verify만 기다리고, `dev-db-migrate`는 verify 뒤 `workflow_run`으로 따로 돌아서 기다리는 대상이 아니다. 새 테이블 · 컬럼이 든 머지에서 배포가 먼저 뜨면 `ddl-auto: validate`로 시작에 실패하고, Railway는 헬스체크를 통과 못 한 배포로 바꾸지 않아 이전 버전이 계속 돈다. `dev-db-migrate`가 끝난 뒤 Railway에서 Redeploy
+  - `SameSite=None`이면 "리프레시 쿠키는 SameSite로 막는다"는 CSRF 전제(SecurityConfig)가 개발 서버에서는 깨진다. 다른 사이트가 refresh · logout 요청을 보낼 수는 있고 응답은 CORS로 못 읽는다. Safari는 사이트가 다른 쿠키를 막을 수 있어 갱신이 실패할 수 있다. 운영 도메인을 정할 때(B12) 같은 사이트(예: api.<도메인>)로 맞추는 것을 다시 본다
+  - 커넥션 풀은 shared-db의 2를 물려받는다. 프론트 여럿이 동시에 쓰다 느려지면 dev-server에서만 늘린다(pooler 한도 안에서)
+- 남은 일
+  - `dev-db-migrate` 마지막에 Railway 배포를 부르면 순서 문제가 없어진다(Railway 토큰 시크릿 필요, 하네스 PR)
+  - `docs/HARNESS.md`에 Railway 설정 절차 추가(하네스 PR)
+  - 운영(production 환경): 메일 어댑터(#18) 뒤 같은 이미지에 `prod` 프로필과 0016의 변수 + `REDIS_URL`
+  - Railway 서버 지역은 Supabase 지역과 가깝게 둔다(DB 왕복 시간)

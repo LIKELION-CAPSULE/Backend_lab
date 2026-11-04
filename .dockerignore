@@ -1,0 +1,16 @@
+# 이미지 빌드에 필요 없는 것, 비밀값이 든 것은 빌드 컨텍스트에 넣지 않는다
+.git
+.gradle
+build
+out
+.idea
+*.iml
+.vscode
+.claude
+.harness
+.github
+docs
+scripts
+.env
+.env.*
+*.local.*

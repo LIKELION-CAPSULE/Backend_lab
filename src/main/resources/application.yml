@@ -1,4 +1,7 @@
 # 공용 설정 (비밀값 없음). 비밀값은 환경변수로만 받는다.
+server:
+  port: ${PORT:8080} # Railway 등 배포 환경이 넘기는 포트 (ADR 0018). 로컬은 run-local.sh의 SERVER_PORT가 이긴다
+
 spring:
   application.name: capsule
   jpa:
