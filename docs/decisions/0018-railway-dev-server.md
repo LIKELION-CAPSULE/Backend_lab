@@ -2,7 +2,7 @@
 
 - 결정
   - 앱 서버는 Railway에서 돌린다. 빌드는 레포의 `Dockerfile`(Java 21, 실행 이미지는 JRE만), 설정은 `railway.json`(Dockerfile 빌드, `/actuator/health` 헬스체크)
-  - 먼저 프론트 연동용 개발 서버(Railway `dev` 환경)를 띄운다. 프로필 `local,shared-db,dev-server`: DB는 공용 개발 DB(0017), 카카오 · 메일은 Fake
+  - 먼저 프론트 연동용 개발 서버(Railway `dev` 환경)를 띄운다. 프로필 `local,shared-db,dev-server`: DB는 공용 개발 DB(0017), 카카오 · 메일은 Fake. → 2026-11-04 바뀜: 메일(0020)과 카카오 로그인도 실제로 동작하고 키가 필수다. 그래서 아래 '대가'의 Fake 카카오 로그인 구멍은 닫혔다
   - Redis는 같은 Railway 프로젝트의 Redis 서비스. 앱은 `REDIS_URL`(= `${{Redis.REDIS_URL}}`)로 붙는다. 0016 '남은 일'의 운영 Redis도 같은 방식으로 한다
   - 운영(production 환경, `prod` 프로필)은 실제 메일 어댑터(#18)가 생긴 뒤 같은 이미지로 띄운다
 - 이유
@@ -21,6 +21,9 @@
   - `REDIS_URL=${{Redis.REDIS_URL}}`
   - `CAPSULE_JWT_SECRET`: 32바이트 이상 무작위 값. local 기본값을 쓰지 않는다
   - `CAPSULE_CORS_ORIGINS`: 프론트 주소
+  - `CAPSULE_FRONTEND_URL`: 배포된 프론트 주소 하나(비밀번호 재설정 메일 링크 앞부분, api.md 25). 필수
+  - `CAPSULE_BREVO_KEY` · `CAPSULE_MAIL_FROM`: 인증 메일(0020). 필수
+  - `CAPSULE_KAKAO_REST_API_KEY`: 카카오 로그인. 필수(`CAPSULE_KAKAO_CLIENT_SECRET`는 Client Secret을 켰을 때만)
   - `CAPSULE_REFRESH_COOKIE_SAME_SITE`: 기본 `None`(프론트와 도메인이 다를 때). 같은 사이트면 `Lax`
   - 배포 브랜치: `develop`. Railway의 "Wait for CI"를 켜서 verify가 통과한 커밋만 배포한다
 - 대가

@@ -87,7 +87,7 @@ class ContentTest {
 
         RoomInfo room = roomQuery.find(1).orElseThrow();
         assertThat(room.name()).isEqualTo("쌀쌀맞은 갸루짝꿍이 나에게만 친절하다!");
-        assertThat(room.characters()).extracting(CharacterInfo::name).containsExactly("채린");
+        assertThat(room.characters()).extracting(CharacterInfo::name).containsExactly("말포이");
 
         assertThat(roomQuery.defaultBackground(1))
                 .contains(new BackgroundInfo(1, 1, "교실", "https://cdn.capsule.invalid/room1-bg.png"));
