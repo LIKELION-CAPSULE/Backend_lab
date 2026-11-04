@@ -1,24 +1,15 @@
 package com.capsule.dialogue.client;
 
-import java.util.List;
 import java.util.Map;
-import java.util.function.Consumer;
 
-/** 엔진이 바라보는 LLM 포트. 실제 구현은 dialogue/client에 두고(라이브러리는 #11에서 결정), 테스트에선 가짜로 바꾼다. */
+/** LLM 호출의 공통 타입 (요청 블록 · 결과 · 사용량 · 가격). 호출은 LlmGateway가 한다. */
 public final class Llm {
     private Llm() {}
 
-    public enum Role {
-        DIRECTOR,
-        ACTOR,
-        JUDGE
-    }
     /** cache=true인 블록에 프롬프트 캐시 지점을 둔다. 바뀌는 내용은 시스템에 넣지 않는다(캐시가 깨짐). */
     public record SystemBlock(String text, boolean cache) {}
 
     public record ChatTurn(String role, String text) {}
-
-    public record Call(Role role, String model, List<SystemBlock> system, List<ChatTurn> messages, int maxTokens) {}
 
     public record Usage(int input, int cacheWrite, int cacheRead, int output) {
         public static final Usage ZERO = new Usage(0, 0, 0, 0);
@@ -30,12 +21,6 @@ public final class Llm {
 
     public record Result(
             String text, Usage usage, Long ttftMs, long totalMs, String stopReason, boolean thinkingSeen) {}
-
-    public interface Client {
-        Result call(Call call);
-        /** onText에는 지금까지 누적된 원문 텍스트가 전달된다. */
-        Result stream(Call call, Consumer<String> onText);
-    }
 
     /** 달러/백만 토큰. 캐시 쓰기는 5분 캐시 기준. */
     public record Price(double in, double cacheWrite, double cacheRead, double out) {

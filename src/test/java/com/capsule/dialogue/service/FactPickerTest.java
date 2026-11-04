@@ -13,7 +13,6 @@ import com.capsule.dialogue.client.Decider;
 import com.capsule.dialogue.client.Decider.Decision;
 import com.capsule.dialogue.config.DialogueProperties;
 import com.capsule.dialogue.dto.ChatInput;
-import com.capsule.dialogue.dto.EngineOptions;
 import com.capsule.dialogue.dto.LlmContext;
 import java.util.List;
 import java.util.Map;
@@ -38,9 +37,7 @@ class FactPickerTest {
                 List.of(),
                 List.of(),
                 "토익 점수 걱정돼",
-                null,
                 Map.of(),
-                EngineOptions.DEFAULT,
                 false,
                 false,
                 0);

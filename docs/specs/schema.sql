@@ -37,6 +37,10 @@
 --   - 세계관 · 캐릭터 설정을 데이터로 (ADR 0022 결정 15): worlds · world_lore · world_events · character_profiles
 --     · character_moves · character_lines · character_scores · character_habits 추가. characters는 화면용 정보만
 --   - relation_logs.reason에 ADJUST 추가 (local 흐름 테스트에서 호감도를 손으로 맞춘 만큼)
+--
+-- 2026-11-05 변경
+--   - 대화 엔진(ENGINE 파이프라인) 제거 (ADR 0022 결정 19부터 안 씀): dialogue_states · llm_lab_sessions.state 삭제,
+--     llm_lab_sessions · llm_eval_runs의 pipeline에서 ENGINE 제거, engine.* 프롬프트 버전 삭제
 -- =====================================================================
 
 BEGIN;
@@ -580,7 +584,7 @@ CREATE TABLE character_habits (
 -- (키, 캐릭터)마다 ACTIVE는 하나, 새 버전을 켜면 이전 ACTIVE는 ARCHIVED. 캐릭터 전용 ACTIVE가 공통(character_id NULL)보다 먼저
 CREATE TABLE prompt_versions (
     id           bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    prompt_key   text        NOT NULL,                     -- chat.system · fixed.lines · engine.actor 등
+    prompt_key   text        NOT NULL,                     -- chat.system · fixed.lines · scene.system 등
     character_id bigint      REFERENCES characters (id),
     version      int         NOT NULL CHECK (version > 0),
     status       text        NOT NULL CHECK (status IN ('DRAFT', 'ACTIVE', 'ARCHIVED')),
@@ -593,26 +597,13 @@ CREATE TABLE prompt_versions (
 CREATE UNIQUE INDEX uq_prompt_versions_active ON prompt_versions (prompt_key, character_id) NULLS NOT DISTINCT
     WHERE status = 'ACTIVE';
 
--- 대화 엔진 상태 (세션 × 캐릭터). 턴이 성공했을 때만 저장, 세션이 끝나면 삭제
-CREATE TABLE dialogue_states (
-    id             bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    session_id     bigint      NOT NULL REFERENCES study_sessions (id),
-    character_id   bigint      NOT NULL REFERENCES characters (id),
-    engine_version int         NOT NULL,                   -- 상태 JSON 형식 버전
-    state          jsonb       NOT NULL,
-    version        bigint      NOT NULL DEFAULT 0,         -- 낙관적 잠금
-    updated_at     timestamptz NOT NULL DEFAULT now(),
-    UNIQUE (session_id, character_id)
-);
-
 -- LLM 실험실 (내부 품질 테스트. 서비스 데이터와 섞지 않음)
 CREATE TABLE llm_lab_sessions (
     id           bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     title        text        NOT NULL,
     character_id bigint      NOT NULL REFERENCES characters (id),
-    pipeline     text        NOT NULL CHECK (pipeline IN ('SIMPLE', 'SCENE', 'ENGINE')),
+    pipeline     text        NOT NULL CHECK (pipeline IN ('SIMPLE', 'SCENE')),
     config       jsonb       NOT NULL,                     -- 실험 조건 (공급자·모델·프롬프트 버전 고정·가상 사용자 정보)
-    state        jsonb,                                    -- ENGINE 파이프라인 상태
     created_at   timestamptz NOT NULL DEFAULT now(),
     updated_at   timestamptz NOT NULL DEFAULT now()
 );
@@ -649,7 +640,7 @@ CREATE TABLE llm_eval_cases (
 CREATE TABLE llm_eval_runs (
     id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     label       text        NOT NULL,
-    pipeline    text        NOT NULL CHECK (pipeline IN ('SIMPLE', 'SCENE', 'ENGINE')),
+    pipeline    text        NOT NULL CHECK (pipeline IN ('SIMPLE', 'SCENE')),
     config      jsonb       NOT NULL,
     case_ids    bigint[]    NOT NULL,
     repeats     int         NOT NULL CHECK (repeats BETWEEN 1 AND 20),

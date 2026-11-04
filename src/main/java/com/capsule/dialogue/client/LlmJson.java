@@ -1,35 +1,16 @@
 package com.capsule.dialogue.client;
 
-import com.capsule.dialogue.engine.Engine;
-import com.capsule.dialogue.engine.Planning;
 import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.PropertyNamingStrategies;
 import tools.jackson.databind.json.JsonMapper;
 
-/**
- * LLM 입출력 JSON. 감독·심사 파서는 snake_case(followup_target 등)로 답하므로 이름 규칙을 맞춘다. 실패하면 예외 → 엔진이 null로 처리.
- * JSON은 공급자 요청 본문, LLM이 낸 JSON 답, 실험실 jsonb 칸에도 쓴다.
- */
+/** LLM 입출력 JSON: 공급자 요청 본문, LLM이 낸 JSON 답, 실험실 jsonb 칸에 쓴다. */
 public final class LlmJson {
     private LlmJson() {}
-
-    private static final JsonMapper SNAKE = JsonMapper.builder()
-            .propertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE)
-            .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
-            .build();
 
     public static final JsonMapper JSON = JsonMapper.builder()
             .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
             .build();
-
-    public static Planning.DirectorPlan plan(String json) {
-        return SNAKE.readValue(json, Planning.DirectorPlan.class);
-    }
-
-    public static Engine.Verdict verdict(String json) {
-        return SNAKE.readValue(json, Engine.Verdict.class);
-    }
 
     public static String write(Object value) {
         return JSON.writeValueAsString(value);

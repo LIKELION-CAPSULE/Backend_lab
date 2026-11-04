@@ -103,7 +103,7 @@ class SceneChatPipeline implements ChatPipeline {
         trace.put("fact", fact);
         trace.put("scene", card);
         trace.put("raw", r.text());
-        return ChatOutcome.of(reply.strip(), emotion, null, trace);
+        return ChatOutcome.of(reply.strip(), emotion, trace);
     }
 
     private Function<String, String> situation(CharacterContent c, ChatInput in) {

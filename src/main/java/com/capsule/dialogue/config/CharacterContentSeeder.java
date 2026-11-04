@@ -5,16 +5,16 @@ import com.capsule.content.api.RoomQuery;
 import com.capsule.dialogue.config.DialogueProperties.ScoreRule;
 import com.capsule.dialogue.dto.CharacterContent;
 import com.capsule.dialogue.dto.CharacterContent.Event;
-import com.capsule.dialogue.dto.CharacterContent.Example;
 import com.capsule.dialogue.dto.CharacterContent.Line;
 import com.capsule.dialogue.dto.CharacterContent.Lore;
 import com.capsule.dialogue.dto.CharacterContent.Move;
 import com.capsule.dialogue.dto.CharacterContent.Sample;
 import com.capsule.dialogue.dto.CharacterContent.World;
-import com.capsule.dialogue.engine.Content;
 import com.capsule.dialogue.repository.CharacterContentRepository;
 import com.capsule.relation.api.RelationTypes.SignalType;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -32,7 +32,7 @@ import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * classpath:characters/<code>/의 처음 값(profile.yml + character.yml)을 DB 캐릭터 설정으로 불러온다 (ADR 0022 결정 15).
+ * classpath:characters/<code>/의 처음 값(profile.yml)을 DB 캐릭터 설정으로 불러온다 (ADR 0022 결정 15).
  * DB에 그 캐릭터 설정(code)이 없을 때만 파일을 읽어 넣는다: 그 뒤로는 DB가 원본이고 실험실에서 고친다 (git 파일을 고쳐도 덮지 않음).
  * 붙을 characters 행(content 모듈)은 profile.yml의 characterName으로 찾는다 (id는 DB마다 다르다). 없으면 건너뛴다.
  * 다시 불러오려면 실험실 reseed. 파일이 깨졌거나 DB가 준비되지 않았어도 앱은 뜬다: 그 캐릭터만 건너뛰고(설정이 없으면 SIMPLE로 답함) 로그를 남긴다.
@@ -131,39 +131,30 @@ public class CharacterContentSeeder implements ApplicationRunner {
         return ids.size() == 1 ? Optional.of(ids.getFirst()) : Optional.empty();
     }
 
-    /** profile.yml + character.yml(대화 기술 · 세계 지식 · 세계 사건) → 캐릭터 id에 붙일 설정 */
+    /** profile.yml → 캐릭터 id에 붙일 설정 */
     public static CharacterContent load(String code, long characterId) {
         return build(code, profile(code), characterId);
     }
 
     private static ProfileFile profile(String code) {
-        return JSON.convertValue(
-                new Yaml().load(ContentLoader.read("characters/" + code + "/profile.yml")), ProfileFile.class);
+        return JSON.convertValue(new Yaml().load(read("characters/" + code + "/profile.yml")), ProfileFile.class);
+    }
+
+    /** classpath 텍스트 파일 (PromptSeeder도 씀) */
+    static String read(String path) {
+        try (InputStream in = CharacterContentSeeder.class.getClassLoader().getResourceAsStream(path)) {
+            if (in == null) throw new IllegalStateException("리소스 없음: " + path);
+            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 
     private static CharacterContent build(String code, ProfileFile p, long characterId) {
-        Content.Character engine = ContentLoader.fromClasspath(code).character();
-        List<String> skip = p.skipMoves() == null ? List.of() : p.skipMoves();
-        Map<String, List<SignalType>> signals = p.moveSignals() == null ? Map.of() : p.moveSignals();
-        Map<String, List<String>> modes = p.moveModes() == null ? Map.of() : p.moveModes();
-        List<Move> moves = engine.moves().stream()
-                .filter(m -> !skip.contains(m.id()))
-                .map(m -> new Move(
-                        m.id(),
-                        m.name(),
-                        m.how(),
-                        signals.getOrDefault(m.id(), List.of()),
-                        modes.getOrDefault(m.id(), List.of()),
-                        m.examples().stream()
-                                .map(e -> new Example(e.user(), e.reply()))
-                                .toList()))
-                .toList();
-        List<Lore> lore = engine.lore().stream()
-                .map(l -> new Lore(l.id(), l.title(), l.keys(), l.text()))
-                .toList();
-        List<Event> events = engine.events().stream()
-                .map(e -> new Event(e.id(), e.text(), e.hook(), e.lore(), 1))
-                .toList();
+        // 대화 기술 · 세계 지식 · 세계 사건은 엔진 파일(character.yml)과 함께 뺐다 (결정 19부터 답장에 안 씀). 칸은 다음 정리 때 테이블째 뺀다
+        List<Move> moves = List.of();
+        List<Lore> lore = List.of();
+        List<Event> events = List.of();
         List<Line> lines = new ArrayList<>();
         (p.lines() == null ? Map.<String, List<LineFile>>of() : p.lines()).forEach((situation, list) -> {
             for (int i = 0; i < list.size(); i++) {

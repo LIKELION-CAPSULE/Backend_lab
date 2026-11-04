@@ -9,27 +9,22 @@ import com.capsule.content.api.CharacterQuery;
 import com.capsule.content.api.ContentTypes.CharacterInfo;
 import com.capsule.content.api.ContentTypes.Reaction;
 import com.capsule.content.api.ReactionQuery;
-import com.capsule.dialogue.client.LlmJson;
 import com.capsule.dialogue.config.DialogueProperties;
 import com.capsule.dialogue.domain.ChatMessage;
 import com.capsule.dialogue.domain.Conversation;
 import com.capsule.dialogue.domain.ConversationRecap;
-import com.capsule.dialogue.domain.DialogueStateEntity;
 import com.capsule.dialogue.dto.ChatInput;
 import com.capsule.dialogue.dto.ChatLine;
 import com.capsule.dialogue.dto.ChatOutcome;
-import com.capsule.dialogue.dto.EngineOptions;
 import com.capsule.dialogue.dto.LlmContext;
 import com.capsule.dialogue.dto.MessageRequest;
 import com.capsule.dialogue.dto.MessageResponse;
 import com.capsule.dialogue.dto.ReactionCharacter;
 import com.capsule.dialogue.dto.ReactionLine;
 import com.capsule.dialogue.dto.ReactionResponse;
-import com.capsule.dialogue.engine.DialogueState;
 import com.capsule.dialogue.repository.ChatMessageRepository;
 import com.capsule.dialogue.repository.ConversationRecapRepository;
 import com.capsule.dialogue.repository.ConversationRepository;
-import com.capsule.dialogue.repository.DialogueStateRepository;
 import com.capsule.relation.api.RelationCommands;
 import com.capsule.relation.api.RelationQuery;
 import com.capsule.relation.api.RelationTypes.AffinityChange;
@@ -115,7 +110,6 @@ public class DialogueService {
     private final ConversationRepository conversations;
     private final ConversationRecapRepository recapRepository;
     private final ChatMessageRepository messages;
-    private final DialogueStateRepository states;
     private final TransactionTemplate tx;
     private final DialogueProperties props;
     private final Clock clock;
@@ -140,7 +134,6 @@ public class DialogueService {
             ConversationRepository conversations,
             ConversationRecapRepository recapRepository,
             ChatMessageRepository messages,
-            DialogueStateRepository states,
             PlatformTransactionManager transactionManager,
             DialogueProperties props,
             Clock clock) {
@@ -167,7 +160,6 @@ public class DialogueService {
         this.conversations = conversations;
         this.recapRepository = recapRepository;
         this.messages = messages;
-        this.states = states;
         this.tx = new TransactionTemplate(transactionManager);
         this.props = props;
         this.clock = clock;
@@ -271,7 +263,7 @@ public class DialogueService {
     }
 
     /**
-     * 읽기 → LLM(트랜잭션 밖, 5초) → 저장(한 트랜잭션: 호감도 · 답장 · 엔진 상태).
+     * 읽기 → LLM(트랜잭션 밖, 5초) → 저장(한 트랜잭션: 호감도 · 답장).
      * 저장 트랜잭션은 호감도(applyChat)부터 부른다: applyChat은 relation 행을 잠그고, 공부 종료(22)도 정산 때 같은 행을 잠근 채
      * 커밋까지 간다. 그래서 종료와 겹치면 여기서 종료가 끝나길 기다린 뒤 아래 세션 확인에서 끝난 것을 보고 아무것도 남기지 않는다.
      * 종료보다 먼저 잡으면 이 답장까지 커밋된 뒤에 종료가 정산·요약한다. 잠금 순서가 종료(세션 → relation → 대화)와 같아 교착이 없다.
@@ -287,9 +279,6 @@ public class DialogueService {
                         .filter(m -> !m.requestId().equals(requestId))
                         .toList();
         List<ChatLine> history = lines(earlier);
-        Optional<DialogueStateEntity> saved = ChatPipeline.ENGINE.equals(chat.name())
-                ? states.findBySessionIdAndCharacterId(sessionId, characterId)
-                : Optional.empty();
         CharacterInfo character = character(characterId);
         ChatInput input = new ChatInput(
                 character,
@@ -300,9 +289,7 @@ public class DialogueService {
                 memoryLines(userId),
                 history,
                 request.content(),
-                saved.map(DialogueService::engineState).orElse(null),
                 Map.of(),
-                EngineOptions.DEFAULT,
                 sessions.onBreak(sessionId),
                 chatty(earlier),
                 (int) Duration.between(session.startedAt(), Instant.now(clock)).toMinutes());
@@ -343,8 +330,6 @@ public class DialogueService {
                 if (signal != null) messages.markSignal(conversation.id(), requestId, signal.name());
                 messages.save(
                         new ChatMessage(conversation.id(), sessionId, requestId, CHARACTER, reply, Instant.now(clock)));
-                outcome.map(ChatOutcome::engineState).ifPresent(st -> saveState(sessionId, characterId, st));
-                // TODO(judgment): J-07 엔진의 표정 태그 → 반응 표 감정 이름. 지금 ENGINE은 감정을 안 정함(null → 동작 없음)
                 String emotion = outcome.map(ChatOutcome::emotion).orElse(null);
                 Reaction reaction = emotionReaction(characterId, emotion);
                 return new MessageResponse(
@@ -504,7 +489,6 @@ public class DialogueService {
             messages.deleteAllByIdInBatch(d.pendingIds());
         }
         // 카드 쓰기에 실패하면 메시지를 남긴다: 다음 종료 때 그 세션 카드에 같이 들어간다
-        states.deleteBySession(closing.sessionId());
         return d.line();
     }
 
@@ -606,34 +590,6 @@ public class DialogueService {
                 .filter(m -> USER.equals(m.sender()) && m.createdAt().isAfter(since))
                 .count();
         return recent + 1 >= CHATTY_MESSAGES;
-    }
-
-    /** 저장된 엔진 상태. 형식 버전이 다르거나 못 읽으면 null(새로 시작) */
-    private static DialogueState engineState(DialogueStateEntity saved) {
-        if (saved.engineVersion() != EngineChatPipeline.STATE_VERSION) {
-            return null;
-        }
-        try {
-            return LlmJson.read(saved.state(), DialogueState.class);
-        } catch (RuntimeException e) {
-            log.warn("대화 엔진 상태를 못 읽어 새로 시작", e);
-            return null;
-        }
-    }
-
-    /**
-     * 답장 저장 트랜잭션 안에서 부른다 (relation 잠금 아래라 같은 세션의 상태 쓰기는 한 줄로 선다). 행을 새로 읽어 덮어쓴다.
-     * ponytail: 같은 세션 메시지가 겹치면 둘 다 같은 옛 상태에서 턴을 만들었으므로 늦은 쪽이 앞 턴을 덮는다(엔진 기억 한 턴 손실).
-     *   잦아지면 상태 버전을 비교해 늦은 쪽을 다시 돌린다
-     */
-    private void saveState(long sessionId, long characterId, DialogueState st) {
-        String json = LlmJson.write(st);
-        Instant now = Instant.now(clock);
-        DialogueStateEntity row = states.findBySessionIdAndCharacterId(sessionId, characterId)
-                .orElseGet(() ->
-                        new DialogueStateEntity(sessionId, characterId, EngineChatPipeline.STATE_VERSION, json, now));
-        row.update(EngineChatPipeline.STATE_VERSION, json, now);
-        states.save(row);
     }
 
     private Optional<ChatMessage> question(Conversation conversation, MessageRequest request) {

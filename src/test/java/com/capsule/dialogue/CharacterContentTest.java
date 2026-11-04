@@ -53,11 +53,7 @@ class CharacterContentTest {
         assertThat(c.speaker()).isEqualTo("말포이");
         assertThat(c.safety()).isEqualTo(CharacterContent.MINOR);
         assertThat(c.expressions()).containsExactly("삐짐", "행복", "경멸", "하품", "화남", "웃음", "수줍음", "집중");
-        assertThat(c.world().lore()).extracting(CharacterContent.Lore::code).contains("pince", "library");
-        assertThat(c.moves())
-                .extracting(CharacterContent.Move::code)
-                .contains("yes_and")
-                .doesNotContain("callback");
+        assertThat(c.world().code()).isNotBlank();
         assertThat(c.habits()).containsEntry("흥", CharacterContent.NO_OPENING);
         assertThat(c.rules()).contains("정답을 물으면 정답"); // PM: 답 대신 힌트만 → 정답은 정답, 힌트는 힌트
         assertThat(c.fallbackExpression("화남")).isEqualTo("화남"); // 8개 모두 에셋이 있어 목록 안 표정은 그대로
@@ -199,7 +195,7 @@ class CharacterContentTest {
         assertThat(reseeded).contains(1L);
         assertThat(repository.find(1).orElseThrow().world().lore())
                 .extracting(Lore::code)
-                .contains("pince");
+                .doesNotContain("lab_only"); // git 값(세계 지식 없음)으로 되돌아감
     }
 
     private static CharacterContent withWorld(CharacterContent c, World world) {

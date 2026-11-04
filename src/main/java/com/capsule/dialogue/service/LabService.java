@@ -31,7 +31,6 @@ import com.capsule.dialogue.dto.RatingRequest;
 import com.capsule.dialogue.dto.ReactionLine;
 import com.capsule.dialogue.dto.UsageSummary;
 import com.capsule.dialogue.dto.UsageView;
-import com.capsule.dialogue.engine.DialogueState;
 import com.capsule.dialogue.repository.LabSessionRepository;
 import com.capsule.dialogue.repository.LabTurnRepository;
 import com.capsule.dialogue.repository.LlmUsageRepository;
@@ -161,7 +160,7 @@ public class LabService {
                 dialogueProps.chatPipeline(),
                 routes,
                 Arrays.stream(PromptKey.values())
-                        .map(k -> new LabMeta.Key(k.key(), k.format(), k.characterOnly(), k.description()))
+                        .map(k -> new LabMeta.Key(k.key(), k.format(), k.description()))
                         .toList(),
                 rooms.activeRooms().stream()
                         .flatMap(room -> room.characters().stream())
@@ -214,7 +213,7 @@ public class LabService {
     public LabSessionView reset(long id) {
         LabSession s = find(id);
         turns.deleteBySession(id);
-        s.saveState(null, Instant.now(clock));
+        s.touch(Instant.now(clock));
         return view(s, List.of(), 0);
     }
 
@@ -233,14 +232,12 @@ public class LabService {
             history.add(new ChatLine(ChatMessage.USER, t.userText()));
             history.add(new ChatLine(ChatMessage.CHARACTER, t.reply()));
         }
-        DialogueState state = s.state() == null ? null : LlmJson.read(s.state(), DialogueState.class);
         LlmContext ctx = LlmContext.lab(LlmContext.LAB, config);
         long t0 = System.nanoTime();
         ChatOutcome out = null;
         String error = null;
         try {
-            out = chatTurn(
-                    pipeline(s.pipeline()), input(character(s.characterId()), config, history, text, state), ctx);
+            out = chatTurn(pipeline(s.pipeline()), input(character(s.characterId()), config, history, text), ctx);
         } catch (RuntimeException e) {
             error = e.toString();
         }
@@ -258,10 +255,6 @@ public class LabService {
                 cost(used),
                 LlmJson.write(out == null ? Map.of() : out.trace()),
                 Instant.now(clock)));
-        if (out != null && out.engineState() != null) {
-            s.saveState(LlmJson.write(out.engineState()), Instant.now(clock));
-            sessions.save(s);
-        }
         return view(turn, used);
     }
 
@@ -286,7 +279,7 @@ public class LabService {
                 ChatPipeline p = pipeline(r.pipeline() == null ? dialogueProps.chatPipeline() : r.pipeline());
                 String message = required(r.message(), "message");
                 yield ctx -> {
-                    ChatOutcome o = chatTurn(p, input(c, config, history, message, null), ctx);
+                    ChatOutcome o = chatTurn(p, input(c, config, history, message), ctx);
                     return map(
                             "reply",
                             o.reply(),
@@ -386,8 +379,7 @@ public class LabService {
 
     // --- 공통 (EvalService도 씀) ---
 
-    static ChatInput input(
-            CharacterInfo c, LabConfig config, List<ChatLine> history, String text, DialogueState state) {
+    static ChatInput input(CharacterInfo c, LabConfig config, List<ChatLine> history, String text) {
         return new ChatInput(
                 c,
                 config.nicknameOrDefault(),
@@ -397,9 +389,7 @@ public class LabService {
                 config.memoriesOrEmpty(),
                 history,
                 text,
-                state,
                 config.pinnedOrEmpty(),
-                config.engineOrDefault(),
                 config.onBreakOrDefault(),
                 config.chattyOrDefault(),
                 config.sessionMinutesOrDefault());

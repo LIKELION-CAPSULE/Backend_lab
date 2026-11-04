@@ -11,7 +11,6 @@ import com.capsule.dialogue.domain.ChatMessage;
 import com.capsule.dialogue.dto.CharacterContent;
 import com.capsule.dialogue.dto.ChatInput;
 import com.capsule.dialogue.dto.ChatLine;
-import com.capsule.dialogue.dto.EngineOptions;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -39,9 +38,7 @@ class SceneChatPipelineTest {
                 List.of("시험: 중간고사 (2026-11-20)"),
                 history,
                 message,
-                null,
                 Map.of(),
-                EngineOptions.DEFAULT,
                 onBreak,
                 chatty,
                 52);

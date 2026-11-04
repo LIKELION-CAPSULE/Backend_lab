@@ -20,14 +20,13 @@ public record LabConfig(
         Double temperature,
         Integer maxTokens,
         Map<String, Long> pinnedPrompts,
-        EngineOptions engine,
         List<String> facts,
         Boolean onBreak,
         Boolean chatty,
         Integer sessionMinutes) {
 
     public static final LabConfig EMPTY =
-            new LabConfig(null, null, null, null, null, null, null, null, null, null, null, null, null, null);
+            new LabConfig(null, null, null, null, null, null, null, null, null, null, null, null, null);
 
     public int sessionMinutesOrDefault() {
         return sessionMinutes == null ? 0 : sessionMinutes;
@@ -59,9 +58,5 @@ public record LabConfig(
 
     public Map<String, Long> pinnedOrEmpty() {
         return pinnedPrompts == null ? Map.of() : pinnedPrompts;
-    }
-
-    public EngineOptions engineOrDefault() {
-        return engine == null ? EngineOptions.DEFAULT : engine;
     }
 }

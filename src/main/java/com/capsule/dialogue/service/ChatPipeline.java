@@ -12,7 +12,6 @@ import com.capsule.dialogue.dto.LlmContext;
 public interface ChatPipeline {
 
     String SIMPLE = "SIMPLE";
-    String ENGINE = "ENGINE";
     /** DB 캐릭터 설정: 페르소나 + 관계 단계별 말투 샘플 + 상황 카드 (ADR 0022 결정 15 · 19). 기본 */
     String SCENE = "SCENE";
 

@@ -49,10 +49,6 @@ capsule:
     routes: # 용도별 등급(공급자의 models 키)과 출력 한도. temperature를 비우면 공급자 기본값
       # 출력 한도는 상한일 뿐 쓴 만큼만 낸다. 숨은 생각 토큰도 여기서 빠지므로(Claude 5.5) 보이는 답의 3~4배로 둔다
       CHAT: { tier: smart, max-tokens: 800 }
-      # 대화 엔진 용도 셋의 토큰 한도는 엔진 설정(Engine.Settings: 감독 500/품질 900, 배우 700, 심사 300)을 쓴다
-      DIRECTOR: { tier: fast }
-      ACTOR: { tier: smart }
-      JUDGE: { tier: fast }
       REACTION: { tier: fast, max-tokens: 400 }
       SUMMARY: { tier: fast, max-tokens: 600 } # 세션 카드 한 장 (80자 이내)
       MEMORY: { tier: fast, max-tokens: 300 } # 기억 한 줄 (40자 이내)
@@ -68,7 +64,7 @@ capsule:
       token: ${CAPSULE_LLM_LAB_TOKEN:} # 공용 서버에서 켤 때만: X-Lab-Token 헤더 검사
       eval-parallelism: 3
   dialogue:
-    # SCENE(DB 캐릭터 설정 + 장면 카드, 기본, ADR 0022 결정 15) | SIMPLE(LLM 한 번, 공통 프롬프트) | ENGINE(감독 · 배우, 비교용)
+    # SCENE(DB 캐릭터 설정 + 장면 카드, 기본, ADR 0022 결정 15) | SIMPLE(LLM 한 번, 공통 프롬프트)
     chat-pipeline: SCENE
     # 상태 반응(19)을 LLM으로 만들 trigger (승희 2026-11-05, ADR 0022 결정 18): 상태 변화는 LLM이 대사 + 표정,
     #   동작 이벤트(DROWSY · YAWN · WAVE · HEAD_TURN)는 미리 쓴 대사(character_lines). LLM이 5초를 넘기면 미리 쓴 대사로

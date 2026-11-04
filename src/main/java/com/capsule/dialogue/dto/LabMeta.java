@@ -21,7 +21,7 @@ public record LabMeta(
     /** models = 공급자 → 이 용도에 쓸 모델 */
     public record Route(String purpose, String tier, int maxTokens, Double temperature, Map<String, String> models) {}
 
-    public record Key(String key, String format, boolean characterOnly, String description) {}
+    public record Key(String key, String format, String description) {}
 
     public record Character(long id, String name) {}
 }

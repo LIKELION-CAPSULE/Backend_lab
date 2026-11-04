@@ -7,12 +7,6 @@ package com.capsule.dialogue.dto;
 public enum LlmPurpose {
     /** 메시지 답장 한 번에 (SIMPLE 파이프라인, 명세 20) */
     CHAT,
-    /** 대화 엔진 감독: 이번 턴 연출 계획(JSON) */
-    DIRECTOR,
-    /** 대화 엔진 배우: 캐릭터 대사 */
-    ACTOR,
-    /** 대화 엔진 심사: 품질 모드에서 후보 3개 채점 */
-    JUDGE,
     /** 상태 반응 대사 (명세 19, reaction-llm-triggers에 든 trigger만) */
     REACTION,
     /** 세션 하나를 흐름 카드 한 장으로 (명세 22) */

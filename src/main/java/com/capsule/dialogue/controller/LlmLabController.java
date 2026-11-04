@@ -4,7 +4,6 @@ import com.capsule.common.error.ApiException;
 import com.capsule.dialogue.config.CharacterContentSeeder;
 import com.capsule.dialogue.domain.PromptKey;
 import com.capsule.dialogue.dto.CharacterContent;
-import com.capsule.dialogue.dto.EnginePackRequest;
 import com.capsule.dialogue.dto.EvalCaseRequest;
 import com.capsule.dialogue.dto.EvalCaseView;
 import com.capsule.dialogue.dto.EvalResultView;
@@ -143,16 +142,6 @@ class LlmLabController {
         Map<String, PromptView> set = new LinkedHashMap<>();
         prompts.activeSet(characterId).forEach((k, v) -> set.put(k, PromptView.from(v)));
         return set;
-    }
-
-    @PostMapping("/api/prompts/engine-pack")
-    List<PromptView> enginePack(@Valid @RequestBody EnginePackRequest r) {
-        return prompts
-                .importEnginePack(
-                        r.characterId(), r.characterYml(), r.actor(), r.director(), r.judge(), r.note(), r.activate())
-                .stream()
-                .map(PromptView::from)
-                .toList();
     }
 
     // --- 실험 대화방 ---

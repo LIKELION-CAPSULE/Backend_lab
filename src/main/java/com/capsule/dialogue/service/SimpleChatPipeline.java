@@ -91,6 +91,6 @@ class SimpleChatPipeline implements ChatPipeline {
         trace.put("prompts", PromptVars.versions(used));
         trace.put("jsonParsed", json != null);
         trace.put("raw", r.text());
-        return ChatOutcome.of(reply.strip(), emotion, null, trace);
+        return ChatOutcome.of(reply.strip(), emotion, trace);
     }
 }
