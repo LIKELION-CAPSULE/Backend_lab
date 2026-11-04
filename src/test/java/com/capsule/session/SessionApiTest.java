@@ -177,6 +177,14 @@ class SessionApiTest {
     // ---- 16 공부 시작
 
     @Test
+    void startAcceptsThreeMinuteMinimum() throws Exception {
+        // 최소 3분 (api.md 16). 5분 단위가 아니어도 3분은 받는다
+        startRequest(userId, 3)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.targetMinutes").value(3));
+    }
+
+    @Test
     void startCreatesSessionWithScene() throws Exception {
         startRequest(userId, 50)
                 .andExpect(status().isCreated())
@@ -206,6 +214,8 @@ class SessionApiTest {
     void startRejectsInvalidRequests() throws Exception {
         expectError(startRequest(userId, 52), 400, "INVALID_TARGET_MINUTES");
         expectError(startRequest(userId, 185), 400, "INVALID_TARGET_MINUTES");
+        expectError(startRequest(userId, 2), 400, "INVALID_TARGET_MINUTES");
+        expectError(startRequest(userId, 4), 400, "INVALID_TARGET_MINUTES");
         expectError(
                 startRequest(userId, "{\"roomId\":99,\"characterId\":1,\"targetMinutes\":50}"), 404, "ROOM_NOT_FOUND");
         expectError(
