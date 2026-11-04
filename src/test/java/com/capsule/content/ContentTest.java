@@ -14,7 +14,6 @@ import com.capsule.content.api.ContentTypes.BackgroundInfo;
 import com.capsule.content.api.ContentTypes.CharacterInfo;
 import com.capsule.content.api.ContentTypes.ExpressionRef;
 import com.capsule.content.api.ContentTypes.ModelInfo;
-import com.capsule.content.api.ContentTypes.MotionRef;
 import com.capsule.content.api.ContentTypes.Reaction;
 import com.capsule.content.api.ContentTypes.RoomInfo;
 import com.capsule.content.api.ReactionQuery;
@@ -34,10 +33,9 @@ import org.springframework.test.web.servlet.MockMvc;
 @Import(TestcontainersConfiguration.class)
 class ContentTest {
 
-    static final MotionRef LOOK_AROUND = new MotionRef("Idle", "motions/look_around.motion3.json");
-    static final MotionRef WAVE = new MotionRef("TapBody", "motions/wave.motion3.json");
-    static final ExpressionRef POUT = new ExpressionRef("삐짐", "exp/pout.exp3.json");
-    static final ExpressionRef SMILE = new ExpressionRef("웃음", "exp/smile.exp3.json");
+    static final ExpressionRef POUT = new ExpressionRef("삐짐", "exp/expression1.exp3.json");
+    static final ExpressionRef SMILE = new ExpressionRef("웃음", "exp/expression6.exp3.json");
+    static final ExpressionRef SHY = new ExpressionRef("수줍음", "exp/expression7.exp3.json");
 
     @Autowired
     MockMvc mvc;
@@ -100,21 +98,29 @@ class ContentTest {
         assertThat(malfoy.roomId()).isEqualTo(1);
         assertThat(malfoy.personality()).containsExactly("츤데레", "슬리데린 5학년", "라이벌");
         assertThat(malfoy.model())
-                .isEqualTo(
-                        new ModelInfo("https://cdn.capsule.invalid/live2d/chaerin/v1/chaerin.model3.json", 1.0, 0, 12));
+                .isEqualTo(new ModelInfo("https://cdn.capsule.invalid/chaerin/v1/chaerin.model3.json", 1.0, 0, 12));
     }
 
     @Test
     void reactionExactMatch() {
-        assertThat(reactionQuery.pick(1, "GREETING", null)).isEqualTo(new Reaction(WAVE, SMILE));
-        assertThat(reactionQuery.pick(1, "AWAY", 2)).isEqualTo(new Reaction(LOOK_AROUND, POUT));
+        // 말포이 모델은 모션 파일이 없어 표정만 (api.md 19)
+        assertThat(reactionQuery.pick(1, "GREETING", null)).isEqualTo(new Reaction(null, SMILE));
+        assertThat(reactionQuery.pick(1, "AWAY", 2)).isEqualTo(new Reaction(null, POUT));
         assertThat(reactionQuery.pick(1, "AWAY", 3)).isEqualTo(new Reaction(null, POUT));
+    }
+
+    @Test
+    void reactionByEmotionName() {
+        // 19 · 20: LLM이 고른 감정 이름으로 같은 이름의 표정 (#9)
+        assertThat(reactionQuery.pick(1, "수줍음", null)).isEqualTo(new Reaction(null, SHY));
+        assertThat(reactionQuery.pick(1, "웃음", null)).isEqualTo(new Reaction(null, SMILE));
+        assertThat(reactionQuery.pick(1, "찡그림", null)).isEqualTo(Reaction.NONE); // 에셋 없는 표정
     }
 
     @Test
     void reactionFallsBackToNullIntensity() {
         // (GREETING, 2) 행은 없고 (GREETING, NULL)만 있음
-        assertThat(reactionQuery.pick(1, "GREETING", 2)).isEqualTo(new Reaction(WAVE, SMILE));
+        assertThat(reactionQuery.pick(1, "GREETING", 2)).isEqualTo(new Reaction(null, SMILE));
     }
 
     @Test
