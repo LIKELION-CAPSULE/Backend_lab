@@ -19,7 +19,7 @@ import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 
 /**
- * LLM 한 번 → 답장 + 감정(JSON). 호감도는 여기서 정하지 않는다: ChatReplier가 결정 모델로 신호를 같이 읽는다 (ADR 0020).
+ * LLM 한 번 → 답장 + 감정(JSON). 호감도는 여기서 정하지 않는다: ChatReplier가 결정 모델로 신호를 같이 읽는다 (ADR 0021).
  * 시스템 = [캐릭터·규칙(chat.system, 캐시)] + [상황(chat.context, 매번 바뀜)], 메시지 = 이번 세션 대화 + 이번 말.
  */
 @Component

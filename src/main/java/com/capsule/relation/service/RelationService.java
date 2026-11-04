@@ -28,7 +28,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 호감도 최종안 (2026-11-04, ADR 0020).
+ * 호감도 최종안 (2026-11-04, ADR 0021).
  * 호감도: 50에서 시작, 0~100. 대화 · 자리 비움 · 연속 출석으로만 바뀐다. 기록의 합 + 50 = 지금 점수.
  * 레벨: 자리 지킴 시간. 관계 단계: 호감도 구간.
  */

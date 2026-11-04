@@ -6,7 +6,7 @@ import com.capsule.relation.api.RelationTypes.SessionEventRef;
 import com.capsule.relation.api.RelationTypes.StudySettlement;
 import java.util.UUID;
 
-/** 호감도를 바꾸는 쪽. 얼마나 바꿀지(공식)는 relation이 정한다 (호감도 최종안, ADR 0020). */
+/** 호감도를 바꾸는 쪽. 얼마나 바꿀지(공식)는 relation이 정한다 (호감도 최종안, ADR 0021). */
 public interface RelationCommands {
 
     /** 처음 만나면 관계 행을 만들고(50점), 이미 있으면 last_met_at만 갱신 (공부 시작, api.md 16) */

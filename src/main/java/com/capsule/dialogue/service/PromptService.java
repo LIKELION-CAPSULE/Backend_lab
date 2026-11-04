@@ -19,7 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.yaml.snakeyaml.Yaml;
 
 /**
- * 프롬프트 레지스트리 (ADR 0020). 코드는 키(PromptKey)로 찾고, 본문은 DB 버전이 정한다 → 배포 없이 프롬프트를 바꾸고 되돌린다.
+ * 프롬프트 레지스트리 (ADR 0021). 코드는 키(PromptKey)로 찾고, 본문은 DB 버전이 정한다 → 배포 없이 프롬프트를 바꾸고 되돌린다.
  * 쓰는 버전: 실험에서 고정한 버전(pinned) → 캐릭터 전용 ACTIVE → 공통 ACTIVE.
  * LLM 호출마다 쓴 버전 id가 llm_usages.prompt_version_ids에 남아서, 버전별 품질·비용을 비교할 수 있다.
  */

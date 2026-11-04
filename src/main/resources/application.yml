@@ -17,7 +17,7 @@ springdoc:
   swagger-ui.enabled: false
 
 capsule:
-  # LLM (ADR 0020). 공급자 전환 = provider 한 줄. 키는 환경변수로만 (ANTHROPIC_API_KEY · OPENAI_API_KEY)
+  # LLM (ADR 0021). 공급자 전환 = provider 한 줄. 키는 환경변수로만 (ANTHROPIC_API_KEY · OPENAI_API_KEY)
   llm:
     provider: ${CAPSULE_LLM_PROVIDER:fake} # fake | anthropic | openai (jev는 결정 전용: routes.DECIDE.provider)
     fallback-provider: ${CAPSULE_LLM_FALLBACK_PROVIDER:} # 기본 공급자가 실패하면 한 번 더 (비우면 없음)
@@ -84,7 +84,7 @@ capsule:
     memory-max: 20 # 캐릭터가 아는 사실 최대 개수. 넘치면 결정 모델이 가장 덜 중요한 하나를 버린다
     recap-max: 5 # 지난 세션 흐름 카드 최대 장수. 넘치면 오래된 카드부터 지운다
     memory-async: true # 기억 정리를 답장 뒤 따로 돈다 (테스트는 false: 바로 돌려서 확인)
-  # 호감도 · 레벨 (호감도 최종안 2026-11-04, ADR 0020). PM 답이 오면 값만 바꾼다. 날짜는 한국 날짜
+  # 호감도 · 레벨 (호감도 최종안 2026-11-04, ADR 0021). PM 답이 오면 값만 바꾼다. 날짜는 한국 날짜
   #   호감도 0~100, 50에서 시작(DB 기본값). 대화 한 번의 점수표는 캐릭터마다 달라서 dialogue 쪽(chat-scores)
   relation:
     chat-daily-gain-cap: 15 # 대화로 하루에 오를 수 있는 최대. 내려가는 쪽은 상한 없음

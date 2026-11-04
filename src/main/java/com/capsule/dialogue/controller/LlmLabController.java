@@ -47,7 +47,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * LLM 실험실 (내부 품질 테스트, ADR 0020). capsule.llm.lab.enabled=true일 때만 생긴다 (local 기본 켬, 운영 끔).
+ * LLM 실험실 (내부 품질 테스트, ADR 0021). capsule.llm.lab.enabled=true일 때만 생긴다 (local 기본 켬, 운영 끔).
  * 화면: GET /internal/llm-lab. 요청 예시: http/llm-lab.http
  */
 @RestController
