@@ -142,7 +142,8 @@ class LlmGatewayTest {
     void labPinsProviderAndModelWithoutFallbackAndKeepsContent() {
         Scripted anthropic = new Scripted("anthropic", LlmCallException.http("anthropic", 400, "bad"));
         Scripted openai = new Scripted("openai", OK);
-        LabConfig pinned = new LabConfig(null, null, null, null, "anthropic", "claude-pinned", 0.2, 50, null, null);
+        LabConfig pinned =
+                new LabConfig(null, null, null, null, "anthropic", "claude-pinned", 0.2, 50, null, null, null);
 
         assertThatThrownBy(
                         () -> call(gateway("openai", false, anthropic, openai), LlmContext.lab(LlmContext.LAB, pinned)))

@@ -1,5 +1,7 @@
 package com.capsule.dialogue.service;
 
+import static com.capsule.relation.api.RelationTypes.START_POINTS;
+
 import com.capsule.common.error.ApiException;
 import com.capsule.content.api.CharacterQuery;
 import com.capsule.content.api.ContentTypes.CharacterInfo;
@@ -33,7 +35,7 @@ import com.capsule.dialogue.engine.DialogueState;
 import com.capsule.dialogue.repository.LabSessionRepository;
 import com.capsule.dialogue.repository.LabTurnRepository;
 import com.capsule.dialogue.repository.LlmUsageRepository;
-import com.capsule.relation.api.RelationQuery;
+import com.capsule.relation.api.RelationTypes.ChatScore;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -93,7 +95,7 @@ public class LabService {
     private final LlmUsageRepository usages;
     private final Map<String, ChatPipeline> pipelines;
     private final ChatReplier replier;
-    private final RelationQuery relationQuery;
+    private final ChatScorer scorer;
     private final ReactionWriter reactionWriter;
     private final ClosingWriter closingWriter;
     private final LlmGateway gateway;
@@ -110,7 +112,7 @@ public class LabService {
             LlmUsageRepository usages,
             List<ChatPipeline> pipelines,
             ChatReplier replier,
-            RelationQuery relationQuery,
+            ChatScorer scorer,
             ReactionWriter reactionWriter,
             ClosingWriter closingWriter,
             LlmGateway gateway,
@@ -125,7 +127,7 @@ public class LabService {
         this.usages = usages;
         this.pipelines = pipelines.stream().collect(Collectors.toMap(ChatPipeline::name, Function.identity()));
         this.replier = replier;
-        this.relationQuery = relationQuery;
+        this.scorer = scorer;
         this.reactionWriter = reactionWriter;
         this.closingWriter = closingWriter;
         this.gateway = gateway;
@@ -314,9 +316,23 @@ public class LabService {
                     return map("content", l.content(), "emotion", l.emotion());
                 };
             }
+            // 이번 세션 카드. previousSummary 칸은 '캐릭터가 아는 사실'(줄마다)로 쓴다: 카드에 되풀이하지 않는지 본다
             case "summary" ->
                 ctx -> map(
-                        "summary", closingWriter.mergeSummary(c, nickname, r.previousSummary(), history, pinned, ctx));
+                        "summary",
+                        closingWriter.recap(
+                                c,
+                                nickname,
+                                "오늘 " + (r.studySeconds() == null ? 55 : r.studySeconds() / 60) + "분",
+                                r.previousSummary() == null
+                                        ? List.of()
+                                        : r.previousSummary()
+                                                .lines()
+                                                .filter(l -> !l.isBlank())
+                                                .toList(),
+                                history,
+                                pinned,
+                                ctx));
             case "closing" ->
                 ctx -> map(
                         "closingLine",
@@ -364,6 +380,7 @@ public class LabService {
                 config.nicknameOrDefault(),
                 config.relationLevelOrDefault(),
                 config.summary(),
+                config.factsOrEmpty(),
                 config.memoriesOrEmpty(),
                 history,
                 text,
@@ -389,9 +406,13 @@ public class LabService {
         return replier.reply(pipeline, in, ctx);
     }
 
-    /** 서비스였다면 이 턴의 호감도 점수 (하루 상한 전). 실험실은 호감도를 바꾸지 않는다 */
+    /**
+     * 서비스였다면 이 턴의 호감도 점수 (세션 반복 규칙 · 하루 상한 전, 비율 감점은 50점 기준). 실험실은 호감도를 바꾸지 않는다
+     */
     Integer points(ChatOutcome o) {
-        return o == null || o.signal() == null ? null : relationQuery.chatPoints(o.signal());
+        if (o == null || o.signal() == null) return null;
+        ChatScore s = scorer.score(o.signal(), List.of());
+        return s.lossPercent() > 0 ? Math.min(s.points(), -(START_POINTS * s.lossPercent() + 99) / 100) : s.points();
     }
 
     ChatPipeline pipeline(String name) {

@@ -6,7 +6,8 @@ import java.util.Map;
 /**
  * 실험 조건. 실험 대화방·평가 실행·한 번 실행(playground)이 같이 쓴다. null인 칸은 설정(capsule.llm)과 기본값.
  *
- * @param nickname · relationLevel · summary · memories 실제 API에서 DB가 채우는 값(닉네임·호감도 단계·지난 대화 요약·일정)을 대신한다
+ * @param nickname · relationLevel · summary · memories · facts 실제 API에서 DB가 채우는 값(닉네임·관계 단계·지난 세션 흐름·일정·
+ *     캐릭터가 아는 사실)을 대신한다
  * @param pinnedPrompts 프롬프트 키 → 고정할 prompt_versions.id. ACTIVE가 아닌 DRAFT를 켜기 전에 시험할 때
  */
 public record LabConfig(
@@ -19,9 +20,15 @@ public record LabConfig(
         Double temperature,
         Integer maxTokens,
         Map<String, Long> pinnedPrompts,
-        EngineOptions engine) {
+        EngineOptions engine,
+        List<String> facts) {
 
-    public static final LabConfig EMPTY = new LabConfig(null, null, null, null, null, null, null, null, null, null);
+    public static final LabConfig EMPTY =
+            new LabConfig(null, null, null, null, null, null, null, null, null, null, null);
+
+    public List<String> factsOrEmpty() {
+        return facts == null ? List.of() : facts;
+    }
 
     public String nicknameOrDefault() {
         return nickname == null || nickname.isBlank() ? "테스터" : nickname;

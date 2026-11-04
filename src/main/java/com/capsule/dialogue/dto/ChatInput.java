@@ -7,8 +7,12 @@ import java.util.Map;
 
 /**
  * 답장 파이프라인 입력. 메시지 전송(20)은 DB 값으로, 실험실은 LabConfig로 채운다. 파이프라인은 둘을 구분하지 않는다.
+ * 기억은 세 겹 (ADR 0020): facts(아는 사실) · summary(지난 세션 흐름 카드) · history(이번 세션 원문)
  *
- * @param memories 대화에 넣을 일정 한 줄씩 (예: "시험: 중간고사 (2026-11-20)")
+ * @param relationLevel 관계 단계 (호감도 구간, 1부터)
+ * @param summary 지난 세션 흐름 카드들을 줄마다 (오래된 것부터). 없으면 null
+ * @param facts 캐릭터가 아는 사실 한 줄씩
+ * @param memories 사용자가 넣은 일정 한 줄씩 (예: "시험: 중간고사 (2026-11-20)")
  * @param history 이번 세션의 앞선 메시지 (이번 userMessage는 빠짐)
  * @param engineState ENGINE 파이프라인만. null이면 새로 시작
  * @param pinnedPrompts 실험실에서 고정한 프롬프트 버전 (키 → id). 서비스는 빈 값
@@ -18,6 +22,7 @@ public record ChatInput(
         String nickname,
         int relationLevel,
         String summary,
+        List<String> facts,
         List<String> memories,
         List<ChatLine> history,
         String userMessage,

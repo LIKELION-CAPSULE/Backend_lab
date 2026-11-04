@@ -12,9 +12,12 @@ import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Component;
 
-/** 공부 종료(명세 22)에서 LLM이 쓰는 글: 지난 요약에 이번 대화 합치기, 완료 대사. 시간 제한(5초)은 부르는 쪽이 지킨다 */
+/** 공부 종료(명세 22)에서 LLM이 쓰는 글: 이번 세션 흐름 카드, 완료 대사. 시간 제한(5초)은 부르는 쪽이 지킨다 */
 @Component
 public class ClosingWriter {
+
+    /** 카드 본문 길이 (DB CHECK 200자, 머리말 포함) */
+    static final int RECAP_MAX = 150;
 
     private final LlmGateway llm;
     private final PromptService prompts;
@@ -24,28 +27,37 @@ public class ClosingWriter {
         this.prompts = prompts;
     }
 
-    // TODO(judgment): J-08 요약 방법(합치기·다시 쓰기, 길이). 지금은 summary.system 프롬프트의 기본안
-    public String mergeSummary(
+    /**
+     * 세션 하나를 흐름 카드 한 장으로 (기억 ②, ADR 0020). 지난 카드를 다시 압축하지 않는다(재귀 요약은 쓸수록 정보가 빠짐).
+     * 오래 남길 사실은 MemoryKeeper가 매 턴 이미 뽑았으므로, 카드는 흐름만 쓰고 오래되면 지워져도 된다.
+     *
+     * @param header 코드가 붙이는 머리말 (예: "11/03 52분")
+     * @param facts 캐릭터가 이미 아는 사실 (카드에 되풀이하지 않게)
+     */
+    // TODO(judgment): J-08 카드 길이 · 내용 (임시: 70자 안팎 한두 문장, summary.system 프롬프트)
+    public String recap(
             CharacterInfo character,
             String nickname,
-            String previousSummary,
+            String header,
+            List<String> facts,
             List<ChatLine> lines,
             Map<String, Long> pinned,
             LlmContext ctx) {
         PromptVersion system = prompts.resolve(PromptKey.SUMMARY_SYSTEM, character.id(), pinned);
         Map<String, String> vars = PromptVars.character(character);
         vars.put("nickname", nickname);
-        String input = "<이전 요약>\n" + PromptVars.orNone(previousSummary, "없음") + "\n</이전 요약>\n\n<이번 대화>\n"
-                + PromptVars.transcript(lines, character.name()) + "\n</이번 대화>";
+        String input = "<아는 사실>\n" + (facts.isEmpty() ? "없음" : "- " + String.join("\n- ", facts))
+                + "\n</아는 사실>\n\n<이번 대화>\n" + PromptVars.transcript(lines, character.name()) + "\n</이번 대화>";
         Llm.Result r = llm.complete(
                 LlmPurpose.SUMMARY,
                 List.of(new Llm.SystemBlock(PromptService.render(system.body(), vars), false)),
                 List.of(new Llm.ChatTurn("user", input)),
                 ctx.withPrompts(List.of(system.id())),
                 null);
-        String summary = r.text().strip();
-        if (summary.isEmpty()) throw new IllegalStateException("빈 요약");
-        return summary;
+        String body = r.text().strip().replaceAll("\\s+", " ");
+        if (body.isEmpty()) throw new IllegalStateException("빈 카드");
+        if (body.length() > RECAP_MAX) body = body.substring(0, RECAP_MAX);
+        return header + ", " + body;
     }
 
     // TODO(judgment): J-09 완료 대사에 넣을 정보(목표 달성·레벨업 등). 지금은 공부 시간과 끝낸 방법만

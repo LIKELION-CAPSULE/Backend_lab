@@ -42,6 +42,7 @@ class FakeProvider implements LlmProvider {
             case JUDGE -> "{\"scores\":[7,6,5],\"pick\":1,\"why\":\"가짜 심사\"}";
             case REACTION -> LlmJson.write(Map.of("content", "(가짜 반응) " + head(last, 30), "emotion", "NEUTRAL"));
             case SUMMARY -> "(가짜 요약) " + head(last, 60);
+            case MEMORY -> "(가짜 기억) " + head(last, 20);
             case CLOSING -> "(가짜 완료 대사) 오늘 공부 수고했어."; // 대체 문구(fixed.lines)와 달라야 테스트가 둘을 구분한다
             case EVAL_JUDGE -> "{\"score\":7,\"reason\":\"가짜 심사\"}";
             case DECIDE -> firstChoices(last);

@@ -15,8 +15,10 @@ public enum LlmPurpose {
     JUDGE,
     /** 상태 반응 대사 (명세 19, reaction-llm-triggers에 든 trigger만) */
     REACTION,
-    /** 세션 대화를 지난 요약에 합침 (명세 22) */
+    /** 세션 하나를 흐름 카드 한 장으로 (명세 22) */
     SUMMARY,
+    /** 기억할 사실 한 줄 쓰기 (결정 모델이 저장 · 고치기로 고른 턴만) */
+    MEMORY,
     /** 완료 대사 (명세 22) */
     CLOSING,
     /** 실험실 평가 심사관 */

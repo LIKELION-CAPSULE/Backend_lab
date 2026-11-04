@@ -8,7 +8,6 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -34,8 +33,9 @@ import com.capsule.dialogue.service.ChatReplier;
 import com.capsule.relation.api.RelationCommands;
 import com.capsule.relation.api.RelationQuery;
 import com.capsule.relation.api.RelationTypes.AffinityChange;
-import com.capsule.relation.api.RelationTypes.ChatSignal;
+import com.capsule.relation.api.RelationTypes.ChatScore;
 import com.capsule.relation.api.RelationTypes.RelationView;
+import com.capsule.relation.api.RelationTypes.SignalType;
 import com.capsule.session.api.SessionClosingHandler;
 import com.capsule.session.api.SessionQuery;
 import com.capsule.session.api.SessionTypes.SessionClosing;
@@ -129,8 +129,16 @@ class DialogueTest {
                 .thenReturn(
                         Optional.of(new CharacterInfo(CHARACTER_ID, 1, "채린", null, List.of("츤데레"), "짝꿍", true, null)));
         when(reactionQuery.pick(anyLong(), anyString(), any())).thenReturn(Reaction.NONE);
-        when(relationQuery.view(userId, CHARACTER_ID))
-                .thenReturn(new RelationView(CHARACTER_ID, 1, "아는 사이", 80, 0, 100));
+        when(relationQuery.view(userId, CHARACTER_ID)).thenReturn(view(1, 80));
+    }
+
+    /** 관계 단계(stage)와 호감도만 의미 있는 조회 결과 */
+    private static RelationView view(int stage, int points) {
+        return new RelationView(CHARACTER_ID, 1, "단계" + stage, points, 0, null, stage, "단계" + stage, 0, 3600);
+    }
+
+    private static AffinityChange change(int delta, int points) {
+        return new AffinityChange(delta, points, 1, false, 1, "단계1");
     }
 
     // --- 19 이벤트 반응 ---
@@ -205,8 +213,7 @@ class DialogueTest {
     @Test
     void fixedLineFollowsRelationLevel() throws Exception {
         event(15, "AWAY", false, false);
-        when(relationQuery.view(userId, CHARACTER_ID))
-                .thenReturn(new RelationView(CHARACTER_ID, 3, "Lv.3", 320, 0, null));
+        when(relationQuery.view(userId, CHARACTER_ID)).thenReturn(view(3, 80));
 
         // Lv.3: AWAY의 3 이상 칸. 강도 2도 AWAY_2의 3 이상 칸
         react(15, "{\"requestId\":\"" + UUID.randomUUID() + "\"}")
@@ -292,12 +299,8 @@ class DialogueTest {
     @Test
     void sendMessage() throws Exception {
         UUID requestId = UUID.randomUUID();
-        // 사용자 말 신호는 결정 모델이 고른다 (여기선 PRAISE로), 점수는 relation이 정한다
-        doReturn(Map.of(ChatReplier.QUESTION, new Decider.Decision("PRAISE", 0.9)))
-                .when(decider)
-                .decide(anyString(), any(), any());
-        when(relationCommands.applyChatSignal(userId, CHARACTER_ID, sessionId, requestId, ChatSignal.PRAISE))
-                .thenReturn(new AffinityChange(1, 81, 1, false));
+        when(relationCommands.applyChatScore(eq(userId), eq(CHARACTER_ID), eq(sessionId), eq(requestId), any()))
+                .thenReturn(change(1, 81));
 
         send(requestId, "이거 너무 어려워")
                 .andExpect(status().isOk())
@@ -321,33 +324,94 @@ class DialogueTest {
                 .isEqualTo(1);
     }
 
-    @Test
-    void signalIsReadInParallelAndUnsureMeansNeutral() throws Exception {
-        // Fake 결정 모델은 첫 보기(NEUTRAL)를 고르고, 그 호출도 기록된다
-        UUID first = UUID.randomUUID();
-        send(first, "오늘 날씨 좋다").andExpect(status().isOk());
-        verify(relationCommands).applyChatSignal(userId, CHARACTER_ID, sessionId, first, ChatSignal.NEUTRAL);
-        assertThat(jdbc.queryForObject(
-                        "SELECT count(*) FROM llm_usages WHERE session_id = ? AND purpose = 'DECIDE' AND status = 'OK'",
-                        Integer.class,
-                        sessionId))
-                .isEqualTo(1);
+    /** 이 말을 보내고 relation에 넘긴 점수 */
+    private ChatScore scoreOf(String content) throws Exception {
+        UUID id = UUID.randomUUID();
+        send(id, content).andExpect(status().isOk());
+        org.mockito.ArgumentCaptor<ChatScore> score = org.mockito.ArgumentCaptor.forClass(ChatScore.class);
+        verify(relationCommands).applyChatScore(eq(userId), eq(CHARACTER_ID), eq(sessionId), eq(id), score.capture());
+        return score.getValue();
+    }
 
-        // 확신이 기준(0.6)보다 낮으면 무례로 읽혀도 0점(NEUTRAL)
-        doReturn(Map.of(ChatReplier.QUESTION, new Decider.Decision("RUDE", 0.4)))
+    @Test
+    void chatIsScoredByPatternAndSessionRules() throws Exception {
+        // A안: 말 패턴으로 종류, 점수표(application.yml chat-scores)로 점수. 결정 모델은 부르지 않는다
+        assertThat(scoreOf("오늘 날씨 좋다")).isEqualTo(new ChatScore(SignalType.NEUTRAL, 0, 0));
+        assertThat(scoreOf("고마워 진짜")).isEqualTo(new ChatScore(SignalType.THANKS, 1, 0));
+        assertThat(scoreOf("고맙다 정말")).isEqualTo(new ChatScore(SignalType.THANKS, 1, 0));
+        assertThat(scoreOf("감사합니다요")).isEqualTo(new ChatScore(SignalType.THANKS, 0, 0)); // 10턴 안 세 번째
+        assertThat(scoreOf("요즘 너무 힘들어")).isEqualTo(new ChatScore(SignalType.CONFIDE, 2, 0));
+        assertThat(scoreOf("진짜 불안해 죽겠어")).isEqualTo(new ChatScore(SignalType.CONFIDE, 0, 0)); // 세션당 1번
+        assertThat(scoreOf("아 꺼져 좀")).isEqualTo(new ChatScore(SignalType.RUDE, -2, 0));
+        assertThat(scoreOf("닥쳐 진짜")).isEqualTo(new ChatScore(SignalType.RUDE, -3, 0)); // 같은 세션 반복
+        assertThat(jdbc.queryForObject(
+                        "SELECT signal FROM chat_messages WHERE session_id = ? AND sender = 'USER' ORDER BY id LIMIT 1",
+                        String.class,
+                        sessionId))
+                .isEqualTo("NEUTRAL");
+    }
+
+    @Test
+    void severeWordsAreConfirmedByTheDecider() throws Exception {
+        // 패턴이 혐오 · 성적이라고 하면 결정 모델이 확인한다. Fake는 첫 보기(HATE_OR_SEXUAL, 0.9)를 고른다
+        assertThat(scoreOf("섹스 얘기 하자")).isEqualTo(new ChatScore(SignalType.HATE_OR_SEXUAL, -5, 30));
+
+        // 확인이 낮은 확신이면 RUDE로 (비율 감점 오탐 방지)
+        doAnswer(inv -> {
+                    Map<?, ?> questions = inv.getArgument(1);
+                    return questions.containsKey(ChatReplier.QUESTION)
+                            ? Map.of(ChatReplier.QUESTION, new Decider.Decision("HATE_OR_SEXUAL", 0.5))
+                            : inv.callRealMethod();
+                })
                 .when(decider)
                 .decide(anyString(), any(), any());
-        UUID unsure = UUID.randomUUID();
-        send(unsure, "아 진짜").andExpect(status().isOk());
-        verify(relationCommands).applyChatSignal(userId, CHARACTER_ID, sessionId, unsure, ChatSignal.NEUTRAL);
+        assertThat(scoreOf("야동 같은 소리")).isEqualTo(new ChatScore(SignalType.RUDE, -2, 0));
 
-        // 결정 호출이 실패해도 답장은 나간다 (NEUTRAL)
+        // 확인 호출이 실패해도 답장은 나가고 RUDE (같은 세션 두 번째라 −3)
         doThrow(new IllegalStateException("결정 실패")).when(decider).decide(anyString(), any(), any());
         UUID failed = UUID.randomUUID();
-        send(failed, "파이팅")
+        send(failed, "섹드립 ㄱ")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.fallback").value(false));
-        verify(relationCommands).applyChatSignal(userId, CHARACTER_ID, sessionId, failed, ChatSignal.NEUTRAL);
+        verify(relationCommands)
+                .applyChatScore(userId, CHARACTER_ID, sessionId, failed, new ChatScore(SignalType.RUDE, -3, 0));
+    }
+
+    @Test
+    void factsAreKeptUpdatedAndCappedAt20() throws Exception {
+        // 결정 모델이 '새로 저장'을 고르면 LLM이 한 줄로 쓴다
+        doAnswer(inv -> {
+                    Map<?, ?> questions = inv.getArgument(1);
+                    return questions.containsKey("memory")
+                            ? Map.of("memory", new Decider.Decision("ADD", 0.9))
+                            : inv.callRealMethod();
+                })
+                .when(decider)
+                .decide(anyString(), any(), any());
+        send(UUID.randomUUID(), "나 이번 달에 토익 800 목표야").andExpect(status().isOk());
+        assertThat(jdbc.queryForList("SELECT content FROM character_memories WHERE user_id = ?", String.class, userId))
+                .singleElement()
+                .asString()
+                .startsWith("(가짜 기억)");
+
+        // 20개가 차 있으면 하나 버리고 넣는다 (Fake는 버릴 것으로 첫 보기 = 가장 오래된 것)
+        for (int i = 0; i < 19; i++) {
+            jdbc.update(
+                    "INSERT INTO character_memories (user_id, character_id, content) VALUES (?, ?, ?)",
+                    userId,
+                    CHARACTER_ID,
+                    "사실 " + i);
+        }
+        send(UUID.randomUUID(), "나 밤에 공부가 잘 돼").andExpect(status().isOk());
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM character_memories WHERE user_id = ?", Integer.class, userId))
+                .isEqualTo(20);
+
+        // 전화번호 같은 개인정보는 결정 모델에 묻지도 않는다
+        int before = jdbc.queryForObject("SELECT count(*) FROM llm_usages WHERE purpose = 'MEMORY'", Integer.class);
+        send(UUID.randomUUID(), "내 번호 010-1234-5678 이야").andExpect(status().isOk());
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM llm_usages WHERE purpose = 'MEMORY'", Integer.class))
+                .isEqualTo(before);
     }
 
     @Test
@@ -380,8 +444,8 @@ class DialogueTest {
     @Test
     void resendWithSameRequestIdIsHandledOnce() throws Exception {
         UUID requestId = UUID.randomUUID();
-        when(relationCommands.applyChatSignal(userId, CHARACTER_ID, sessionId, requestId, ChatSignal.NEUTRAL))
-                .thenReturn(new AffinityChange(1, 81, 1, false));
+        when(relationCommands.applyChatScore(eq(userId), eq(CHARACTER_ID), eq(sessionId), eq(requestId), any()))
+                .thenReturn(change(1, 81));
         send(requestId, "졸려").andExpect(status().isOk());
 
         send(requestId, "졸려")
@@ -390,7 +454,7 @@ class DialogueTest {
                 .andExpect(jsonPath("$.affinity.delta").value(0))
                 .andExpect(jsonPath("$.affinity.points").value(80));
         verify(llm, times(1)).complete(eq(LlmPurpose.CHAT), any(), any(), any(), any());
-        verify(relationCommands, times(1)).applyChatSignal(anyLong(), anyLong(), anyLong(), any(), any());
+        verify(relationCommands, times(1)).applyChatScore(anyLong(), anyLong(), anyLong(), any(), any());
         assertThat(rows(requestId)).isEqualTo(2);
     }
 
@@ -457,8 +521,8 @@ class DialogueTest {
                 .when(llm)
                 .complete(any(), any(), any(), any(), any());
         UUID requestId = UUID.randomUUID();
-        when(relationCommands.applyChatSignal(userId, CHARACTER_ID, sessionId, requestId, ChatSignal.NEUTRAL))
-                .thenReturn(new AffinityChange(0, 80, 1, false));
+        when(relationCommands.applyChatScore(userId, CHARACTER_ID, sessionId, requestId, ChatScore.none()))
+                .thenReturn(change(0, 80));
 
         send(requestId, "이거 어려워")
                 .andExpect(status().isOk())
@@ -467,14 +531,8 @@ class DialogueTest {
                 .andExpect(jsonPath("$.fallback").value(true))
                 .andExpect(jsonPath("$.affinity.delta").value(0))
                 .andExpect(jsonPath("$.affinity.points").value(80));
-        // 대체 대사면 NEUTRAL로만 부른다 (호감도 변화 없음, relation 잠금 순서만 지킴)
-        verify(relationCommands, never())
-                .applyChatSignal(
-                        anyLong(),
-                        anyLong(),
-                        anyLong(),
-                        any(),
-                        org.mockito.ArgumentMatchers.argThat(s -> s != ChatSignal.NEUTRAL));
+        // 대체 대사면 0점으로만 부른다 (호감도 변화 없음, relation 잠금 순서만 지킴)
+        verify(relationCommands).applyChatScore(userId, CHARACTER_ID, sessionId, requestId, ChatScore.none());
     }
 
     @Test
@@ -547,25 +605,43 @@ class DialogueTest {
     // --- 22 종료 때 마무리 ---
 
     @Test
-    void closeMergesSummaryDeletesMessagesAndReturnsClosingLine() throws Exception {
+    void closeWritesARecapCardDeletesMessagesAndReturnsClosingLine() throws Exception {
         send(UUID.randomUUID(), "파이팅").andExpect(status().isOk());
-        send(UUID.randomUUID(), "졸려").andExpect(status().isOk());
-        jdbc.update("UPDATE conversations SET summary = '이전 요약' WHERE user_id = ?", userId);
+        long conversationId = jdbc.queryForObject("SELECT id FROM conversations WHERE user_id = ?", Long.class, userId);
+        // 앞선 종료에서 카드 쓰기가 실패해 남은 다른 세션 메시지도 이번 카드에 같이 들어간다
+        long earlier = jdbc.queryForObject(
+                "INSERT INTO study_sessions (user_id, room_id, background_id, ended_at, end_type)"
+                        + " VALUES (?, 1, 1, now(), 'AUTO_CLOSED') RETURNING id",
+                Long.class,
+                userId);
+        jdbc.update(
+                "INSERT INTO chat_messages (conversation_id, session_id, request_id, sender, content)"
+                        + " VALUES (?, ?, ?, 'USER', '지난번 남은 말')",
+                conversationId,
+                earlier,
+                UUID.randomUUID());
+        // 카드는 최근 5장만 남는다
+        for (long s = 1; s <= 5; s++) {
+            jdbc.update(
+                    "INSERT INTO conversation_recaps (conversation_id, session_id, content) VALUES (?, ?, ?)",
+                    conversationId,
+                    -s,
+                    "옛 카드 " + s);
+        }
 
         String closingLine =
                 closingHandler.close(new SessionClosing(sessionId, userId, CHARACTER_ID, "채린", "NORMAL", 3300));
 
         assertThat(closingLine).isEqualTo("(가짜 완료 대사) 오늘 공부 수고했어."); // LLM이 만든 것 (대체 문구가 아님)
-        // Fake 요약은 입력(이전 요약 + 이번 대화) 앞부분을 그대로 돌려준다: 이전 요약이 입력에 들어갔는지 확인
-        assertThat(jdbc.queryForObject("SELECT summary FROM conversations WHERE user_id = ?", String.class, userId))
-                .startsWith("(가짜 요약) <이전 요약>\n이전 요약");
+        List<String> cards = jdbc.queryForList(
+                "SELECT content FROM conversation_recaps WHERE conversation_id = ? ORDER BY id DESC",
+                String.class,
+                conversationId);
+        assertThat(cards).hasSize(5).doesNotContain("옛 카드 1");
+        // 머리말(날짜 · 공부 시간)은 코드가 붙인다. Fake 요약은 입력 앞부분을 돌려준다
+        assertThat(cards.getFirst()).matches("\\d{2}/\\d{2} 55분, \\(가짜 요약\\) <아는 사실>.*");
         assertThat(jdbc.queryForObject(
-                        "SELECT summary_updated_at IS NOT NULL FROM conversations WHERE user_id = ?",
-                        Boolean.class,
-                        userId))
-                .isTrue();
-        assertThat(jdbc.queryForObject(
-                        "SELECT count(*) FROM chat_messages WHERE session_id = ?", Integer.class, sessionId))
+                        "SELECT count(*) FROM chat_messages WHERE conversation_id = ?", Integer.class, conversationId))
                 .isZero();
     }
 

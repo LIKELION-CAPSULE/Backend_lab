@@ -104,7 +104,9 @@ class FlowE2ETest {
         String s = "/api/sessions/" + sessionId;
 
         MvcResult focus = eventCall(token, s, "FOCUS", Instant.now().toString(), 201);
-        assertThat(affinityDelta(focus)).isEqualTo(5);
+        assertThat(affinityDelta(focus)).isZero(); // 연속 출석 1일째는 점수 없음 (2일째부터)
+        assertThat((Integer) JsonPath.read(body(focus), "$.characters[0].affinity.points"))
+                .isEqualTo(50); // 50에서 시작
         MvcResult greeting = call(post(s + "/events/" + eventId(focus) + "/reaction"), token, reactionBody(null), 200);
         // 상태 변화(인사 · 자리 비움)는 LLM 반응 (테스트는 Fake LLM). 동작 이벤트는 고정 대사
         assertThat((String) JsonPath.read(body(greeting), "$.characters[0].content"))
@@ -118,18 +120,18 @@ class FlowE2ETest {
         // 13~14 자리 비움 → 반응 → 같은 이벤트 재전송
         String awayAt = Instant.now().toString();
         MvcResult awayEvent = eventCall(token, s, "AWAY", awayAt, 201);
-        assertThat(affinityDelta(awayEvent)).isEqualTo(-1);
+        assertThat(affinityDelta(awayEvent)).isZero(); // 자리 비움 감점은 끝날 때 1분 넘게 비웠으면
         long awayId = eventId(awayEvent);
         MvcResult away = call(post(s + "/events/" + awayId + "/reaction"), token, reactionBody(1), 200);
         assertThat((String) JsonPath.read(body(away), "$.characters[0].content"))
                 .startsWith("(가짜 반응)");
         MvcResult awayAgain = eventCall(token, s, "AWAY", awayAt, 200);
         assertThat(eventId(awayAgain)).isEqualTo(awayId);
-        assertThat(affinityDelta(awayAgain)).isEqualTo(-1); // 재전송은 다시 반영하지 않고 같은 변화
+        assertThat(affinityDelta(awayAgain)).isZero(); // 재전송은 다시 반영하지 않고 같은 변화
 
-        // 15 복귀
+        // 15 복귀: 1분 안에 돌아와서 감점 없음, 돌아옴 자체도 0점
         MvcResult returned = eventCall(token, s, "RETURN", Instant.now().toString(), 201);
-        assertThat(affinityDelta(returned)).isEqualTo(1);
+        assertThat(affinityDelta(returned)).isZero();
         call(post(s + "/events/" + eventId(returned) + "/reaction"), token, reactionBody(null), 200);
 
         // 16 채팅 → 같은 requestId 재전송은 한 번만
@@ -155,10 +157,12 @@ class FlowE2ETest {
         MvcResult end = call(post(s + "/end"), token, endBody, 200);
         assertThat((Integer) JsonPath.read(body(end), "$.returnCount")).isEqualTo(1);
         assertThat((Integer) JsonPath.read(body(end), "$.studySeconds")).isEqualTo(60);
-        // 호감도 0~100: 첫 만남 +5, 자리 비움 −1, 복귀 +1, 채팅 0(Fake 결정 = NEUTRAL), 공부 1분 0(10분당 +1)
+        // 호감도 0~100, 50에서 시작: 연속 출석 1일째 0, 짧은 자리 비움 0, 복귀 0, 채팅 0(평범한 말), 공부 시간은 레벨에만
         assertThat((Integer) JsonPath.read(body(end), "$.relation.pointsBefore"))
-                .isEqualTo(0);
-        assertThat((Integer) JsonPath.read(body(end), "$.relation.pointsAfter")).isEqualTo(5);
+                .isEqualTo(50);
+        assertThat((Integer) JsonPath.read(body(end), "$.relation.pointsAfter")).isEqualTo(50);
+        assertThat((String) JsonPath.read(body(end), "$.relation.stageName")).isEqualTo("친한 사이");
+        assertThat((Integer) JsonPath.read(body(end), "$.relation.levelAfter")).isEqualTo(1); // 자리 지킴 1분
         assertThat((String) JsonPath.read(body(end), "$.closingLine")).isNotBlank();
         MvcResult endAgain = call(post(s + "/end"), token, endBody, 200);
         assertThat(body(endAgain)).isEqualTo(body(end));

@@ -13,6 +13,7 @@ import com.capsule.dialogue.client.LlmJson;
 import com.capsule.dialogue.config.DialogueProperties;
 import com.capsule.dialogue.domain.ChatMessage;
 import com.capsule.dialogue.domain.Conversation;
+import com.capsule.dialogue.domain.ConversationRecap;
 import com.capsule.dialogue.domain.DialogueStateEntity;
 import com.capsule.dialogue.dto.ChatInput;
 import com.capsule.dialogue.dto.ChatLine;
@@ -26,13 +27,15 @@ import com.capsule.dialogue.dto.ReactionLine;
 import com.capsule.dialogue.dto.ReactionResponse;
 import com.capsule.dialogue.engine.DialogueState;
 import com.capsule.dialogue.repository.ChatMessageRepository;
+import com.capsule.dialogue.repository.ConversationRecapRepository;
 import com.capsule.dialogue.repository.ConversationRepository;
 import com.capsule.dialogue.repository.DialogueStateRepository;
 import com.capsule.relation.api.RelationCommands;
 import com.capsule.relation.api.RelationQuery;
 import com.capsule.relation.api.RelationTypes.AffinityChange;
-import com.capsule.relation.api.RelationTypes.ChatSignal;
+import com.capsule.relation.api.RelationTypes.ChatScore;
 import com.capsule.relation.api.RelationTypes.RelationView;
+import com.capsule.relation.api.RelationTypes.SignalType;
 import com.capsule.session.api.SessionQuery;
 import com.capsule.session.api.SessionTypes.SessionClosing;
 import com.capsule.session.api.SessionTypes.SessionEventInfo;
@@ -44,6 +47,9 @@ import com.capsule.user.api.UserTypes.UserProfile;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -80,6 +86,9 @@ public class DialogueService {
 
     private static final ExecutorService LLM_THREADS = Executors.newVirtualThreadPerTaskExecutor();
     private static final int MESSAGES_PER_MINUTE = 10;
+    private static final ZoneId DAY_ZONE = ZoneId.of("Asia/Seoul");
+    /** 세션 카드 머리말 날짜 (예: "11/03 52분") */
+    private static final DateTimeFormatter CARD_DATE = DateTimeFormatter.ofPattern("MM/dd");
 
     private final SessionQuery sessions;
     private final CharacterQuery characters;
@@ -93,8 +102,11 @@ public class DialogueService {
     private final FixedLines fixedLines;
     private final ChatPipeline chat;
     private final ChatReplier replier;
+    private final ChatScorer scorer;
+    private final MemoryKeeper memoryKeeper;
     private final ClosingWriter closingWriter;
     private final ConversationRepository conversations;
+    private final ConversationRecapRepository recapRepository;
     private final ChatMessageRepository messages;
     private final DialogueStateRepository states;
     private final TransactionTemplate tx;
@@ -114,8 +126,11 @@ public class DialogueService {
             FixedLines fixedLines,
             List<ChatPipeline> pipelines,
             ChatReplier replier,
+            ChatScorer scorer,
+            MemoryKeeper memoryKeeper,
             ClosingWriter closingWriter,
             ConversationRepository conversations,
+            ConversationRecapRepository recapRepository,
             ChatMessageRepository messages,
             DialogueStateRepository states,
             PlatformTransactionManager transactionManager,
@@ -137,8 +152,11 @@ public class DialogueService {
                 .orElseThrow(
                         () -> new IllegalStateException("capsule.dialogue.chat-pipeline을 모름: " + props.chatPipeline()));
         this.replier = replier;
+        this.scorer = scorer;
+        this.memoryKeeper = memoryKeeper;
         this.closingWriter = closingWriter;
         this.conversations = conversations;
+        this.recapRepository = recapRepository;
         this.messages = messages;
         this.states = states;
         this.tx = new TransactionTemplate(transactionManager);
@@ -160,16 +178,16 @@ public class DialogueService {
             throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_REQUEST");
         }
 
-        // 호감도는 상태 변화 전송(18)이 반영하고 그 응답으로 돌려준다. 여기서는 단계만 읽어 말투를 고른다
-        int relationLevel = relationQuery.view(userId, characterId).level();
+        // 호감도는 상태 변화 전송(18)이 반영하고 그 응답으로 돌려준다. 여기서는 관계 단계(호감도 구간)만 읽어 말투를 고른다
+        int relationLevel = relationQuery.view(userId, characterId).stage();
         ReactionLine line = fixedLines.reaction(characterId, trigger, awayLevel, relationLevel, Map.of());
         boolean fallback = false;
         if (reactionWriter.usesLlm(trigger)) {
-            // 상태 변화는 LLM: 호감도 단계 + 지난 요약 + 이번 세션 최근 대화를 같이 넣는다
+            // 상태 변화는 LLM: 관계 단계 + 지난 세션 흐름 + 이번 세션 최근 대화를 같이 넣는다
             CharacterInfo character = character(characterId);
             String nickname = nickname(userId);
             Optional<Conversation> conv = conversations.findByUserIdAndCharacterId(userId, characterId);
-            String summary = conv.map(Conversation::summary).orElse(null);
+            String summary = conv.map(c -> recaps(c.id())).orElse(null);
             List<ChatLine> recent = conv.map(c -> tail(
                             lines(messages.findByConversationIdAndSessionIdOrderById(c.id(), sessionId)),
                             props.reactionContextLines()))
@@ -245,18 +263,21 @@ public class DialogueService {
         long characterId = session.characterId();
         UUID requestId = request.requestId();
 
-        List<ChatLine> history =
-                lines(messages.findByConversationIdAndSessionIdOrderById(conversation.id(), sessionId).stream()
+        List<ChatMessage> earlier =
+                messages.findByConversationIdAndSessionIdOrderById(conversation.id(), sessionId).stream()
                         .filter(m -> !m.requestId().equals(requestId))
-                        .toList());
+                        .toList();
+        List<ChatLine> history = lines(earlier);
         Optional<DialogueStateEntity> saved = ChatPipeline.ENGINE.equals(chat.name())
                 ? states.findBySessionIdAndCharacterId(sessionId, characterId)
                 : Optional.empty();
+        CharacterInfo character = character(characterId);
         ChatInput input = new ChatInput(
-                character(characterId),
+                character,
                 nickname(userId),
-                relationQuery.view(userId, characterId).level(),
-                conversation.summary(),
+                relationQuery.view(userId, characterId).stage(),
+                recaps(conversation.id()),
+                memoryKeeper.facts(userId, characterId),
                 memoryLines(userId),
                 history,
                 request.content(),
@@ -266,18 +287,27 @@ public class DialogueService {
         LlmContext ctx = LlmContext.app(userId, sessionId, deadline());
         Optional<ChatOutcome> outcome = withinBudget(() -> replier.reply(chat, input, ctx));
         String reply = outcome.map(ChatOutcome::reply).orElseGet(() -> fixedLines.replyFallback(characterId));
-        // 명세 20: fallback이면 호감도 변화 없음 (NEUTRAL이어도 applyChatSignal을 불러 잠금 순서를 지킨다)
-        ChatSignal signal = outcome.map(ChatOutcome::signal).orElse(ChatSignal.NEUTRAL);
+        // 명세 20: fallback이면 호감도 변화 없음 (0점이어도 applyChatScore를 불러 잠금 순서를 지킨다)
+        SignalType signal = outcome.map(ChatOutcome::signal).orElse(null);
+        ChatScore score = signal == null
+                ? ChatScore.none()
+                : scorer.score(
+                        signal,
+                        earlier.stream()
+                                .filter(m -> USER.equals(m.sender()) && m.signal() != null)
+                                .map(m -> SignalType.valueOf(m.signal()))
+                                .toList());
 
         MessageResponse response;
         try {
             response = tx.execute(status -> {
                 AffinityChange affinity =
-                        relationCommands.applyChatSignal(userId, characterId, sessionId, requestId, signal);
+                        relationCommands.applyChatScore(userId, characterId, sessionId, requestId, score);
                 if (sessions.find(sessionId).filter(SessionInfo::inProgress).isEmpty()) {
                     status.setRollbackOnly(); // 답하는 사이 공부가 끝났다: 정산·요약이 끝난 세션에 남기지 않는다
                     return null;
                 }
+                if (signal != null) messages.markSignal(conversation.id(), requestId, signal.name());
                 messages.save(
                         new ChatMessage(conversation.id(), sessionId, requestId, CHARACTER, reply, Instant.now(clock)));
                 outcome.map(ChatOutcome::engineState).ifPresent(st -> saveState(sessionId, characterId, st));
@@ -304,6 +334,16 @@ public class DialogueService {
             messages.deleteQuestion(conversation.id(), requestId);
             throw new ApiException(HttpStatus.CONFLICT, "SESSION_ENDED");
         }
+        // 기억 ①: 답장을 저장한 뒤 이번 사용자 말에서 기억할 것을 정리한다 (답장을 늦추지 않게 따로, 마감 없음)
+        Runnable remember = () -> memoryKeeper.afterTurn(
+                character,
+                userId,
+                requestId,
+                request.content(),
+                tail(history, ChatReplier.CONTEXT_LINES),
+                LlmContext.app(userId, sessionId, null));
+        if (props.memoryAsync()) LLM_THREADS.execute(remember);
+        else remember.run();
         return response;
     }
 
@@ -354,32 +394,43 @@ public class DialogueService {
     // --- 22 공부 종료 ---
 
     /**
-     * 공부 종료 트랜잭션 안에서 불린다. 이번 세션 대화를 요약에 합치고 메시지를 지운 뒤 완료 대사를 돌려준다.
-     * LLM이 실패하거나 5초를 넘겨도 공부 종료는 성공해야 하므로 고정 문구로 대신한다. 요약과 완료 대사는 같이 보낸다(둘 다 5초 안).
+     * 공부 종료 트랜잭션 안에서 불린다. 이번 세션 대화를 흐름 카드 한 장으로 쓰고 메시지를 지운 뒤 완료 대사를 돌려준다 (기억 ②).
+     * 대화방에 남은 메시지를 전부 쓴다: 카드에 넣은 메시지는 지우므로, 남은 게 있으면 앞선 종료에서 카드 쓰기가 실패한 것이다.
+     * LLM이 실패하거나 5초를 넘겨도 공부 종료는 성공해야 하므로 고정 문구로 대신한다. 카드와 완료 대사는 같이 보낸다(둘 다 5초 안).
      */
     @Transactional
     public String close(SessionClosing closing) {
         Conversation conversation = conversation(closing.userId(), closing.characterId());
-        List<ChatMessage> sessionMessages =
-                messages.findByConversationIdAndSessionIdOrderById(conversation.id(), closing.sessionId());
+        List<ChatMessage> pending = messages.findByConversationIdOrderById(conversation.id());
         CharacterInfo character = character(closing.characterId());
         String nickname = nickname(closing.userId());
         LlmContext ctx = LlmContext.app(closing.userId(), closing.sessionId(), deadline());
+        String header =
+                LocalDate.now(clock.withZone(DAY_ZONE)).format(CARD_DATE) + " " + closing.studySeconds() / 60 + "분";
 
-        CompletableFuture<String> summary = sessionMessages.isEmpty()
+        CompletableFuture<String> recap = pending.isEmpty()
                 ? null
-                : start(() -> closingWriter.mergeSummary(
-                        character, nickname, conversation.summary(), lines(sessionMessages), Map.of(), ctx));
+                : start(() -> closingWriter.recap(
+                        character,
+                        nickname,
+                        header,
+                        memoryKeeper.facts(closing.userId(), closing.characterId()),
+                        lines(pending),
+                        Map.of(),
+                        ctx));
         CompletableFuture<String> line = start(() -> closingWriter.closingLine(
                 character, nickname, closing.studySeconds(), closing.endType(), Map.of(), ctx));
 
-        Optional<String> merged = summary == null ? Optional.empty() : await(summary);
-        if (merged.isPresent()) {
-            conversation.updateSummary(merged.get(), Instant.now(clock));
-            messages.deleteAllInBatch(sessionMessages);
+        Optional<String> card = recap == null ? Optional.empty() : await(recap);
+        if (card.isPresent()) {
+            recapRepository.save(
+                    new ConversationRecap(conversation.id(), closing.sessionId(), card.get(), Instant.now(clock)));
+            // 최근 recap-max장만 남긴다. 오래된 흐름은 지워져도 된다 (오래 남길 사실은 기억 ①에 있음)
+            List<ConversationRecap> all = recapRepository.findByConversationIdOrderByIdDesc(conversation.id());
+            if (all.size() > props.recapMax()) recapRepository.deleteAll(all.subList(props.recapMax(), all.size()));
+            messages.deleteAllInBatch(pending);
         }
-        // ponytail: 요약에 실패하면 기존 요약을 두고 이번 세션 메시지도 남긴다(다음 종료 때는 그 세션만 보므로 다시 합쳐지지 않음).
-        //   실패가 잦으면 남은 메시지를 합치는 재시도 배치
+        // 카드 쓰기에 실패하면 메시지를 남긴다: 다음 종료 때 그 세션 카드에 같이 들어간다
         states.deleteBySession(closing.sessionId());
         return await(line).orElseGet(() -> fixedLines.closingFallback(closing.characterId()));
     }
@@ -422,7 +473,18 @@ public class DialogueService {
 
     private AffinityChange unchanged(long userId, long characterId) {
         RelationView view = relationQuery.view(userId, characterId);
-        return new AffinityChange(0, view.points(), view.level(), false);
+        return new AffinityChange(0, view.points(), view.level(), false, view.stage(), view.stageName());
+    }
+
+    /** 지난 세션 흐름 카드를 오래된 것부터 줄마다. 없으면 null */
+    private String recaps(long conversationId) {
+        List<String> cards = recapRepository.findByConversationIdOrderByIdDesc(conversationId).stream()
+                .limit(props.recapMax())
+                .map(ConversationRecap::content)
+                .collect(java.util.stream.Collectors.toCollection(java.util.ArrayList::new));
+        if (cards.isEmpty()) return null;
+        java.util.Collections.reverse(cards);
+        return String.join("\n", cards);
     }
 
     private List<String> memoryLines(long userId) {

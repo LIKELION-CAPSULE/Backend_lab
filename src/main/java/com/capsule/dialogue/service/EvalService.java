@@ -229,7 +229,8 @@ public class EvalService {
                 runConfig.temperature(),
                 runConfig.maxTokens(),
                 runConfig.pinnedPrompts(),
-                runConfig.engine());
+                runConfig.engine(),
+                context.facts());
         LlmContext ctx = LlmContext.lab(LlmContext.EVAL, config);
         CharacterInfo character = lab.character(c.characterId());
         ChatPipeline pipeline = lab.pipeline(run.pipeline());

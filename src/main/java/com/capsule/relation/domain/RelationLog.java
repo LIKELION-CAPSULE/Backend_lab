@@ -22,10 +22,12 @@ public class RelationLog {
     private UUID requestId;
     private int delta;
     private String reason;
+    private String signal;
     private Instant createdAt;
 
     protected RelationLog() {}
 
+    /** @param signal CHAT일 때 말의 종류 (SignalType 이름), 아니면 null */
     public RelationLog(
             long relationId,
             String reason,
@@ -33,6 +35,7 @@ public class RelationLog {
             Long sessionId,
             Long sessionEventId,
             UUID requestId,
+            String signal,
             Instant createdAt) {
         this.relationId = relationId;
         this.reason = reason;
@@ -40,6 +43,7 @@ public class RelationLog {
         this.sessionId = sessionId;
         this.sessionEventId = sessionEventId;
         this.requestId = requestId;
+        this.signal = signal;
         this.createdAt = createdAt;
     }
 

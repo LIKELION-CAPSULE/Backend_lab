@@ -16,7 +16,6 @@ import com.capsule.dialogue.service.PromptService;
 import com.capsule.relation.api.RelationCommands;
 import com.capsule.relation.api.RelationQuery;
 import com.capsule.relation.api.RelationTypes.AffinityChange;
-import com.capsule.relation.api.RelationTypes.ChatSignal;
 import com.capsule.relation.api.RelationTypes.RelationView;
 import com.capsule.session.api.SessionClosingHandler;
 import com.capsule.session.api.SessionQuery;
@@ -93,10 +92,9 @@ class DialogueEngineTest {
                 .thenReturn(
                         Optional.of(new CharacterInfo(CHARACTER_ID, 1, "채린", null, List.of("츤데레"), "짝꿍", true, null)));
         when(relationQuery.view(userId, CHARACTER_ID))
-                .thenReturn(new RelationView(CHARACTER_ID, 1, "아는 사이", 80, 0, 100));
-        when(relationCommands.applyChatSignal(
-                        eq(userId), eq(CHARACTER_ID), eq(sessionId), any(), eq(ChatSignal.NEUTRAL)))
-                .thenReturn(new AffinityChange(0, 80, 1, false));
+                .thenReturn(new RelationView(CHARACTER_ID, 1, "아는 사이", 80, 0, null, 1, "아는 사이", 0, 3600));
+        when(relationCommands.applyChatScore(eq(userId), eq(CHARACTER_ID), eq(sessionId), any(), any()))
+                .thenReturn(new AffinityChange(0, 80, 1, false, 1, "아는 사이"));
         prompts.importEnginePack(
                 CHARACTER_ID,
                 resource("character.yml"),

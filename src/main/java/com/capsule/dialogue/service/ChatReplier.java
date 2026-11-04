@@ -8,7 +8,7 @@ import com.capsule.dialogue.dto.ChatInput;
 import com.capsule.dialogue.dto.ChatLine;
 import com.capsule.dialogue.dto.ChatOutcome;
 import com.capsule.dialogue.dto.LlmContext;
-import com.capsule.relation.api.RelationTypes.ChatSignal;
+import com.capsule.relation.api.RelationTypes.SignalType;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -26,16 +26,18 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 /**
- * 답장 한 턴 (명세 20): 답장 파이프라인(글)과 사용자 말 신호 읽기(결정)를 동시에 부른다. 서비스·실험실·평가가 같이 쓴다.
- * 원칙: LLM은 고르기만 하고 숫자는 코드가 정한다 (ADR 0020). 신호 → 점수는 relation이 한다.
- * 신호는 답장을 늦추지 않는다: 답장이 끝났을 때 마감이 지났으면 기다리지 않고 NEUTRAL(0점).
+ * 답장 한 턴 (명세 20): 답장 파이프라인(글)과 사용자 말의 종류 고르기. 서비스·실험실·평가가 같이 쓴다.
+ * 원칙: LLM은 고르기만 하고 숫자는 코드가 정한다 (ADR 0020).
+ * 종류는 A안(말 패턴, PM 확정)이 기본이다. 결정 모델은 두 경우만 답장과 동시에 부른다:
+ *   ① 패턴이 혐오 · 성적이라고 할 때 확인 (비율 감점이라 오탐이면 RUDE로) ② signal-detector: DECIDER(B안)
+ * 결정은 답장을 늦추지 않는다: 답장이 끝났을 때 마감이 지났으면 기다리지 않는다 (① RUDE, ② NEUTRAL).
  */
 @Component
 public class ChatReplier {
 
     private static final Logger log = LoggerFactory.getLogger(ChatReplier.class);
     private static final ExecutorService THREADS = Executors.newVirtualThreadPerTaskExecutor();
-    // TODO(judgment): J-05 신호를 읽을 때 같이 보여 줄 앞 대화 수
+    // TODO(judgment): J-05 결정 모델에 같이 보여 줄 앞 대화 수
     static final int CONTEXT_LINES = 4;
     public static final String QUESTION = "signal";
 
@@ -50,26 +52,39 @@ public class ChatReplier {
     }
 
     public ChatOutcome reply(ChatPipeline pipeline, ChatInput in, LlmContext ctx) {
-        CompletableFuture<Decision> signal = CompletableFuture.supplyAsync(() -> read(in, ctx), THREADS);
+        SignalType guess = ChatScorer.detect(in.userMessage());
+        boolean decide = DialogueProperties.DECIDER.equals(props.signalDetector());
+        boolean confirm = !decide && guess == SignalType.HATE_OR_SEXUAL;
+        CompletableFuture<Decision> asked = decide || confirm
+                ? CompletableFuture.supplyAsync(() -> read(in, decide ? question() : severeQuestion(), ctx), THREADS)
+                : null;
         ChatOutcome outcome;
         try {
             outcome = pipeline.reply(in, ctx);
         } catch (RuntimeException e) {
-            signal.cancel(true);
+            if (asked != null) asked.cancel(true);
             throw e;
         }
-        Decision d = await(signal, ctx.deadline());
-        // TODO(judgment): J-06 확신이 낮으면 0점. 기준값은 실험실 평가로 정한다
+        if (asked == null) return outcome.withSignal(guess, null);
+        Decision d = await(asked, ctx.deadline());
+        Double confidence = d == null ? null : d.confidence();
+        if (confirm) {
+            boolean severe = d != null
+                    && SignalType.HATE_OR_SEXUAL.name().equals(d.choice())
+                    && d.confidence() >= props.severeMinConfidence();
+            return outcome.withSignal(severe ? SignalType.HATE_OR_SEXUAL : SignalType.RUDE, confidence);
+        }
+        // TODO(judgment): J-06 B안: 확신이 낮으면 0점. 기준값은 실험실 평가로 정한다
         if (d == null || d.confidence() < props.signalMinConfidence())
-            return outcome.withSignal(ChatSignal.NEUTRAL, d == null ? null : d.confidence());
-        return outcome.withSignal(ChatSignal.valueOf(d.choice()), d.confidence());
+            return outcome.withSignal(SignalType.NEUTRAL, confidence);
+        return outcome.withSignal(SignalType.valueOf(d.choice()), confidence);
     }
 
-    private Decision read(ChatInput in, LlmContext ctx) {
+    private Decision read(ChatInput in, Decider.Question q, LlmContext ctx) {
         try {
-            return decider.decide(state(in), Map.of(QUESTION, question()), ctx).get(QUESTION);
+            return decider.decide(state(in), Map.of(QUESTION, q), ctx).get(QUESTION);
         } catch (RuntimeException e) {
-            log.warn("신호 읽기 실패 → NEUTRAL: {}", e.toString());
+            log.warn("말의 종류 고르기 실패: {}", e.toString());
             return null;
         }
     }
@@ -97,9 +112,18 @@ public class ChatReplier {
                 + "사용자의 마지막 말: " + in.userMessage();
     }
 
+    /** B안: 모든 종류 중 하나 */
     static Decider.Question question() {
         Map<String, String> criteria = new LinkedHashMap<>();
-        Arrays.stream(ChatSignal.values()).forEach(s -> criteria.put(s.name(), s.meaning()));
-        return new Decider.Question("사용자의 마지막 말이 캐릭터와의 관계에 주는 신호를 하나 고른다", criteria);
+        Arrays.stream(SignalType.values()).forEach(s -> criteria.put(s.name(), s.meaning()));
+        return new Decider.Question("사용자의 마지막 말이 어떤 종류의 말인지 하나 고른다", criteria);
+    }
+
+    /** 심한 말 확인: 패턴이 걸린 말이 정말 혐오 · 성적인지 */
+    static Decider.Question severeQuestion() {
+        Map<String, String> criteria = new LinkedHashMap<>();
+        criteria.put(SignalType.HATE_OR_SEXUAL.name(), SignalType.HATE_OR_SEXUAL.meaning());
+        criteria.put(SignalType.RUDE.name(), "혐오 · 성적인 말은 아니다 (욕, 농담, 힘들다는 표현, 남의 말 인용 등)");
+        return new Decider.Question("사용자의 마지막 말이 캐릭터를 향한 혐오 표현이나 성적인 말인지 고른다", criteria);
     }
 }

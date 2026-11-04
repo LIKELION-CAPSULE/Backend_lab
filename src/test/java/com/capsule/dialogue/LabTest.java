@@ -104,12 +104,12 @@ class LabTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.reply").value("「안녕」… 그렇구나. 한 문제만 더 해보자."))
                 .andExpect(jsonPath("$.emotion").value("NEUTRAL"))
-                // 호감도: 결정(Fake = NEUTRAL) → 서비스였다면 0점. 답장과 결정은 동시에 나가서 기록 순서는 정해지지 않는다
+                // 호감도: 말 패턴(A안)으로 '안녕' = 단답 → 서비스였다면 0점. 결정 모델은 부르지 않는다
                 .andExpect(jsonPath("$.affinity").value(0))
-                .andExpect(jsonPath("$.trace.signal").value("NEUTRAL"))
+                .andExpect(jsonPath("$.trace.signal").value("LOW_EFFORT"))
                 .andExpect(jsonPath("$.overBudget").value(false))
                 .andExpect(jsonPath("$.trace.prompts['chat.system'].id").value(draft))
-                .andExpect(jsonPath("$.usages[*].purpose").value(containsInAnyOrder("CHAT", "DECIDE")))
+                .andExpect(jsonPath("$.usages[*].purpose").value(containsInAnyOrder("CHAT")))
                 .andExpect(jsonPath("$.usages[?(@.purpose == 'CHAT')].request.system[0].text")
                         .value(contains("너는 채린. 실험 버전")))
                 .andExpect(jsonPath("$.usages[?(@.purpose == 'CHAT')].request.system[0].cache")
@@ -151,7 +151,7 @@ class LabTest {
         call(post(API + "/sessions/" + session + "/turns"), Map.of("text", "야 안녕"))
                 .andExpect(jsonPath("$.reply").value("「야 안녕」… 그렇구나."))
                 .andExpect(jsonPath("$.trace.pipeline").value("ENGINE"))
-                .andExpect(jsonPath("$.usages[*].purpose").value(containsInAnyOrder("DIRECTOR", "ACTOR", "DECIDE")));
+                .andExpect(jsonPath("$.usages[*].purpose").value(containsInAnyOrder("DIRECTOR", "ACTOR")));
         call(post(API + "/sessions/" + session + "/turns"), Map.of("text", "공부 중이야"))
                 .andExpect(jsonPath("$.error").doesNotExist());
 

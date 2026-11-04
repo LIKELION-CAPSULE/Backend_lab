@@ -56,6 +56,7 @@ class SimpleChatPipeline implements ChatPipeline {
         vars.put("nickname", in.nickname());
         vars.put("relationLevel", "Lv." + in.relationLevel());
         vars.put("summary", PromptVars.orNone(in.summary(), "없음 (처음 만남)"));
+        vars.put("facts", in.facts().isEmpty() ? "없음" : "- " + String.join("\n- ", in.facts()));
         vars.put("memories", in.memories().isEmpty() ? "없음" : "- " + String.join("\n- ", in.memories()));
 
         List<Llm.SystemBlock> system = List.of(
