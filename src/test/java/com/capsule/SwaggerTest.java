@@ -1,11 +1,16 @@
 package com.capsule;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.contains;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.capsule.common.config.ApiTags;
+import com.jayway.jsonpath.JsonPath;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -66,6 +71,23 @@ class SwaggerTest {
         void tagsInSpecOrder() throws Exception {
             mvc.perform(get("/v3/api-docs"))
                     .andExpect(jsonPath("$.tags[*].name").value(contains("인증", "온보딩 · 홈", "공부 세션", "대화", "리포트")));
+        }
+
+        @Test
+        void everyApiHasSpecTagAndSummary() throws Exception {
+            // 새 API에 @Tag · @Operation을 빠뜨리면 여기서 걸린다 (빠지면 'xxx-controller' 묶음으로 따로 나옴)
+            String json = mvc.perform(get("/v3/api-docs"))
+                    .andReturn()
+                    .getResponse()
+                    .getContentAsString(StandardCharsets.UTF_8);
+            int operations = JsonPath.<List<?>>read(json, "$.paths.*.*").size();
+            List<String> tags = JsonPath.read(json, "$.paths.*.*.tags[*]");
+            List<String> summaries = JsonPath.read(json, "$.paths.*.*.summary");
+            List<String> known = List.of(
+                    ApiTags.AUTH, ApiTags.ONBOARDING_HOME, ApiTags.STUDY_SESSION, ApiTags.DIALOGUE, ApiTags.REPORT);
+
+            assertThat(tags).hasSize(operations).allMatch(known::contains);
+            assertThat(summaries).hasSize(operations).allMatch(s -> s.matches("\\d+\\. .+")); // "명세 번호. 제목"
         }
 
         @Test
