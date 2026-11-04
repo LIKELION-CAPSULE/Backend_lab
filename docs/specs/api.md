@@ -456,7 +456,7 @@
   "nickname": "승희",
   "email": "name@example.com",
   "onboardingRequired": false,
-  "activeSession": { "sessionId": 512, "roomId": 1, "roomName": "쌀쌀맞은 갸루짝꿍이 나에게만 친절하다!", "characterName": "채린", "startedAt": "2026-11-07T05:00:02Z" },
+  "activeSession": { "sessionId": 512, "roomId": 1, "roomName": "밤의 호그와트 도서관", "characterName": "말포이", "startedAt": "2026-11-07T05:00:02Z" },
   "profileImage" : "profile_image_url.com"
 }
 ```
@@ -596,8 +596,8 @@ H02에서 아바타를 저장하면 `onboardingRequired`가 false가 되고 H03 
   "todayStudySeconds": 3300,
   "activeSession": null,
   "rooms": [
-    { "id": 1, "name": "쌀쌀맞은 갸루짝꿍이 나에게만 친절하다!", "thumbnailUrl": "https://cdn.../room1.png",
-      "characters": [ { "id": 1, "name": "채린", "profileImageUrl": "https://cdn.../chaerin.png" } ] }
+    { "id": 1, "name": "밤의 호그와트 도서관", "thumbnailUrl": "https://cdn.../room1.png",
+      "characters": [ { "id": 1, "name": "말포이", "profileImageUrl": "https://cdn.../chaerin.png" } ] }
   ]
 }
 ```
@@ -647,12 +647,12 @@ H02에서 아바타를 저장하면 `onboardingRequired`가 false가 되고 H03 
 ```json
 {
   "id": 1,
-  "name": "쌀쌀맞은 갸루짝꿍이 나에게만 친절하다!",
-  "description": "차갑게 굴지만 나한테만 다정한 짝꿍과 같이 공부해요.",
+  "name": "밤의 호그와트 도서관",
+  "description": "지기 싫어하는 슬리데린 라이벌 말포이와 촛불 아래에서 같이 공부해요.",
   "thumbnailUrl": "https://cdn.../room1.png",
   "characters": [
-    { "id": 1, "name": "채린", "profileImageUrl": "https://cdn.../chaerin.png",
-      "personality": ["츤데레", "같은 반 친구"],
+    { "id": 1, "name": "말포이", "profileImageUrl": "https://cdn.../chaerin.png",
+      "personality": ["츤데레", "슬리데린 5학년", "라이벌"],
       "relation": { "level": 1, "levelName": "친한 사이", "totalStudySeconds": 0,
                     "points": 50, "stage": 2, "stageName": "친한 사이" } }
   ],
@@ -862,8 +862,8 @@ GET /api/me/memories?date=2026-11-12
   "sessionId": 512,
   "startedAt": "2026-11-07T05:00:02Z",
   "targetMinutes": 50,
-  "room": { "id": 1, "name": "쌀쌀맞은 갸루짝꿍이 나에게만 친절하다!", "backgroundImageUrl": "https://cdn.../room1-bg.png" },
-  "character": { "id": 1, "name": "채린", "profileImageUrl": "https://cdn.../chaerin.png", "modelJsonUrl": "https://cdn.../live2d/chaerin/v1/chaerin.model3.json", "scale": 1.0, "offsetX": 0, "offsetY": 12 },
+  "room": { "id": 1, "name": "밤의 호그와트 도서관", "backgroundImageUrl": "https://cdn.../room1-bg.png" },
+  "character": { "id": 1, "name": "말포이", "profileImageUrl": "https://cdn.../chaerin.png", "modelJsonUrl": "https://cdn.../live2d/chaerin/v1/chaerin.model3.json", "scale": 1.0, "offsetX": 0, "offsetY": 12 },
   "avatar": { "id": 1, "name": "기본 아바타", "profileImageUrl": "https://cdn.../avatar1.png", "modelJsonUrl": "https://cdn.../live2d/avatar1/v1/avatar1.model3.json", "scale": 1.0, "offsetX": 0, "offsetY": 12 },
   "me": { "nickname": "승희", "profileImageUrl": "https://cdn.../avatar1.png" },
   "serverTime": "2026-11-07T05:00:02Z"
@@ -916,8 +916,8 @@ GET /api/me/memories?date=2026-11-12
 ```json
 {
   "sessionId": 512, "targetMinutes": 50,
-  "room": { "id": 1, "name": "쌀쌀맞은 갸루짝꿍이 나에게만 친절하다!", "backgroundImageUrl": "https://cdn.../room1-bg.png" },
-  "character": { "id": 1, "name": "채린", "profileImageUrl": "https://cdn.../chaerin.png", "modelJsonUrl": "https://cdn.../live2d/chaerin/v1/chaerin.model3.json", "scale": 1.0, "offsetX": 0, "offsetY": 12 },
+  "room": { "id": 1, "name": "밤의 호그와트 도서관", "backgroundImageUrl": "https://cdn.../room1-bg.png" },
+  "character": { "id": 1, "name": "말포이", "profileImageUrl": "https://cdn.../chaerin.png", "modelJsonUrl": "https://cdn.../live2d/chaerin/v1/chaerin.model3.json", "scale": 1.0, "offsetX": 0, "offsetY": 12 },
   "avatar": { "id": 1, "name": "기본 아바타", "profileImageUrl": "https://cdn.../avatar1.png", "modelJsonUrl": "https://cdn.../live2d/avatar1/v1/avatar1.model3.json", "scale": 1.0, "offsetX": 0, "offsetY": 12 },
   "me": { "nickname": "승희", "profileImageUrl": "https://cdn.../avatar1.png" },
   "studySeconds": 1043, "breakSeconds": 420,
@@ -1399,7 +1399,7 @@ json
 json
 
 ```json
-{  "sessionId": 512, "roomName": "쌀쌀맞은 갸루짝꿍이 나에게만 친절하다!",  "startedAt": "2026-11-07T05:00:02Z", "endedAt": "2026-11-07T06:05:10Z", "endType": "NORMAL",  "studySeconds": 3300, "presentSeconds": 2880, "awaySeconds": 420,  "returnCount": 2,  "character": { "id": 1, "name": "채린" },  "relation": { "levelBefore": 1, "levelAfter": 2, "levelUp": true, "nextLevelSeconds": 7200, "pointsBefore": 50, "pointsAfter": 53, "stage": 2, "stageName": "친한 사이", "levelName": "친한 사이", "nextLevelPoints": null },  "closingLine": "오늘도 같이 공부해서 좋았어. 다음에도 함께하자."}
+{  "sessionId": 512, "roomName": "밤의 호그와트 도서관",  "startedAt": "2026-11-07T05:00:02Z", "endedAt": "2026-11-07T06:05:10Z", "endType": "NORMAL",  "studySeconds": 3300, "presentSeconds": 2880, "awaySeconds": 420,  "returnCount": 2,  "character": { "id": 1, "name": "채린" },  "relation": { "levelBefore": 1, "levelAfter": 2, "levelUp": true, "nextLevelSeconds": 7200, "pointsBefore": 50, "pointsAfter": 53, "stage": 2, "stageName": "친한 사이", "levelName": "친한 사이", "nextLevelPoints": null },  "closingLine": "오늘도 같이 공부해서 좋았어. 다음에도 함께하자."}
 ```
 
 > ✅ **200 OK** (이미 끝난 세션도 200 + 같은 결과)

@@ -208,7 +208,7 @@ CREATE TABLE characters (
     room_id           bigint      NOT NULL REFERENCES study_rooms (id),
     model_id          bigint      NOT NULL UNIQUE REFERENCES live2d_models (id),
     name              text        NOT NULL,
-    personality       text[]      NOT NULL DEFAULT '{}',   -- 성격 태그 (예: {츤데레, 같은 반 친구}), 순서대로 표시
+    personality       text[]      NOT NULL DEFAULT '{}',   -- 성격 태그 (예: {츤데레, 슬리데린 5학년, 라이벌}), 순서대로 표시
     intro             text,
     profile_image_url text,
     sort_order        int         NOT NULL DEFAULT 0,      -- 룸 안 표시 순서
