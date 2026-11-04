@@ -34,6 +34,8 @@
 --     relation_settlements 추가 (공부 종료 때 레벨 전후, 리포트 재조회용)
 --   - 대화 기억 세 겹 (ADR 0022): character_memories(아는 사실 최대 20개) · conversation_recaps(세션 카드 최근 5장) 추가,
 --     chat_messages.signal 추가, conversations.summary는 더 쓰지 않음 (삭제는 다음 단계), llm_usages.purpose에 MEMORY
+--   - 세계관 · 캐릭터 설정을 데이터로 (ADR 0022 결정 15): worlds · world_lore · world_events · character_profiles
+--     · character_moves · character_lines · character_scores · character_habits 추가. characters는 화면용 정보만
 -- =====================================================================
 
 BEGIN;
@@ -469,6 +471,101 @@ CREATE TABLE llm_usages (
 );
 CREATE INDEX idx_llm_usages_user ON llm_usages (user_id, created_at);
 CREATE INDEX idx_llm_usages_trace ON llm_usages (trace_id);
+
+-- 세계관 · 캐릭터 설정 (대사를 만드는 데 쓰는 데이터, ADR 0022 결정 15). 캐릭터를 더해도 코드는 바뀌지 않는다
+-- characters(6장)는 화면용 정보만 둔다. 처음 값은 git의 classpath:characters/<code>/에서 한 번 불러오고, 그 뒤로는 DB가 원본
+-- 세계: 여러 캐릭터가 같은 세계를 쓸 수 있다
+CREATE TABLE worlds (
+    id         bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    code       text        NOT NULL UNIQUE,              -- 예: hogwarts
+    name       text        NOT NULL,
+    setting    text        NOT NULL,                     -- 무대 설명
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+-- 세계 지식 카드: 사용자 말 · 최근 대화에 키워드가 나오면 그 카드만 꺼낸다 (한 턴 최대 4장)
+CREATE TABLE world_lore (
+    id       bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    world_id bigint NOT NULL REFERENCES worlds (id) ON DELETE CASCADE,
+    code     text   NOT NULL,
+    title    text   NOT NULL,
+    keywords text[] NOT NULL DEFAULT '{}',
+    body     text   NOT NULL,
+    UNIQUE (world_id, code)
+);
+
+-- 세계 사건: 가끔 저절로 일어나 캐릭터가 반응할 거리
+CREATE TABLE world_events (
+    id        bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    world_id  bigint NOT NULL REFERENCES worlds (id) ON DELETE CASCADE,
+    code      text   NOT NULL,
+    text      text   NOT NULL,
+    hook      text,                                      -- 어울리는 반응
+    lore_code text,                                      -- 같이 꺼낼 지식 카드
+    weight    int    NOT NULL DEFAULT 1 CHECK (weight > 0),
+    UNIQUE (world_id, code)
+);
+
+-- 캐릭터 설정 (캐릭터당 하나)
+CREATE TABLE character_profiles (
+    character_id         bigint      PRIMARY KEY REFERENCES characters (id),
+    world_id             bigint      NOT NULL REFERENCES worlds (id),
+    code                 text        NOT NULL UNIQUE,    -- 예: malfoy
+    speaker              text        NOT NULL,           -- 대사에서 부르는 이름
+    bible                text        NOT NULL,           -- 정체성 · 화법 · 대화 원칙 · 형식
+    rules                text        NOT NULL,           -- 절대 규칙
+    safety               text        NOT NULL CHECK (safety IN ('MINOR', 'ADULT')),  -- 미성년 설정이면 연애 · 성적 표현 금지
+    expressions          text[]      NOT NULL,           -- 고를 수 있는 표정 (19 · 20 응답 emotion 값)
+    expression_fallbacks jsonb       NOT NULL DEFAULT '{}',  -- 에셋이 없는 표정 → 대신 쓸 표정
+    stage_tones          jsonb       NOT NULL DEFAULT '{}',  -- 관계 단계 → 말투 지시 한 줄
+    updated_at           timestamptz NOT NULL DEFAULT now()
+);
+
+-- 대화 기술: 한 턴에 하나를 골라 예시 2개와 함께 장면 카드에 넣는다
+CREATE TABLE character_moves (
+    id           bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    character_id bigint NOT NULL REFERENCES character_profiles (character_id) ON DELETE CASCADE,
+    code         text   NOT NULL,
+    name         text   NOT NULL,
+    how          text   NOT NULL,
+    signals      text[] NOT NULL DEFAULT '{}',           -- 어울리는 사용자 말의 종류. 비면 평소에
+    examples     jsonb  NOT NULL DEFAULT '[]',           -- [{"user": "…", "reply": "…"}]
+    UNIQUE (character_id, code)
+);
+
+-- 상황별 미리 쓴 대사: 같은 상황이면 sort 순서대로 돌려 쓴다
+--   situation: GREETING · AWAY · AWAY_2 · AWAY_3 · RETURN · BREAK · BREAK_END · DROWSY · YAWN · WAVE · HEAD_TURN · REPLY_FALLBACK · CLOSING
+CREATE TABLE character_lines (
+    id           bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    character_id bigint NOT NULL REFERENCES character_profiles (character_id) ON DELETE CASCADE,
+    situation    text   NOT NULL,
+    min_stage    int    NOT NULL DEFAULT 1 CHECK (min_stage >= 1),  -- 이 관계 단계부터
+    sort         int    NOT NULL DEFAULT 0,
+    text         text   NOT NULL,                        -- {name}은 닉네임으로 바뀜
+    expression   text
+);
+CREATE INDEX idx_character_lines_situation ON character_lines (character_id, situation, sort);
+
+-- 대화 점수표 (말의 종류별). 없으면 서버 설정의 기본 표
+CREATE TABLE character_scores (
+    character_id     bigint  NOT NULL REFERENCES character_profiles (character_id) ON DELETE CASCADE,
+    signal           text    NOT NULL,
+    points           int     NOT NULL,
+    loss_percent     int     NOT NULL DEFAULT 0 CHECK (loss_percent BETWEEN 0 AND 100),
+    once_per_session boolean NOT NULL DEFAULT false,
+    repeat_points    int,
+    PRIMARY KEY (character_id, signal)
+);
+
+-- 피할 말버릇 (예: 첫마디 금지, 세션에 한 번)
+CREATE TABLE character_habits (
+    id           bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    character_id bigint NOT NULL REFERENCES character_profiles (character_id) ON DELETE CASCADE,
+    phrase       text   NOT NULL,
+    rule         text   NOT NULL CHECK (rule IN ('NO_OPENING', 'ONCE_PER_SESSION')),
+    UNIQUE (character_id, phrase)
+);
 
 -- 프롬프트 버전 (배포 없이 바꾸고 되돌리기). 본문은 고치지 않고 새 버전을 만든다.
 -- (키, 캐릭터)마다 ACTIVE는 하나, 새 버전을 켜면 이전 ACTIVE는 ARCHIVED. 캐릭터 전용 ACTIVE가 공통(character_id NULL)보다 먼저
