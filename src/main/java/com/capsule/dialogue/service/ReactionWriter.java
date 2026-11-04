@@ -36,8 +36,8 @@ public class ReactionWriter {
     private final PromptService prompts;
     private final FixedLines fixed;
     private final DialogueProperties props;
-    /** 오늘 근황을 넣는 상태 변화: 공부 시작 인사 · 쉬기 시작 (자리 비움 · 돌아옴에선 어색하다) */
-    static final List<String> TODAY_TRIGGERS = List.of("GREETING", "BREAK");
+    /** 오늘 근황을 넣는 상태 변화: 공부 시작 인사만 (쉬기 시작에도 넣었더니 한마디마다 근황을 꺼냈다) */
+    static final List<String> TODAY_TRIGGERS = List.of("GREETING");
 
     private final CharacterContents contents;
     private final Clock clock;
