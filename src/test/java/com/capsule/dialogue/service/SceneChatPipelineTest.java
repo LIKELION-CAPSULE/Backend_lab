@@ -23,6 +23,11 @@ class SceneChatPipelineTest {
     }
 
     static ChatInput input(String message, List<ChatLine> history, List<String> facts, boolean onBreak) {
+        return input(message, history, facts, onBreak, false);
+    }
+
+    static ChatInput input(
+            String message, List<ChatLine> history, List<String> facts, boolean onBreak, boolean chatty) {
         CharacterInfo info = new CharacterInfo(1, 1, "말포이", null, List.of(), "", true, null);
         return new ChatInput(
                 info,
@@ -36,7 +41,8 @@ class SceneChatPipelineTest {
                 null,
                 Map.of(),
                 EngineOptions.DEFAULT,
-                onBreak);
+                onBreak,
+                chatty);
     }
 
     @Test
@@ -54,6 +60,27 @@ class SceneChatPipelineTest {
             assertThat(move.usableIn(CharacterContent.BREAK)).isTrue();
             assertThat(move.code()).isNotIn("compare_up", "challenge", "secret_study", "hint_muggle");
         }
+    }
+
+    @Test
+    void reactionCardUsesStageToneAndScriptedLinesAsExamples() {
+        String card = ReactionWriter.card(MALFOY, "사용자가 자리를 비웠다", "AWAY", 2, 2, "민수", null, List.of());
+        assertThat(card).contains("방금 일어난 일: 사용자가 자리를 비웠다");
+        assertThat(card).contains("관계: 라이벌이자 공부 짝");
+        assertThat(card).contains("…진짜 간 거야? 금방 와. (삐짐)"); // 강도 칸(AWAY_2)의 미리 쓴 대사가 예시로
+        assertThat(card).doesNotContain("<지난 세션 흐름>"); // 없는 재료는 칸도 없음
+    }
+
+    @Test
+    void chattyStudyTurnSendsBackToStudyButNotOnBreak() {
+        String chatty = SceneChatPipeline.scene(
+                        MALFOY, input("ㅋㅋ 또 뭐 해", List.of(), List.of(), false, true), null, false)
+                .card();
+        String breakChatty = SceneChatPipeline.scene(
+                        MALFOY, input("ㅋㅋ 또 뭐 해", List.of(), List.of(), true, true), null, false)
+                .card();
+        assertThat(chatty).contains(SceneChatPipeline.CHATTY);
+        assertThat(breakChatty).doesNotContain(SceneChatPipeline.CHATTY); // 쉬는 시간엔 수다가 정상
     }
 
     @Test

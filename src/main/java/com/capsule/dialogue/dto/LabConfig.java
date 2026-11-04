@@ -22,13 +22,18 @@ public record LabConfig(
         Map<String, Long> pinnedPrompts,
         EngineOptions engine,
         List<String> facts,
-        Boolean onBreak) {
+        Boolean onBreak,
+        Boolean chatty) {
 
     public static final LabConfig EMPTY =
-            new LabConfig(null, null, null, null, null, null, null, null, null, null, null, null);
+            new LabConfig(null, null, null, null, null, null, null, null, null, null, null, null, null);
 
     public boolean onBreakOrDefault() {
         return Boolean.TRUE.equals(onBreak);
+    }
+
+    public boolean chattyOrDefault() {
+        return Boolean.TRUE.equals(chatty);
     }
 
     public List<String> factsOrEmpty() {

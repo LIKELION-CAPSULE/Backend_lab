@@ -41,6 +41,7 @@ class FactPickerTest {
                 null,
                 Map.of(),
                 EngineOptions.DEFAULT,
+                false,
                 false);
     }
 

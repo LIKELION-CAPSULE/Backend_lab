@@ -37,6 +37,8 @@ class SceneChatPipeline implements ChatPipeline {
     // TODO(judgment): J-05 세계 사건이 저절로 일어날 확률 (한 턴마다). 쉬는 시간엔 수다 거리가 되게 더 자주
     static final double EVENT_CHANCE = 0.15;
     static final double EVENT_CHANCE_ON_BREAK = 0.3;
+    // 공부 중에 수다가 길어지면 (ChatInput.chatty, 기준은 DialogueService) 공부로 돌려보낸다. 막지는 않는다 (ADR 0022 결정 18)
+    static final String CHATTY = "수다가 길어졌다: 공부 중인데 대화만 계속하고 있다. 이번 말은 짧게 받아 주고 공부로 돌려보낸다 (다그치지 말고 캐릭터 말투로)";
 
     private final LlmGateway llm;
     private final PromptService prompts;
@@ -70,13 +72,7 @@ class SceneChatPipeline implements ChatPipeline {
         if (found.isEmpty()) return generic.reply(in, ctx);
         CharacterContent c = found.get();
         PromptVersion system = prompts.resolve(PromptKey.SCENE_SYSTEM, characterId, in.pinnedPrompts());
-        Map<String, String> vars = new LinkedHashMap<>();
-        vars.put("bible", c.bible());
-        vars.put("rules", c.rules());
-        vars.put("speaker", c.speaker());
-        vars.put("worldName", c.world().name());
-        vars.put("worldSetting", c.world().setting());
-        vars.put("expressions", String.join(", ", c.expressions()));
+        Map<String, String> vars = systemVars(c);
 
         String fact = factPicker.pick(in, ctx).orElse(null); // 아는 사실은 결정 모델이 고른 하나만 (없으면 안 넣음)
         double chance = in.onBreak() ? EVENT_CHANCE_ON_BREAK : EVENT_CHANCE;
@@ -108,6 +104,18 @@ class SceneChatPipeline implements ChatPipeline {
         return ChatOutcome.of(reply.strip(), emotion, null, trace);
     }
 
+    /** 고정 블록(scene.system) 변수. 상태 반응(ReactionWriter)도 같은 블록을 써서 캐시를 같이 탄다 */
+    static Map<String, String> systemVars(CharacterContent c) {
+        Map<String, String> vars = new LinkedHashMap<>();
+        vars.put("bible", c.bible());
+        vars.put("rules", c.rules());
+        vars.put("speaker", c.speaker());
+        vars.put("worldName", c.world().name());
+        vars.put("worldSetting", c.world().setting());
+        vars.put("expressions", String.join(", ", c.expressions()));
+        return vars;
+    }
+
     record Scene(String card, Move move, List<Lore> lore, Event event) {}
 
     /** 이번 턴에 쓸 것만 고른다. 장면 카드는 매 턴 수십 줄 */
@@ -127,6 +135,7 @@ class SceneChatPipeline implements ChatPipeline {
         L.add("<장면>");
         // 공부 중 · 쉬는 시간에 따라 답 길이와 구성이 다르다 (PM 확정: 1~2문장 / 2~4문장, 구성은 캐릭터 설정)
         L.add("지금: " + (in.onBreak() ? c.breakStyle() : c.studyStyle()));
+        if (!in.onBreak() && in.chatty()) L.add(CHATTY);
         L.add("사용자: " + in.nickname() + " / 관계: " + PromptVars.orNone(c.toneFor(in.relationLevel()), "보통"));
         if (event != null)
             L.add("방금 일어난 일: " + event.text() + (event.hook() == null ? "" : " (어울리는 반응: " + event.hook() + ")"));

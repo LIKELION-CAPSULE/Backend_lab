@@ -86,6 +86,9 @@ public class DialogueService {
 
     private static final ExecutorService LLM_THREADS = Executors.newVirtualThreadPerTaskExecutor();
     private static final int MESSAGES_PER_MINUTE = 10;
+    // TODO(judgment): J-14 '수다가 길어졌다'의 기준 (승희 2026-11-05 임시: 최근 10분에 사용자 말 8번, 이번 말 포함)
+    static final int CHATTY_MESSAGES = 8;
+    static final Duration CHATTY_WINDOW = Duration.ofMinutes(10);
     private static final ZoneId DAY_ZONE = ZoneId.of("Asia/Seoul");
     /** 세션 카드 머리말 날짜 (예: "11/03 52분") */
     private static final DateTimeFormatter CARD_DATE = DateTimeFormatter.ofPattern("MM/dd");
@@ -183,14 +186,11 @@ public class DialogueService {
 
         // 호감도는 상태 변화 전송(18)이 반영하고 그 응답으로 돌려준다. 여기서는 관계 단계(호감도 구간)만 읽어 말투를 고른다
         int relationLevel = relationQuery.view(userId, characterId).stage();
-        // 캐릭터 설정에 미리 쓴 대사가 있으면 순서대로 (PM 확정). AI 생성은 없다. 없으면 공통 고정 대사 · LLM 설정대로
-        String situation = awayLevel != null && awayLevel > 1 ? trigger + "_" + awayLevel : trigger;
-        Optional<ReactionLine> scripted = characterContents.next(
-                characterId, situation, trigger, relationLevel, String.valueOf(sessionId), nickname(userId));
-        ReactionLine line =
-                scripted.orElseGet(() -> fixedLines.reaction(characterId, trigger, awayLevel, relationLevel, Map.of()));
+        // 상태 변화는 LLM이 대사 + 표정 (ADR 0022 결정 18), 동작 이벤트는 미리 쓴 대사(캐릭터 설정, 순서대로 → 없으면 공통 고정 대사).
+        // LLM이 5초를 넘기거나 실패해도 미리 쓴 대사로
+        ReactionLine line = null;
         boolean fallback = false;
-        if (scripted.isEmpty() && reactionWriter.usesLlm(trigger)) {
+        if (reactionWriter.usesLlm(trigger)) {
             // 상태 변화는 LLM: 관계 단계 + 지난 세션 흐름 + 이번 세션 최근 대화를 같이 넣는다
             CharacterInfo character = character(characterId);
             String nickname = nickname(userId);
@@ -204,7 +204,15 @@ public class DialogueService {
             Optional<ReactionLine> generated = withinBudget(() -> reactionWriter.generate(
                     character, trigger, awayLevel, relationLevel, nickname, summary, recent, Map.of(), ctx));
             fallback = generated.isEmpty();
-            line = generated.orElse(new ReactionLine(line.content(), null)); // 5초 넘으면 고정 대사, 감정 없음
+            line = generated.orElse(null);
+        }
+        if (line == null) {
+            String situation = awayLevel != null && awayLevel > 1 ? trigger + "_" + awayLevel : trigger;
+            line = characterContents
+                    .next(characterId, situation, trigger, relationLevel, String.valueOf(sessionId), nickname(userId))
+                    .orElseGet(() -> fixedLines.reaction(characterId, trigger, awayLevel, relationLevel, Map.of()));
+            // TODO(judgment): J-12 ② LLM이 실패한 대체 대사의 감정. 지금은 없음(동작 없음), 추천은 그 대사 칸의 표정
+            if (fallback) line = new ReactionLine(line.content(), null);
         }
         // 명세 19: 모션·표정은 대사의 감정으로 고른다 (trigger 기준 '알아채는' 동작은 18이 줌)
         // TODO(judgment): J-04 ④ 강도를 동작에도 쓸지. 지금은 대사(고정 대사 칸 · LLM 입력)에만
@@ -292,7 +300,8 @@ public class DialogueService {
                 saved.map(DialogueService::engineState).orElse(null),
                 Map.of(),
                 EngineOptions.DEFAULT,
-                sessions.onBreak(sessionId));
+                sessions.onBreak(sessionId),
+                chatty(earlier));
         LlmContext ctx = LlmContext.app(userId, sessionId, deadline());
         Optional<ChatOutcome> outcome = withinBudget(() -> replier.reply(chat, input, ctx));
         String reply = outcome.map(ChatOutcome::reply)
@@ -541,6 +550,18 @@ public class DialogueService {
 
     private static List<ChatLine> lines(List<ChatMessage> chat) {
         return chat.stream().map(m -> new ChatLine(m.sender(), m.content())).toList();
+    }
+
+    /**
+     * 최근 10분에 사용자 말이 이번 말까지 8번 이상이면 수다가 길어진 것. 공부 중일 때만 쓰인다(파이프라인이 거름).
+     * ponytail: 쉬는 시간에 한 말도 센다. 쉬는 시간 직후 첫 말에 한 번 더 돌려보낼 수 있다. 문제가 되면 마지막 상태 이벤트 뒤의 말만 센다
+     */
+    private boolean chatty(List<ChatMessage> earlier) {
+        Instant since = Instant.now(clock).minus(CHATTY_WINDOW);
+        long recent = earlier.stream()
+                .filter(m -> USER.equals(m.sender()) && m.createdAt().isAfter(since))
+                .count();
+        return recent + 1 >= CHATTY_MESSAGES;
     }
 
     /** 저장된 엔진 상태. 형식 버전이 다르거나 못 읽으면 null(새로 시작) */

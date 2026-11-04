@@ -219,7 +219,7 @@ function confirmBtn(label, fn) {
 }
 
 /* ---------- 공용 부품 ---------- */
-const USER_F = ['nickname', 'relationLevel', 'onBreak', 'summary', 'facts', 'memories'];
+const USER_F = ['nickname', 'relationLevel', 'onBreak', 'chatty', 'summary', 'facts', 'memories'];
 const MODEL_F = ['provider', 'model', 'temperature', 'maxTokens', 'pinnedPrompts', 'engine'];
 // 실험 조건(LabConfig) 편집기. 빈 칸 = null = 서버 기본값
 function configEditor(cfg, fields = [...USER_F, ...MODEL_F], title = '실험 조건', open = false) {
@@ -229,6 +229,7 @@ function configEditor(cfg, fields = [...USER_F, ...MODEL_F], title = '실험 조
     nickname: h('input', {value: c.nickname ?? '', placeholder: '기본'}),
     relationLevel: num(c.relationLevel),
     onBreak: h('input', {type: 'checkbox', checked: c.onBreak === true}),
+    chatty: h('input', {type: 'checkbox', checked: c.chatty === true}),
     summary: h('textarea', {rows: 2, value: c.summary ?? '', placeholder: '11/03 55분, 3단원 하다 지쳐서 일찍 끝냄 (한 줄에 한 장, 최근 2장)'}),
     facts: h('textarea', {rows: 3, value: (c.facts || []).join('\n'), placeholder: '사용자는 이번 달 토익 800 목표 (한 줄에 하나, 최대 20개)'}),
     memories: h('textarea', {rows: 2, value: (c.memories || []).join('\n'), placeholder: '시험: 중간고사 (2026-11-20)'}),
@@ -245,6 +246,7 @@ function configEditor(cfg, fields = [...USER_F, ...MODEL_F], title = '실험 조
     has('nickname') && field('닉네임', i.nickname),
     has('relationLevel') && field('관계 단계 (1~4, 호감도 0 · 30 · 70 · 90)', i.relationLevel),
     has('onBreak') && field('쉬는 시간 (2~4문장 수다 · 끄면 공부 중 1~2문장)', chk(i.onBreak, '쉬는 중')),
+    has('chatty') && field('수다가 길어짐 (공부 중 최근 10분에 8번 이상 → 공부로 돌려보냄)', chk(i.chatty, '수다 많음')),
     has('provider') && field('공급자', i.provider),
     has('model') && field('모델', i.model),
     has('temperature') && field('temperature', i.temperature),
@@ -261,6 +263,7 @@ function configEditor(cfg, fields = [...USER_F, ...MODEL_F], title = '실험 조
     if (has('nickname')) o.nickname = txt(i.nickname);
     if (has('relationLevel')) o.relationLevel = nv(i.relationLevel);
     if (has('onBreak')) o.onBreak = i.onBreak.checked || null;
+    if (has('chatty')) o.chatty = i.chatty.checked || null;
     if (has('summary')) o.summary = txt(i.summary);
     if (has('facts')) { const f = lines(i.facts.value); o.facts = f.length ? f : null; }
     if (has('memories')) { const m = lines(i.memories.value); o.memories = m.length ? m : null; }

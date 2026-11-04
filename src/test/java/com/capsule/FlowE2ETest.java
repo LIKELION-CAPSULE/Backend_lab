@@ -108,12 +108,20 @@ class FlowE2ETest {
         assertThat((Integer) JsonPath.read(body(focus), "$.characters[0].affinity.points"))
                 .isEqualTo(50); // 50에서 시작
         MvcResult greeting = call(post(s + "/events/" + eventId(focus) + "/reaction"), token, reactionBody(null), 200);
-        // 상태 반응은 캐릭터 설정(DB, 처음 값은 characters/malfoy/profile.yml)의 미리 쓴 대사 (PM 확정, AI 생성 꺼짐)
+        // 상태 변화 반응은 LLM이 대사 + 표정 (ADR 0022 결정 18. 테스트는 가짜 AI)
         assertThat((String) JsonPath.read(body(greeting), "$.characters[0].content"))
-                .startsWith("뭐야, ")
-                .doesNotContain("{name}");
+                .startsWith("(가짜 반응)");
         assertThat((Boolean) JsonPath.read(body(greeting), "$.characters[0].fallback"))
                 .isFalse();
+
+        // 순간 동작은 캐릭터 설정(DB, 처음 값은 characters/malfoy/profile.yml)의 미리 쓴 대사 · 표정
+        MvcResult drowsy = eventCall(token, s, "DROWSY", Instant.now().toString(), 201);
+        MvcResult drowsyLine =
+                call(post(s + "/events/" + eventId(drowsy) + "/reaction"), token, reactionBody(null), 200);
+        assertThat((String) JsonPath.read(body(drowsyLine), "$.characters[0].content"))
+                .isEqualTo("벌써 졸려? 물이나 마시고 와.");
+        assertThat((String) JsonPath.read(body(drowsyLine), "$.characters[0].emotion"))
+                .isEqualTo("찡그림");
 
         // 12 heartbeat
         call(post(s + "/heartbeat"), token, "{\"studySeconds\":0,\"presentSeconds\":0}", 204);
@@ -125,9 +133,7 @@ class FlowE2ETest {
         long awayId = eventId(awayEvent);
         MvcResult away = call(post(s + "/events/" + awayId + "/reaction"), token, reactionBody(1), 200);
         assertThat((String) JsonPath.read(body(away), "$.characters[0].content"))
-                .isEqualTo("야 어디가?!");
-        assertThat((String) JsonPath.read(body(away), "$.characters[0].emotion"))
-                .isEqualTo("삐짐");
+                .startsWith("(가짜 반응)");
         MvcResult awayAgain = eventCall(token, s, "AWAY", awayAt, 200);
         assertThat(eventId(awayAgain)).isEqualTo(awayId);
         assertThat(affinityDelta(awayAgain)).isZero(); // 재전송은 다시 반영하지 않고 같은 변화

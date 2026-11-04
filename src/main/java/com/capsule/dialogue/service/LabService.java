@@ -400,7 +400,8 @@ public class LabService {
                 state,
                 config.pinnedOrEmpty(),
                 config.engineOrDefault(),
-                config.onBreakOrDefault());
+                config.onBreakOrDefault(),
+                config.chattyOrDefault());
     }
 
     static BigDecimal cost(List<LlmUsage> used) {

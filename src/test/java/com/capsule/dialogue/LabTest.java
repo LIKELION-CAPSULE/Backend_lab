@@ -208,10 +208,13 @@ class LabTest {
                                         Map.of("sender", "USER", "content", "수학 3단원 끝내고 쉴게"),
                                         Map.of("sender", "CHARACTER", "content", "좋아, 끝나면 말해."))))
                 .andExpect(jsonPath("$[0].output.content").value(startsWith("(가짜 반응)")))
-                .andExpect(jsonPath("$[0].usages[0].request.system[0].text")
+                // 캐릭터 설정이 있으면 [답장과 같은 고정 블록(캐시)] + [반응 카드]: 상황 · 대화는 카드에
+                .andExpect(jsonPath("$[0].usages[0].request.system[1].text")
                         .value(org.hamcrest.Matchers.containsString("5분째 자리에 없다")))
-                .andExpect(jsonPath("$[0].usages[0].request.system[0].text")
-                        .value(org.hamcrest.Matchers.containsString("민수: 수학 3단원 끝내고 쉴게")));
+                .andExpect(jsonPath("$[0].usages[0].request.system[1].text")
+                        .value(org.hamcrest.Matchers.containsString("민수: 수학 3단원 끝내고 쉴게")))
+                .andExpect(jsonPath("$[0].usages[0].request.system[1].text")
+                        .value(org.hamcrest.Matchers.containsString("흥, 도망간 줄 알았잖아."))); // AWAY_3 미리 쓴 대사가 예시로
 
         mvc.perform(get(API + "/usages/summary").param("days", "1"))
                 .andExpect(status().isOk())

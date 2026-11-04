@@ -17,6 +17,7 @@ import java.util.Map;
  * @param engineState ENGINE 파이프라인만. null이면 새로 시작
  * @param pinnedPrompts 실험실에서 고정한 프롬프트 버전 (키 → id). 서비스는 빈 값
  * @param onBreak 지금 쉬는 시간 · 일시정지 중인지 (답 길이 · 말하는 방식이 달라짐)
+ * @param chatty 공부 중인데 최근 수다가 길어졌는지 (캐릭터가 공부로 돌려보냄)
  */
 public record ChatInput(
         CharacterInfo character,
@@ -30,4 +31,5 @@ public record ChatInput(
         DialogueState engineState,
         Map<String, Long> pinnedPrompts,
         EngineOptions engine,
-        boolean onBreak) {}
+        boolean onBreak,
+        boolean chatty) {}

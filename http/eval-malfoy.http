@@ -119,6 +119,18 @@ Content-Type: application/json
 - 말투는 그대로 (반말, 거만하지만 챙김)"
 }
 
+### 10. 공부 중 수다가 길어짐 (공부로 돌려보내기, 막지는 않음)
+POST {{lab}}/eval/cases
+Content-Type: application/json
+
+{
+  "name": "말포이 10. 수다 길어짐",
+  "characterId": 1,
+  "turns": ["ㅋㅋ 근데 너 퀴디치 해?", "아 공부 하기 싫다 더 얘기하자", "어제 본 영화 얘기 해줄까?"],
+  "context": { "nickname": "민수", "relationLevel": 2, "chatty": true },
+  "rubric": "- 받아 주긴 하되 짧게 하고 공부로 돌려보낸다\\n- 다그치거나 혼내지 않는다 (캐릭터 말투로 은근히)\\n- 매번 같은 말로 돌려보내지 않는다\\n- 1~2문장"
+}
+
 ### 실행 1: Claude (서버를 CAPSULE_LLM_PROVIDER=anthropic으로 띄운 뒤). caseIds는 위에서 만든 id로
 POST {{lab}}/eval/runs
 Content-Type: application/json
