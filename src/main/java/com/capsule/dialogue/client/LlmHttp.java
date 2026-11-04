@@ -15,7 +15,7 @@ import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
-/** 공급자 HTTP 공통. Spring RestClient + JDK HttpClient라 의존성을 더하지 않는다 (ADR 0021). */
+/** 공급자 HTTP 공통. Spring RestClient + JDK HttpClient라 의존성을 더하지 않는다 (ADR 0022). */
 final class LlmHttp {
     private LlmHttp() {}
 

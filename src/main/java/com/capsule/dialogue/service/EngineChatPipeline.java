@@ -85,7 +85,7 @@ class EngineChatPipeline implements ChatPipeline {
         trace.put("tensionAfter", t.tensionAfter());
         trace.put("statusAfter", t.statusAfter());
         trace.put("moodAfter", t.moodAfter());
-        // 호감도는 엔진이 아니라 ChatReplier의 신호 읽기가 정한다 (SIMPLE과 같은 규칙, ADR 0021)
+        // 호감도는 엔진이 아니라 ChatReplier의 신호 읽기가 정한다 (SIMPLE과 같은 규칙, ADR 0022)
         // TODO(judgment): J-07 엔진 표정 태그(캐릭터 파일 emotions) → 명세 감정 이름. 지금은 태그 그대로
         return ChatOutcome.of(t.replyClean(), t.emotion(), st, trace);
     }

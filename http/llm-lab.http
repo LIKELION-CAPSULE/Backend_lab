@@ -1,4 +1,4 @@
-### LLM 실험실 (ADR 0021). scripts/run-local.sh로 띄운 뒤 위에서부터 실행
+### LLM 실험실 (ADR 0022). scripts/run-local.sh로 띄운 뒤 위에서부터 실행
 # 화면: {{host}}/internal/llm-lab  (로그인 없음, local 프로필에서만 켜짐)
 # 실제 LLM: 실행 전에 환경변수 CAPSULE_LLM_PROVIDER=anthropic(또는 openai) + ANTHROPIC_API_KEY(또는 OPENAI_API_KEY)
 # 기본은 fake: 형식만 확인되고 품질은 볼 수 없다

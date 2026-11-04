@@ -4,7 +4,7 @@ import java.util.List;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * 호감도 · 레벨 숫자 (2026-11-04 최종안, ADR 0021). PM 답이 오면 값만 바꾼다. 날짜는 한국 날짜 기준.
+ * 호감도 · 레벨 숫자 (2026-11-04 최종안, ADR 0022). PM 답이 오면 값만 바꾼다. 날짜는 한국 날짜 기준.
  * 대화 한 번의 점수(말의 종류별)는 캐릭터마다 달라서 dialogue가 정하고, 여기는 모든 캐릭터에 같은 규칙만 둔다.
  *
  * @param chatDailyGainCap 대화로 하루에 오를 수 있는 최대 (내려가는 쪽은 상한 없음)

@@ -59,7 +59,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * LLM 실험실 (ADR 0021): 서비스와 같은 파이프라인·작성기를 실험 조건(LabConfig)으로 불러 품질을 본다.
+ * LLM 실험실 (ADR 0022): 서비스와 같은 파이프라인·작성기를 실험 조건(LabConfig)으로 불러 품질을 본다.
  * 실제 세션·사용자 데이터는 건드리지 않고, 결과는 실험실 테이블과 llm_usages(source=LAB)에만 남긴다.
  */
 @Service

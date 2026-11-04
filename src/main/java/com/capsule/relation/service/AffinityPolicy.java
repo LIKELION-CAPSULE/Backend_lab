@@ -9,7 +9,7 @@ import java.time.ZoneId;
 import org.springframework.stereotype.Component;
 
 /**
- * 호감도 · 단계 · 레벨 공식 (호감도 최종안, ADR 0021). 숫자는 RelationProperties(application.yml)에 있다.
+ * 호감도 · 단계 · 레벨 공식 (호감도 최종안, ADR 0022). 숫자는 RelationProperties(application.yml)에 있다.
  * 호감도는 오르기 어렵고 내려가기 쉽다: 오르는 쪽만 하루 상한, 심한 말은 지금 값의 %로 깎는다.
  */
 @Component

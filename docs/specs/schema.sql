@@ -28,11 +28,11 @@
 --   - session_events.type에 동작 이벤트 DROWSY · YAWN · WAVE 추가 (졸음 · 하품 · 손 흔들기. 상태를 바꾸지 않음)
 --   - session_events.type에 동작 이벤트 HEAD_TURN 추가 (고개 돌림. 다른 동작 이벤트와 같이 상태 · 시간 계산에 안 씀)
 --   - 주석: 동작 이벤트 서버 쿨다운(같은 type 1분), live2d_reaction_maps.trigger_type에 감정 이름 (API 19 · 20의 감정 동작. 목록은 데이터, 디자이너 에셋에 따라 바뀜)
---   - 호감도 최종안 (ADR 0021): 호감도와 레벨을 나눔
+--   - 호감도 최종안 (ADR 0022): 호감도와 레벨을 나눔
 --     user_character_relations: relation_points 0~100 · 기본 50, level = 자리 지킴 시간 레벨, total_present_seconds · streak_days · last_study_date 추가
 --     relation_logs: signal 추가(CHAT의 말의 종류), CHAT 범위 −100~5 (비율 감점), 공부 시간 · 첫 만남 점수는 더 기록하지 않음
 --     relation_settlements 추가 (공부 종료 때 레벨 전후, 리포트 재조회용)
---   - 대화 기억 세 겹 (ADR 0021): character_memories(아는 사실 최대 20개) · conversation_recaps(세션 카드 최근 5장) 추가,
+--   - 대화 기억 세 겹 (ADR 0022): character_memories(아는 사실 최대 20개) · conversation_recaps(세션 카드 최근 5장) 추가,
 --     chat_messages.signal 추가, conversations.summary는 더 쓰지 않음 (삭제는 다음 단계), llm_usages.purpose에 MEMORY
 -- =====================================================================
 
