@@ -107,7 +107,7 @@ class FlowE2ETest {
         assertThat(affinityDelta(focus)).isEqualTo(5);
         MvcResult greeting = call(post(s + "/events/" + eventId(focus) + "/reaction"), token, reactionBody(null), 200);
         assertThat((String) JsonPath.read(body(greeting), "$.characters[0].content"))
-                .isEqualTo("왔구나. 오늘도 같이 해볼까?");
+                .isIn("왔구나. 오늘도 같이 해볼까?", "안녕. 오늘도 잘 부탁해."); // 처음 만남 = Lv.1 대사 묶음
 
         // 12 heartbeat
         call(post(s + "/heartbeat"), token, "{\"studySeconds\":0,\"presentSeconds\":0}", 204);
@@ -119,7 +119,7 @@ class FlowE2ETest {
         long awayId = eventId(awayEvent);
         MvcResult away = call(post(s + "/events/" + awayId + "/reaction"), token, reactionBody(1), 200);
         assertThat((String) JsonPath.read(body(away), "$.characters[0].content"))
-                .isEqualTo("잠깐 자리 비운 거야?");
+                .isIn("잠깐 자리 비운 거야?", "어… 어디 갔어?");
         MvcResult awayAgain = eventCall(token, s, "AWAY", awayAt, 200);
         assertThat(eventId(awayAgain)).isEqualTo(awayId);
         assertThat(affinityDelta(awayAgain)).isEqualTo(-1); // 재전송은 다시 반영하지 않고 같은 변화

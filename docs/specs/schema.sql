@@ -388,17 +388,135 @@ CREATE TABLE chat_messages (
 );
 CREATE INDEX idx_chat_messages_session ON chat_messages (session_id, id);
 
--- LLM 사용량 (지우지 않고 계속 쌓임, 비용·크레딧 근거)
+-- LLM 호출 기록 (지우지 않고 계속 쌓임, 비용·크레딧 근거 + 품질·지연 분석). 호출 한 번 = 한 행, 실패도 기록
+-- 실험실·평가 호출은 사용자·세션이 없다 (source LAB · EVAL)
 CREATE TABLE llm_usages (
-    id            bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    user_id       bigint      NOT NULL REFERENCES users (id),
-    session_id    bigint      NOT NULL REFERENCES study_sessions (id),
-    purpose       text        NOT NULL CHECK (purpose IN ('CHAT', 'AFFINITY', 'SUMMARY')),  -- 답변 / 호감도 점수 판정 / 세션 종료 요약
-    model         text        NOT NULL,
-    input_tokens  int         NOT NULL CHECK (input_tokens >= 0),
-    output_tokens int         NOT NULL CHECK (output_tokens >= 0),
-    created_at    timestamptz NOT NULL DEFAULT now()
+    id                 bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id            bigint         REFERENCES users (id),
+    session_id         bigint         REFERENCES study_sessions (id),
+    purpose            text           NOT NULL CHECK (purpose IN (
+                           'CHAT', 'DIRECTOR', 'ACTOR', 'JUDGE', 'REACTION', 'SUMMARY', 'CLOSING', 'EVAL_JUDGE')),
+    source             text           NOT NULL CHECK (source IN ('APP', 'LAB', 'EVAL')),
+    trace_id           uuid           NOT NULL,           -- 한 요청(대화 한 턴 등)에서 나간 호출을 묶음
+    provider           text           NOT NULL,           -- anthropic · openai · fake
+    model              text           NOT NULL,
+    status             text           NOT NULL CHECK (status IN ('OK', 'ERROR')),
+    error              text,
+    stop_reason        text,
+    input_tokens       int            NOT NULL CHECK (input_tokens >= 0),        -- 캐시에 없던 입력
+    output_tokens      int            NOT NULL CHECK (output_tokens >= 0),
+    cache_read_tokens  int            NOT NULL CHECK (cache_read_tokens >= 0),
+    cache_write_tokens int            NOT NULL CHECK (cache_write_tokens >= 0),
+    cost_usd           numeric(12, 6) NOT NULL,
+    latency_ms         int            NOT NULL,
+    ttft_ms            int,                               -- 스트리밍일 때 첫 글자까지
+    prompt_version_ids bigint[]       NOT NULL,           -- 이 호출에 쓴 prompt_versions.id
+    request            jsonb,                             -- 보낸 프롬프트 원문: 실험실·평가, 또는 설정으로 켰을 때만
+    response           text,
+    created_at         timestamptz    NOT NULL DEFAULT now()
 );
 CREATE INDEX idx_llm_usages_user ON llm_usages (user_id, created_at);
+CREATE INDEX idx_llm_usages_trace ON llm_usages (trace_id);
+
+-- 프롬프트 버전 (배포 없이 바꾸고 되돌리기). 본문은 고치지 않고 새 버전을 만든다.
+-- (키, 캐릭터)마다 ACTIVE는 하나, 새 버전을 켜면 이전 ACTIVE는 ARCHIVED. 캐릭터 전용 ACTIVE가 공통(character_id NULL)보다 먼저
+CREATE TABLE prompt_versions (
+    id           bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    prompt_key   text        NOT NULL,                     -- chat.system · fixed.lines · engine.actor 등
+    character_id bigint      REFERENCES characters (id),
+    version      int         NOT NULL CHECK (version > 0),
+    status       text        NOT NULL CHECK (status IN ('DRAFT', 'ACTIVE', 'ARCHIVED')),
+    body         text        NOT NULL,
+    note         text,                                     -- 무엇을 왜 바꿨는지
+    created_at   timestamptz NOT NULL DEFAULT now(),
+    activated_at timestamptz,
+    UNIQUE NULLS NOT DISTINCT (prompt_key, character_id, version)
+);
+CREATE UNIQUE INDEX uq_prompt_versions_active ON prompt_versions (prompt_key, character_id) NULLS NOT DISTINCT
+    WHERE status = 'ACTIVE';
+
+-- 대화 엔진 상태 (세션 × 캐릭터). 턴이 성공했을 때만 저장, 세션이 끝나면 삭제
+CREATE TABLE dialogue_states (
+    id             bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    session_id     bigint      NOT NULL REFERENCES study_sessions (id),
+    character_id   bigint      NOT NULL REFERENCES characters (id),
+    engine_version int         NOT NULL,                   -- 상태 JSON 형식 버전
+    state          jsonb       NOT NULL,
+    version        bigint      NOT NULL DEFAULT 0,         -- 낙관적 잠금
+    updated_at     timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (session_id, character_id)
+);
+
+-- LLM 실험실 (내부 품질 테스트. 서비스 데이터와 섞지 않음)
+CREATE TABLE llm_lab_sessions (
+    id           bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    title        text        NOT NULL,
+    character_id bigint      NOT NULL REFERENCES characters (id),
+    pipeline     text        NOT NULL CHECK (pipeline IN ('SIMPLE', 'ENGINE')),
+    config       jsonb       NOT NULL,                     -- 실험 조건 (공급자·모델·프롬프트 버전 고정·가상 사용자 정보)
+    state        jsonb,                                    -- ENGINE 파이프라인 상태
+    created_at   timestamptz NOT NULL DEFAULT now(),
+    updated_at   timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE llm_lab_turns (
+    id             bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    lab_session_id bigint         NOT NULL REFERENCES llm_lab_sessions (id) ON DELETE CASCADE,
+    trace_id       uuid           NOT NULL,               -- 이 턴의 llm_usages
+    user_text      text           NOT NULL,
+    reply          text,
+    emotion        text,
+    affinity       int,
+    error          text,
+    latency_ms     int            NOT NULL,
+    cost_usd       numeric(12, 6) NOT NULL,
+    trace          jsonb          NOT NULL,               -- 파이프라인 중간 결과
+    rating         int CHECK (rating BETWEEN 1 AND 5),    -- 사람 평가
+    rating_note    text,
+    created_at     timestamptz    NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_llm_lab_turns_session ON llm_lab_turns (lab_session_id, id);
+
+-- 평가: 골든 대본(케이스)을 한 조건으로 여러 번 돌려 LLM 심사·사람 점수로 비교
+CREATE TABLE llm_eval_cases (
+    id           bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    name         text        NOT NULL,
+    character_id bigint      NOT NULL REFERENCES characters (id),
+    turns        jsonb       NOT NULL,                     -- 사용자 말 배열
+    context      jsonb       NOT NULL,                     -- 가상 사용자 정보
+    rubric       text,                                     -- 심사 기준
+    created_at   timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE llm_eval_runs (
+    id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    label       text        NOT NULL,
+    pipeline    text        NOT NULL CHECK (pipeline IN ('SIMPLE', 'ENGINE')),
+    config      jsonb       NOT NULL,
+    case_ids    bigint[]    NOT NULL,
+    repeats     int         NOT NULL CHECK (repeats BETWEEN 1 AND 20),
+    judge       boolean     NOT NULL,
+    status      text        NOT NULL CHECK (status IN ('RUNNING', 'DONE', 'FAILED')),
+    created_at  timestamptz NOT NULL DEFAULT now(),
+    finished_at timestamptz
+);
+
+CREATE TABLE llm_eval_results (
+    id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    run_id      bigint         NOT NULL REFERENCES llm_eval_runs (id) ON DELETE CASCADE,
+    case_id     bigint         NOT NULL REFERENCES llm_eval_cases (id) ON DELETE CASCADE,
+    repeat_no   int            NOT NULL,
+    trace_id    uuid           NOT NULL,
+    transcript  jsonb          NOT NULL,
+    judge_score numeric(4, 1),                            -- LLM 심사 0~10
+    judge_note  text,
+    human_score int CHECK (human_score BETWEEN 1 AND 5),
+    human_note  text,
+    latency_ms  int            NOT NULL,
+    cost_usd    numeric(12, 6) NOT NULL,
+    error       text,
+    created_at  timestamptz    NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_llm_eval_results_run ON llm_eval_results (run_id, case_id, repeat_no);
 
 COMMIT;

@@ -4,6 +4,11 @@ spring:
     locations: classpath:db/migration,classpath:db/seed
 
 capsule:
+  llm:
+    provider: fake # 테스트는 실제 LLM을 부르지 않는다 (환경변수가 있어도)
+    fallback-provider: ""
+    lab:
+      enabled: true
   fake-integrations: true
   auth:
     jwt-secret: test-only-secret-0123456789abcdef0123

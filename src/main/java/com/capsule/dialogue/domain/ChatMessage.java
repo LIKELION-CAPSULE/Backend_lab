@@ -39,11 +39,19 @@ public class ChatMessage {
         this.createdAt = now;
     }
 
+    public UUID requestId() {
+        return requestId;
+    }
+
     public String sender() {
         return sender;
     }
 
     public String content() {
         return content;
+    }
+
+    public Instant createdAt() {
+        return createdAt;
     }
 }

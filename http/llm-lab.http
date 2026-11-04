@@ -1,0 +1,131 @@
+### LLM 실험실 (ADR 0017). scripts/run-local.sh로 띄운 뒤 위에서부터 실행
+# 화면: {{host}}/internal/llm-lab  (로그인 없음, local 프로필에서만 켜짐)
+# 실제 LLM: 실행 전에 환경변수 CAPSULE_LLM_PROVIDER=anthropic(또는 openai) + ANTHROPIC_API_KEY(또는 OPENAI_API_KEY)
+# 기본은 fake: 형식만 확인되고 품질은 볼 수 없다
+# 포트는 run-local.sh가 출력한 값으로 (worktree마다 8080~8179)
+@host = http://localhost:8080
+@lab = {{host}}/internal/llm-lab/api
+
+### 1. 설정 확인: 기본 공급자, 키 있는 공급자, 용도별 모델, 캐릭터
+GET {{lab}}/meta
+
+### 2. 지금 채린(1)이 쓰는 프롬프트 (키마다 캐릭터 전용 → 공통)
+GET {{lab}}/prompts/active?characterId=1
+
+### 3. 답장 시스템 프롬프트의 버전 목록
+GET {{lab}}/prompts?key=chat.system
+
+### 4. 새 버전을 DRAFT로 저장 (켜지 않음). 응답의 id를 5·8에서 씀
+# 프롬프트 본문의 변수(중괄호 두 겹 + 이름)는 이 파일에서 HTTP 클라이언트 변수로 읽히므로, 본문 편집은 실험실 화면에서 한다
+POST {{lab}}/prompts
+Content-Type: application/json
+
+{
+  "key": "chat.system",
+  "characterId": 1,
+  "body": "너는 공부 앱 '캡슐'의 캐릭터 채린이다. (실험 버전 본문)\nJSON 한 줄만 출력: {\"reply\": \"대사\", \"emotion\": \"NEUTRAL\", \"affinity\": 0}",
+  "note": "말투 더 짧게",
+  "activate": false
+}
+
+### 5. DRAFT를 고정한 실험 대화방 (서비스는 계속 ACTIVE를 씀). pinnedPrompts의 숫자를 4의 id로
+POST {{lab}}/sessions
+Content-Type: application/json
+
+{
+  "title": "말투 실험",
+  "characterId": 1,
+  "pipeline": "SIMPLE",
+  "config": {
+    "nickname": "민수",
+    "relationLevel": 2,
+    "summary": "민수는 고2, 수학을 어려워한다. 지난번에 모의고사를 같이 준비하기로 했다.",
+    "memories": ["시험: 중간고사 (2026-11-20)"],
+    "provider": null,
+    "model": null,
+    "temperature": null,
+    "pinnedPrompts": { "chat.system": 0 }
+  }
+}
+
+### 6. 말 걸기 (응답: 답장·감정·호감도·지연·비용 + 이 턴의 LLM 호출 원문). 5의 id로
+POST {{lab}}/sessions/1/turns
+Content-Type: application/json
+
+{ "text": "오늘 수학 진짜 하기 싫다" }
+
+### 7. 이 턴 평가 (1~5)
+PATCH {{lab}}/turns/1
+Content-Type: application/json
+
+{ "score": 4, "note": "말투 좋음, 조금 김" }
+
+### 8. 괜찮으면 켜기 (되돌리기도 예전 버전 id로 같은 요청)
+POST {{lab}}/prompts/0/activate
+
+### 9. 같은 입력을 5번: 답이 얼마나 흔들리는지 (kind: chat · reaction · summary · closing)
+POST {{lab}}/playground
+Content-Type: application/json
+
+{
+  "kind": "chat",
+  "characterId": 1,
+  "repeat": 5,
+  "config": { "nickname": "민수" },
+  "message": "이거 너무 어려워",
+  "history": [
+    { "sender": "USER", "content": "안녕" },
+    { "sender": "CHARACTER", "content": "왔구나. 오늘은 뭐 해?" }
+  ]
+}
+
+### 10. 상태 반응을 LLM으로 (서비스는 reaction-llm-triggers에 든 trigger만 LLM)
+POST {{lab}}/playground
+Content-Type: application/json
+
+{ "kind": "reaction", "characterId": 1, "repeat": 3, "trigger": "AWAY", "intensity": 2 }
+
+### 11. 완료 대사
+POST {{lab}}/playground
+Content-Type: application/json
+
+{ "kind": "closing", "characterId": 1, "repeat": 3, "studySeconds": 3300, "endType": "NORMAL" }
+
+### 12. 평가 케이스(골든 대본) 만들기
+POST {{lab}}/eval/cases
+Content-Type: application/json
+
+{
+  "name": "공부 싫다는 학생",
+  "characterId": 1,
+  "turns": ["오늘 공부 하기 싫어", "그냥 놀고 싶다", "알았어 30분만 할게"],
+  "context": { "nickname": "민수", "relationLevel": 1 },
+  "rubric": "- 공부를 강요하지 않고 마음을 받아 준다\n- 마지막 말에는 칭찬한다\n- 1~2문장"
+}
+
+### 13. 평가 실행: 케이스 × 3번, LLM 심사 켬. config로 공급자·모델·프롬프트 버전을 바꿔 같은 케이스를 다시 돌려 비교
+POST {{lab}}/eval/runs
+Content-Type: application/json
+
+{ "label": "기본 프롬프트", "caseIds": [1], "repeats": 3, "pipeline": "SIMPLE", "config": {}, "judge": true }
+
+### 14. 실행 목록 (진행률·평균 심사 점수·평균 지연·비용)
+GET {{lab}}/eval/runs
+
+### 15. 실행 결과 자세히
+GET {{lab}}/eval/runs/1
+
+### 16. 결과 사람 평가
+PATCH {{lab}}/eval/results/1
+Content-Type: application/json
+
+{ "score": 3, "note": "두 번째 답이 너무 김" }
+
+### 17. 대화 엔진 파일 올리기 (ENGINE 파이프라인용, 캐릭터별): 화면의 '프롬프트' 탭에서 파일 네 개를 골라 올린다
+# director.md에는 수 목록 자리(중괄호 두 겹 + MOVES)가 있어야 한다. 엔진이 못 읽는 파일은 400 INVALID_ENGINE_PACK
+
+### 18. 최근 LLM 호출 100개 (원문 포함)
+GET {{lab}}/usages
+
+### 19. 7일 집계: 하루 × 출처 × 공급자 × 모델 × 용도별 호출 수·오류·토큰·비용·평균/p95 지연·5초 초과
+GET {{lab}}/usages/summary?days=7

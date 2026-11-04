@@ -17,8 +17,47 @@ springdoc:
   swagger-ui.enabled: false
 
 capsule:
+  # LLM (ADR 0017). 공급자 전환 = provider 한 줄. 키는 환경변수로만 (ANTHROPIC_API_KEY · OPENAI_API_KEY)
   llm:
-    mode: fake # fake | real (real은 dialogue 담당이 도메인 단계에서 구현)
+    provider: ${CAPSULE_LLM_PROVIDER:fake} # fake | anthropic | openai
+    fallback-provider: ${CAPSULE_LLM_FALLBACK_PROVIDER:} # 기본 공급자가 실패하면 한 번 더 (비우면 없음)
+    http-timeout: 30s # 공급자 HTTP 한 번의 한도. 명세의 5초 대체 대사는 서비스가 따로 지킨다
+    max-retries: 1 # 429 · 5xx · 연결 오류만
+    log-content: false # 서비스 호출의 프롬프트·응답 원문 저장 (실험실·평가는 항상 저장)
+    anthropic:
+      base-url: https://api.anthropic.com
+      api-key: ${ANTHROPIC_API_KEY:}
+      version: "2023-06-01"
+      models: { fast: claude-haiku-5-5, smart: claude-sonnet-5-5, judge: claude-opus-5-5 }
+    openai:
+      base-url: https://api.openai.com/v1
+      api-key: ${OPENAI_API_KEY:}
+      # 모델 이름·가격은 바꾸기 전에 공식 문서로 확인. 5.1 이후 모델은 reasoning-effort minimal 대신 none
+      models: { fast: gpt-5-mini, smart: gpt-5, judge: gpt-5 }
+      reasoning-effort: minimal # 추론 토큰도 max-tokens에 들어가므로 짧은 대사는 최소로
+    routes: # 용도별 등급(공급자의 models 키)과 출력 한도. temperature를 비우면 공급자 기본값
+      CHAT: { tier: smart, max-tokens: 400 }
+      # 대화 엔진 용도 셋의 토큰 한도는 엔진 설정(Engine.Settings: 감독 500/품질 900, 배우 700, 심사 300)을 쓴다
+      DIRECTOR: { tier: fast }
+      ACTOR: { tier: smart }
+      JUDGE: { tier: fast }
+      REACTION: { tier: fast, max-tokens: 150 }
+      SUMMARY: { tier: fast, max-tokens: 600 }
+      CLOSING: { tier: fast, max-tokens: 150 }
+      EVAL_JUDGE: { tier: judge, max-tokens: 600 }
+    prices: # 달러/백만 토큰. Claude 모델은 Llm.DEFAULT_PRICES. 점(.)이 든 모델 이름은 "[gpt-5.5]"처럼 대괄호
+      gpt-5-mini: { in: 0.25, cache-write: 0, cache-read: 0.025, out: 2.0 }
+      gpt-5: { in: 1.25, cache-write: 0, cache-read: 0.125, out: 10.0 }
+    lab:
+      enabled: false # 실험실 /internal/llm-lab (local만 true). 운영에서 켜지 않는다
+      token: ${CAPSULE_LLM_LAB_TOKEN:} # 공용 서버에서 켤 때만: X-Lab-Token 헤더 검사
+      eval-parallelism: 3
+  dialogue:
+    chat-pipeline: SIMPLE # SIMPLE(LLM 한 번, 명세 20) | ENGINE(감독·배우 엔진. 캐릭터별 engine.* 프롬프트 필요)
+    # 상태 반응(19)을 LLM으로 만들 trigger. 비우면 전부 고정 대사 (J-04 미정. 추천안 '섞기'면 [GREETING])
+    reaction-llm-triggers: []
+    # 답장 감정 후보 (명세 19·20). TODO: #9 반응 매핑(live2d_reaction_maps)에서 캐릭터별로 읽기
+    emotions: [HAPPY, SHY, ANGRY, SAD, SURPRISED, NEUTRAL]
   # 외부 연동(카카오·메일) Fake. local/test에서만 true. 운영에서 켜면 아무 코드로나 로그인되므로 절대 켜지 않는다
   fake-integrations: false
   cdn:

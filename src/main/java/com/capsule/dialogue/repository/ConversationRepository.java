@@ -6,11 +6,13 @@ import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.transaction.annotation.Transactional;
 
 public interface ConversationRepository extends JpaRepository<Conversation, Long> {
 
     Optional<Conversation> findByUserIdAndCharacterId(long userId, long characterId);
 
+    @Transactional // 메시지 전송은 LLM을 트랜잭션 밖에서 부르려고 트랜잭션 없이 시작한다
     @Modifying
     @Query(value = """
             INSERT INTO conversations (user_id, character_id, created_at)
