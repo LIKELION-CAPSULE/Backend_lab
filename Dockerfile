@@ -15,5 +15,7 @@ WORKDIR /app
 RUN useradd --system --uid 10001 capsule
 COPY --from=build /workspace/app.jar app.jar
 USER capsule
-# 컨테이너 메모리 한도의 75%까지 힙으로. Railway가 PORT를 넘기면 dev-server · prod 프로필이 그 포트를 쓴다
-ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75", "-jar", "/app/app.jar"]
+# 힙 최대 512MB. Railway는 사용량 과금이고 컨테이너 한도가 플랜 최대치로 보여서 비율로 잡으면 힙이 수 GB까지 커진다
+# 바꾸려면 Railway 변수 JAVA_TOOL_OPTIONS (예: -Xmx1g). 포트는 Railway가 넘기는 PORT를 공용 설정이 쓴다
+ENV JAVA_TOOL_OPTIONS="-Xmx512m"
+ENTRYPOINT ["java", "-jar", "/app/app.jar"]

@@ -1,8 +1,8 @@
 # 프론트 연동용 개발 서버(Railway dev 환경). local,shared-db 위에 얹는다: SPRING_PROFILES_ACTIVE=local,shared-db,dev-server (ADR 0018)
 # DB는 공용 개발 DB(shared-db), 카카오 · 메일은 Fake(local). 비밀값 없음, 값은 Railway 변수로
-# 주의: Fake 카카오라 주소를 아는 사람은 fake-kakao:<번호>:<이름> 코드로 로그인된다. 개발 데이터만 둔다
+# 주의: Fake 카카오라 주소를 아는 사람은 fake-kakao:<번호>:<이름> 코드로 이미 있는 카카오 회원 누구로든 로그인된다. 개발 데이터만 둔다
+# local 없이 쓰지 않는다(Fake 빈이 local 프로필에서만 뜸). 포트는 공용 설정의 ${PORT}
 server:
-  port: ${PORT:8080} # Railway가 넘기는 포트
   forward-headers-strategy: framework # Railway 프록시 뒤에서 https · 호스트를 바르게 인식
 
 spring:
