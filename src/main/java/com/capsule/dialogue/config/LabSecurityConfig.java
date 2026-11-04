@@ -34,7 +34,8 @@ class LabSecurityConfig {
         http.securityMatcher("/internal/llm-lab", "/internal/llm-lab/**")
                 .csrf(csrf -> csrf.disable()) // 같은 출처 화면에서 JSON으로만 부름. 쿠키 인증을 쓰지 않음
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(a -> a.requestMatchers(HttpMethod.GET, "/internal/llm-lab", "/internal/llm-lab/")
+                .authorizeHttpRequests(a -> a.requestMatchers(
+                                HttpMethod.GET, "/internal/llm-lab", "/internal/llm-lab/", "/internal/llm-lab/flow")
                         .permitAll()
                         .anyRequest()
                         .access((auth, ctx) -> new AuthorizationDecision(allowed(ctx.getRequest(), token))))

@@ -109,6 +109,12 @@ class LlmLabController {
         return ResponseEntity.ok().contentType(MediaType.TEXT_HTML).body(new ClassPathResource("llm-lab/index.html"));
     }
 
+    /** 흐름 테스트: 실제 API(16~23)를 프론트 순서대로 부르고 호감도 · 공부 시간을 상태판으로 본다 */
+    @GetMapping("/flow")
+    ResponseEntity<Resource> flowPage() {
+        return ResponseEntity.ok().contentType(MediaType.TEXT_HTML).body(new ClassPathResource("llm-lab/flow.html"));
+    }
+
     @GetMapping("/api/meta")
     LabMeta meta() {
         return lab.meta();
