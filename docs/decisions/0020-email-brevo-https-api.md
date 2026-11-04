@@ -1,0 +1,24 @@
+# 0020 인증 메일은 Brevo 발송 API(HTTPS) (0018 이어서)
+
+- 결정
+  - 이메일 인증번호(api.md 2)는 Brevo의 발송 API(`POST https://api.brevo.com/v3/smtp/email`)로 보낸다. `user/client/BrevoEmailSender`, RestClient. 새 의존성 없음
+  - 값은 환경변수 `CAPSULE_BREVO_KEY`(API 키), `CAPSULE_MAIL_FROM`(Brevo에서 인증한 보내는 사람 이메일)
+  - 키가 있으면 실제 발송, 없으면 local · test는 Fake. 개발 서버(Railway dev)도 키를 넣어 메일만 실제로 보내고, 카카오는 Fake로 둔다. 운영(prod)은 키가 없으면 시작에 실패한다
+  - 발송이 실패하면 500. 그때 저장한 인증번호와 1분 제한을 지워서 바로 다시 요청할 수 있게 한다
+- 이유
+  - Railway는 Free · Trial · Hobby 플랜에서 외부 SMTP(25 · 465 · 587)를 막는다(Railway 문서 'Outbound Networking', 2026-11-04 확인). HTTPS API 메일 서비스를 써야 한다
+  - 우리는 아직 자체 도메인이 없다. Brevo는 도메인 없이 보내는 사람 이메일 하나만 인증하면 보낼 수 있고, 무료로 하루 300통이다
+  - 처음엔 Gmail SMTP를 골랐으나 위 SMTP 차단 때문에 바꿨다(2026-11-04 합의)
+- 버린 대안
+  - Gmail SMTP: Railway Trial · Hobby에서 막힘. 쓰려면 Railway Pro(월 20달러)
+  - Resend · AWS SES: 도메인 인증이 있어야 다른 사람에게 보낼 수 있다. 도메인을 사면 이쪽이 스팸함에 덜 간다
+  - Spring Mail(SMTP) 어댑터를 만들고 서비스만 갈아끼우기: Railway에서 SMTP가 막혀 의미가 없다
+- 대가
+  - gmail · naver 같은 무료 메일 주소를 보내는 사람으로 쓰면 SPF · DKIM · DMARC가 그 도메인과 맞지 않아 스팸함에 가거나 거부될 수 있다. 시연 · 운영 전에는 도메인을 사서 Brevo(또는 Resend)에 도메인 인증을 한다. 어댑터 하나만 바꾸면 된다
+  - 메일 제목에 인증번호를 넣어서 알림 미리보기에 번호가 보인다
+  - 요청 제한이 이메일 주소별(1분 1번)뿐이다. 주소를 바꿔 가며 부르면 하루 무료 한도(300통)를 다 쓰거나 남의 주소로 메일을 보내는 데 쓰일 수 있다. IP별 · 전체 제한은 기획 판단이 필요하다(확정 필요)
+- Brevo 계정에서 할 일
+  - 보내는 사람(Senders) 이메일 인증
+  - API 키 발급(SMTP & API > API Keys)
+  - Security > Authorised IPs에서 "모르는 IP 차단"을 끈다. Railway는 나가는 IP가 바뀌어서, 켜 두면 401(unrecognised IP)이 난다
+  - 새 계정은 거래성 메일 발송 활성화를 확인한다
