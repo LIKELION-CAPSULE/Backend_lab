@@ -111,7 +111,7 @@ class LabTest {
                 .andExpect(jsonPath("$.trace.prompts['chat.system'].id").value(draft))
                 .andExpect(jsonPath("$.usages[*].purpose").value(containsInAnyOrder("CHAT")))
                 .andExpect(jsonPath("$.usages[?(@.purpose == 'CHAT')].request.system[0].text")
-                        .value(contains("너는 채린. 실험 버전")))
+                        .value(contains("너는 말포이. 실험 버전")))
                 .andExpect(jsonPath("$.usages[?(@.purpose == 'CHAT')].request.system[0].cache")
                         .value(contains(true))));
         long turnId = ((Number) JsonPath.read(turn, "$.id")).longValue();

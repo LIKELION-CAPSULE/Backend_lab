@@ -108,7 +108,8 @@ class SceneChatPipelineTest {
         String card = SceneChatPipeline.scene(
                         MALFOY, input("오늘 뭐 해", List.of(), List.of("사용자는 토익 800 목표")), null, false)
                 .card();
-        assertThat(card).doesNotContain("꺼낼 수 있는 기억").doesNotContain("토익");
+        // "토익"은 무작위로 고른 대화 기술의 예시에도 나올 수 있어서 기억 문장에만 있는 말로 본다
+        assertThat(card).doesNotContain("꺼낼 수 있는 기억").doesNotContain("800 목표");
     }
 
     @Test
