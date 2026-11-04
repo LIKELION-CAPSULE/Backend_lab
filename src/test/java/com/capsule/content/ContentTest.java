@@ -58,10 +58,9 @@ class ContentTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.avatars[0].id").value(1))
                 .andExpect(jsonPath("$.avatars[0].name").value("기본 아바타"))
+                // DB에는 상대 경로, 응답은 CDN 주소(테스트는 기본값 cdn.capsule.invalid)를 붙인 값
                 .andExpect(
-                        jsonPath("$.avatars[0].thumbnailUrl")
-                                .value(
-                                        "https://belbmclzeenlntgpekww.supabase.co/storage/v1/object/public/live2d-model/haru/thumbnail.png"))
+                        jsonPath("$.avatars[0].thumbnailUrl").value("https://cdn.capsule.invalid/haru/thumbnail.png"))
                 .andExpect(jsonPath("$.avatars[0].active").doesNotExist())
                 .andExpect(jsonPath("$.avatars[0].model.modelJsonUrl")
                         .value("https://cdn.capsule.invalid/haru/v1/Haru.model3.json"))
@@ -89,14 +88,13 @@ class ContentTest {
         RoomInfo room = roomQuery.find(1).orElseThrow();
         assertThat(room.name()).isEqualTo("밤의 호그와트 도서관");
         assertThat(room.characters()).extracting(CharacterInfo::name).containsExactly("말포이");
+        assertThat(room.thumbnailUrl()).isEqualTo("https://cdn.capsule.invalid/images/auth-posters/fantasy.webp");
+        assertThat(room.characters().get(0).profileImageUrl())
+                .isEqualTo("https://cdn.capsule.invalid/images/characters/kang-study.webp");
 
         assertThat(roomQuery.defaultBackground(1))
-                .contains(
-                        new BackgroundInfo(
-                                1,
-                                1,
-                                "밤의 도서관",
-                                "https://belbmclzeenlntgpekww.supabase.co/storage/v1/object/public/live2d-model/images/scenes/fantasy-background-v1.webp"));
+                .contains(new BackgroundInfo(
+                        1, 1, "밤의 도서관", "https://cdn.capsule.invalid/images/scenes/fantasy-background-v1.webp"));
         assertThat(roomQuery.find(999)).isEmpty();
     }
 

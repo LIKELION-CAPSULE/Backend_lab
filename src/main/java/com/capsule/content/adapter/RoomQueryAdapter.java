@@ -47,22 +47,23 @@ class RoomQueryAdapter implements RoomQuery {
 
     @Override
     public Optional<BackgroundInfo> defaultBackground(long roomId) {
-        return backgrounds.findByRoomIdAndIsDefaultTrue(roomId).map(RoomQueryAdapter::info);
+        return backgrounds.findByRoomIdAndIsDefaultTrue(roomId).map(this::info);
     }
 
     @Override
     public Optional<BackgroundInfo> background(long backgroundId) {
-        return backgrounds.findById(backgroundId).map(RoomQueryAdapter::info);
+        return backgrounds.findById(backgroundId).map(this::info);
     }
 
     private RoomInfo info(StudyRoom r) {
         var roomCharacters = characters.findByRoomIdAndIsActiveTrueOrderBySortOrderAscIdAsc(r.id()).stream()
                 .map(mapper::character)
                 .toList();
-        return new RoomInfo(r.id(), r.name(), r.description(), r.thumbnailUrl(), r.isActive(), roomCharacters);
+        return new RoomInfo(
+                r.id(), r.name(), r.description(), mapper.asset(r.thumbnailUrl()), r.isActive(), roomCharacters);
     }
 
-    private static BackgroundInfo info(RoomBackground b) {
-        return new BackgroundInfo(b.id(), b.roomId(), b.name(), b.imageUrl());
+    private BackgroundInfo info(RoomBackground b) {
+        return new BackgroundInfo(b.id(), b.roomId(), b.name(), mapper.asset(b.imageUrl()));
     }
 }
