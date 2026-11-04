@@ -6,18 +6,19 @@
 
 | ID | 모듈 | 담당 | 무엇이 미정인가 | 코드 위치 | 지금 Fake 동작 | 근거 명세 | 상태 |
 |---|---|---|---|---|---|---|---|
-| J-01 | relation | seunghee | 상태 이벤트별 호감도 변화량 (동작 이벤트 DROWSY · YAWN · WAVE · HEAD_TURN 포함, 2026-11-04 추가) | `relation/service/AffinityPolicy.java` | 명세 예시값: 처음 만난 날 첫 FOCUS +5(FIRST_MEET), AWAY −1, RETURN +1, BREAK 0. 동작 이벤트 4종은 0 | api.md 18 "예시, 기획 확정 필요" | 미정 (#14) |
-| J-02 | relation | seunghee | 공부 시간 → STUDY_TIME 점수 공식 | `relation/service/AffinityPolicy.java` | 공부 1분당 +1 | api.md 22 | 미정 (#14) |
-| J-03 | relation | seunghee | 레벨 기준 포인트·레벨 이름 | `relation/service/AffinityPolicy.java` | Lv.1 0점 '아는 사이', Lv.2 100점 '친한 사이', Lv.3 300점 'Lv.3' | api.md 12, 22 | 미정 (#14) |
+| J-01 | relation | seunghee | 상태 이벤트별 호감도 변화량 (동작 이벤트 DROWSY · YAWN · WAVE · HEAD_TURN 포함, 2026-11-04 추가) | `relation/service/RelationService.java`, 값은 `application.yml` `capsule.relation` | **방향 확정 (PM 2026-11-04)**: 동작 이벤트 0, 돌아옴 0, 첫 만남 삭제 → 연속 출석. 임시값: 1분 넘게 비우면 −1 · 하루 −3, 연속 출석 2일째부터 하루 +1 | api.md 18 (호감도 최종안) | 임시값 구현, 숫자는 PM 확인 필요 (#14) |
+| J-02 | relation | seunghee | 공부 시간 → STUDY_TIME 점수 공식 | — | **확정 (PM 2026-11-04)**: 공부 시간은 호감도를 올리지 않음 (레벨에만, J-03) | api.md 22 | 완료 (#14) |
+| J-03 | relation | seunghee | 레벨 공식 · 관계 단계 기준과 이름 | `relation/service/AffinityPolicy.java`, 값은 `capsule.relation` | 레벨 = 자리 지킴 60분당 1(상한 없음, PM 임시). 관계 단계 = 호감도 0 · 30 · 70 · 90 구간, 이름 '아는 사이 · 친한 사이 · Lv.3 · Lv.4'(임시). 단계 이름을 화면에 보일지 미정 (PM은 숨김) | api.md 12, 22 | 임시값 구현, PM 확인 필요 (#14) |
 | J-04 | dialogue | seunghee | 이벤트 반응 대사(LLM)와 trigger별 고정 대사(5초 초과) | `dialogue/client/FakeLlmClient.java`, `LlmClient.java`(고정 대사 표) | trigger별 고정 문장 1개. 동작 이벤트 4종(DROWSY · YAWN · WAVE · HEAD_TURN)은 임시 문구(#41, HEAD_TURN은 2026-11-04 추가) | api.md 19 | 미정 (#11, 동작 이벤트 #27) |
 | J-05 | dialogue | seunghee | 대화 답장 생성 (캐릭터 설정·요약·대화·일정, 답 길이) | `dialogue/client/FakeLlmClient.java`, `LlmClient.java`(대체 대사) | 고정 문장 + 입력 일부 | api.md 20 | 미정 (#11, 휴식 여부 계약 #8) |
-| J-06 | dialogue | seunghee | 대화 호감도 판정 (−5~5) | `dialogue/client/FakeLlmClient.java` | 항상 +1 | api.md 20 | 미정 (#11, 점수는 기획 #7) |
+| J-06 | dialogue | seunghee | 대화 호감도 판정 | `dialogue/service/ChatScorer.java`(종류 · 점수표), `relation/service/RelationService.java`(하루 상한 · 비율 감점), 값은 `capsule.dialogue.chat-scores` | **방식 확정 (PM 2026-11-04)**: A안 말 패턴, AI 판정 점수 없음, 기본 대사 턴 0. 임시값: 칭찬 · 고마움 +1, 고민 +2(세션 1번), 무례 −2(반복 −3), 혐오 · 성적 −30%(최소 −5, 그날 오름 멈춤), 오르는 쪽 하루 +15, 같은 종류 10턴 안 세 번째 0 | api.md 20 (호감도 최종안) | 임시값 구현, 숫자는 PM 확인 필요 (#11, #7) |
 | J-07 | dialogue | seunghee | 답장 감정 → 모션·표정 고르는 규칙 (엔진 표정 태그 ↔ 반응 표 감정 이름) | `dialogue/service/DialogueService.java` | 감정이 있으면 반응 표에서 그 감정으로 고름(#41). Fake 답장은 감정을 안 정해서 모션·표정 없음 | api.md 19·20 (9차: 감정 목록은 데이터) | 미정 (#11·#33, 데이터 #9) |
-| J-08 | dialogue | seunghee | 세션 종료 시 대화 요약 합치기 | `dialogue/client/FakeLlmClient.java` | 기존 요약 + "[세션 N] 메시지 n개" 한 줄 | api.md 22 | 미정 (#12) |
+| J-08 | dialogue | seunghee | 세션 종료 때 지난 대화 정리 | `dialogue/service/ClosingWriter.java` `recap`, 프롬프트 `summary.system` | **방식 정함 (승희 2026-11-04, ADR 0020 14)**: 합치는 요약 대신 세션마다 카드 한 장, 최근 5장. 카드 길이 · 내용(70자 안팎 흐름)은 임시 | api.md 22 | 임시값 구현 (#12) |
 | J-09 | dialogue | seunghee | 완료 대사 `closingLine` 생성, 못 만들 때 대체 문구 | `dialogue/client/FakeLlmClient.java`, `LlmClient.java`(대체 문구) | 캐릭터 이름을 넣은 고정 문구. 실패·5초 초과면 명세 22 예시 문장 | api.md 22·23 | 미정 (#12) |
 | J-10 | dialogue | seunghee | TTS `audioBase64` | `dialogue/service/DialogueService.java` | 항상 null | api.md 19·20 | 미정 (#13) |
 | J-11 | session | seonguk | 종료 시 프론트 값과 서버 계산값이 "크게" 다를 때의 기준 | `session/service/SessionService.java` `end()` | 명세의 부등식 검증만 하고 프론트 값 사용 | api.md 22 "같이 챙길 것" | 미정 (#20) |
 | J-12 | dialogue | seunghee | 이벤트 반응 감정 `emotion` 값 목록과 정하는 기준 (LLM 출력) | `dialogue/client/FakeLlmClient.java` | trigger별 고정 값 (GREETING·RETURN·WAVE `HAPPY`, AWAY `SAD`, BREAK·BREAK_END·DROWSY·YAWN `NEUTRAL`). 고정 대사(fallback)면 null | api.md 19 (2026-11-04) | 미정 (#33) |
+| J-13 | dialogue | seunghee | 캐릭터가 기억할 사실의 기준 · 개수 (2026-11-04 추가) | `dialogue/service/MemoryKeeper.java` `keepQuestion`, 값은 `capsule.dialogue.memory-max` | 결정 모델 보기 설명: 저장(목표 · 계획, 이어지는 고민, 취향 · 습관, 캐릭터와 한 약속, 자기 이야기) / 무시(인사 · 잡담 · 공부 문제 자체 · 그때뿐인 상태 · 일정에 이미 있는 것). 최대 20개(승희). PM은 기억 기능을 데모데이 뒤로 미룸 | api.md 20 | 임시값 구현, PM 확인 필요 |
 
 ## 판단 항목을 가져갈 때 같이 볼 것
 - **J-05 답 길이 규칙**(공부 중 1~2문장, 쉬는 시간 2~4문장)을 적용하려면 dialogue가 "지금 휴식 중인지"를 알아야 한다. 지금 `session.api.SessionQuery`에는 없어서 계약 확장이 필요하다(contract-change 스킬).

@@ -28,6 +28,12 @@
 --   - session_events.type에 동작 이벤트 DROWSY · YAWN · WAVE 추가 (졸음 · 하품 · 손 흔들기. 상태를 바꾸지 않음)
 --   - session_events.type에 동작 이벤트 HEAD_TURN 추가 (고개 돌림. 다른 동작 이벤트와 같이 상태 · 시간 계산에 안 씀)
 --   - 주석: 동작 이벤트 서버 쿨다운(같은 type 1분), live2d_reaction_maps.trigger_type에 감정 이름 (API 19 · 20의 감정 동작. 목록은 데이터, 디자이너 에셋에 따라 바뀜)
+--   - 호감도 최종안 (ADR 0020): 호감도와 레벨을 나눔
+--     user_character_relations: relation_points 0~100 · 기본 50, level = 자리 지킴 시간 레벨, total_present_seconds · streak_days · last_study_date 추가
+--     relation_logs: signal 추가(CHAT의 말의 종류), CHAT 범위 −100~5 (비율 감점), 공부 시간 · 첫 만남 점수는 더 기록하지 않음
+--     relation_settlements 추가 (공부 종료 때 레벨 전후, 리포트 재조회용)
+--   - 대화 기억 세 겹 (ADR 0020): character_memories(아는 사실 최대 20개) · conversation_recaps(세션 카드 최근 5장) 추가,
+--     chat_messages.signal 추가, conversations.summary는 더 쓰지 않음 (삭제는 다음 단계), llm_usages.purpose에 MEMORY
 -- =====================================================================
 
 BEGIN;
@@ -242,16 +248,20 @@ CREATE INDEX idx_character_contents_character ON character_contents (character_i
 
 -- 사용자 × 캐릭터 관계: 처음 만날 때 행을 만듦. 행이 없으면 아직 안 만난 것
 -- 호감도는 세션이 끝나도 여기에 계속 남음 (사용자마다 다르므로 characters가 아니라 여기)
+-- 호감도(캐릭터가 나를 어떻게 보는가)와 레벨(함께 공부한 시간)은 따로: 관계 단계 = 호감도 구간, 레벨 = 자리 지킴 시간
 CREATE TABLE user_character_relations (
-    id                  bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    user_id             bigint      NOT NULL REFERENCES users (id),
-    character_id        bigint      NOT NULL REFERENCES characters (id),
-    relation_points     int         NOT NULL DEFAULT 0     -- 호감도 0~100 (%처럼 읽음, 끝이 있음). 서버가 범위를 넘는 만큼 잘라 반영
-                                    CHECK (relation_points BETWEEN 0 AND 100),
-    level               int         NOT NULL DEFAULT 1,    -- 저장해 둠: 기준이 바뀌어도 이미 오른 단계는 유지
-    total_study_seconds int         NOT NULL DEFAULT 0,    -- 함께한 공부 시간 (쉬는 시간 제외, 세션 합계와 같아야 함)
-    first_met_at        timestamptz NOT NULL DEFAULT now(),
-    last_met_at         timestamptz NOT NULL DEFAULT now(),
+    id                    bigint      GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id               bigint      NOT NULL REFERENCES users (id),
+    character_id          bigint      NOT NULL REFERENCES characters (id),
+    relation_points       int         NOT NULL DEFAULT 50    -- 호감도 0~100, 50에서 시작. 대화 · 자리 비움 · 연속 출석으로만 바뀜. 범위를 넘는 만큼은 잘라 반영
+                                      CHECK (relation_points BETWEEN 0 AND 100),
+    level                 int         NOT NULL DEFAULT 1,    -- 레벨 = 1 + 자리 지킴 시간 ÷ 60분 (계산값을 같이 저장, 상한 없음)
+    total_study_seconds   int         NOT NULL DEFAULT 0,    -- 함께한 공부 시간 (쉬는 시간 제외, 세션 합계와 같아야 함)
+    total_present_seconds int         NOT NULL DEFAULT 0 CHECK (total_present_seconds >= 0),  -- 그중 자리 지킴 (레벨 기준)
+    streak_days           int         NOT NULL DEFAULT 0 CHECK (streak_days >= 0),            -- 연속 출석 일수 (한국 날짜)
+    last_study_date       date,                              -- 마지막으로 공부를 시작한 날 (한국 날짜)
+    first_met_at          timestamptz NOT NULL DEFAULT now(),
+    last_met_at           timestamptz NOT NULL DEFAULT now(),
     UNIQUE (user_id, character_id)
 );
 CREATE INDEX idx_relations_character ON user_character_relations (character_id);
@@ -337,16 +347,19 @@ CREATE TABLE session_events (
 );
 CREATE INDEX idx_session_events_session ON session_events (session_id, occurred_at);
 
--- 호감도 변화 이력 (계속 남음). delta는 실제로 바뀐 만큼(0~100 밖으로 나간 몫은 잘림) → 기록의 합 = 지금 점수
---   CHAT: 결정 모델이 사용자 말의 신호(칭찬 · 무례 등)를 고르고, 서버가 신호 → 점수 + 하루 상한으로 정해 기록
---   SESSION_EVENT: 공부 중 이벤트(자리 비움, 복귀 등) 하나로 바뀐 점수. 1:3 룸이면 캐릭터마다 한 행씩
+-- 호감도 변화 이력 (계속 남음). delta는 실제로 바뀐 만큼(0~100 밖으로 나간 몫은 잘림) → 50 + 기록의 합 = 지금 점수
+--   CHAT: 말 패턴으로 고른 말의 종류(signal) → 캐릭터 점수표 → 오르는 쪽만 하루 상한. 심한 말은 지금 값의 %로 깎음
+--   SESSION_EVENT: 자리 비움을 끝낸 상태 이벤트에서, 1분 넘게 비웠으면 감점 (하루 상한). 1:3 룸이면 캐릭터마다 한 행씩
+--   STREAK: 연속 출석 (2일째부터 하루 한 번, 세션 첫 FOCUS)
 --   EVENT: 기간 한정 이벤트(character_contents의 EVENT)로 받은 점수
+--   STUDY_TIME · FIRST_MEET · FOCUS_BONUS: 더 기록하지 않음 (호감도 최종안. 공부 시간은 레벨에만)
 CREATE TABLE relation_logs (
     id               bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     relation_id      bigint      NOT NULL REFERENCES user_character_relations (id),
     session_id       bigint      REFERENCES study_sessions (id),
     session_event_id bigint      REFERENCES session_events (id),   -- SESSION_EVENT일 때 원인 이벤트
     request_id       uuid,                                      -- CHAT일 때 메시지 전송 요청 id (메시지는 지워지므로 FK 아님)
+    signal           text,                                      -- CHAT일 때 말의 종류 (COMPLIMENT, HATE_OR_SEXUAL 등). 그날 오름 멈춤 · 문의 대응
     delta            int         NOT NULL,                      -- 음수 가능
     reason           text        NOT NULL CHECK (reason IN (
                          'STUDY_TIME', 'STREAK', 'FOCUS_BONUS', 'FIRST_MEET', 'EVENT', 'CHAT', 'SESSION_EVENT')),
@@ -354,7 +367,8 @@ CREATE TABLE relation_logs (
     CHECK ((reason = 'CHAT') = (request_id IS NOT NULL)),
     CHECK ((reason = 'SESSION_EVENT') = (session_event_id IS NOT NULL)),
     CHECK (delta <> 0),                                        -- 0점이면 기록하지 않음
-    CHECK (reason <> 'CHAT' OR delta BETWEEN -5 AND 5)         -- 대화 한 번의 점수 범위 (기획에 맞게 조정)
+    CONSTRAINT relation_logs_chat_range
+        CHECK (reason <> 'CHAT' OR delta BETWEEN -100 AND 5)   -- 대화 한 번: 오르는 쪽은 작게, 비율 감점은 크게
 );
 CREATE INDEX idx_relation_logs_relation ON relation_logs (relation_id, created_at DESC);
 CREATE UNIQUE INDEX uq_relation_logs_request
@@ -362,21 +376,56 @@ CREATE UNIQUE INDEX uq_relation_logs_request
 CREATE UNIQUE INDEX uq_relation_logs_session_event
     ON relation_logs (relation_id, session_event_id) WHERE session_event_id IS NOT NULL;  -- 같은 이벤트는 캐릭터마다 한 번만
 
+-- 공부 종료 정산 때의 레벨 (세션마다 한 번). 리포트를 다시 볼 때 같은 값을 주려고 남긴다 (레벨은 점수 기록으로 다시 계산할 수 없음)
+CREATE TABLE relation_settlements (
+    relation_id     bigint      NOT NULL REFERENCES user_character_relations (id),
+    session_id      bigint      NOT NULL REFERENCES study_sessions (id),
+    present_seconds int         NOT NULL CHECK (present_seconds >= 0),
+    level_before    int         NOT NULL,
+    level_after     int         NOT NULL,
+    created_at      timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (relation_id, session_id)
+);
+
 -- ---------------------------------------------------------------------
 -- 8. 대화 LLM (S08)
 -- ---------------------------------------------------------------------
--- 사용자 × 캐릭터마다 하나. 세션을 넘어 이어지는 건 요약뿐. 탈퇴 시 서버가 삭제
+-- 사용자 × 캐릭터마다 하나. 탈퇴 시 서버가 삭제
+-- 대화 기억은 세 겹이고 모두 크기가 정해져 있다: 아는 사실(character_memories) · 지난 세션 흐름(conversation_recaps) · 이번 세션 원문(chat_messages)
 CREATE TABLE conversations (
     id                 bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     user_id            bigint      NOT NULL REFERENCES users (id),
     character_id       bigint      NOT NULL REFERENCES characters (id),
-    summary            text,                              -- 지난 세션들까지의 대화 요약
+    summary            text,                              -- 더 쓰지 않음 (conversation_recaps로 바뀜, 삭제는 다음 단계)
     summary_updated_at timestamptz,
     created_at         timestamptz NOT NULL DEFAULT now(),
     UNIQUE (user_id, character_id)
 );
 
--- 현재 세션의 메시지만 보관. 세션이 끝나면 요약에 합친 뒤 한 트랜잭션에서 삭제 (요약에 실패하면 남김)
+-- 지난 세션 흐름: 공부 종료 때 그 세션만 카드 한 장 (예: "11/03 55분, 3단원 하다 지쳐서 일찍 끝냄"). 최근 5장만 남기고 다시 압축하지 않음
+CREATE TABLE conversation_recaps (
+    id              bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    conversation_id bigint      NOT NULL REFERENCES conversations (id) ON DELETE CASCADE,
+    session_id      bigint      NOT NULL,                 -- 다른 모듈(session) 테이블이라 FK 아님
+    content         text        NOT NULL CHECK (char_length(content) BETWEEN 1 AND 200),
+    created_at      timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (conversation_id, session_id)
+);
+
+-- 캐릭터가 사용자에 대해 아는 사실 한 줄씩 (최대 20개). 매 턴 결정 모델이 추가 · 고치기 · 지우기를 고르고, 넘치면 가장 덜 중요한 하나를 버림
+-- 사용자가 직접 넣는 일정(user_memories)과는 따로. 탈퇴 시 서버가 삭제
+CREATE TABLE character_memories (
+    id                bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id           bigint      NOT NULL REFERENCES users (id),
+    character_id      bigint      NOT NULL REFERENCES characters (id),
+    content           text        NOT NULL CHECK (char_length(content) BETWEEN 1 AND 80),
+    source_request_id uuid,                               -- 이 기억을 만든 · 고친 메시지 요청 (메시지는 지워지므로 FK 아님)
+    created_at        timestamptz NOT NULL DEFAULT now(),
+    updated_at        timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_character_memories_owner ON character_memories (user_id, character_id);
+
+-- 이번 세션 원문. 세션이 끝나면 카드에 넣은 뒤 한 트랜잭션에서 삭제 (카드 쓰기에 실패하면 남겨 다음 종료 때 같이 넣음)
 -- 음성(TTS)은 저장하지 않고 응답으로 바로 전달
 CREATE TABLE chat_messages (
     id              bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -385,6 +434,7 @@ CREATE TABLE chat_messages (
     request_id      uuid        NOT NULL,                 -- 사용자 메시지와 그 답변이 같은 값
     sender          text        NOT NULL CHECK (sender IN ('USER', 'CHARACTER')),
     content         text        NOT NULL,
+    signal          text,                                 -- USER일 때 말의 종류 (같은 세션 안 반복 규칙: 고민 1번, 무례 반복, 칭찬 연타)
     created_at      timestamptz NOT NULL DEFAULT now(),
     UNIQUE (conversation_id, request_id, sender)          -- 재전송돼도 질문·답변 각각 한 번만
 );
@@ -397,7 +447,7 @@ CREATE TABLE llm_usages (
     user_id            bigint         REFERENCES users (id),
     session_id         bigint         REFERENCES study_sessions (id),
     purpose            text           NOT NULL CHECK (purpose IN (
-                           'CHAT', 'DIRECTOR', 'ACTOR', 'JUDGE', 'REACTION', 'SUMMARY', 'CLOSING', 'EVAL_JUDGE', 'DECIDE')),
+                           'CHAT', 'DIRECTOR', 'ACTOR', 'JUDGE', 'REACTION', 'SUMMARY', 'CLOSING', 'EVAL_JUDGE', 'DECIDE', 'MEMORY')),
     source             text           NOT NULL CHECK (source IN ('APP', 'LAB', 'EVAL')),
     trace_id           uuid           NOT NULL,           -- 한 요청(대화 한 턴 등)에서 나간 호출을 묶음
     provider           text           NOT NULL,           -- anthropic · openai · jev · fake
