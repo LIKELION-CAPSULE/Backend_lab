@@ -28,6 +28,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /** 약관, 이메일 인증, 가입, 로그인, 카카오 (api.md 1~6). 토큰 발급은 {@link TokenService}. */
 @Service
@@ -50,6 +51,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final EmailSender emailSender;
     private final KakaoClient kakaoClient;
+    private final TransactionTemplate tx;
     private final Clock clock;
 
     AuthService(
@@ -60,6 +62,7 @@ public class AuthService {
             PasswordEncoder passwordEncoder,
             EmailSender emailSender,
             KakaoClient kakaoClient,
+            TransactionTemplate tx,
             Clock clock) {
         this.users = users;
         this.terms = terms;
@@ -68,6 +71,7 @@ public class AuthService {
         this.passwordEncoder = passwordEncoder;
         this.emailSender = emailSender;
         this.kakaoClient = kakaoClient;
+        this.tx = tx;
         this.clock = clock;
     }
 
@@ -169,12 +173,18 @@ public class AuthService {
         return new Login(user.get().id(), user.get().onboardingRequired(), false);
     }
 
-    /** 처음이면 users + user_social_accounts + user_terms를 한 트랜잭션으로 (api.md 6 '서버가 하는 일') */
-    @Transactional
+    /**
+     * 처음이면 users + user_social_accounts + user_terms를 한 트랜잭션으로 (api.md 6 '서버가 하는 일').
+     * 카카오 호출(네트워크 왕복 2번)은 트랜잭션 밖에서 한다. 카카오가 느려도 DB 커넥션을 붙잡지 않게
+     */
     public Login kakao(KakaoRequest req) {
         KakaoProfile profile = kakaoClient
                 .fetchProfile(req.code(), req.redirectUri())
                 .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "SOCIAL_AUTH_FAILED"));
+        return tx.execute(status -> loginOrSignUp(profile, req));
+    }
+
+    private Login loginOrSignUp(KakaoProfile profile, KakaoRequest req) {
         Instant now = Instant.now(clock);
         Optional<Long> existingId = users.findUserIdBySocialAccount(KAKAO, profile.providerUserId());
         if (existingId.isPresent()) {
