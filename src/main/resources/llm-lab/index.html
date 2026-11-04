@@ -473,7 +473,7 @@ function chatTab() {
 
 /* ---------- 2. 한 번 실행 ---------- */
 function playTab() {
-  const kinds = [['chat', '답장 (chat)'], ['memory', '기억 만들기 미리보기 (memory)'], ['reaction', '상태 반응 AI (reaction, 서비스는 꺼짐)'], ['summary', '세션 카드 (summary)'], ['closing', '완료 대사 AI (closing)']];
+  const kinds = [['chat', '답장 (chat)'], ['memory', '기억 만들기 미리보기 (memory)'], ['reaction', '상태 반응 AI (reaction, 서비스는 상태 변화 5종만 AI)'], ['summary', '세션 카드 (summary)'], ['closing', '완료 대사 AI (closing)']];
   const kind = sel(kinds, 'chat', {onchange: sync}), ch = charSel(), repeat = h('input', {type: 'number', min: 1, max: 10, value: 1}), cfg = configEditor();
   const pipe = sel(META.pipelines, META.defaultPipeline), msg = h('textarea', {rows: 2, placeholder: '사용자 말'});
   const hist = historyEditor('대화 기록 (chat: 앞선 대화 · reaction: 이번 공부에서 방금 나눈 대화, 최근 몇 줄만 들어감 · summary: 요약에 합칠 대화)');
