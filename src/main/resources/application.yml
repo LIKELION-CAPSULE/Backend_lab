@@ -47,15 +47,16 @@ capsule:
       api-key: ${JEV_API_KEY:}
       models: { fast: jev-1.13.0 } # jev-latest는 모르는 사이 바뀌므로 시험한 버전으로 고정
     routes: # 용도별 등급(공급자의 models 키)과 출력 한도. temperature를 비우면 공급자 기본값
-      CHAT: { tier: smart, max-tokens: 400 }
+      # 출력 한도는 상한일 뿐 쓴 만큼만 낸다. 숨은 생각 토큰도 여기서 빠지므로(Claude 5.5) 보이는 답의 3~4배로 둔다
+      CHAT: { tier: smart, max-tokens: 800 }
       # 대화 엔진 용도 셋의 토큰 한도는 엔진 설정(Engine.Settings: 감독 500/품질 900, 배우 700, 심사 300)을 쓴다
       DIRECTOR: { tier: fast }
       ACTOR: { tier: smart }
       JUDGE: { tier: fast }
-      REACTION: { tier: fast, max-tokens: 150 }
-      SUMMARY: { tier: fast, max-tokens: 300 } # 세션 카드 한 장 (80자 이내)
-      MEMORY: { tier: fast, max-tokens: 100 } # 기억 한 줄 (40자 이내)
-      CLOSING: { tier: fast, max-tokens: 150 }
+      REACTION: { tier: fast, max-tokens: 400 }
+      SUMMARY: { tier: fast, max-tokens: 600 } # 세션 카드 한 장 (80자 이내)
+      MEMORY: { tier: fast, max-tokens: 300 } # 기억 한 줄 (40자 이내)
+      CLOSING: { tier: fast, max-tokens: 400 }
       EVAL_JUDGE: { tier: judge, max-tokens: 600 }
       # 결정(사용자 말 신호 → 호감도). provider를 jev로 두면 Jev, 실패하면 기본 공급자(LLM)가 같은 질문에 답한다
       DECIDE: { tier: fast, max-tokens: 200, provider: "${CAPSULE_LLM_DECIDE_PROVIDER:}" }
