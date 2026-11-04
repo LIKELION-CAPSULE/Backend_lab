@@ -310,7 +310,13 @@ public class DialogueService {
         Optional<ChatOutcome> outcome = withinBudget(() -> replier.reply(chat, input, ctx));
         String reply = outcome.map(ChatOutcome::reply)
                 .orElseGet(() -> characterContents
-                        .next(characterId, "REPLY_FALLBACK", null, input.relationLevel(), String.valueOf(sessionId), "")
+                        .next(
+                                characterId,
+                                "REPLY_FALLBACK",
+                                null,
+                                input.relationLevel(),
+                                String.valueOf(sessionId),
+                                input.nickname())
                         .map(ReactionLine::content)
                         .orElseGet(() -> fixedLines.replyFallback(characterId)));
         // 명세 20: fallback이면 호감도 변화 없음 (0점이어도 applyChatScore를 불러 잠금 순서를 지킨다)
@@ -463,13 +469,15 @@ public class DialogueService {
         // 캐릭터 설정에 완료 대사가 있으면 그것 (PM: 말포이는 고정 문장, 관계 단계별), 없으면 LLM.
         // 목표 시간의 절반도 못 채우고 직접 끝냈으면 공부 포기 대사(GIVE_UP, 없으면 완료 대사)
         int stage = relationQuery.view(closing.userId(), closing.characterId()).stage();
+        // 세션마다 한 번 나오는 대사라 순번을 세션이 아니라 사용자 단위로 잇는다: 세션 단위면 늘 그 단계의 첫 줄만 나온다
+        // ponytail: 순번은 메모리라 서버를 다시 띄우면 첫 줄부터. 연달아 같은 문장만 피하면 돼서 저장하지 않음
         Optional<String> scriptedClosing = characterContents
                 .next(
                         closing.characterId(),
                         gaveUp(closing) ? "GIVE_UP" : "CLOSING",
                         "CLOSING",
                         stage,
-                        String.valueOf(closing.sessionId()),
+                        "user-" + closing.userId(),
                         nickname)
                 .map(ReactionLine::content);
         CompletableFuture<String> line = scriptedClosing.isPresent()
