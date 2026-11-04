@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 
 /**
- * 결정 입구 (ADR 0017): 상태 글 하나 + 보기가 정해진 질문들 → 질문마다 고른 보기와 확신도. 글을 쓰지 않는다.
+ * 결정 입구 (ADR 0020): 상태 글 하나 + 보기가 정해진 질문들 → 질문마다 고른 보기와 확신도. 글을 쓰지 않는다.
  * 게이트웨이 DECIDE 용도로 보내므로 공급자는 설정이 정한다: Jev(결정 모델)든 LLM이든 같은 모양으로 답한다.
  * 요청은 user 메시지 하나의 JSON {"state", "questions": {id: {instructions, criteria: {보기: 설명}}}}이고
  * 답은 {id: {"choice", "confidence"}} JSON이다. LLM은 아래 시스템 지시를 따라, Jev 어댑터는 이 JSON을 Jev 형식으로 바꿔 보낸다.

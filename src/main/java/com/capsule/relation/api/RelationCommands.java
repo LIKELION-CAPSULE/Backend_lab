@@ -18,7 +18,7 @@ public interface RelationCommands {
     /**
      * 대화 점수 반영 (api.md 20). delta는 −5~5로 자르고, 0이면 기록하지 않음. 같은 requestId는 한 번만
      *
-     * @deprecated 점수는 relation이 정한다: {@link #applyChatSignal}로 신호를 넘길 것 (ADR 0017). 부르는 곳이 없어지면 지운다
+     * @deprecated 점수는 relation이 정한다: {@link #applyChatSignal}로 신호를 넘길 것 (ADR 0020). 부르는 곳이 없어지면 지운다
      */
     @Deprecated
     AffinityChange applyChat(long userId, long characterId, long sessionId, UUID requestId, int delta);

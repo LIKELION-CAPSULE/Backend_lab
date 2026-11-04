@@ -22,7 +22,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 /**
- * LLM 호출의 유일한 입구 (ADR 0017). 서비스·엔진·실험실은 용도(LlmPurpose)만 말하고, 여기서
+ * LLM 호출의 유일한 입구 (ADR 0020). 서비스·엔진·실험실은 용도(LlmPurpose)만 말하고, 여기서
  * ① 공급자·모델·한도를 정하고(설정 + 실험 덮어쓰기) ② 실패하면 재시도 → 대체 공급자 ③ 호출마다 llm_usages에 기록한다.
  * 기록이 실패해도 호출 결과는 그대로 돌려준다.
  */

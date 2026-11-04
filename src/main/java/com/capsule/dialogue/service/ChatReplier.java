@@ -27,7 +27,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * 답장 한 턴 (명세 20): 답장 파이프라인(글)과 사용자 말 신호 읽기(결정)를 동시에 부른다. 서비스·실험실·평가가 같이 쓴다.
- * 원칙: LLM은 고르기만 하고 숫자는 코드가 정한다 (ADR 0017). 신호 → 점수는 relation이 한다.
+ * 원칙: LLM은 고르기만 하고 숫자는 코드가 정한다 (ADR 0020). 신호 → 점수는 relation이 한다.
  * 신호는 답장을 늦추지 않는다: 답장이 끝났을 때 마감이 지났으면 기다리지 않고 NEUTRAL(0점).
  */
 @Component

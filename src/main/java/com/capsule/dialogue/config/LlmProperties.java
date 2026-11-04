@@ -7,7 +7,7 @@ import java.util.Map;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * LLM 설정 (ADR 0017). 공급자를 바꾸는 것은 provider 한 줄이다: 용도(routes)는 모델 이름 대신 등급(tier)을 적고,
+ * LLM 설정 (ADR 0020). 공급자를 바꾸는 것은 provider 한 줄이다: 용도(routes)는 모델 이름 대신 등급(tier)을 적고,
  * 등급을 실제 모델로 바꾸는 표는 공급자마다 따로 둔다. API 키는 환경변수로만 받는다.
  *
  * @param provider 기본 공급자: fake · anthropic · openai (jev는 결정 전용이라 routes의 provider로만)
