@@ -4,12 +4,8 @@ import com.capsule.content.api.ContentTypes.CharacterInfo;
 import com.capsule.content.api.RoomQuery;
 import com.capsule.dialogue.config.DialogueProperties.ScoreRule;
 import com.capsule.dialogue.dto.CharacterContent;
-import com.capsule.dialogue.dto.CharacterContent.Event;
 import com.capsule.dialogue.dto.CharacterContent.Line;
-import com.capsule.dialogue.dto.CharacterContent.Lore;
-import com.capsule.dialogue.dto.CharacterContent.Move;
 import com.capsule.dialogue.dto.CharacterContent.Sample;
-import com.capsule.dialogue.dto.CharacterContent.World;
 import com.capsule.dialogue.repository.CharacterContentRepository;
 import com.capsule.relation.api.RelationTypes.SignalType;
 import java.io.IOException;
@@ -51,7 +47,6 @@ public class CharacterContentSeeder implements ApplicationRunner {
             String characterName,
             String speaker,
             String safety,
-            WorldFile world,
             List<String> expressions,
             Map<String, String> expressionFallbacks,
             Map<Integer, String> stageTones,
@@ -59,15 +54,10 @@ public class CharacterContentSeeder implements ApplicationRunner {
             String breakStyle,
             String bible,
             String rules,
-            Map<String, List<SignalType>> moveSignals,
-            Map<String, List<String>> moveModes,
-            List<String> skipMoves,
             Map<SignalType, ScoreRule> scores,
             Map<String, String> habits,
             Map<String, List<LineFile>> lines,
             Map<Integer, List<SampleFile>> samples) {}
-
-    record WorldFile(String code, String name, String setting) {}
 
     record LineFile(String text, String expression, Integer minStage) {}
 
@@ -96,8 +86,7 @@ public class CharacterContentSeeder implements ApplicationRunner {
 
     /**
      * @return 불러온 캐릭터 id. 이미 DB에 있거나(overwrite가 아닐 때) 붙을 캐릭터 행이 없으면 빈 값.
-     * overwrite(실험실 reseed)면 DB에 있어도 git의 처음 값으로 덮고, 세계 지식 · 사건도 이 파일 값으로 덮는다.
-     * 처음 불러올 때는 같은 세계가 이미 있으면 그대로 둔다 (다른 캐릭터가 실험실에서 고친 지식을 덮지 않게)
+     * overwrite(실험실 reseed)면 DB에 있어도 git의 처음 값으로 덮는다.
      */
     public Optional<Long> seed(String code, boolean overwrite) {
         if (!overwrite && contents.existsCode(code)) return Optional.empty(); // DB가 원본: 파일을 읽지도 않는다
@@ -114,7 +103,7 @@ public class CharacterContentSeeder implements ApplicationRunner {
             log.warn("캐릭터 {}에 다른 설정이 이미 있어 {}을 불러오지 않음 (덮으려면 실험실 reseed)", id.get(), code);
             return Optional.empty();
         }
-        contents.replace(build(code, p, id.get()), overwrite);
+        contents.replace(build(code, p, id.get()));
         log.info("캐릭터 설정을 불러옴: {} → 캐릭터 {}", code, id.get());
         return id;
     }
@@ -151,10 +140,6 @@ public class CharacterContentSeeder implements ApplicationRunner {
     }
 
     private static CharacterContent build(String code, ProfileFile p, long characterId) {
-        // 대화 기술 · 세계 지식 · 세계 사건은 엔진 파일(character.yml)과 함께 뺐다 (결정 19부터 답장에 안 씀). 칸은 다음 정리 때 테이블째 뺀다
-        List<Move> moves = List.of();
-        List<Lore> lore = List.of();
-        List<Event> events = List.of();
         List<Line> lines = new ArrayList<>();
         (p.lines() == null ? Map.<String, List<LineFile>>of() : p.lines()).forEach((situation, list) -> {
             for (int i = 0; i < list.size(); i++) {
@@ -177,9 +162,6 @@ public class CharacterContentSeeder implements ApplicationRunner {
                 p.stageTones() == null ? Map.of() : p.stageTones(),
                 p.studyStyle().strip(),
                 p.breakStyle().strip(),
-                new World(
-                        p.world().code(), p.world().name(), p.world().setting().strip(), lore, events),
-                moves,
                 lines,
                 samples,
                 p.scores() == null ? Map.of() : p.scores(),

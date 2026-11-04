@@ -741,7 +741,7 @@ function usageTab() {
   };
 }
 
-/* ---------- 6. 캐릭터 설정 (DB의 세계관 · 캐릭터, ADR 0022 결정 15) ---------- */
+/* ---------- 6. 캐릭터 설정 (DB의 캐릭터 설정, ADR 0022 결정 15) ---------- */
 function characterTab() {
   const ch = charSel(), view = h('div', null, muted('캐릭터를 고르고 불러오기')), json = h('textarea', {class: 'mono big', spellcheck: false});
   let current = null;
@@ -749,7 +749,6 @@ function characterTab() {
   const text = t => h('div', {class: 'pre'}, t || '—');
   const sec = (title, ...body) => h('details', {class: 'card', open: true}, h('summary', null, title), body);
   function render(c) {
-    const w = c.world || {};
     view.replaceChildren(
       sec('기본',
         table(['항목', '값'], [
@@ -764,15 +763,6 @@ function characterTab() {
         h('h4', null, '공부 중 (study_style)'), text(c.studyStyle), h('h4', null, '쉬는 시간 (break_style)'), text(c.breakStyle)),
       sec('공통 페르소나 (고정 블록)', text(c.bible)),
       sec('절대 규칙 (고정 블록)', text(c.rules)),
-      sec(`세계: ${w.name || ''} (지금 답장에 안 씀 · 결정 19, 다음 정리 때 뺌)`, text(w.setting),
-        h('h4', null, `세계 지식 ${(w.lore || []).length}장`),
-        table(['코드', '제목', '키워드', '본문'], (w.lore || []).map(l => tr([l.code, l.title, join(l.keywords), l.body]))),
-        h('h4', null, `세계 사건 ${(w.events || []).length}개`),
-        table(['코드', '사건', '어울리는 반응', '같이 꺼낼 지식', '빈도'], (w.events || []).map(e => tr([e.code, e.text, e.hook, e.loreCode, e.weight])))),
-      sec(`대화 기술 ${(c.moves || []).length}개 (지금 답장에 안 씀 · 결정 19, 다음 정리 때 뺌)`,
-        table(['코드', '이름', '쓰는 법', '어울리는 말', '쓰는 때', '예시'], (c.moves || []).map(m => tr([m.code, m.name, m.how,
-          join(m.signals) || '평소', join(m.modes) || '언제나',
-          h('div', null, (m.examples || []).map(e => h('div', {class: 'small'}, `사용자: ${e.user} → ${e.reply}`)))])))),
       sec(`미리 쓴 대사 ${(c.lines || []).length}줄 (순간 동작은 그대로, 상태 변화는 단계별 AI 예시 · 5초 대체)`,
         table(['상황', '단계부터', '순서', '대사', '표정'], (c.lines || []).map(l => tr([l.situation, l.minStage, l.sort, l.text, l.expression])))),
       sec('대화 점수표',

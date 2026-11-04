@@ -79,7 +79,7 @@ class LlmLabController {
         this.seeder = seeder;
     }
 
-    // --- 캐릭터 · 세계관 설정 (DB가 원본, ADR 0022 결정 15) ---
+    // --- 캐릭터 설정 (DB가 원본, ADR 0022 결정 15) ---
 
     @GetMapping("/api/characters/{id}/content")
     CharacterContent content(@PathVariable long id) {

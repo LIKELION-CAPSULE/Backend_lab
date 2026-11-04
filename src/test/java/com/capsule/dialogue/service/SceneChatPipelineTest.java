@@ -131,8 +131,6 @@ class SceneChatPipelineTest {
                 c.stageTones(),
                 c.studyStyle(),
                 c.breakStyle(),
-                c.world(),
-                c.moves(),
                 c.lines(),
                 c.samples(),
                 c.scores(),
