@@ -9,7 +9,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
@@ -21,11 +21,11 @@ import org.springframework.web.client.RestClient;
 
 /**
  * 실제 카카오 로그인: 인가 코드 → 카카오 액세스 토큰 → 회원번호·닉네임 (api.md 6, ADR 0011).
- * Fake를 끈 환경(운영)에서만 뜬다. local·test는 FakeKakaoClient.
+ * 운영(Fake 끔)과, 카카오 키가 있는 개발 서버에서 뜬다. 키가 없는 local · test는 FakeKakaoClient.
  * 코드 만료·오류처럼 카카오가 4xx로 거절하면 빈 값(→ 401 SOCIAL_AUTH_FAILED). 카카오 장애(5xx·연결 실패)는 예외 그대로 둬서 500으로 보인다.
  */
 @Component
-@ConditionalOnProperty(name = "capsule.fake-integrations", havingValue = "false", matchIfMissing = true)
+@ConditionalOnExpression("!${capsule.fake-integrations:false} or !'${capsule.kakao.rest-api-key:}'.isBlank()")
 class HttpKakaoClient implements KakaoClient {
 
     static final String TOKEN_URL = "https://kauth.kakao.com/oauth/token";
@@ -52,6 +52,7 @@ class HttpKakaoClient implements KakaoClient {
         this.rest = builder.build();
         this.restApiKey = restApiKey;
         this.clientSecret = clientSecret == null ? "" : clientSecret;
+        log.info("카카오 로그인: 실제 카카오"); // 개발 서버에서 키를 빠뜨려 Fake로 떨어졌는지 시작 로그로 구분
     }
 
     @Override
