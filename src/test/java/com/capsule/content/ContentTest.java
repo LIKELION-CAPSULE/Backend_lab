@@ -86,20 +86,20 @@ class ContentTest {
         assertThat(roomQuery.activeRooms()).extracting(RoomInfo::id).containsExactly(1L);
 
         RoomInfo room = roomQuery.find(1).orElseThrow();
-        assertThat(room.name()).isEqualTo("쌀쌀맞은 갸루짝꿍이 나에게만 친절하다!");
+        assertThat(room.name()).isEqualTo("밤의 호그와트 도서관");
         assertThat(room.characters()).extracting(CharacterInfo::name).containsExactly("말포이");
 
         assertThat(roomQuery.defaultBackground(1))
-                .contains(new BackgroundInfo(1, 1, "교실", "https://cdn.capsule.invalid/room1-bg.png"));
+                .contains(new BackgroundInfo(1, 1, "밤의 도서관", "https://cdn.capsule.invalid/room1-bg.png"));
         assertThat(roomQuery.find(999)).isEmpty();
     }
 
     @Test
     void character() {
-        CharacterInfo chaerin = characterQuery.find(1).orElseThrow();
-        assertThat(chaerin.roomId()).isEqualTo(1);
-        assertThat(chaerin.personality()).containsExactly("츤데레", "같은 반 친구");
-        assertThat(chaerin.model())
+        CharacterInfo malfoy = characterQuery.find(1).orElseThrow();
+        assertThat(malfoy.roomId()).isEqualTo(1);
+        assertThat(malfoy.personality()).containsExactly("츤데레", "슬리데린 5학년", "라이벌");
+        assertThat(malfoy.model())
                 .isEqualTo(
                         new ModelInfo("https://cdn.capsule.invalid/live2d/chaerin/v1/chaerin.model3.json", 1.0, 0, 12));
     }
