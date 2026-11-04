@@ -19,6 +19,8 @@ capsule:
     base-url: ${CAPSULE_CDN_BASE_URL}
   cors:
     allowed-origins: ${CAPSULE_CORS_ORIGINS} # 비면 모든 프론트 요청이 조용히 막히므로 운영에서는 필수
+  frontend:
+    url: ${CAPSULE_FRONTEND_URL} # 프론트 주소. 비밀번호 재설정 메일 링크의 앞부분 (api.md 25)
   brevo:
     key: ${CAPSULE_BREVO_KEY} # Brevo > SMTP & API > API Keys. 빠지면 시작 실패 (ADR 0020)
   mail:
