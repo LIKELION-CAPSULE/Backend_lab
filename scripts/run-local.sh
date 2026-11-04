@@ -18,9 +18,17 @@ if [ "${1:-}" = "--info" ]; then
 fi
 
 if [ "${1:-}" = "--shared" ]; then
+  # shared-db 프로필 파일이 없는 옛 브랜치면 프로필 없이 local로 떠서 Docker 기본 DB에 마이그레이션해 버린다. 막는다
+  if [ ! -f src/main/resources/application-shared-db.yml ]; then
+    echo "✖ application-shared-db.yml 이 없음. git rebase origin/develop 후 다시 (ADR 0017)" >&2
+    exit 1
+  fi
   # .env.local에서 공용 개발 DB 세 줄만 읽는다(다른 값은 건드리지 않음). 이미 환경변수에 있으면 그 값을 쓴다
+  # 첫 '='에서만 나눈다. 값 안이나 끝의 '='(base64 비밀번호 등)를 지키려고 IFS='=' read를 쓰지 않음
   if [ -f .env.local ]; then
-    while IFS='=' read -r key value; do
+    while IFS= read -r line; do
+      key="${line%%=*}"
+      value="${line#*=}"
       if [ -z "${!key:-}" ]; then export "$key=$value"; fi
     done < <(tr -d '\r' < .env.local | grep -E '^CAPSULE_DEV_DB_(URL|USERNAME|PASSWORD)=' || true)
   fi
@@ -33,7 +41,8 @@ if [ "${1:-}" = "--shared" ]; then
   docker compose up -d redis >/dev/null
   echo "▶ http://localhost:$PORT  (DB: 공용 개발 DB, 마이그레이션 안 함)"
   echo "ℹ 내 브랜치의 새 마이그레이션은 develop에 머지돼야 공용 DB에 들어감. 그 전엔 옵션 없이 실행(Docker 로컬 DB)"
-  unset SPRING_DATASOURCE_URL SPRING_DATASOURCE_USERNAME SPRING_DATASOURCE_PASSWORD
+  # 셸 · IDE에 남은 값이 shared-db 프로필을 덮지 않게
+  unset SPRING_DATASOURCE_URL SPRING_DATASOURCE_USERNAME SPRING_DATASOURCE_PASSWORD SPRING_FLYWAY_ENABLED
   export SPRING_PROFILES_ACTIVE=local,shared-db
   export SERVER_PORT="$PORT"
   exec ./gradlew bootRun

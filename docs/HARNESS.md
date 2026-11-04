@@ -160,7 +160,7 @@ setup.sh가 하는 일: 도구 확인(python3 연결, git, docker, java 21, gh) 
   3. 시크릿 등록: `gh secret set CLAUDE_CODE_OAUTH_TOKEN -R LIKELION-CAPSULE/Backend_lab` → 토큰 붙여넣기 (토큰을 채팅·파일에 남기지 않음)
   - API 키로 돌리려면 `ANTHROPIC_API_KEY` 시크릿 + `.github/workflows/claude-*.yml`에서 해당 줄 주석 해제
   - 시크릿이 없으면 claude-review(위험 구역 PR)와 `@claude`만 실패하고 나머지는 정상 동작함
-  4. 공용 개발 DB 시크릿(ADR 0017): `gh secret set DEV_DB_URL`, `DEV_DB_USERNAME`, `DEV_DB_PASSWORD` (Supabase 개발 프로젝트 Connect > JDBC · Session pooler 값, `?sslmode=require`). 넣은 뒤 Actions에서 `dev-db-migrate`를 develop으로 한 번 손으로 돌림. 없으면 그 워크플로만 경고하고 건너뜀
+  4. 공용 개발 DB 시크릿(ADR 0017): `gh secret set DEV_DB_URL`, `DEV_DB_USERNAME`, `DEV_DB_PASSWORD` (Supabase 개발 프로젝트 Connect > JDBC · Session pooler(5432, Transaction pooler 아님). URL은 대시보드 문자열의 `?user=...&password=...`를 빼고 `jdbc:postgresql://<pooler 호스트>:5432/postgres?sslmode=require`, 계정 · 비밀번호는 따로). 처음 돌리기 전에 개발 프로젝트 `public` 스키마는 비어 있어야 함(대시보드로 만든 테이블이 있으면 Flyway가 거부). 넣은 뒤 Actions에서 `dev-db-migrate`를 develop으로 한 번 손으로 돌림. 없으면 그 워크플로만 경고하고 건너뜀
   - 각자 `.env.local`에 같은 값을 `CAPSULE_DEV_DB_URL` · `CAPSULE_DEV_DB_USERNAME` · `CAPSULE_DEV_DB_PASSWORD`로 넣고 `scripts/run-local.sh --shared`
 
 ---
@@ -403,7 +403,9 @@ skeleton 스킬이 하는 일:
 | `Could not find a valid Docker environment` | Docker 꺼짐 | Docker Desktop 실행 |
 | 로컬에서 Flyway `Detected applied migration not resolved locally` | 다른 브랜치에서 적용한 마이그레이션이 로컬 DB에 남아 있음(브랜치 전환) | `scripts/run-local.sh --reset` |
 | `Migration checksum mismatch` | 적용된 마이그레이션 파일이 바뀜 | 되돌리고 새 마이그레이션 |
-| `run-local.sh --shared`가 `Schema-validation: missing table/column`으로 안 뜸 | 내 브랜치에 아직 머지 안 된 마이그레이션이 있음 (공용 개발 DB는 develop 기준) | 머지 전까지는 옵션 없이 실행(Docker 로컬 DB). 머지되면 `dev-db-migrate`가 넣음 || CI `zones.conf 엄격 검사` 실패 | `[team]`에 TODO 남음 | GitHub 아이디·이메일 채우는 harness PR |
+| `run-local.sh --shared`가 `Schema-validation: missing table/column`으로 안 뜸 | 내 브랜치에 아직 머지 안 된 마이그레이션이 있음 (공용 개발 DB는 develop 기준) | 머지 전까지는 옵션 없이 실행(Docker 로컬 DB). 머지되면 `dev-db-migrate`가 넣음. 제약(CHECK) · 인덱스 · 데이터 마이그레이션은 시작 때 못 잡고 실행 중 오류로 나므로 그런 작업도 Docker 로컬 DB로 |
+| `dev-db-migrate` 실패 `Detected applied migration not resolved locally` | develop 머지가 연달아 있어 옛 커밋 기준 실행이 늦게 돎 | Actions에서 `dev-db-migrate`를 develop으로 다시 실행 |
+| CI `zones.conf 엄격 검사` 실패 | `[team]`에 TODO 남음 | GitHub 아이디·이메일 채우는 harness PR |
 | CI `PR 본문` 실패 | '작업 내용' 섹션이 없거나 템플릿 안내 문구뿐 | pr-write로 다시 쓰거나 '작업 내용'을 채움 |
 | `claude-review` 실패 | 시크릿 없음 | 2-3장. 안 쓸 거면 무시해도 다른 체크엔 영향 없음 |
 | spec-sync가 노션에 반영을 못 함 | Claude Code에 Notion MCP 미연결·미로그인 | 2-2장 Notion MCP 연결 |

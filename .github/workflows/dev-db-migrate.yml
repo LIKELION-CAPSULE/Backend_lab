@@ -10,6 +10,9 @@ on:
     branches: [develop]
   workflow_dispatch: # 시크릿을 처음 넣었을 때 등 손으로 한 번 돌릴 때 (develop에서만)
 
+permissions:
+  contents: read
+
 concurrency:
   group: dev-db-migrate
   cancel-in-progress: false # 마이그레이션 도중에 끊지 않는다
