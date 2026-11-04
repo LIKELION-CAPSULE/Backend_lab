@@ -11,7 +11,7 @@ GET {{host}}/api/terms
 POST {{host}}/api/auth/social/KAKAO
 Content-Type: application/json
 
-{ "code": "fake-kakao:local-1:승희", "redirectUri": "http://localhost:5173/oauth/kakao", "agreedTermVersionIds": [3, 4] }
+{ "code": "fake-kakao:local-1:승희", "redirectUri": "http://localhost:5173/oauth/kakao" }
 
 > {% client.global.set("token", response.body.accessToken); %}
 
@@ -24,7 +24,7 @@ PATCH {{host}}/api/me
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
-{ "nickname": "승희", "avatarId": 1 }
+{ "avatarId": 1 }
 
 ### 5. 홈 (H03)
 GET {{host}}/api/home
