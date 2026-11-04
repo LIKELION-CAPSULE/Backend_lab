@@ -40,11 +40,12 @@ class SceneChatPipelineTest {
                 Map.of(),
                 EngineOptions.DEFAULT,
                 onBreak,
-                chatty);
+                chatty,
+                52);
     }
 
     static String card(ChatInput in, String fact) {
-        return SceneChatPipeline.card(MALFOY, in, fact, "2026-11-05 (목) 21:00");
+        return SceneChatPipeline.card(MALFOY, in, fact, "2026-11-05 (목) 21:00", "엄마가 과자 상자를 보냈다");
     }
 
     @Test
@@ -52,7 +53,7 @@ class SceneChatPipelineTest {
         Map<String, String> one = SceneChatPipeline.systemVars(MALFOY, 1, "민수", SITUATION);
         Map<String, String> four = SceneChatPipeline.systemVars(MALFOY, 4, "민수", SITUATION);
         assertThat(one.get("relation")).contains("단계 1").contains("이름은 부르지 않는다");
-        assertThat(four.get("relation")).contains("단계 4").contains("좋아하고 아낀다");
+        assertThat(four.get("relation")).contains("단계 4 · 특별한 관계").contains("질투도 숨기지 않는다");
         // 말투 샘플은 그 단계 묶음만, {name}은 닉네임으로
         assertThat(one.get("samples")).contains("…어. 왔으면 조용히 앉아.").doesNotContain("기다렸어");
         assertThat(four.get("samples")).contains("민수, 왔구나. 기다렸어.").doesNotContain("왔으면 조용히 앉아");
@@ -69,6 +70,7 @@ class SceneChatPipelineTest {
         assertThat(card).contains("<꺼낼 수 있는 기억> 사용자는 토익 800 목표").doesNotContain("밤에 공부가 잘 됨");
         assertThat(card).contains("11/03 55분, 3단원 하다 일찍 끝냄").contains("시험: 중간고사");
         assertThat(card).contains("\"흥\"로 말을 시작하지 않기"); // 말버릇은 데이터
+        assertThat(card).contains("공부한 지: 52분").contains("말포이 오늘: 엄마가 과자 상자를 보냈다");
         // 매 턴 기술 · 세계 지식 카드 · 무작위 사건은 없다 (결정 19)
         assertThat(card).doesNotContain("대화 기술").doesNotContain("세계 지식").doesNotContain("방금 일어난 일");
         // 길이 · 구성(지금) 줄이 맨 끝
@@ -97,8 +99,28 @@ class SceneChatPipelineTest {
 
     @Test
     void reactionCardIsFactsAndFormatOnly() {
-        String card = ReactionWriter.card(MALFOY, "민수", null, List.of());
+        String card = ReactionWriter.card(MALFOY, "민수", null, List.of(), null);
         assertThat(card).contains("사용자: 민수").contains("한 문장");
-        assertThat(card).doesNotContain("<지난 세션 흐름>"); // 없는 재료는 칸도 없음
+        assertThat(card).doesNotContain("<지난 세션 흐름>").doesNotContain("오늘:"); // 없는 재료는 칸도 없음
+    }
+
+    @Test
+    void todayNotePicksTheWeekday() {
+        // 2026-11-05는 목요일 → TODAY 네 번째 줄
+        java.time.Clock thursday =
+                java.time.Clock.fixed(java.time.Instant.parse("2026-11-05T03:00:00Z"), java.time.ZoneOffset.UTC);
+        assertThat(SceneChatPipeline.today(MALFOY, thursday)).startsWith("엄마가 부엉이 편으로 과자 상자를 보냈다");
+    }
+
+    @Test
+    void givingUpIsEndingBeforeHalfTheTarget() {
+        assertThat(DialogueService.gaveUp(closing("NORMAL", 20 * 60, 50))).isTrue();
+        assertThat(DialogueService.gaveUp(closing("NORMAL", 30 * 60, 50))).isFalse();
+        assertThat(DialogueService.gaveUp(closing("AUTO_CLOSED", 60, 50))).isFalse(); // 자동 종료는 포기가 아님
+        assertThat(DialogueService.gaveUp(closing("NORMAL", 60, null))).isFalse();
+    }
+
+    static com.capsule.session.api.SessionTypes.SessionClosing closing(String endType, int seconds, Integer target) {
+        return new com.capsule.session.api.SessionTypes.SessionClosing(1, 1, 1, "말포이", endType, seconds, target);
     }
 }

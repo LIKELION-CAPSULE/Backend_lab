@@ -420,7 +420,13 @@ public class SessionService {
         StudySettlement settlement =
                 relationCommands.settleStudy(s.userId(), characterId, s.id(), present + away, present);
         s.recordClosingLine(closingHandler.close(new SessionClosing(
-                s.id(), s.userId(), characterId, character(characterId).name(), endType, present + away)));
+                s.id(),
+                s.userId(),
+                characterId,
+                character(characterId).name(),
+                endType,
+                present + away,
+                s.targetMinutes())));
         return toReport(s, settlement);
     }
 

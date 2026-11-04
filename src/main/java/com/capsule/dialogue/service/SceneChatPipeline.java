@@ -1,5 +1,6 @@
 package com.capsule.dialogue.service;
 
+import com.capsule.common.time.ClockConfig;
 import com.capsule.dialogue.client.LlmGateway;
 import com.capsule.dialogue.client.LlmJson;
 import com.capsule.dialogue.domain.ChatMessage;
@@ -13,6 +14,7 @@ import com.capsule.dialogue.dto.LlmContext;
 import com.capsule.dialogue.dto.LlmPurpose;
 import com.capsule.dialogue.engine.Llm;
 import java.time.Clock;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -34,6 +36,8 @@ class SceneChatPipeline implements ChatPipeline {
     // 공부 중에 수다가 길어지면 (ChatInput.chatty, 기준은 DialogueService) 공부로 돌려보낸다. 막지는 않는다 (ADR 0022 결정 18)
     static final String CHATTY = "수다가 길어졌다: 공부 중인데 대화만 계속하고 있다. 이번 말은 짧게 받아 주고 공부로 돌려보낸다 (다그치지 말고 캐릭터 말투로)";
     /** 고정 블록에 예시로 넣는 상태 변화 (순간 동작은 미리 쓴 대사 그대로라 뺀다) */
+    static final String TODAY = "TODAY";
+
     static final List<String> STATE_SITUATIONS =
             List.of("GREETING", "AWAY", "AWAY_2", "AWAY_3", "RETURN", "BREAK", "BREAK_END");
 
@@ -76,7 +80,7 @@ class SceneChatPipeline implements ChatPipeline {
         CharacterContent c = found.get();
         PromptVersion system = prompts.resolve(PromptKey.SCENE_SYSTEM, characterId, in.pinnedPrompts());
         String fact = factPicker.pick(in, ctx).orElse(null); // 아는 사실은 결정 모델이 고른 하나만 (없으면 안 넣음)
-        String card = card(c, in, fact, PromptVars.now(clock));
+        String card = card(c, in, fact, PromptVars.now(clock), today(c, clock));
         List<Llm.SystemBlock> blocks = List.of(
                 new Llm.SystemBlock(
                         PromptService.render(
@@ -143,10 +147,12 @@ class SceneChatPipeline implements ChatPipeline {
     }
 
     /** 이번 턴의 사실만: 시각 · 기억 · 지난 세션 · 일정(첫 대화) · 피할 말버릇 · 수다 길어짐 · 지금(길이 · 구성, 맨 끝) */
-    static String card(CharacterContent c, ChatInput in, String fact, String now) {
+    static String card(CharacterContent c, ChatInput in, String fact, String now, String today) {
         List<String> L = new ArrayList<>();
         L.add("<상황>");
-        L.add("사용자: " + in.nickname() + " / 시각: " + now);
+        L.add("사용자: " + in.nickname() + " / 시각: " + now
+                + (in.sessionMinutes() > 0 ? " / 공부한 지: " + in.sessionMinutes() + "분" : ""));
+        if (today != null) L.add(c.speaker() + " 오늘: " + today);
         // 기억 (ADR 0022 결정 16): 아는 사실은 결정 모델이 이번 말에 맞춰 고른 하나만, 세션 카드는 최근 2장, 원문은 메시지로 15줄
         if (fact != null) L.add("<꺼낼 수 있는 기억> " + fact + " (자연스러울 때만, 단정하지 말고)");
         if (in.summary() != null && !in.summary().isBlank())
@@ -161,6 +167,14 @@ class SceneChatPipeline implements ChatPipeline {
         L.add("지금: " + (in.onBreak() ? c.breakStyle() : c.studyStyle()));
         L.add("</상황>");
         return String.join("\n", L);
+    }
+
+    /** 캐릭터의 오늘 근황: TODAY 대사를 요일(월 = 0)로 고른다 (결정 19). 없으면 null */
+    static String today(CharacterContent c, Clock clock) {
+        List<CharacterContent.Line> notes = c.linesFor(TODAY, 1);
+        if (notes.isEmpty()) return null;
+        int day = LocalDate.now(clock.withZone(ClockConfig.KST)).getDayOfWeek().getValue() - 1;
+        return notes.get(day % notes.size()).text();
     }
 
     /** 말버릇 규칙: 첫마디 금지는 늘, 세션 한 번은 이번 세션 캐릭터 대사에 이미 있으면 */

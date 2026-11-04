@@ -13,6 +13,7 @@ import com.capsule.dialogue.dto.LlmContext;
 import com.capsule.dialogue.dto.LlmPurpose;
 import com.capsule.dialogue.dto.ReactionLine;
 import com.capsule.dialogue.engine.Llm;
+import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -35,18 +36,21 @@ public class ReactionWriter {
     private final FixedLines fixed;
     private final DialogueProperties props;
     private final CharacterContents contents;
+    private final Clock clock;
 
     ReactionWriter(
             LlmGateway llm,
             PromptService prompts,
             FixedLines fixed,
             DialogueProperties props,
-            CharacterContents contents) {
+            CharacterContents contents,
+            Clock clock) {
         this.llm = llm;
         this.prompts = prompts;
         this.fixed = fixed;
         this.props = props;
         this.contents = contents;
+        this.clock = clock;
     }
 
     public boolean usesLlm(String trigger) {
@@ -117,18 +121,20 @@ public class ReactionWriter {
                                                 nickname,
                                                 s -> fixed.situation(c.characterId(), s, null, pinned))),
                                 true),
-                        new Llm.SystemBlock(card(c, nickname, summary, recent), false)),
+                        new Llm.SystemBlock(
+                                card(c, nickname, summary, recent, SceneChatPipeline.today(c, clock)), false)),
                 messages,
                 ctx.withPrompts(List.of(system.id())),
                 null);
         return parse(r, c.expressions());
     }
 
-    /** 상태 반응의 상황 카드: 사실 몇 줄 + 이번 말의 형식 */
-    static String card(CharacterContent c, String nickname, String summary, List<ChatLine> recent) {
+    /** 상태 반응의 상황 카드. 지난 세션 흐름 · 오늘 근황이 있으면 다시 만난 사이처럼 (공부 시작 인사) */
+    static String card(CharacterContent c, String nickname, String summary, List<ChatLine> recent, String today) {
         List<String> L = new ArrayList<>();
         L.add("<상황>");
         L.add("사용자: " + nickname);
+        if (today != null) L.add(c.speaker() + " 오늘: " + today);
         if (summary != null && !summary.isBlank()) L.add("<지난 세션 흐름 (최근 것이 아래)>\n" + summary + "\n</지난 세션 흐름>");
         List<String> avoid = SceneChatPipeline.avoid(c, recent);
         if (!avoid.isEmpty()) L.add("피할 것: " + String.join(" / ", avoid));

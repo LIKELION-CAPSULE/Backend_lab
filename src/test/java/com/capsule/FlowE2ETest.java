@@ -114,12 +114,13 @@ class FlowE2ETest {
         assertThat((Boolean) JsonPath.read(body(greeting), "$.characters[0].fallback"))
                 .isFalse();
 
-        // 순간 동작은 캐릭터 설정(DB, 처음 값은 characters/malfoy/profile.yml)의 미리 쓴 대사 · 표정
+        // 순간 동작은 캐릭터 설정(DB, 처음 값은 characters/malfoy/profile.yml)의 미리 쓴 대사 · 표정.
+        // 호감도 50 = 관계 단계 2의 대사
         MvcResult drowsy = eventCall(token, s, "DROWSY", Instant.now().toString(), 201);
         MvcResult drowsyLine =
                 call(post(s + "/events/" + eventId(drowsy) + "/reaction"), token, reactionBody(null), 200);
         assertThat((String) JsonPath.read(body(drowsyLine), "$.characters[0].content"))
-                .isEqualTo("벌써 졸려? 물이나 마시고 와.");
+                .isEqualTo("졸지 마. 너 졸면 내가 이기는 게 재미없잖아.");
         assertThat((String) JsonPath.read(body(drowsyLine), "$.characters[0].emotion"))
                 .isEqualTo("찡그림");
 

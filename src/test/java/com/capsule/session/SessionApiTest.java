@@ -466,7 +466,7 @@ class SessionApiTest {
         verify(relationCommands, times(1)).settleStudy(anyLong(), anyLong(), anyLong(), anyInt(), anyInt());
         verify(relationCommands).settleStudy(userId, 1L, sessionId, 3300, 2880);
         verify(closingHandler, times(1)).close(any());
-        verify(closingHandler).close(new SessionClosing(sessionId, userId, 1L, "채린", "NORMAL", 3300));
+        verify(closingHandler).close(new SessionClosing(sessionId, userId, 1L, "채린", "NORMAL", 3300, 50));
         assertThat(jdbc.queryForMap(
                         "SELECT end_type, focus_seconds, distract_seconds, return_count, closing_line"
                                 + " FROM study_sessions WHERE id = ?",
@@ -566,7 +566,7 @@ class SessionApiTest {
                 .containsEntry("focus_seconds", 3600)
                 .containsEntry("closing_line", CLOSING_LINE);
         verify(relationCommands).settleStudy(userId, 1L, sessionId, 3600, 3600);
-        verify(closingHandler).close(new SessionClosing(sessionId, userId, 1L, "채린", "AUTO_CLOSED", 3600));
+        verify(closingHandler).close(new SessionClosing(sessionId, userId, 1L, "채린", "AUTO_CLOSED", 3600, 50));
         assertThat(sessionQuery.find(freshSessionId)).get().matches(SessionInfo::inProgress);
     }
 
@@ -592,7 +592,7 @@ class SessionApiTest {
                 .containsEntry("focus_seconds", 2700)
                 .containsEntry("distract_seconds", 300);
         verify(relationCommands).settleStudy(userId, 1L, sessionId, 3000, 2700);
-        verify(closingHandler).close(new SessionClosing(sessionId, userId, 1L, "채린", "AUTO_CLOSED", 3000));
+        verify(closingHandler).close(new SessionClosing(sessionId, userId, 1L, "채린", "AUTO_CLOSED", 3000, 50));
     }
 
     // ---- 도우미
