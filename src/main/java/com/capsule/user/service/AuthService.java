@@ -89,13 +89,21 @@ public class AuthService {
         if (users.existsByEmail(email)) {
             throw new ApiException(HttpStatus.CONFLICT, "EMAIL_ALREADY_USED");
         }
-        if (!rateLimiter.tryAcquire("rl:email-verification:" + email, 1, Duration.ofMinutes(1))) {
+        String rateKey = "rl:email-verification:" + email;
+        if (!rateLimiter.tryAcquire(rateKey, 1, Duration.ofMinutes(1))) {
             throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "TOO_MANY_REQUESTS");
         }
         String code = "%06d".formatted(RANDOM.nextInt(1_000_000));
         redis.opsForValue().set(codeKey(email), code, CODE_TTL);
         redis.delete(codeFailKey(email));
-        emailSender.sendVerificationCode(email, code);
+        try {
+            emailSender.sendVerificationCode(email, code);
+        } catch (RuntimeException e) {
+            // 메일이 안 나갔는데 1분 동안 429가 나지 않게, 보내지 못한 번호와 제한을 지우고 500으로 넘긴다
+            redis.delete(codeKey(email));
+            rateLimiter.reset(rateKey);
+            throw e;
+        }
         return (int) CODE_TTL.toSeconds();
     }
 
