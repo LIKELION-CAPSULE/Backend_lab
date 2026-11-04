@@ -57,6 +57,7 @@ class SimpleChatPipeline implements ChatPipeline {
         vars.put("emotions", String.join(", ", props.emotions()));
         vars.put("now", PromptVars.now(clock));
         vars.put("nickname", in.nickname());
+        vars.put("mode", in.onBreak() ? "쉬는 시간 (2~4문장, 공부 재촉 없이 수다)" : "공부 중 (1~2문장, 짧게)");
         vars.put("relationLevel", "Lv." + in.relationLevel());
         vars.put("summary", PromptVars.orNone(in.summary(), "없음 (처음 만남)"));
         // 아는 사실은 결정 모델이 이번 말에 맞춰 고른 하나만 (ADR 0022 결정 16)

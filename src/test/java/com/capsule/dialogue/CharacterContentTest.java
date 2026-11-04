@@ -109,6 +109,8 @@ class CharacterContentTest {
                 c.expressions(),
                 c.expressionFallbacks(),
                 c.stageTones(),
+                c.studyStyle(),
+                c.breakStyle(),
                 c.world(),
                 c.moves(),
                 c.lines(),

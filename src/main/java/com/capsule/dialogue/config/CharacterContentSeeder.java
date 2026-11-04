@@ -51,9 +51,12 @@ public class CharacterContentSeeder implements ApplicationRunner {
             List<String> expressions,
             Map<String, String> expressionFallbacks,
             Map<Integer, String> stageTones,
+            String studyStyle,
+            String breakStyle,
             String bible,
             String rules,
             Map<String, List<SignalType>> moveSignals,
+            Map<String, List<String>> moveModes,
             List<String> skipMoves,
             Map<SignalType, ScoreRule> scores,
             Map<String, String> habits,
@@ -97,6 +100,7 @@ public class CharacterContentSeeder implements ApplicationRunner {
         Content.Character engine = ContentLoader.fromClasspath(code).character();
         List<String> skip = p.skipMoves() == null ? List.of() : p.skipMoves();
         Map<String, List<SignalType>> signals = p.moveSignals() == null ? Map.of() : p.moveSignals();
+        Map<String, List<String>> modes = p.moveModes() == null ? Map.of() : p.moveModes();
         List<Move> moves = engine.moves().stream()
                 .filter(m -> !skip.contains(m.id()))
                 .map(m -> new Move(
@@ -104,6 +108,7 @@ public class CharacterContentSeeder implements ApplicationRunner {
                         m.name(),
                         m.how(),
                         signals.getOrDefault(m.id(), List.of()),
+                        modes.getOrDefault(m.id(), List.of()),
                         m.examples().stream()
                                 .map(e -> new Example(e.user(), e.reply()))
                                 .toList()))
@@ -131,6 +136,8 @@ public class CharacterContentSeeder implements ApplicationRunner {
                 p.expressions(),
                 p.expressionFallbacks() == null ? Map.of() : p.expressionFallbacks(),
                 p.stageTones() == null ? Map.of() : p.stageTones(),
+                p.studyStyle().strip(),
+                p.breakStyle().strip(),
                 new World(
                         p.world().code(), p.world().name(), p.world().setting().strip(), lore, events),
                 moves,

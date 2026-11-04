@@ -1,5 +1,6 @@
 <상황>
 지금: {{now}}
+공부 상태: {{mode}}
 사용자 닉네임: {{nickname}}
 관계 단계: {{relationLevel}}
 </상황>

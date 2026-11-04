@@ -34,8 +34,9 @@ import tools.jackson.databind.JsonNode;
 class SceneChatPipeline implements ChatPipeline {
 
     static final int MAX_LORE = 4;
-    // TODO(judgment): J-05 세계 사건이 저절로 일어날 확률 (한 턴마다)
+    // TODO(judgment): J-05 세계 사건이 저절로 일어날 확률 (한 턴마다). 쉬는 시간엔 수다 거리가 되게 더 자주
     static final double EVENT_CHANCE = 0.15;
+    static final double EVENT_CHANCE_ON_BREAK = 0.3;
 
     private final LlmGateway llm;
     private final PromptService prompts;
@@ -78,7 +79,8 @@ class SceneChatPipeline implements ChatPipeline {
         vars.put("expressions", String.join(", ", c.expressions()));
 
         String fact = factPicker.pick(in, ctx).orElse(null); // 아는 사실은 결정 모델이 고른 하나만 (없으면 안 넣음)
-        Scene scene = scene(c, in, fact, ThreadLocalRandom.current().nextDouble() < EVENT_CHANCE);
+        double chance = in.onBreak() ? EVENT_CHANCE_ON_BREAK : EVENT_CHANCE;
+        Scene scene = scene(c, in, fact, ThreadLocalRandom.current().nextDouble() < chance);
         List<Llm.SystemBlock> blocks = List.of(
                 new Llm.SystemBlock(PromptService.render(system.body(), vars), true),
                 new Llm.SystemBlock(scene.card(), false));
@@ -118,10 +120,13 @@ class SceneChatPipeline implements ChatPipeline {
                         .map(ChatLine::content)
                         .collect(Collectors.joining(" "));
         List<Lore> lore = pickLore(c.world().lore(), hay, event);
-        Move move = pickMove(c.moves(), signal);
+        String mode = in.onBreak() ? CharacterContent.BREAK : CharacterContent.STUDY;
+        Move move = pickMove(c.moves(), signal, mode);
 
         List<String> L = new ArrayList<>();
         L.add("<장면>");
+        // 공부 중 · 쉬는 시간에 따라 답 길이와 구성이 다르다 (PM 확정: 1~2문장 / 2~4문장, 구성은 캐릭터 설정)
+        L.add("지금: " + (in.onBreak() ? c.breakStyle() : c.studyStyle()));
         L.add("사용자: " + in.nickname() + " / 관계: " + PromptVars.orNone(c.toneFor(in.relationLevel()), "보통"));
         if (event != null)
             L.add("방금 일어난 일: " + event.text() + (event.hook() == null ? "" : " (어울리는 반응: " + event.hook() + ")"));
@@ -165,12 +170,16 @@ class SceneChatPipeline implements ChatPipeline {
         return chosen;
     }
 
-    /** 이 말의 종류에 어울리는 기술이 있으면 그중에서, 없으면 평소 기술(signals가 빈 것) 중에서 하나 */
-    static Move pickMove(List<Move> moves, SignalType signal) {
+    /**
+     * 지금(공부 중 · 쉬는 시간)에 쓰는 기술 중에서, 이 말의 종류에 어울리는 기술이 있으면 그중에서,
+     * 없으면 평소 기술(signals가 빈 것) 중에서 하나
+     */
+    static Move pickMove(List<Move> moves, SignalType signal, String mode) {
+        List<Move> usable = moves.stream().filter(m -> m.usableIn(mode)).toList();
         List<Move> fit =
-                moves.stream().filter(m -> m.signals().contains(signal)).toList();
+                usable.stream().filter(m -> m.signals().contains(signal)).toList();
         if (fit.isEmpty())
-            fit = moves.stream().filter(m -> m.signals().isEmpty()).toList();
+            fit = usable.stream().filter(m -> m.signals().isEmpty()).toList();
         return fit.isEmpty() ? null : fit.get(ThreadLocalRandom.current().nextInt(fit.size()));
     }
 

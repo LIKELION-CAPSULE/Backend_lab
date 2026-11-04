@@ -51,6 +51,8 @@ CREATE TABLE character_profiles (
     expressions          text[]      NOT NULL,           -- 고를 수 있는 표정 (답장 emotion 값)
     expression_fallbacks jsonb       NOT NULL DEFAULT '{}',  -- 에셋이 없는 표정 → 대신 쓸 표정 (예: {"화남": "찡그림"})
     stage_tones          jsonb       NOT NULL DEFAULT '{}',  -- 관계 단계 → 말투 지시 한 줄 (예: {"1": "아직 서먹함"})
+    study_style          text        NOT NULL,           -- 공부 중일 때 말하는 방식 (답 길이 · 구성. PM: 1~2문장)
+    break_style          text        NOT NULL,           -- 쉬는 시간일 때 말하는 방식 (PM: 2~4문장)
     updated_at           timestamptz NOT NULL DEFAULT now()
 );
 
@@ -62,6 +64,7 @@ CREATE TABLE character_moves (
     name         text   NOT NULL,
     how          text   NOT NULL,
     signals      text[] NOT NULL DEFAULT '{}',           -- 어울리는 사용자 말의 종류 (SignalType). 비면 평소에
+    modes        text[] NOT NULL DEFAULT '{}',           -- 쓰는 때: STUDY(공부 중) · BREAK(쉬는 시간). 비면 언제나
     examples     jsonb  NOT NULL DEFAULT '[]',           -- [{"user": "…", "reply": "…"}]
     UNIQUE (character_id, code)
 );

@@ -21,10 +21,15 @@ public record LabConfig(
         Integer maxTokens,
         Map<String, Long> pinnedPrompts,
         EngineOptions engine,
-        List<String> facts) {
+        List<String> facts,
+        Boolean onBreak) {
 
     public static final LabConfig EMPTY =
-            new LabConfig(null, null, null, null, null, null, null, null, null, null, null);
+            new LabConfig(null, null, null, null, null, null, null, null, null, null, null, null);
+
+    public boolean onBreakOrDefault() {
+        return Boolean.TRUE.equals(onBreak);
+    }
 
     public List<String> factsOrEmpty() {
         return facts == null ? List.of() : facts;

@@ -59,10 +59,12 @@ public class CharacterContentRepository {
                 String safety,
                 List<String> expressions,
                 String fallbacks,
-                String tones) {}
+                String tones,
+                String studyStyle,
+                String breakStyle) {}
         Optional<Row> profile = jdbc.sql("""
                         SELECT world_id, code, speaker, bible, rules, safety, expressions,
-                               expression_fallbacks::text AS fallbacks, stage_tones::text AS tones
+                               expression_fallbacks::text AS fallbacks, stage_tones::text AS tones, study_style, break_style
                         FROM character_profiles WHERE character_id = ?""")
                 .param(characterId)
                 .query((rs, n) -> new Row(
@@ -74,7 +76,9 @@ public class CharacterContentRepository {
                         rs.getString("safety"),
                         strings(rs, "expressions"),
                         rs.getString("fallbacks"),
-                        rs.getString("tones")))
+                        rs.getString("tones"),
+                        rs.getString("study_style"),
+                        rs.getString("break_style")))
                 .optional();
         if (profile.isEmpty()) return Optional.empty();
         Row p = profile.get();
@@ -89,7 +93,7 @@ public class CharacterContentRepository {
                         events(p.worldId())))
                 .single();
         List<Move> moves = jdbc.sql("""
-                        SELECT code, name, how, signals, examples::text AS examples
+                        SELECT code, name, how, signals, modes, examples::text AS examples
                         FROM character_moves WHERE character_id = ? ORDER BY id""")
                 .param(characterId)
                 .query((rs, n) -> new Move(
@@ -97,6 +101,7 @@ public class CharacterContentRepository {
                         rs.getString("name"),
                         rs.getString("how"),
                         strings(rs, "signals").stream().map(SignalType::valueOf).toList(),
+                        strings(rs, "modes"),
                         LlmJson.JSON.readValue(rs.getString("examples"), EXAMPLES)))
                 .list();
         List<Line> lines = jdbc.sql("""
@@ -140,6 +145,8 @@ public class CharacterContentRepository {
                 p.expressions(),
                 LlmJson.JSON.readValue(p.fallbacks(), STRING_MAP),
                 tones,
+                p.studyStyle(),
+                p.breakStyle(),
                 world,
                 moves,
                 lines,
@@ -182,9 +189,9 @@ public class CharacterContentRepository {
         jdbc.sql("""
                         INSERT INTO character_profiles
                             (character_id, world_id, code, speaker, bible, rules, safety, expressions,
-                             expression_fallbacks, stage_tones)
+                             expression_fallbacks, stage_tones, study_style, break_style)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ARRAY(SELECT jsonb_array_elements_text(CAST(? AS jsonb))),
-                                CAST(? AS jsonb), CAST(? AS jsonb))""")
+                                CAST(? AS jsonb), CAST(? AS jsonb), ?, ?)""")
                 .params(
                         id,
                         worldId,
@@ -195,13 +202,23 @@ public class CharacterContentRepository {
                         c.safety(),
                         LlmJson.write(c.expressions()),
                         LlmJson.write(c.expressionFallbacks()),
-                        LlmJson.write(c.stageTones()))
+                        LlmJson.write(c.stageTones()),
+                        c.studyStyle(),
+                        c.breakStyle())
                 .update();
         for (Move m : c.moves()) {
             jdbc.sql("""
-                            INSERT INTO character_moves (character_id, code, name, how, signals, examples)
-                            VALUES (?, ?, ?, ?, ARRAY(SELECT jsonb_array_elements_text(CAST(? AS jsonb))), CAST(? AS jsonb))""")
-                    .params(id, m.code(), m.name(), m.how(), LlmJson.write(m.signals()), LlmJson.write(m.examples()))
+                            INSERT INTO character_moves (character_id, code, name, how, signals, modes, examples)
+                            VALUES (?, ?, ?, ?, ARRAY(SELECT jsonb_array_elements_text(CAST(? AS jsonb))),
+                                    ARRAY(SELECT jsonb_array_elements_text(CAST(? AS jsonb))), CAST(? AS jsonb))""")
+                    .params(
+                            id,
+                            m.code(),
+                            m.name(),
+                            m.how(),
+                            LlmJson.write(m.signals()),
+                            LlmJson.write(m.modes() == null ? List.of() : m.modes()),
+                            LlmJson.write(m.examples()))
                     .update();
         }
         for (Line l : c.lines()) {

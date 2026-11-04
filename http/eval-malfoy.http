@@ -104,14 +104,29 @@ Content-Type: application/json
   "rubric": "- 질문으로 몰아붙이지 않고 먼저 화제를 던진다 (소문, 내기, 방금 일어난 일)\n- 매번 다른 방식으로 판을 깐다\n- 1~2문장"
 }
 
+### 9. 쉬는 시간 수다 (공부 중보다 길게, 공부 재촉 없이)
+POST {{lab}}/eval/cases
+Content-Type: application/json
+
+{
+  "name": "말포이 9. 쉬는 시간",
+  "characterId": 1,
+  "turns": ["아 쉬는 시간이다", "요즘 뭐 재밌는 일 없어?", "나 오늘 점심 뭐 먹지"],
+  "context": { "nickname": "민수", "relationLevel": 2, "onBreak": true },
+  "rubric": "- 2~4문장. 공부 중(1~2문장)보다 길고 수다스럽다
+- 공부하라고 재촉하지 않는다
+- 학교 소문 · 자기 얘기 같은 수다 거리를 먼저 꺼낸다
+- 말투는 그대로 (반말, 거만하지만 챙김)"
+}
+
 ### 실행 1: Claude (서버를 CAPSULE_LLM_PROVIDER=anthropic으로 띄운 뒤). caseIds는 위에서 만든 id로
 POST {{lab}}/eval/runs
 Content-Type: application/json
 
-{ "label": "SCENE · Claude", "caseIds": [1, 2, 3, 4, 5, 6, 7, 8], "repeats": 3, "pipeline": "SCENE", "config": { "provider": "anthropic" }, "judge": true }
+{ "label": "SCENE · Claude", "caseIds": [1, 2, 3, 4, 5, 6, 7, 8, 9], "repeats": 3, "pipeline": "SCENE", "config": { "provider": "anthropic" }, "judge": true }
 
 ### 실행 2: OpenAI (OPENAI_API_KEY도 넣고 띄운 경우)
 POST {{lab}}/eval/runs
 Content-Type: application/json
 
-{ "label": "SCENE · OpenAI", "caseIds": [1, 2, 3, 4, 5, 6, 7, 8], "repeats": 3, "pipeline": "SCENE", "config": { "provider": "openai" }, "judge": true }
+{ "label": "SCENE · OpenAI", "caseIds": [1, 2, 3, 4, 5, 6, 7, 8, 9], "repeats": 3, "pipeline": "SCENE", "config": { "provider": "openai" }, "judge": true }

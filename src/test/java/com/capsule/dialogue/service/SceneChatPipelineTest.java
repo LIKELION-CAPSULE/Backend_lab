@@ -19,6 +19,10 @@ class SceneChatPipelineTest {
     static final CharacterContent MALFOY = CharacterContentSeeder.load("malfoy");
 
     static ChatInput input(String message, List<ChatLine> history, List<String> facts) {
+        return input(message, history, facts, false);
+    }
+
+    static ChatInput input(String message, List<ChatLine> history, List<String> facts, boolean onBreak) {
         CharacterInfo info = new CharacterInfo(1, 1, "말포이", null, List.of(), "", true, null);
         return new ChatInput(
                 info,
@@ -31,7 +35,25 @@ class SceneChatPipelineTest {
                 message,
                 null,
                 Map.of(),
-                EngineOptions.DEFAULT);
+                EngineOptions.DEFAULT,
+                onBreak);
+    }
+
+    @Test
+    void breakChangesLengthAndMovePool() {
+        String study = SceneChatPipeline.scene(MALFOY, input("오늘 뭐 해", List.of(), List.of()), null, false)
+                .card();
+        String rest = SceneChatPipeline.scene(MALFOY, input("오늘 뭐 해", List.of(), List.of(), true), null, false)
+                .card();
+        assertThat(study).contains("지금: 지금은 공부 중이다. 1~2문장");
+        assertThat(rest).contains("지금: 지금은 쉬는 시간이다. 2~4문장");
+        // 쉬는 시간에는 공부용 기술(내기 · 비교로 올라서기 등)을 고르지 않는다
+        for (int i = 0; i < 30; i++) {
+            var move = SceneChatPipeline.pickMove(
+                    MALFOY.moves(), com.capsule.relation.api.RelationTypes.SignalType.NEUTRAL, CharacterContent.BREAK);
+            assertThat(move.usableIn(CharacterContent.BREAK)).isTrue();
+            assertThat(move.code()).isNotIn("compare_up", "challenge", "secret_study", "hint_muggle");
+        }
     }
 
     @Test
@@ -75,7 +97,9 @@ class SceneChatPipelineTest {
     @Test
     void movesFollowTheSignal() {
         assertThat(SceneChatPipeline.pickMove(
-                                MALFOY.moves(), com.capsule.relation.api.RelationTypes.SignalType.COMPLIMENT)
+                                MALFOY.moves(),
+                                com.capsule.relation.api.RelationTypes.SignalType.COMPLIMENT,
+                                CharacterContent.STUDY)
                         .code())
                 .isEqualTo("flustered");
     }

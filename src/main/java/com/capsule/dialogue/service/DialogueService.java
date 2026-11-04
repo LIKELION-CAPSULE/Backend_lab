@@ -291,7 +291,8 @@ public class DialogueService {
                 request.content(),
                 saved.map(DialogueService::engineState).orElse(null),
                 Map.of(),
-                EngineOptions.DEFAULT);
+                EngineOptions.DEFAULT,
+                sessions.onBreak(sessionId));
         LlmContext ctx = LlmContext.app(userId, sessionId, deadline());
         Optional<ChatOutcome> outcome = withinBudget(() -> replier.reply(chat, input, ctx));
         String reply = outcome.map(ChatOutcome::reply)

@@ -40,7 +40,8 @@ class FactPickerTest {
                 "토익 점수 걱정돼",
                 null,
                 Map.of(),
-                EngineOptions.DEFAULT);
+                EngineOptions.DEFAULT,
+                false);
     }
 
     void answer(String choice, double confidence) {

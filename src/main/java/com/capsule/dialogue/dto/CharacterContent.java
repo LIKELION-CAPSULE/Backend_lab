@@ -23,6 +23,8 @@ public record CharacterContent(
         List<String> expressions,
         Map<String, String> expressionFallbacks,
         Map<Integer, String> stageTones,
+        String studyStyle,
+        String breakStyle,
         World world,
         List<Move> moves,
         List<Line> lines,
@@ -41,8 +43,25 @@ public record CharacterContent(
 
     public record Example(String user, String reply) {}
 
-    /** @param signals 어울리는 사용자 말의 종류. 비면 평소에 쓰는 기술 */
-    public record Move(String code, String name, String how, List<SignalType> signals, List<Example> examples) {}
+    public static final String STUDY = "STUDY";
+    public static final String BREAK = "BREAK";
+
+    /**
+     * @param signals 어울리는 사용자 말의 종류. 비면 평소에 쓰는 기술
+     * @param modes 쓰는 때 (STUDY · BREAK). 비면 언제나
+     */
+    public record Move(
+            String code,
+            String name,
+            String how,
+            List<SignalType> signals,
+            List<String> modes,
+            List<Example> examples) {
+
+        public boolean usableIn(String mode) {
+            return modes == null || modes.isEmpty() || modes.contains(mode);
+        }
+    }
 
     /** @param minStage 이 관계 단계부터 쓰는 대사 */
     public record Line(String situation, int minStage, int sort, String text, String expression) {}
