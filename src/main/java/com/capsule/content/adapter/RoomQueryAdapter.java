@@ -60,7 +60,13 @@ class RoomQueryAdapter implements RoomQuery {
                 .map(mapper::character)
                 .toList();
         return new RoomInfo(
-                r.id(), r.name(), r.description(), mapper.asset(r.thumbnailUrl()), r.isActive(), roomCharacters);
+                r.id(),
+                r.name(),
+                r.description(),
+                mapper.asset(r.thumbnailUrl()),
+                r.isActive(),
+                roomCharacters,
+                mapper.asset(r.bannerUrl()));
     }
 
     private BackgroundInfo info(RoomBackground b) {

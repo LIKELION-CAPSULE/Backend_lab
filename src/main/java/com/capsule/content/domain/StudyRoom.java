@@ -17,6 +17,7 @@ public class StudyRoom {
     String name;
     String description;
     String thumbnailUrl;
+    String bannerUrl;
     int sortOrder;
     boolean isActive;
 
@@ -34,6 +35,11 @@ public class StudyRoom {
 
     public String thumbnailUrl() {
         return thumbnailUrl;
+    }
+
+    /** 룸 상세(H04) 가로 배너. 없으면 null (api.md 12) */
+    public String bannerUrl() {
+        return bannerUrl;
     }
 
     public boolean isActive() {

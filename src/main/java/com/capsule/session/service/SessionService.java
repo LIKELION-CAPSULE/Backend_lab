@@ -169,7 +169,14 @@ public class SessionService {
                 .filter(s -> s.roomId() == roomId)
                 .map(StudySession::id)
                 .orElse(null);
-        return new RoomDetail(room.id(), room.name(), room.description(), room.thumbnailUrl(), list, activeSessionId);
+        return new RoomDetail(
+                room.id(),
+                room.name(),
+                room.description(),
+                room.thumbnailUrl(),
+                room.bannerUrl(),
+                list,
+                activeSessionId);
     }
 
     // ---- 16 공부 시작 · 17 이어하기
