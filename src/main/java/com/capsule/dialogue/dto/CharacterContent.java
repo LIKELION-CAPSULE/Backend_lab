@@ -10,8 +10,11 @@ import java.util.Map;
  * 장면 카드 파이프라인 · 상황 대사 · 점수표가 이것만 보고 돈다: 캐릭터를 더해도 코드는 바뀌지 않는다.
  * 실험실 API가 이 모양 그대로 JSON으로 읽고 쓴다.
  *
+ * @param bible 공통 페르소나 (누구 · 지금 상황 · 성격 · 말하는 법)
  * @param expressionFallbacks 에셋이 없는 표정 → 대신 쓸 표정
- * @param stageTones 관계 단계 → 말투 지시 한 줄
+ * @param stageTones 관계 단계 → 그 단계의 관계 설명 (거리감 · 호칭 · 챙김 수위)
+ * @param samples 관계 단계별 말투 샘플 (ADR 0022 결정 19)
+ * @param world · moves 세계 지식 · 대화 기술. 결정 19부터 답장에 쓰지 않는다 (다음 정리 때 테이블째 뺀다)
  */
 public record CharacterContent(
         long characterId,
@@ -28,6 +31,7 @@ public record CharacterContent(
         World world,
         List<Move> moves,
         List<Line> lines,
+        List<Sample> samples,
         Map<SignalType, ScoreRule> scores,
         Map<String, String> habits) {
 
@@ -65,6 +69,19 @@ public record CharacterContent(
 
     /** @param minStage 이 관계 단계부터 쓰는 대사 */
     public record Line(String situation, int minStage, int sort, String text, String expression) {}
+
+    /** 말투 샘플 한 쌍. @param minStage 이 관계 단계부터 */
+    public record Sample(int minStage, String user, String reply) {}
+
+    /** 이 단계의 말투 샘플: 지금 단계 이하 중 가장 높은 min_stage 묶음 (대사와 같은 규칙) */
+    public List<Sample> samplesFor(int stage) {
+        int best = samples.stream()
+                .filter(s -> s.minStage() <= stage)
+                .mapToInt(Sample::minStage)
+                .max()
+                .orElse(0);
+        return samples.stream().filter(s -> s.minStage() == best).toList();
+    }
 
     /** 관계 단계에 맞는 말투 한 줄: 지금 단계 이하 중 가장 높은 단계 */
     public String toneFor(int stage) {

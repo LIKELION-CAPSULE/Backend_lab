@@ -102,51 +102,38 @@ public class ReactionWriter {
             LlmContext ctx) {
         PromptVersion system = prompts.resolve(PromptKey.SCENE_SYSTEM, c.characterId(), pinned);
         String situation = fixed.situation(c.characterId(), trigger, intensity, pinned);
+        // 방금 나눈 대화는 답장처럼 메시지로, 일어난 일은 사용자 차례로 ("상태가 바뀌었다"만 주면 외모가 바뀐 걸로 읽었다)
+        List<Llm.ChatTurn> messages = new ArrayList<>(PromptVars.turns(recent, recent.size()));
+        messages.add(new Llm.ChatTurn("user", "(방금 일어난 일: " + situation + ")"));
         Llm.Result r = llm.complete(
                 LlmPurpose.REACTION,
                 List.of(
-                        new Llm.SystemBlock(PromptService.render(system.body(), SceneChatPipeline.systemVars(c)), true),
                         new Llm.SystemBlock(
-                                card(c, situation, trigger, intensity, relationLevel, nickname, summary, recent),
-                                false)),
-                // "상태가 바뀌었다"만 주면 외모 · 표정이 바뀐 걸로 읽는다(실제 키 평가 2026-11-05): 일어난 일을 그대로
-                List.of(new Llm.ChatTurn("user", "(방금 일어난 일: " + situation + ")")),
+                                PromptService.render(
+                                        system.body(),
+                                        SceneChatPipeline.systemVars(
+                                                c,
+                                                relationLevel,
+                                                nickname,
+                                                s -> fixed.situation(c.characterId(), s, null, pinned))),
+                                true),
+                        new Llm.SystemBlock(card(c, nickname, summary, recent), false)),
+                messages,
                 ctx.withPrompts(List.of(system.id())),
                 null);
         return parse(r, c.expressions());
     }
 
-    static String card(
-            CharacterContent c,
-            String situation,
-            String trigger,
-            Integer intensity,
-            int relationLevel,
-            String nickname,
-            String summary,
-            List<ChatLine> recent) {
+    /** 상태 반응의 상황 카드: 사실 몇 줄 + 이번 말의 형식 */
+    static String card(CharacterContent c, String nickname, String summary, List<ChatLine> recent) {
         List<String> L = new ArrayList<>();
-        L.add("<장면>");
-        L.add("방금 일어난 일: " + situation);
-        L.add("사용자: " + nickname + " / 관계: " + PromptVars.orNone(c.toneFor(relationLevel), "보통"));
+        L.add("<상황>");
+        L.add("사용자: " + nickname);
         if (summary != null && !summary.isBlank()) L.add("<지난 세션 흐름 (최근 것이 아래)>\n" + summary + "\n</지난 세션 흐름>");
-        if (!recent.isEmpty()) L.add("<방금 나눈 대화>\n" + transcript(recent, nickname, c.speaker()) + "\n</방금 나눈 대화>");
-        // 미리 쓴 대사는 이 상황 · 단계의 말투 예시 (강도 칸 AWAY_2가 없으면 AWAY)
-        String situationKey = intensity != null && intensity > 1 ? trigger + "_" + intensity : trigger;
-        List<CharacterContent.Line> lines = c.linesFor(situationKey, relationLevel);
-        if (lines.isEmpty()) lines = c.linesFor(trigger, relationLevel);
-        if (!lines.isEmpty())
-            L.add("<이 상황에 미리 쓴 대사 (톤 참고용, 베끼지 않기)>\n"
-                    + lines.stream()
-                            .map(l -> "- " + l.text().replace("{name}", nickname)
-                                    + (l.expression() == null ? "" : " (" + l.expression() + ")"))
-                            .collect(Collectors.joining("\n"))
-                    + "\n</이 상황에 미리 쓴 대사>");
-        L.add("이번 말: '방금 일어난 일'에 바로 반응하는 한마디 (사용자의 외모 · 표정 얘기가 아니다). 한 문장, 말풍선 두 줄 이내."
-                + " 관계 단계 말투를 따른다. 사용자를 탓하거나 다그치지 않는다. 대사에 맞는 표정을 고른다");
         List<String> avoid = SceneChatPipeline.avoid(c, recent);
         if (!avoid.isEmpty()) L.add("피할 것: " + String.join(" / ", avoid));
-        L.add("</장면>");
+        L.add("이번 말: 방금 일어난 일에 바로 반응하는 한마디. 한 문장, 말풍선 두 줄 이내. 사용자를 탓하거나 다그치지 않는다");
+        L.add("</상황>");
         return String.join("\n", L);
     }
 

@@ -5,40 +5,40 @@
 #   byLevel = 호감도 단계 N 이상에서 쓰는 대사. 현재 단계 이하 중 가장 높은 칸, 없으면 lines
 reactions:
   GREETING:
-    situation: "공부를 막 시작했다"
+    situation: "사용자가 공부를 막 시작했다"
     emotion: HAPPY
     lines: ["왔구나. 오늘도 같이 해볼까?", "안녕. 오늘도 잘 부탁해."]
     byLevel:
       2: ["왔다! 오늘은 뭐부터 할까?", "기다리고 있었어. 시작하자."]
       3: ["늦었잖아~ 얼른 앉아, 같이 하자.", "오늘도 왔네. 역시 내 짝꿍."]
   AWAY:
-    situation: "방금 자리를 비웠다"
+    situation: "사용자가 방금 자리에서 일어나 나갔다 (아직 안 돌아옴)"
     emotion: SAD
     lines: ["잠깐 자리 비운 거야?", "어… 어디 갔어?"]
     byLevel:
       2: ["어디 가? 금방 와야 해.", "잠깐 쉬는 거지?"]
       3: ["또 도망가는 거야~?", "빨리 와. 혼자 있으면 심심하단 말이야."]
   AWAY_2:
-    situation: "1분째 자리에 없다"
+    situation: "사용자가 1분째 돌아오지 않았다"
     emotion: SAD
     lines: ["아직이야? 기다리고 있을게.", "언제 와?"]
     byLevel:
       3: ["1분이나 지났어. 나 삐질 거야?", "어디서 뭐 해~ 빨리 와."]
   AWAY_3:
-    situation: "5분째 자리에 없다"
+    situation: "사용자가 5분째 돌아오지 않았다"
     emotion: SAD
     lines: ["많이 바쁜가 보네. 오면 이어서 하자.", "…계속 기다리는 중."]
     byLevel:
       3: ["진짜 서운해지려고 해…", "나 혼자 두고 어디 간 거야."]
   RETURN:
-    situation: "자리로 돌아왔다"
+    situation: "자리를 비웠던 사용자가 돌아왔다"
     emotion: HAPPY
     lines: ["왔네. 이어서 하자.", "돌아왔구나. 다시 해볼까?"]
     byLevel:
       2: ["왔다! 이제 다시 집중!", "기다렸어. 이어서 하자."]
       3: ["드디어 왔다~ 보고 싶었잖아.", "늦었어. 대신 지금부터 열심히 해."]
   BREAK:
-    situation: "쉬는 시간을 시작했다"
+    situation: "사용자가 쉬는 시간을 시작했다"
     emotion: NEUTRAL
     lines: ["잠깐 쉬자.", "수고했어. 조금 쉬어."]
     byLevel:
