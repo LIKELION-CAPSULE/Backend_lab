@@ -1,6 +1,7 @@
 package com.capsule.dialogue.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.capsule.content.api.ContentTypes.CharacterInfo;
 import com.capsule.dialogue.client.LlmJson;
@@ -10,6 +11,7 @@ import com.capsule.dialogue.dto.CharacterContent;
 import com.capsule.dialogue.dto.ChatInput;
 import com.capsule.dialogue.dto.ChatLine;
 import com.capsule.dialogue.dto.EngineOptions;
+import com.capsule.dialogue.engine.Llm;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -118,6 +120,47 @@ class SceneChatPipelineTest {
         assertThat(MALFOY.emotion("질투")).isEqualTo("삐짐");
         assertThat(MALFOY.emotion("SAD")).isNull();
         assertThat(MALFOY.emotion(null)).isNull();
+        // 대체 표의 목록 안 키(에셋 없는 표정의 대체)는 감정 이름을 바꾸지 않는다: 목록 안 이름이 먼저
+        CharacterContent c = MALFOY;
+        CharacterContent assetFallback = new CharacterContent(
+                c.characterId(),
+                c.code(),
+                c.speaker(),
+                c.bible(),
+                c.rules(),
+                c.safety(),
+                c.expressions(),
+                Map.of("화남", "경멸", "분노", "화남"),
+                c.stageTones(),
+                c.studyStyle(),
+                c.breakStyle(),
+                c.world(),
+                c.moves(),
+                c.lines(),
+                c.samples(),
+                c.scores(),
+                c.habits());
+        assertThat(assetFallback.emotion("화남")).isEqualTo("화남");
+        assertThat(assetFallback.emotion("분노")).isEqualTo("화남");
+    }
+
+    @Test
+    void brokenReplyJsonGoesToTheFallbackLine() {
+        // 맨 글은 그대로 답장, 온전한 JSON은 꺼낸다
+        assertThat(SceneChatPipeline.replyJson(result("흥, 그 정도는 알아.", "end_turn")))
+                .isNull();
+        assertThat(LlmJson.str(SceneChatPipeline.replyJson(result("{\"reply\":\"흥.\",\"emotion\":\"경멸\"}", "end_turn"))
+                        .path("reply")))
+                .isEqualTo("흥.");
+        // 앞이 잘린 JSON · 토큰 한도로 잘린 답은 깨진 것 → 부르는 쪽이 5초 대체 대사로
+        assertThatThrownBy(() -> SceneChatPipeline.replyJson(result("…공부나 해.\",\"emotion\":\"경멸\"}", "end_turn")))
+                .isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> SceneChatPipeline.replyJson(result("{\"reply\":\"흥, 그 정도는", "max_tokens")))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    static Llm.Result result(String text, String stopReason) {
+        return new Llm.Result(text, null, null, 0, stopReason, false);
     }
 
     @Test

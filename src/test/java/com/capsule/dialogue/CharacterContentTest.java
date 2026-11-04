@@ -93,6 +93,35 @@ class CharacterContentTest {
     }
 
     @Test
+    void momentAndScriptedLinesHaveThreePerStage() {
+        CharacterContent c = contents.find(1).orElseThrow();
+        // 순간 동작 · 5초 대체 · 완료 · 공부 포기는 단계마다 세 줄 (같은 대사가 연달아 나오지 않게, 승희 2026-11-05)
+        for (String situation : List.of("YAWN", "WAVE", "HEAD_TURN", "REPLY_FALLBACK", "CLOSING", "GIVE_UP")) {
+            for (int stage = 1; stage <= 4; stage++) {
+                assertThat(c.linesFor(situation, stage))
+                        .as(situation + " 단계 " + stage)
+                        .hasSize(3);
+            }
+        }
+        // 모든 대사의 표정은 확정 8개 안 (근황 TODAY는 표정 없음). 옛 '찡그림' 같은 어긋남을 잡는다
+        assertThat(c.lines())
+                .filteredOn(l -> !l.situation().equals("TODAY"))
+                .allSatisfy(l -> assertThat(c.expressions())
+                        .as(l.situation() + ": " + l.text())
+                        .contains(l.expression()));
+        // 5초 대체의 각 단계 첫 줄은 PM 문구, {name}은 닉네임으로
+        String key = "fallback-test";
+        assertThat(contents.next(1, "REPLY_FALLBACK", null, 4, key, "민수")
+                        .orElseThrow()
+                        .content())
+                .isEqualTo("잠깐 생각중이야. 조금만 기다려.");
+        assertThat(contents.next(1, "REPLY_FALLBACK", null, 4, key, "민수")
+                        .orElseThrow()
+                        .content())
+                .isEqualTo("잠깐만, 민수. 대충 대답하기 싫어서 그래.");
+    }
+
+    @Test
     void labPreviewsMemoryDecisionWithoutSaving() throws Exception {
         // Fake 결정 모델은 첫 보기(무시)를 고른다. 개인정보 숫자는 묻지도 않는다
         String body = "{\"kind\":\"memory\",\"characterId\":1,\"message\":\"나 이번 달 토익 800 목표야\","

@@ -11,7 +11,7 @@ import java.util.Map;
  * 실험실 API가 이 모양 그대로 JSON으로 읽고 쓴다.
  *
  * @param bible 공통 페르소나 (누구 · 지금 상황 · 성격 · 말하는 법)
- * @param expressionFallbacks 에셋이 없는 표정 → 대신 쓸 표정
+ * @param expressionFallbacks 대체 표. 목록 안 키 = 에셋이 없는 표정 → 대신 쓸 표정, 목록 밖 키 = 모델이 쓴 감정 이름 → 목록 안 표정
  * @param stageTones 관계 단계 → 그 단계의 관계 설명 (거리감 · 호칭 · 챙김 수위)
  * @param samples 관계 단계별 말투 샘플 (ADR 0022 결정 19)
  * @param world · moves 세계 지식 · 대화 기술. 결정 19부터 답장에 쓰지 않는다 (다음 정리 때 테이블째 뺀다)
@@ -117,7 +117,10 @@ public record CharacterContent(
     /** 모델이 쓴 감정 이름을 표정 목록에 맞춘다: 목록에 있으면 그대로, 없으면 대체 표(예: 걱정 → 집중)로, 그래도 없으면 null */
     public String emotion(String raw) {
         if (raw == null) return null;
-        String e = fallbackExpression(raw.strip());
-        return expressions.contains(e) ? e : null;
+        String e = raw.strip();
+        // 목록 안 이름이 먼저: 대체 표의 목록 안 키(에셋이 없는 표정의 대체)는 동작을 고를 때만 쓴다 (DialogueService)
+        if (expressions.contains(e)) return e;
+        String mapped = expressionFallbacks.get(e);
+        return mapped != null && expressions.contains(mapped) ? mapped : null;
     }
 }

@@ -91,12 +91,7 @@ class SceneChatPipeline implements ChatPipeline {
         messages.add(new Llm.ChatTurn("user", in.userMessage()));
         Llm.Result r = llm.complete(LlmPurpose.CHAT, blocks, messages, ctx.withPrompts(List.of(system.id())), null);
 
-        JsonNode json = LlmJson.objectIn(r.text());
-        boolean truncated = "max_tokens".equals(r.stopReason()) || "length".equals(r.stopReason());
-        // 앞이 잘린 JSON(`…","emotion":"경멸"}`)도 깨진 것: 그대로 두면 말풍선에 JSON 꼬리가 나간다
-        if (json == null
-                && (truncated || r.text().strip().startsWith("{") || r.text().contains("\"emotion\"")))
-            throw new IllegalStateException("답장 JSON이 깨짐 (stop_reason=" + r.stopReason() + "): " + r.text());
+        JsonNode json = replyJson(r);
         String reply = replyText(r.text(), json);
         if (reply == null || reply.isBlank()) throw new IllegalStateException("빈 답장: " + r.text());
         String emotion = json == null ? null : c.emotion(LlmJson.str(json.path("emotion")));
@@ -146,6 +141,20 @@ class SceneChatPipeline implements ChatPipeline {
 
     private static String named(String text, String nickname) {
         return text.replace("{name}", nickname);
+    }
+
+    /**
+     * 답장 JSON. JSON이 아닌 맨 글이면 null(그 글을 답장으로 씀).
+     * 깨진 JSON(토큰 한도로 잘림, 앞이 잘린 `…","emotion":"경멸"}`)은 IllegalStateException: 그대로 두면 말풍선에 JSON 꼬리가 나가서
+     * 부르는 쪽이 5초 대체 대사로 돌린다
+     */
+    static JsonNode replyJson(Llm.Result r) {
+        JsonNode json = LlmJson.objectIn(r.text());
+        boolean truncated = "max_tokens".equals(r.stopReason()) || "length".equals(r.stopReason());
+        if (json == null
+                && (truncated || r.text().strip().startsWith("{") || r.text().contains("\"emotion\"")))
+            throw new IllegalStateException("답장 JSON이 깨짐 (stop_reason=" + r.stopReason() + "): " + r.text());
+        return json;
     }
 
     /** 이번 턴의 사실만: 시각 · 기억 · 지난 세션 · 일정(첫 대화) · 피할 말버릇 · 수다 길어짐 · 지금(길이 · 구성, 맨 끝) */
