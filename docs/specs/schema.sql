@@ -178,7 +178,8 @@ CREATE TABLE study_rooms (
     id            bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     name          text        NOT NULL,
     description   text,
-    thumbnail_url text,                                  -- CDN 상대 경로 또는 전체 URL (avatars.thumbnail_url과 같은 규칙)
+    thumbnail_url text,                                  -- 홈 포스터 카드. CDN 상대 경로 또는 전체 URL (avatars.thumbnail_url과 같은 규칙)
+    banner_url    text,                                  -- 룸 상세(H04) 가로 배너. 같은 규칙. NULL이면 프론트가 thumbnail_url (2026-11-05)
     sort_order    int         NOT NULL DEFAULT 0,
     is_active     boolean     NOT NULL DEFAULT true,
     created_at    timestamptz NOT NULL DEFAULT now()

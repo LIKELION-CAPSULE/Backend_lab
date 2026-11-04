@@ -626,7 +626,7 @@ H02에서 아바타를 저장하면 `onboardingRequired`가 false가 되고 H03 
 
 | 화면 요소 | 응답 필드 |
 | --- | --- |
-| H04 룸 배너 · 제목 · '[룸 소개 2~3줄]' | `name`, `description`, `thumbnailUrl` |
+| H04 룸 배너 · 제목 · '[룸 소개 2~3줄]' | `bannerUrl`(가로 배너, 없으면 `thumbnailUrl`), `name`, `description` |
 | H04 '이곳에서 함께할 친구들' 카드 이름 · 사진 | `characters[].name`, `profileImageUrl` |
 | H04 친구 카드 '#태그' | `characters[].personality` (배열, 순서대로 표시) |
 | H04 친구 카드 '◷ 함께 0분 · ♡ Lv.1 아는 사이' | `characters[].relation` |
@@ -642,11 +642,14 @@ H02에서 아바타를 저장하면 `onboardingRequired`가 false가 되고 H03 
 
 | 이름 | 타입 | 설명 |
 | --- | --- | --- |
-| id · name · description · thumbnailUrl |  | 룸 정보 |
+| id · name · description · thumbnailUrl |  | 룸 정보 (`thumbnailUrl`은 홈 포스터 카드와 같은 그림) |
+| bannerUrl | String | 룸 상세 가로 배너. 없으면 null (그때 프론트는 `thumbnailUrl`) |
 | characters[].id · name · profileImageUrl |  | 캐릭터 (이번 시연은 1명) |
 | characters[].personality | Array | 성격 태그 (`characters.personality text[]`) |
 | characters[].relation | Object | `level`(함께 공부한 자리 지킴 시간 레벨), `totalStudySeconds`, `points`(호감도 0~100), `stage` · `stageName`(관계 단계 = 호감도 구간), `levelName`(옛 필드, `stageName`과 같은 값, 지울 예정). 아직 안 만났으면 Lv.1 · 0초 · 50 |
 | activeSessionId | Long | 이 룸에서 진행 중인 내 세션 id. 없거나 다른 룸에서 진행 중이면 null (그때 공부 시작을 누르면 409 → H18 팝업) |
+
+> 2026-11-05: `bannerUrl` 추가. 홈 포스터 카드(`thumbnailUrl`)와 상세 배너를 다른 그림으로
 
 > 2026-11-04 (호감도 최종안): 레벨과 관계 단계를 나눔. 레벨 = 이 캐릭터와 함께 공부한 자리 지킴 시간(60분당 1, 상한 없음), 관계 단계 = 호감도 구간(0 · 30 · 70 · 90). 단계 이름을 화면에 보일지는 확정 필요 (PM은 숨기기로 함)
 
@@ -656,6 +659,7 @@ H02에서 아바타를 저장하면 `onboardingRequired`가 false가 되고 H03 
   "name": "밤의 호그와트 도서관",
   "description": "지기 싫어하는 슬리데린 라이벌 말포이와 촛불 아래에서 같이 공부해요.",
   "thumbnailUrl": "https://cdn.../room1.png",
+  "bannerUrl": "https://cdn.../room1-banner.webp",
   "characters": [
     { "id": 1, "name": "말포이", "profileImageUrl": "https://cdn.../chaerin.png",
       "personality": ["츤데레", "슬리데린 5학년", "라이벌"],
