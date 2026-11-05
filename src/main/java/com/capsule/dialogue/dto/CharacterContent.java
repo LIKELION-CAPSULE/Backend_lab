@@ -15,6 +15,7 @@ import java.util.Map;
  * @param expressionFallbacks 대체 표. 목록 안 키 = 에셋이 없는 표정 → 대신 쓸 표정, 목록 밖 키 = 모델이 쓴 감정 이름 → 목록 안 표정
  * @param stageTones 관계 단계 → 그 단계의 관계 설명 (거리감 · 호칭 · 챙김 수위)
  * @param samples 관계 단계별 말투 샘플 (ADR 0022 결정 19)
+ * @param lore 로어북: 사용자 말에 키워드가 있을 때만 답장에 넣는 원작 설정 카드. 실험실이 빼고 저장하면 빈 목록
  */
 public record CharacterContent(
         long characterId,
@@ -32,7 +33,12 @@ public record CharacterContent(
         List<Line> lines,
         List<Sample> samples,
         Map<SignalType, ScoreRule> scores,
-        Map<String, String> habits) {
+        Map<String, String> habits,
+        List<Lore> lore) {
+
+    public CharacterContent {
+        lore = lore == null ? List.of() : List.copyOf(lore);
+    }
 
     public static final String MINOR = "MINOR";
     public static final String NO_OPENING = "NO_OPENING";
@@ -56,7 +62,8 @@ public record CharacterContent(
                 lines,
                 samples,
                 scores,
-                habits);
+                habits,
+                lore);
     }
 
     /** @param minStage 이 관계 단계부터 쓰는 대사 */
@@ -64,6 +71,26 @@ public record CharacterContent(
 
     /** 말투 샘플 한 쌍. @param minStage 이 관계 단계부터 */
     public record Sample(int minStage, String user, String reply) {}
+
+    /** 로어북 카드 한 장. @param keys 사용자 말에 이 중 하나가 들어 있으면(띄어쓰기 무시) 넣는다 */
+    public record Lore(String title, List<String> keys, String text) {
+        public Lore {
+            // 실험실 저장 · yml 실수로 keys가 비어도 매 턴 부르는 loreFor가 터지지 않게
+            keys = keys == null
+                    ? List.of()
+                    : keys.stream().filter(k -> k != null && !k.isBlank()).toList();
+        }
+    }
+
+    /** 이 말에 걸린 카드: 파일 순서대로 최대 max장. 공백은 무시한다 ("해리 포터" = "해리포터") */
+    public List<Lore> loreFor(String message, int max) {
+        if (message == null || message.isBlank()) return List.of();
+        String said = message.replaceAll("\\s", "");
+        return lore.stream()
+                .filter(l -> l.keys().stream().anyMatch(k -> said.contains(k.replaceAll("\\s", ""))))
+                .limit(max)
+                .toList();
+    }
 
     /** 이 단계의 말투 샘플: 지금 단계 이하 중 가장 높은 min_stage 묶음 (대사와 같은 규칙) */
     public List<Sample> samplesFor(int stage) {
