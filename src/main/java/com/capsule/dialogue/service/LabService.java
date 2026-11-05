@@ -3,6 +3,7 @@ package com.capsule.dialogue.service;
 import static com.capsule.relation.api.RelationTypes.START_POINTS;
 
 import com.capsule.common.error.ApiException;
+import com.capsule.common.time.ClockConfig;
 import com.capsule.content.api.CharacterQuery;
 import com.capsule.content.api.ContentTypes.CharacterInfo;
 import com.capsule.content.api.RoomQuery;
@@ -64,16 +65,13 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class LabService {
 
-    /** 서비스의 대체 대사 기준(명세 19·20). 실험실은 기다리되 넘었는지 표시만 한다 */
-    static final long BUDGET_MS = 5000;
-
     static final List<String> TRIGGERS =
             List.of("GREETING", "AWAY", "RETURN", "BREAK", "BREAK_END", "DROWSY", "YAWN", "WAVE", "HEAD_TURN");
 
     private static final ExecutorService THREADS = Executors.newVirtualThreadPerTaskExecutor();
 
     private static final String USAGE_SUMMARY = """
-            SELECT (created_at AT TIME ZONE 'Asia/Seoul')::date AS day, source, provider, model, purpose,
+            SELECT (created_at AT TIME ZONE :zone)::date AS day, source, provider, model, purpose,
                    count(*) AS calls,
                    count(*) FILTER (WHERE status = 'ERROR') AS errors,
                    sum(input_tokens) AS input_tokens,
@@ -83,7 +81,7 @@ public class LabService {
                    sum(cost_usd) AS cost_usd,
                    avg(latency_ms) AS avg_latency_ms,
                    percentile_cont(0.95) WITHIN GROUP (ORDER BY latency_ms) AS p95_latency_ms,
-                   count(*) FILTER (WHERE latency_ms > 5000) AS over5s
+                   count(*) FILTER (WHERE latency_ms > :budgetMs) AS over5s
             FROM llm_usages
             WHERE created_at >= now() - make_interval(days => :days)
             GROUP BY 1, 2, 3, 4, 5
@@ -345,7 +343,8 @@ public class LabService {
                 yield ctx -> memoryKeeper.preview(
                         c,
                         config.factsOrEmpty(),
-                        history.subList(Math.max(0, history.size() - ChatReplier.CONTEXT_LINES), history.size()),
+                        history.subList(
+                                Math.max(0, history.size() - dialogueProps.signalContextLines()), history.size()),
                         message,
                         ctx);
             }
@@ -372,7 +371,9 @@ public class LabService {
 
     public List<UsageSummary> usageSummary(int days) {
         return jdbc.sql(USAGE_SUMMARY)
+                .param("zone", ClockConfig.KST.getId())
                 .param("days", days)
+                .param("budgetMs", budgetMs())
                 .query(UsageSummary.class)
                 .list();
     }
@@ -448,7 +449,7 @@ public class LabService {
                 output,
                 error,
                 ms,
-                ms > BUDGET_MS,
+                ms > budgetMs(),
                 cost(used),
                 used.stream().map(UsageView::from).toList());
     }
@@ -484,7 +485,7 @@ public class LabService {
                 t.affinity(),
                 t.error(),
                 t.latencyMs(),
-                t.latencyMs() > BUDGET_MS,
+                t.latencyMs() > budgetMs(),
                 t.costUsd(),
                 LlmJson.tree(t.trace()),
                 t.rating(),
@@ -499,6 +500,11 @@ public class LabService {
         } catch (IllegalStateException e) {
             return null;
         }
+    }
+
+    /** 서비스의 대체 대사 기준(llm-budget, 명세 19·20). 실험실은 기다리되 넘었는지 표시만 한다 */
+    private long budgetMs() {
+        return dialogueProps.llmBudget().toMillis();
     }
 
     private static String required(String value, String name) {

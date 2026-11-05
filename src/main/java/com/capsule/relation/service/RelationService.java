@@ -2,6 +2,7 @@ package com.capsule.relation.service;
 
 import static com.capsule.relation.api.RelationTypes.START_POINTS;
 
+import com.capsule.common.time.ClockConfig;
 import com.capsule.relation.api.RelationCommands;
 import com.capsule.relation.api.RelationQuery;
 import com.capsule.relation.api.RelationTypes.AffinityChange;
@@ -147,7 +148,7 @@ class RelationService implements RelationQuery, RelationCommands {
      */
     // TODO(judgment): J-01 연속 출석 점수 (임시: 2일째부터 하루 +1)
     private void streak(Relation rel, long sessionId) {
-        LocalDate today = LocalDate.now(clock.withZone(AffinityPolicy.DAY_ZONE));
+        LocalDate today = LocalDate.now(clock.withZone(ClockConfig.KST));
         if (today.equals(rel.lastStudyDate())) return;
         int days = today.minusDays(1).equals(rel.lastStudyDate()) ? rel.streakDays() + 1 : 1;
         relations.updateStreak(rel.id(), days, today);
@@ -206,8 +207,8 @@ class RelationService implements RelationQuery, RelationCommands {
     }
 
     private Instant todayStart() {
-        return LocalDate.now(clock.withZone(AffinityPolicy.DAY_ZONE))
-                .atStartOfDay(AffinityPolicy.DAY_ZONE)
+        return LocalDate.now(clock.withZone(ClockConfig.KST))
+                .atStartOfDay(ClockConfig.KST)
                 .toInstant();
     }
 

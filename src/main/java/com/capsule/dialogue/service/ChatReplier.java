@@ -37,8 +37,6 @@ public class ChatReplier {
 
     private static final Logger log = LoggerFactory.getLogger(ChatReplier.class);
     private static final ExecutorService THREADS = Executors.newVirtualThreadPerTaskExecutor();
-    // TODO(judgment): J-05 결정 모델에 같이 보여 줄 앞 대화 수
-    static final int CONTEXT_LINES = 4;
     public static final String QUESTION = "signal";
 
     private final Decider decider;
@@ -52,7 +50,7 @@ public class ChatReplier {
     }
 
     public ChatOutcome reply(ChatPipeline pipeline, ChatInput in, LlmContext ctx) {
-        SignalType guess = ChatScorer.detect(in.userMessage());
+        SignalType guess = ChatScorer.detect(in.userMessage(), props.lowEffortMaxChars());
         boolean decide = DialogueProperties.DECIDER.equals(props.signalDetector());
         boolean confirm = !decide && guess == SignalType.HATE_OR_SEXUAL;
         CompletableFuture<Decision> asked = decide || confirm
@@ -86,7 +84,8 @@ public class ChatReplier {
 
     private Decision read(ChatInput in, Decider.Question q, LlmContext ctx) {
         try {
-            return decider.decide(state(in), Map.of(QUESTION, q), ctx).get(QUESTION);
+            return decider.decide(state(in, props.signalContextLines()), Map.of(QUESTION, q), ctx)
+                    .get(QUESTION);
         } catch (RuntimeException e) {
             log.warn("말의 종류 고르기 실패: {}", e.toString());
             return null;
@@ -103,9 +102,11 @@ public class ChatReplier {
         }
     }
 
-    static String state(ChatInput in) {
+    /** @param contextLines 같이 보여 줄 앞 대화 수 (signal-context-lines) */
+    // TODO(judgment): J-05 결정 모델에 같이 보여 줄 앞 대화 수
+    static String state(ChatInput in, int contextLines) {
         List<ChatLine> h = in.history();
-        String recent = h.subList(Math.max(0, h.size() - CONTEXT_LINES), h.size()).stream()
+        String recent = h.subList(Math.max(0, h.size() - contextLines), h.size()).stream()
                 .map(l -> (ChatMessage.USER.equals(l.sender())
                                 ? "사용자: "
                                 : in.character().name() + ": ")

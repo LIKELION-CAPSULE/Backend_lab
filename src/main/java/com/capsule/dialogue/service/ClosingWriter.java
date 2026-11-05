@@ -16,7 +16,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class ClosingWriter {
 
-    /** 카드 본문 길이 (DB CHECK 200자, 머리말 포함) */
+    /** 카드 본문 길이. 설정이 아니라 상수: DB CHECK conversation_recaps.content 1~200자, 머리말 포함 (V20261104_204409) */
     static final int RECAP_MAX = 150;
 
     private final LlmGateway llm;

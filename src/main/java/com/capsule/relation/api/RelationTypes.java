@@ -5,12 +5,15 @@ public final class RelationTypes {
 
     private RelationTypes() {}
 
-    /** 호감도는 0~100 (%처럼 읽는다). 쌓이는 점수가 아니라 지금 얼마나 가까운지. 0 아래·100 위로는 가지 않는다 */
+    /**
+     * 호감도는 0~100 (%처럼 읽는다). 쌓이는 점수가 아니라 지금 얼마나 가까운지. 0 아래·100 위로는 가지 않는다.
+     * 설정이 아니라 상수: DB CHECK user_character_relations_points_range(0~100, V20261104_165439)와 같아야 한다
+     */
     public static final int MIN_POINTS = 0;
 
     public static final int MAX_POINTS = 100;
 
-    /** 처음 만나면 50에서 시작 (PM 확정, DB 기본값과 같음) */
+    /** 처음 만나면 50에서 시작 (PM 확정). 상수: DB 기본값 relation_points DEFAULT 50(V20261104_165439)과 같아야 한다 */
     public static final int START_POINTS = 50;
 
     /**

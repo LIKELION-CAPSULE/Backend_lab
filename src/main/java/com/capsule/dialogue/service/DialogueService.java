@@ -5,6 +5,7 @@ import static com.capsule.dialogue.domain.ChatMessage.USER;
 
 import com.capsule.common.error.ApiException;
 import com.capsule.common.ratelimit.RateLimiter;
+import com.capsule.common.time.ClockConfig;
 import com.capsule.content.api.CharacterQuery;
 import com.capsule.content.api.ContentTypes.CharacterInfo;
 import com.capsule.content.api.ContentTypes.Reaction;
@@ -44,7 +45,6 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
@@ -75,19 +75,7 @@ public class DialogueService {
 
     private static final Logger log = LoggerFactory.getLogger(DialogueService.class);
 
-    /** 명세 19·20·22: 5초 안에 못 만들면 고정 대사 */
-    private static final Duration LLM_BUDGET = Duration.ofSeconds(5);
-    /** 같은 requestId가 처리 중이면 기다리는 한도 (LLM 5초 + 저장 여유) */
-    private static final Duration IN_FLIGHT_WAIT = Duration.ofSeconds(8);
-
     private static final ExecutorService LLM_THREADS = Executors.newVirtualThreadPerTaskExecutor();
-    private static final int MESSAGES_PER_MINUTE = 10;
-    // TODO(judgment): J-14 '수다가 길어졌다'의 기준 (승희 2026-11-05 임시: 최근 10분에 사용자 말 8번, 이번 말 포함)
-    static final int CHATTY_MESSAGES = 8;
-    static final Duration CHATTY_WINDOW = Duration.ofMinutes(10);
-    // TODO(judgment): J-15 '공부 포기'의 기준 (승희 2026-11-05 임시: 직접 끝냈는데 목표 시간의 절반 미만)
-    static final double GIVE_UP_RATIO = 0.5;
-    private static final ZoneId DAY_ZONE = ZoneId.of("Asia/Seoul");
     /** 세션 카드 머리말 날짜 (예: "11/03 52분") */
     private static final DateTimeFormatter CARD_DATE = DateTimeFormatter.ofPattern("MM/dd");
 
@@ -175,7 +163,7 @@ public class DialogueService {
         long characterId = session.characterId();
         String trigger = triggerOf(event);
         Integer awayLevel = trigger.equals("AWAY") ? (intensity == null ? 1 : intensity) : null;
-        if (awayLevel != null && (awayLevel < 1 || awayLevel > 3)) {
+        if (awayLevel != null && (awayLevel < 1 || awayLevel > props.awayIntensityMax())) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_REQUEST");
         }
 
@@ -255,7 +243,7 @@ public class DialogueService {
             ChatMessage other = question(conversation, request).orElseThrow(() -> e);
             return awaitAnswer(session, conversation, request, other.createdAt());
         }
-        if (!rateLimiter.tryAcquire("rate:chat:" + userId, MESSAGES_PER_MINUTE, Duration.ofMinutes(1))) {
+        if (!rateLimiter.tryAcquire("rate:chat:" + userId, props.messageLimit(), props.messageLimitWindow())) {
             messages.deleteQuestion(conversation.id(), request.requestId());
             throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "TOO_MANY_REQUESTS");
         }
@@ -358,7 +346,7 @@ public class DialogueService {
                 userId,
                 requestId,
                 request.content(),
-                tail(history, ChatReplier.CONTEXT_LINES),
+                tail(history, props.signalContextLines()),
                 LlmContext.app(userId, sessionId, null));
         if (!props.memoryEnabled()) return response;
         if (props.memoryAsync()) LLM_THREADS.execute(remember);
@@ -368,18 +356,18 @@ public class DialogueService {
 
     /**
      * 같은 requestId가 아직 처리 중: 끝날 때까지 기다렸다가 같은 답장 (명세 20).
-     * 먼저 온 요청이 사용자 말을 저장한 지 IN_FLIGHT_WAIT가 지나도 답이 없으면(중간에 죽음) 이 요청이 이어서 답한다.
+     * 먼저 온 요청이 사용자 말을 저장한 지 in-flight-wait가 지나도 답이 없으면(중간에 죽음) 이 요청이 이어서 답한다.
      */
     private MessageResponse awaitAnswer(
             SessionInfo session, Conversation conversation, MessageRequest request, Instant askedAt) {
-        Instant deadline = askedAt.plus(IN_FLIGHT_WAIT);
+        Instant deadline = askedAt.plus(props.inFlightWait());
         while (Instant.now(clock).isBefore(deadline)) {
             Optional<MessageResponse> answered = answered(conversation, session, request);
             if (answered.isPresent()) {
                 return answered.get();
             }
             try {
-                Thread.sleep(200);
+                Thread.sleep(props.inFlightPoll());
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 throw new IllegalStateException(e);
@@ -438,8 +426,8 @@ public class DialogueService {
         CharacterInfo character = character(closing.characterId());
         String nickname = nickname(closing.userId());
         LlmContext ctx = LlmContext.app(closing.userId(), closing.sessionId(), deadline());
-        String header =
-                LocalDate.now(clock.withZone(DAY_ZONE)).format(CARD_DATE) + " " + closing.studySeconds() / 60 + "분";
+        String header = LocalDate.now(clock.withZone(ClockConfig.KST)).format(CARD_DATE) + " "
+                + closing.studySeconds() / 60 + "분";
 
         CompletableFuture<String> recap = pending.isEmpty()
                 ? null
@@ -459,7 +447,7 @@ public class DialogueService {
         Optional<String> scriptedClosing = characterContents
                 .next(
                         closing.characterId(),
-                        gaveUp(closing) ? "GIVE_UP" : "CLOSING",
+                        gaveUp(closing, props.giveUpRatio()) ? "GIVE_UP" : "CLOSING",
                         "CLOSING",
                         stage,
                         "user-" + closing.userId(),
@@ -567,13 +555,14 @@ public class DialogueService {
         return lines.subList(Math.max(0, lines.size() - n), lines.size());
     }
 
-    /** 직접 끝냈는데 목표 시간의 절반도 못 채웠으면 공부 포기 (자동 종료는 포기로 보지 않는다) */
-    static boolean gaveUp(SessionClosing closing) {
+    /** 직접 끝냈는데 목표 시간의 ratio(give-up-ratio)도 못 채웠으면 공부 포기 (자동 종료는 포기로 보지 않는다) */
+    // TODO(judgment): J-15 '공부 포기'의 기준 (승희 2026-11-05 임시: 직접 끝냈는데 목표 시간의 절반 미만)
+    static boolean gaveUp(SessionClosing closing, double ratio) {
         Integer target = closing.targetMinutes();
         return "NORMAL".equals(closing.endType())
                 && target != null
                 && target > 0
-                && closing.studySeconds() < target * 60 * GIVE_UP_RATIO;
+                && closing.studySeconds() < target * 60 * ratio;
     }
 
     private static List<ChatLine> lines(List<ChatMessage> chat) {
@@ -581,15 +570,16 @@ public class DialogueService {
     }
 
     /**
-     * 최근 10분에 사용자 말이 이번 말까지 8번 이상이면 수다가 길어진 것. 공부 중일 때만 쓰인다(파이프라인이 거름).
+     * 최근 chatty-window(10분)에 사용자 말이 이번 말까지 chatty-messages(8번) 이상이면 수다가 길어진 것. 공부 중일 때만 쓰인다(파이프라인이 거름).
      * ponytail: 쉬는 시간에 한 말도 센다. 쉬는 시간 직후 첫 말에 한 번 더 돌려보낼 수 있다. 문제가 되면 마지막 상태 이벤트 뒤의 말만 센다
      */
+    // TODO(judgment): J-14 '수다가 길어졌다'의 기준 (승희 2026-11-05 임시: 최근 10분에 사용자 말 8번, 이번 말 포함)
     private boolean chatty(List<ChatMessage> earlier) {
-        Instant since = Instant.now(clock).minus(CHATTY_WINDOW);
+        Instant since = Instant.now(clock).minus(props.chattyWindow());
         long recent = earlier.stream()
                 .filter(m -> USER.equals(m.sender()) && m.createdAt().isAfter(since))
                 .count();
-        return recent + 1 >= CHATTY_MESSAGES;
+        return recent + 1 >= props.chattyMessages();
     }
 
     private Optional<ChatMessage> question(Conversation conversation, MessageRequest request) {
@@ -598,14 +588,15 @@ public class DialogueService {
 
     /** 서비스 LLM 호출의 마감: 이 시각이 지나면 게이트웨이가 새 호출을 시작하지 않는다 (결과가 버려지므로) */
     private Instant deadline() {
-        return Instant.now(clock).plus(LLM_BUDGET);
+        return Instant.now(clock).plus(props.llmBudget());
     }
 
-    private static <T> CompletableFuture<T> start(Supplier<T> call) {
-        return CompletableFuture.supplyAsync(call, LLM_THREADS).orTimeout(LLM_BUDGET.toSeconds(), TimeUnit.SECONDS);
+    private <T> CompletableFuture<T> start(Supplier<T> call) {
+        return CompletableFuture.supplyAsync(call, LLM_THREADS)
+                .orTimeout(props.llmBudget().toMillis(), TimeUnit.MILLISECONDS);
     }
 
-    /** 5초 안에 끝나지 않거나 실패하면 빈 값 → 호출한 쪽이 고정 대사를 쓴다 */
+    /** llm-budget(5초) 안에 끝나지 않거나 실패하면 빈 값 → 호출한 쪽이 고정 대사를 쓴다 */
     private static <T> Optional<T> await(CompletableFuture<T> call) {
         try {
             return Optional.ofNullable(call.join());
@@ -615,7 +606,7 @@ public class DialogueService {
         }
     }
 
-    private static <T> Optional<T> withinBudget(Supplier<T> call) {
+    private <T> Optional<T> withinBudget(Supplier<T> call) {
         return await(start(call));
     }
 

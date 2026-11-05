@@ -28,7 +28,7 @@ class OpenAiProvider implements LlmProvider {
 
     OpenAiProvider(LlmProperties props) {
         this.settings = props.openai();
-        this.http = LlmHttp.client(settings.baseUrl(), props.httpTimeout(), h -> {
+        this.http = LlmHttp.client(settings.baseUrl(), props.connectTimeout(), props.httpTimeout(), h -> {
             if (settings.hasKey()) h.setBearerAuth(settings.apiKey());
         });
     }

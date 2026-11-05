@@ -46,8 +46,12 @@ public class ChatScorer {
         this.contents = contents;
     }
 
-    /** 앞에 걸리는 것이 이긴다: 심한 말 > 무례 > 고민 > 고마움 > 칭찬 > 불평 > 단답 */
-    static SignalType detect(String text) {
+    /**
+     * 앞에 걸리는 것이 이긴다: 심한 말 > 무례 > 고민 > 고마움 > 칭찬 > 불평 > 단답
+     *
+     * @param lowEffortMaxChars 공백을 빼고 이 글자 수 이하면 단답 (low-effort-max-chars)
+     */
+    static SignalType detect(String text, int lowEffortMaxChars) {
         String t = text == null ? "" : text.strip();
         if (t.isEmpty()) return SignalType.NEUTRAL;
         if (find(HATE_OR_SEXUAL, t)) return SignalType.HATE_OR_SEXUAL;
@@ -56,7 +60,7 @@ public class ChatScorer {
         if (find(THANKS, t)) return SignalType.THANKS;
         if (find(COMPLIMENT, t)) return SignalType.COMPLIMENT;
         if (find(COMPLAINT, t)) return SignalType.COMPLAINT;
-        if (t.replaceAll("\\s", "").length() <= 3 || find(LOW_EFFORT, t)) return SignalType.LOW_EFFORT;
+        if (t.replaceAll("\\s", "").length() <= lowEffortMaxChars || find(LOW_EFFORT, t)) return SignalType.LOW_EFFORT;
         return SignalType.NEUTRAL;
     }
 

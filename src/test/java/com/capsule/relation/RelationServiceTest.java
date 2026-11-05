@@ -3,6 +3,7 @@ package com.capsule.relation;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.capsule.TestcontainersConfiguration;
+import com.capsule.common.time.ClockConfig;
 import com.capsule.relation.api.RelationCommands;
 import com.capsule.relation.api.RelationQuery;
 import com.capsule.relation.api.RelationTypes.AffinityChange;
@@ -12,7 +13,6 @@ import com.capsule.relation.api.RelationTypes.SessionEventRef;
 import com.capsule.relation.api.RelationTypes.SignalType;
 import com.capsule.relation.api.RelationTypes.StudySettlement;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -81,7 +81,7 @@ class RelationServiceTest {
     }
 
     void studiedYesterday(int streakDays) {
-        LocalDate yesterday = LocalDate.now(ZoneId.of("Asia/Seoul")).minusDays(1);
+        LocalDate yesterday = LocalDate.now(ClockConfig.KST).minusDays(1);
         jdbc.update(
                 "UPDATE user_character_relations SET last_study_date = ?, streak_days = ? WHERE user_id = ?",
                 yesterday,

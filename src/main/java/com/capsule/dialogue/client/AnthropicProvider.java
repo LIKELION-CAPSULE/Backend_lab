@@ -24,7 +24,7 @@ class AnthropicProvider implements LlmProvider {
 
     AnthropicProvider(LlmProperties props) {
         this.settings = props.anthropic();
-        this.http = LlmHttp.client(settings.baseUrl(), props.httpTimeout(), h -> {
+        this.http = LlmHttp.client(settings.baseUrl(), props.connectTimeout(), props.httpTimeout(), h -> {
             h.set("x-api-key", settings.hasKey() ? settings.apiKey() : "");
             h.set("anthropic-version", settings.version());
         });

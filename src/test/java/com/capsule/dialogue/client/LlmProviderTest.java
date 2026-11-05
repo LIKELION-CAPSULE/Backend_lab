@@ -59,7 +59,9 @@ class LlmProviderTest {
                 "anthropic",
                 null,
                 Duration.ofSeconds(5),
+                Duration.ofSeconds(5),
                 0,
+                Duration.ofMillis(300),
                 false,
                 new LlmProperties.Provider(
                         base,

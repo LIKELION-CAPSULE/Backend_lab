@@ -29,6 +29,7 @@ import com.capsule.relation.api.RelationTypes.SessionEventRef;
 import com.capsule.relation.api.RelationTypes.StudySettlement;
 import com.capsule.session.api.SessionClosingHandler;
 import com.capsule.session.api.SessionTypes.SessionClosing;
+import com.capsule.session.config.SessionProperties;
 import com.capsule.session.domain.SessionEvent;
 import com.capsule.session.domain.StudySession;
 import com.capsule.session.dto.CharacterBrief;
@@ -66,7 +67,6 @@ import java.util.Map;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -90,7 +90,7 @@ public class SessionService {
     private final ActiveSessionLookup activeSessions;
     private final TransactionTemplate tx;
     private final Clock clock;
-    private final Duration autoCloseAfter;
+    private final SessionProperties props;
 
     SessionService(
             StudySessionRepository sessions,
@@ -106,7 +106,7 @@ public class SessionService {
             ActiveSessionLookup activeSessions,
             TransactionTemplate tx,
             Clock clock,
-            @Value("${capsule.session.auto-close-after}") Duration autoCloseAfter) {
+            SessionProperties props) {
         this.sessions = sessions;
         this.events = events;
         this.users = users;
@@ -120,7 +120,7 @@ public class SessionService {
         this.activeSessions = activeSessions;
         this.tx = tx;
         this.clock = clock;
-        this.autoCloseAfter = autoCloseAfter;
+        this.props = props;
     }
 
     // ---- 11 홈 · 12 룸 상세
@@ -196,7 +196,11 @@ public class SessionService {
     public StartResponse start(long userId, StartRequest req) {
         Integer minutes = req.targetMinutes();
         // 3분, 또는 5~180분 5분 단위 (api.md 16, 2026-11-05 최소 3분)
-        boolean valid = minutes != null && (minutes == 3 || (minutes >= 5 && minutes <= 180 && minutes % 5 == 0));
+        boolean valid = minutes != null
+                && (props.targetMinutesExtra().contains(minutes)
+                        || (minutes >= props.targetMinutesMin()
+                                && minutes <= props.targetMinutesMax()
+                                && minutes % props.targetMinutesStep() == 0));
         if (!valid) {
             throw new ApiException(BAD_REQUEST, "INVALID_TARGET_MINUTES");
         }
@@ -304,11 +308,11 @@ public class SessionService {
             // 명세는 "서버가 무시"뿐이라 저장하지 않고 eventId null로 돌려준다
             return EventResponse.ignored();
         }
-        // 동작 이벤트 쿨다운 (api.md 18): 같은 type이 1분 안에 다시 오면 무시. 늦게 도착한 앞선 이벤트도 걸리게 앞뒤로 본다
+        // 동작 이벤트 쿨다운 (api.md 18): 같은 type이 motion-cooldown(1분) 안에 다시 오면 무시. 늦게 도착한 앞선 이벤트도 걸리게 앞뒤로 본다
         if (motion
                 && list.stream()
                         .anyMatch(e -> e.type().equals(type)
-                                && Duration.between(e.occurredAt(), at).abs().compareTo(Duration.ofMinutes(1)) < 0)) {
+                                && Duration.between(e.occurredAt(), at).abs().compareTo(props.motionCooldown()) < 0)) {
             return EventResponse.ignored();
         }
 
@@ -400,9 +404,9 @@ public class SessionService {
 
     /** heartbeat가 auto-close-after(6h)보다 오래 없는 세션을 마지막 heartbeat 시각으로 닫는다 (api.md 21) */
     // ponytail: 서버 1대 전제 (ADR 0011). 여러 대가 되면 ShedLock으로 한 대만 돌게
-    @Scheduled(fixedDelayString = "PT10M")
+    @Scheduled(fixedDelayString = "${capsule.session.auto-close-interval:PT10M}")
     public void autoCloseStale() {
-        Instant cutoff = now().minus(autoCloseAfter);
+        Instant cutoff = now().minus(props.autoCloseAfter());
         for (long id : sessions.findStaleIds(cutoff)) {
             try {
                 // 공부 종료와 같이 대화 마무리(LLM)는 트랜잭션 밖에서 먼저

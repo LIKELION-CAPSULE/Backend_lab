@@ -25,9 +25,6 @@ import tools.jackson.databind.JsonNode;
 @Component
 class SimpleChatPipeline implements ChatPipeline {
 
-    // TODO(judgment): J-05 LLM에 넘길 대화 수 (승희 2026-11-04: 15줄. 프롬프트가 길수록 지시를 덜 따름)
-    static final int HISTORY_LIMIT = 15;
-
     private final LlmGateway llm;
     private final PromptService prompts;
     private final DialogueProperties props;
@@ -71,7 +68,8 @@ class SimpleChatPipeline implements ChatPipeline {
         List<Llm.SystemBlock> system = List.of(
                 new Llm.SystemBlock(PromptService.render(systemPrompt.body(), vars), true),
                 new Llm.SystemBlock(PromptService.render(contextPrompt.body(), vars), false));
-        List<Llm.ChatTurn> messages = new ArrayList<>(PromptVars.turns(in.history(), HISTORY_LIMIT));
+        // TODO(judgment): J-05 LLM에 넘길 대화 수 (승희 2026-11-04: 15줄 history-lines. 프롬프트가 길수록 지시를 덜 따름)
+        List<Llm.ChatTurn> messages = new ArrayList<>(PromptVars.turns(in.history(), props.historyLines()));
         messages.add(new Llm.ChatTurn("user", in.userMessage()));
         List<PromptVersion> used = List.of(systemPrompt, contextPrompt);
         Llm.Result r = llm.complete(LlmPurpose.CHAT, system, messages, ctx.withPrompts(PromptVars.ids(used)), null);

@@ -28,7 +28,6 @@ import org.springframework.stereotype.Component;
 public class LlmGateway {
 
     private static final Logger log = LoggerFactory.getLogger(LlmGateway.class);
-    private static final long RETRY_BACKOFF_MS = 300;
 
     private final Map<String, LlmProvider> providers;
     private final LlmProperties props;
@@ -168,9 +167,9 @@ public class LlmGateway {
         }
     }
 
-    private static void pause() {
+    private void pause() {
         try {
-            Thread.sleep(RETRY_BACKOFF_MS);
+            Thread.sleep(props.retryBackoff());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }

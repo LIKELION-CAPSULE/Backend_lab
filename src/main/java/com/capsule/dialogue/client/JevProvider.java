@@ -28,7 +28,7 @@ class JevProvider implements LlmProvider {
         this.settings = props.jev();
         this.http = settings == null
                 ? null
-                : LlmHttp.client(settings.baseUrl(), props.httpTimeout(), h -> {
+                : LlmHttp.client(settings.baseUrl(), props.connectTimeout(), props.httpTimeout(), h -> {
                     if (settings.hasKey()) h.setBearerAuth(settings.apiKey());
                 });
     }

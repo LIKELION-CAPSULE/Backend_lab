@@ -177,10 +177,14 @@ class SceneChatPipelineTest {
 
     @Test
     void givingUpIsEndingBeforeHalfTheTarget() {
-        assertThat(DialogueService.gaveUp(closing("NORMAL", 20 * 60, 50))).isTrue();
-        assertThat(DialogueService.gaveUp(closing("NORMAL", 30 * 60, 50))).isFalse();
-        assertThat(DialogueService.gaveUp(closing("AUTO_CLOSED", 60, 50))).isFalse(); // 자동 종료는 포기가 아님
-        assertThat(DialogueService.gaveUp(closing("NORMAL", 60, null))).isFalse();
+        double ratio = YmlDefaults.DIALOGUE.giveUpRatio(); // 0.5
+        assertThat(DialogueService.gaveUp(closing("NORMAL", 20 * 60, 50), ratio))
+                .isTrue();
+        assertThat(DialogueService.gaveUp(closing("NORMAL", 30 * 60, 50), ratio))
+                .isFalse();
+        assertThat(DialogueService.gaveUp(closing("AUTO_CLOSED", 60, 50), ratio))
+                .isFalse(); // 자동 종료는 포기가 아님
+        assertThat(DialogueService.gaveUp(closing("NORMAL", 60, null), ratio)).isFalse();
     }
 
     static com.capsule.session.api.SessionTypes.SessionClosing closing(String endType, int seconds, Integer target) {

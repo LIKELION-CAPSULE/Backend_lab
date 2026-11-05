@@ -24,9 +24,8 @@ final class LlmHttp {
         T read(BufferedReader body) throws IOException;
     }
 
-    static RestClient client(String baseUrl, Duration timeout, Consumer<HttpHeaders> headers) {
-        HttpClient http =
-                HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
+    static RestClient client(String baseUrl, Duration connectTimeout, Duration timeout, Consumer<HttpHeaders> headers) {
+        HttpClient http = HttpClient.newBuilder().connectTimeout(connectTimeout).build();
         JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(http);
         factory.setReadTimeout(timeout);
         return RestClient.builder()
