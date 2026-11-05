@@ -1146,7 +1146,7 @@ GET /api/me/memories?date=2026-11-12
 | characters | Array | 이번에 말하는 캐릭터만 (1:1 룸이면 1개) |
 | characters[].characterId | Long | 캐릭터 id |
 | characters[].content | String | 말풍선 대사 (2줄 이내) |
-| characters[].emotion | String | 대사의 표정 이름. **목록은 캐릭터 설정(`character_profiles.expressions`)이 정한다** (말포이: `삐짐` · `행복`(함박웃음) · `경멸` · `하품` · `화남` · `웃음` · `수줍음` · `집중`, 승희 확정 2026-11-05). 에셋이 없는 표정은 서버가 대체 표정(`expression_fallbacks`)으로 고른다(말포이는 8개 모두 있어 없음). LLM이 목록 밖 감정 이름을 쓰면 같은 대체 표로 목록 안 표정으로 바꾸고(말포이: 걱정 → 집중, 질투 · 서운함 → 삐짐 등), 표에도 없으면 null (2026-11-05). 말포이 동작(모션)은 숨쉬기 같은 기본 동작뿐이라 `motion`은 보통 null. 설정이 없는 캐릭터는 공통 후보(`HAPPY` · `SHY` · `ANGRY` · `SAD` · `SURPRISED` · `NEUTRAL`). ⚠️ 고정 대사(`fallback: true`)일 때 값은 확정 필요 (지금 구현은 null) |
+| characters[].emotion | String | 대사의 표정 이름. **목록은 캐릭터 설정(`character_profiles.expressions`)이 정한다** (말포이: `삐짐` · `행복`(함박웃음) · `경멸` · `하품` · `화남` · `웃음` · `수줍음` · `집중`, 승희 확정 2026-11-05). LLM은 대사만 쓰고, 대사가 다 만들어진 뒤 결정 모델(Jev)이 대사를 보고 이 목록 중 하나를 고른다(보기마다 언제 쓰는지는 `character_profiles.expression_guide`). 그래서 목록 밖 값은 나오지 않는다. 결정이 늦거나(1.5초) 실패하면 null(표정을 바꾸지 않음) (2026-11-06). 말포이 동작(모션)은 숨쉬기 같은 기본 동작뿐이라 `motion`은 보통 null. 설정이 없는 캐릭터는 공통 후보(`HAPPY` · `SHY` · `ANGRY` · `SAD` · `SURPRISED` · `NEUTRAL`). ⚠️ 고정 대사(`fallback: true`)일 때 값은 확정 필요 (지금 구현은 null) |
 | characters[].motion | Object | `group`, `file` — 감정에 맞는 모션 (없으면 null → 18 동작 유지) |
 | characters[].expression | Object | `name`, `file` — 감정에 맞는 표정 (없으면 null) |
 | characters[].fallback | Boolean | LLM 5초 초과로 고정 대사를 썼는지 |
@@ -1176,7 +1176,7 @@ GET /api/me/memories?date=2026-11-12
 #### 서버가 하는 일
 
 1. 이벤트 타입 + 직전 상태 이벤트로 trigger 결정 (응답에는 넣지 않음): 첫 FOCUS = `GREETING`, 휴식 뒤 FOCUS = `BREAK_END`, `AWAY` · `RETURN` · `BREAK`, 동작은 type 그대로(`DROWSY` · `YAWN` · `WAVE` · `HEAD_TURN`)
-2. 상태 변화(`GREETING` · `AWAY` · `RETURN` · `BREAK` · `BREAK_END`): LLM이 대사 + 감정을 한 번에 만든다. 감정은 그 캐릭터의 표정 목록(`character_profiles.expressions`) 중에서. 넣는 것: 캐릭터 페르소나 + 지금 관계 단계의 관계 설명 · 말투 샘플 · 상태 변화 예시(그 단계의 미리 쓴 대사), 캐릭터 오늘 근황(`character_lines` TODAY, 요일별), 지난 세션 흐름, 이번 세션 최근 대화, 일어난 일(trigger를 "방금 일어난 일" 한 줄로. 예: AWAY = 아직 안 돌아옴) (ADR 0022 결정 19). 5초 넘거나 실패하면 미리 쓴 대사(`fallback: true`). 순간 동작(`DROWSY` · `YAWN` · `WAVE` · `HEAD_TURN`): 미리 쓴 대사와 그 칸의 표정을 순서대로 (AI 안 씀)
+2. 상태 변화(`GREETING` · `AWAY` · `RETURN` · `BREAK` · `BREAK_END`): LLM이 대사를 만들고, 결정 모델(Jev)이 그 대사를 보고 표정 목록(`character_profiles.expressions`) 중 하나를 고른다. 넣는 것: 캐릭터 페르소나 + 지금 관계 단계의 관계 설명 · 말투 샘플 · 상태 변화 예시(그 단계의 미리 쓴 대사), 캐릭터 오늘 근황(`character_lines` TODAY, 요일별), 지난 세션 흐름, 이번 세션 최근 대화, 일어난 일(trigger를 "방금 일어난 일" 한 줄로. 예: AWAY = 아직 안 돌아옴) (ADR 0022 결정 19). 5초 넘거나 실패하면 미리 쓴 대사(`fallback: true`). 순간 동작(`DROWSY` · `YAWN` · `WAVE` · `HEAD_TURN`): 미리 쓴 대사와 그 칸의 표정을 순서대로 (AI 안 씀)
 3. 감정에 맞는 모션 · 표정을 `live2d_reaction_maps`에서 하나 고름 (같은 감정의 행이 여러 개면 같은 확률)
 4. `tts: true`면 음성 생성
 - 호감도는 바꾸지 않음 (18번에서 끝남). 같은 `eventId`로 intensity를 올려 다시 불러도 마찬가지
@@ -1283,7 +1283,8 @@ GET /api/me/memories?date=2026-11-12
 
 1. 사용자 메시지 저장 (`chat_messages`)
 2. 결정 모델: 캐릭터가 아는 사실(최대 20개) + "선택 안 함" 중 이번 말에 꺼낼 사실 하나를 고름 (1.5초 안에 못 고르면 선택 안 함)
-3. LLM: 캐릭터 페르소나 + 지금 관계 단계의 관계 설명 · 말투 샘플(ADR 0022 결정 19, 문구는 데모용 임시 · 확정 필요) + 캐릭터 오늘 근황(`character_lines` TODAY, 요일별) + 고른 사실 하나(있을 때만) + 지난 세션 흐름(최근 2장) + 이번 세션 대화(최근 15줄) + 일정(세션 첫 대화만) → 답장 + 감정
+3. LLM: 캐릭터 페르소나 + 지금 관계 단계의 관계 설명 · 말투 샘플(ADR 0022 결정 19, 문구는 데모용 임시 · 확정 필요) + 캐릭터 오늘 근황(`character_lines` TODAY, 요일별) + 고른 사실 하나(있을 때만) + 지난 세션 흐름(최근 2장) + 이번 세션 대화(최근 15줄) + 일정(세션 첫 대화만) → 답장 (대사만)
+   - 답장이 끝나면 결정 모델(Jev): 답장을 보고 캐릭터 표정 목록(`character_profiles.expressions`) 중 하나 (1.5초 안에 못 고르면 null)
 4. 감정에 맞는 모션 · 표정을 `live2d_reaction_maps`에서 고름
 5. 말의 종류(`chat_messages.signal`) → 점수 → 0~100에서 실제로 바뀐 만큼 `relation_logs`(CHAT, `request_id`, `signal`)에 기록
 6. 5초 넘으면 대체 대사 + `fallback: true`, 호감도 변화 없음

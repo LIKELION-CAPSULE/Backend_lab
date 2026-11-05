@@ -51,6 +51,8 @@
 -- 2026-11-06 변경
 --   - 운영 설정 (ADR 0026): relation_settings · dialogue_settings 추가. 실험실 '운영 설정' 화면에서 바꾼 칸만 저장하고,
 --     나머지는 application.yml 값. 배포 없이 호감도 숫자 · 대화 설정 · AI 공급자와 모델을 바꾼다
+--   - 표정은 결정 모델이 고른다 (ADR 0028): character_profiles.expression_fallbacks 삭제(모델이 쓴 목록 밖 감정 이름을 맞추던 대체 표),
+--     expression_guide 추가(표정마다 언제 쓰는지. 결정 모델 보기 설명)
 -- =====================================================================
 
 BEGIN;
@@ -506,7 +508,7 @@ CREATE TABLE character_profiles (
     rules                text        NOT NULL,           -- 절대 규칙
     safety               text        NOT NULL CHECK (safety IN ('MINOR', 'ADULT')),  -- 미성년 설정이면 연애 · 성적 표현 금지
     expressions          text[]      NOT NULL,           -- 고를 수 있는 표정 (19 · 20 응답 emotion 값)
-    expression_fallbacks jsonb       NOT NULL DEFAULT '{}',  -- 대체 표: 목록 안 키 = 에셋이 없는 표정 → 대신 쓸 표정, 목록 밖 키 = 모델이 쓴 감정 이름 → 목록 안 표정 (예: {"걱정": "집중"})
+    expression_guide     jsonb       NOT NULL DEFAULT '{}',  -- 표정 → 언제 쓰는지 (예: {"수줍음": "칭찬 · 다정한 말에"}). 대사를 다 만든 뒤 결정 모델이 이 설명을 보고 expressions 중 하나를 고른다
     stage_tones          jsonb       NOT NULL DEFAULT '{}',  -- 관계 단계 → 그 단계의 관계 설명 (거리감 · 호칭 · 챙김 수위, ADR 0022 결정 19)
     study_style          text        NOT NULL,           -- 공부 중 답 길이 · 구성 (예: 1~2문장, 공부 얘기 중심)
     break_style          text        NOT NULL,           -- 쉬는 시간 답 길이 · 구성 (예: 2~4문장, 공부 재촉 없이 수다)
