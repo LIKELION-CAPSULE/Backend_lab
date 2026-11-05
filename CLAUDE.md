@@ -18,6 +18,8 @@ AI 캐릭터와 함께 공부하는 웹서비스의 백엔드. Spring Boot + Pos
 - 검증(유일한 기준): `scripts/verify.sh --quick` (작업 중, Stop 훅이 자동) / `scripts/verify.sh` (PR 전, 공용 · 계약 · 마이그레이션 · 여러 모듈을 바꿨을 때. 머지된 마이그레이션 불변 검사 포함). PR CI는 없다(ADR 0021 · 0023)
 - 마이그레이션 생성: `scripts/new-migration.sh <모듈> <설명>` (파일을 직접 만들지 않는다)
 - 로컬 실행: `scripts/run-local.sh` (Docker 로컬 DB) / `scripts/run-local.sh --shared` (공용 개발 DB, 마이그레이션은 develop 머지 때 Actions만, ADR 0017)
+- 실제 요청 흐름 확인: 서버를 백그라운드로 띄우고 `scripts/smoke-flow.sh` (끝나면 띄운 서버를 끈다)
+- 캐릭터 설정(`characters/<code>/profile.yml`) 문구를 바꾸면 맨 위 `version`을 올린다. 안 올리면 이미 불러온 DB에 들어가지 않는다
 - 이 파일 누구 담당?: `python3 .harness/zones.py explain <경로>`
 
 ## 구조 규칙
