@@ -85,7 +85,8 @@ class SessionApiTest {
             List.of("츤데레", "같은 반 친구"),
             "차갑게 굴지만 나한테만 다정한 짝꿍",
             true,
-            CHAERIN_MODEL);
+            CHAERIN_MODEL,
+            "https://cdn.capsule.invalid/chaerin-fullbody.webp");
     static final RoomInfo ROOM = new RoomInfo(
             1,
             "쌀쌀맞은 갸루짝꿍이 나에게만 친절하다!",
@@ -529,7 +530,8 @@ class SessionApiTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.activeSession").value(nullValue()))
                 .andExpect(jsonPath("$.rooms[0].thumbnailUrl").value(ROOM.thumbnailUrl()))
-                .andExpect(jsonPath("$.rooms[0].characters[0].profileImageUrl").value(CHAERIN.profileImageUrl()));
+                .andExpect(jsonPath("$.rooms[0].characters[0].profileImageUrl").value(CHAERIN.profileImageUrl()))
+                .andExpect(jsonPath("$.rooms[0].characters[0].homeImageUrl").value(CHAERIN.homeImageUrl()));
         assertThat(activeSessionLookup.find(userId)).isEmpty();
 
         long sessionId = start(userId);

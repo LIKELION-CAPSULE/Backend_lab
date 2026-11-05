@@ -133,7 +133,7 @@ public class SessionService {
                         r.name(),
                         r.thumbnailUrl(),
                         r.characters().stream()
-                                .map(c -> new CharacterBrief(c.id(), c.name(), c.profileImageUrl()))
+                                .map(c -> new CharacterBrief(c.id(), c.name(), c.profileImageUrl(), c.homeImageUrl()))
                                 .toList()))
                 .toList();
         LocalDate today = LocalDate.ofInstant(now(), ClockConfig.KST);

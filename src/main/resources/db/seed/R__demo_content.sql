@@ -4,8 +4,9 @@
 --   화면 문구(성격 · 소개 · 룸 · 배경 이름)는 말포이 설정(characters/malfoy/profile.yml의 세계 · 바이블)에 맞춤
 -- 룸 1 · 캐릭터 1 이미지는 말포이 TS 에셋 전달본(backend-asset-handoff-malfoy-ts-2026-11-05)의 web/ 파일.
 --   Supabase 버킷 live2d-model의 images/malfoy-ts/ 아래에 파일 이름 그대로 올린다. 배포 DB는 정식 마이그레이션으로 따로 넣을 것
---   포스터 카드 = seated-background, 상세 배너 = detail-banner(api.md 12), 공부 배경 = background, 캐릭터 사진 = fullbody
---   (2026-11-06: 포스터 카드 poster → seated-background, 캐릭터 사진 study → fullbody)
+--   포스터 카드 = seated-background, 상세 배너 = detail-banner(api.md 12), 공부 배경 = background, 캐릭터 사진 = study,
+--   홈 카드 캐릭터 = fullbody(home_image_url, api.md 11)
+--   (2026-11-06: 홈 포스터 카드 poster → seated-background, 그 위에 캐릭터 전신을 겹친다. 룸 상세 · 공부 화면 캐릭터는 study 그대로)
 --   나머지(홈 환영 배너 · 홈 전경 · 반응 · 호감 · 완료 리포트 · 룸 제목)는 API 칸이 없어 DB에 넣지 않음 (프론트가 직접 사용)
 -- 이미지 칸은 CDN 상대 경로로 넣는다. 서버가 CAPSULE_CDN_BASE_URL을 붙여 내려줌 (schema.sql 이미지 칸 규칙, #105)
 -- 캐릭터 1 Live2D(모델 1)는 실제 에셋 (2026-11-05, Supabase 버킷 live2d-model의 chaerin/v1/, #9).
@@ -79,13 +80,14 @@ VALUES (1, 1, '밤의 도서관',
 ON CONFLICT (id) DO UPDATE SET room_id = EXCLUDED.room_id, name = EXCLUDED.name, image_url = EXCLUDED.image_url,
     is_default = EXCLUDED.is_default, sort_order = EXCLUDED.sort_order;
 
-INSERT INTO characters (id, room_id, model_id, name, personality, intro, profile_image_url, sort_order)
+-- home_image_url = 홈 포스터 카드에 겹치는 전신 그림(fullbody, api.md 11). 룸 상세 · 공부 화면은 profile_image_url(study) 그대로
+INSERT INTO characters (id, room_id, model_id, name, personality, intro, profile_image_url, home_image_url, sort_order)
     OVERRIDING SYSTEM VALUE
 VALUES (1, 1, 1, '말포이', '{츤데레, 슬리데린 5학년, 라이벌}', '지기 싫어서 일부러 내 옆자리에 앉는 슬리데린 라이벌',
-        'images/malfoy-ts/malfoy-ts-fullbody-v1.webp', 1)
+        'images/malfoy-ts/malfoy-ts-study-v1.webp', 'images/malfoy-ts/malfoy-ts-fullbody-v1.webp', 1)
 ON CONFLICT (id) DO UPDATE SET room_id = EXCLUDED.room_id, model_id = EXCLUDED.model_id, name = EXCLUDED.name,
     personality = EXCLUDED.personality, intro = EXCLUDED.intro, profile_image_url = EXCLUDED.profile_image_url,
-    sort_order = EXCLUDED.sort_order;
+    home_image_url = EXCLUDED.home_image_url, sort_order = EXCLUDED.sort_order;
 
 -- id를 직접 넣었으므로 시퀀스를 맞춘다 (안 하면 다음 INSERT가 id 1부터 시작해 충돌)
 SELECT setval(pg_get_serial_sequence('live2d_models', 'id'), (SELECT max(id) FROM live2d_models));

@@ -50,6 +50,7 @@ class ContentMapper {
                 c.personality(),
                 c.intro(),
                 c.isActive(),
-                model(c.model()));
+                model(c.model()),
+                asset(c.homeImageUrl()));
     }
 }
