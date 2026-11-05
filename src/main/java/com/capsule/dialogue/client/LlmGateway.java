@@ -5,13 +5,11 @@ import com.capsule.dialogue.domain.LlmUsage;
 import com.capsule.dialogue.dto.LlmContext;
 import com.capsule.dialogue.dto.LlmPurpose;
 import com.capsule.dialogue.dto.ProviderRequest;
-import com.capsule.dialogue.engine.Llm;
 import com.capsule.dialogue.repository.LlmUsageRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.Instant;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -22,7 +20,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 /**
- * LLM 호출의 유일한 입구 (ADR 0022). 서비스·엔진·실험실은 용도(LlmPurpose)만 말하고, 여기서
+ * LLM 호출의 유일한 입구 (ADR 0022). 서비스·실험실은 용도(LlmPurpose)만 말하고, 여기서
  * ① 공급자·모델·한도를 정하고(설정 + 실험 덮어쓰기) ② 실패하면 재시도 → 대체 공급자 ③ 호출마다 llm_usages에 기록한다.
  * 기록이 실패해도 호출 결과는 그대로 돌려준다.
  */
@@ -30,7 +28,6 @@ import org.springframework.stereotype.Component;
 public class LlmGateway {
 
     private static final Logger log = LoggerFactory.getLogger(LlmGateway.class);
-    private static final long RETRY_BACKOFF_MS = 300;
 
     private final Map<String, LlmProvider> providers;
     private final LlmProperties props;
@@ -94,43 +91,6 @@ public class LlmGateway {
             }
         }
         throw last;
-    }
-
-    /**
-     * 대화 엔진용 포트. 엔진의 역할(감독·배우·심사)을 용도로 바꿔 complete로 보낸다.
-     * 모델은 엔진이 적은 이름 대신 설정(routes)을 따르고, 토큰 한도는 엔진이 정한 값(Engine.Settings)을 쓴다.
-     */
-    public Llm.Client engineClient(LlmContext ctx) {
-        return new Llm.Client() {
-            @Override
-            public Llm.Result call(Llm.Call c) {
-                return complete(
-                        purposeOf(c.role()), c.system(), c.messages(), ctx.withMaxTokensIfAbsent(c.maxTokens()), null);
-            }
-
-            @Override
-            public Llm.Result stream(Llm.Call c, Consumer<String> onText) {
-                return complete(
-                        purposeOf(c.role()),
-                        c.system(),
-                        c.messages(),
-                        ctx.withMaxTokensIfAbsent(c.maxTokens()),
-                        onText);
-            }
-        };
-    }
-
-    /** 이 맥락에서 이 용도에 실제로 쓸 모델 (엔진 비용 계산·실험실 표시용) */
-    public String modelFor(LlmPurpose purpose, LlmContext ctx) {
-        LlmProperties.Route route = props.route(purpose);
-        return ctx.model() != null ? ctx.model() : props.model(primary(ctx, route), route);
-    }
-
-    /** 엔진 비용 계산용 가격표: 기본 가격(Llm.DEFAULT_PRICES) 위에 설정 가격 */
-    public Map<String, Llm.Price> prices() {
-        Map<String, Llm.Price> all = new HashMap<>(Llm.DEFAULT_PRICES);
-        if (props.prices() != null) all.putAll(props.prices());
-        return all;
     }
 
     /** 공급자 이름 → 부를 수 있는지 (실험실 화면) */
@@ -207,17 +167,9 @@ public class LlmGateway {
         }
     }
 
-    private static LlmPurpose purposeOf(Llm.Role role) {
-        return switch (role) {
-            case DIRECTOR -> LlmPurpose.DIRECTOR;
-            case ACTOR -> LlmPurpose.ACTOR;
-            case JUDGE -> LlmPurpose.JUDGE;
-        };
-    }
-
-    private static void pause() {
+    private void pause() {
         try {
-            Thread.sleep(RETRY_BACKOFF_MS);
+            Thread.sleep(props.retryBackoff());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }

@@ -1,6 +1,6 @@
 package com.capsule.dialogue.dto;
 
-import com.capsule.dialogue.engine.Llm;
+import com.capsule.dialogue.client.Llm;
 import java.util.List;
 
 /**

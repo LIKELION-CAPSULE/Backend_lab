@@ -633,7 +633,7 @@ class DialogueTest {
                     "옛 카드 " + s);
         }
 
-        SessionClosing closing = new SessionClosing(sessionId, userId, CHARACTER_ID, "채린", "NORMAL", 3300);
+        SessionClosing closing = new SessionClosing(sessionId, userId, CHARACTER_ID, "채린", "NORMAL", 3300, null);
         SessionClosingHandler.Draft draft = closingHandler.draft(closing); // 공부 종료처럼 트랜잭션 밖에서 먼저
         assertThat(jdbc.queryForObject(
                         "SELECT count(*) FROM conversation_recaps WHERE conversation_id = ?",

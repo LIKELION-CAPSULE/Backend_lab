@@ -15,9 +15,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.capsule.TestcontainersConfiguration;
 import com.capsule.dialogue.client.LlmJson;
 import com.jayway.jsonpath.JsonPath;
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -25,9 +23,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.http.MediaType;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
@@ -44,9 +40,6 @@ class LabTest {
 
     @Autowired
     MockMvc mvc;
-
-    @Autowired
-    JdbcTemplate jdbc;
 
     @Test
     void pageAndMetaOpenWithoutLogin() throws Exception {
@@ -132,40 +125,6 @@ class LabTest {
 
         call(post(API + "/sessions/" + session + "/reset"), null)
                 .andExpect(jsonPath("$.turnCount").value(0));
-    }
-
-    @Test
-    void enginePackRunsEnginePipelineWithState() throws Exception {
-        Map<String, Object> pack = new LinkedHashMap<>();
-        pack.put("characterId", 1);
-        pack.put("characterYml", resource("characters/malfoy/character.yml"));
-        pack.put("actor", resource("characters/malfoy/actor.md"));
-        pack.put("director", resource("characters/malfoy/director.md"));
-        pack.put("judge", resource("characters/malfoy/judge.md"));
-        pack.put("activate", true);
-        call(post(API + "/prompts/engine-pack"), pack)
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(4));
-
-        long session = id(call(post(API + "/sessions"), Map.of("characterId", 1, "pipeline", "ENGINE")));
-        call(post(API + "/sessions/" + session + "/turns"), Map.of("text", "야 안녕"))
-                .andExpect(jsonPath("$.reply").value("「야 안녕」… 그렇구나."))
-                .andExpect(jsonPath("$.trace.pipeline").value("ENGINE"))
-                .andExpect(jsonPath("$.usages[*].purpose").value(containsInAnyOrder("DIRECTOR", "ACTOR")));
-        call(post(API + "/sessions/" + session + "/turns"), Map.of("text", "공부 중이야"))
-                .andExpect(jsonPath("$.error").doesNotExist());
-
-        assertThat(jdbc.queryForObject(
-                        "SELECT jsonb_array_length(state -> 'history') FROM llm_lab_sessions WHERE id = ?",
-                        Integer.class,
-                        session))
-                .isEqualTo(4);
-
-        // 엔진이 못 읽는 파일은 버전으로 올라가지 않는다
-        pack.put("director", "수 목록 자리가 없는 감독 프롬프트");
-        call(post(API + "/prompts/engine-pack"), pack)
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("INVALID_ENGINE_PACK"));
     }
 
     @Test
@@ -271,9 +230,5 @@ class LabTest {
 
     private static String body(ResultActions result) throws Exception {
         return result.andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
-    }
-
-    private static String resource(String path) throws IOException {
-        return new ClassPathResource(path).getContentAsString(StandardCharsets.UTF_8);
     }
 }

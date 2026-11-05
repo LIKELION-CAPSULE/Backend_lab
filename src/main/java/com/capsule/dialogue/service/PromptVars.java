@@ -2,10 +2,10 @@ package com.capsule.dialogue.service;
 
 import com.capsule.common.time.ClockConfig;
 import com.capsule.content.api.ContentTypes.CharacterInfo;
+import com.capsule.dialogue.client.Llm;
 import com.capsule.dialogue.domain.ChatMessage;
 import com.capsule.dialogue.domain.PromptVersion;
 import com.capsule.dialogue.dto.ChatLine;
-import com.capsule.dialogue.engine.Llm;
 import java.time.Clock;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
@@ -15,6 +15,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /** 프롬프트 변수({{이름}})와 대화 기록을 만드는 공통 함수. 파이프라인·작성기·실험실이 같은 값을 쓰도록 한곳에 둔다 */
 final class PromptVars {
@@ -56,15 +57,21 @@ final class PromptVars {
         return turns;
     }
 
+    /** 대사의 {name} 자리에 넣을 이름: 닉네임, 비었으면 "너" */
+    static String name(String nickname) {
+        return nickname == null || nickname.isBlank() ? "너" : nickname;
+    }
+
     /** 요약·평가용 대화록: "사용자: …" / "채린: …" */
     static String transcript(List<ChatLine> lines, String characterName) {
-        StringBuilder sb = new StringBuilder();
-        for (ChatLine l : lines)
-            sb.append(ChatMessage.USER.equals(l.sender()) ? "사용자" : characterName)
-                    .append(": ")
-                    .append(l.content())
-                    .append('\n');
-        return sb.toString().strip();
+        return transcript(lines, "사용자", characterName).strip();
+    }
+
+    /** 대화록 한 줄씩: "{userLabel}: …" / "{characterName}: …" */
+    static String transcript(List<ChatLine> lines, String userLabel, String characterName) {
+        return lines.stream()
+                .map(l -> (ChatMessage.USER.equals(l.sender()) ? userLabel : characterName) + ": " + l.content())
+                .collect(Collectors.joining("\n"));
     }
 
     /** 실험실 trace용: 키 → {id, version, status} */

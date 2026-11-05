@@ -11,8 +11,6 @@ import com.capsule.TestcontainersConfiguration;
 import com.capsule.dialogue.client.LlmJson;
 import com.capsule.dialogue.config.CharacterContentSeeder;
 import com.capsule.dialogue.dto.CharacterContent;
-import com.capsule.dialogue.dto.CharacterContent.Lore;
-import com.capsule.dialogue.dto.CharacterContent.World;
 import com.capsule.dialogue.repository.CharacterContentRepository;
 import com.capsule.dialogue.service.CharacterContents;
 import java.util.List;
@@ -26,7 +24,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
-/** 캐릭터 · 세계관 설정이 DB에 있고(처음 값 = characters/malfoy), 대사가 그 데이터로만 돈다 (ADR 0022 결정 15) */
+/** 캐릭터 설정이 DB에 있고(처음 값 = characters/malfoy), 대사가 그 데이터로만 돈다 (ADR 0022 결정 15) */
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
@@ -53,11 +51,6 @@ class CharacterContentTest {
         assertThat(c.speaker()).isEqualTo("말포이");
         assertThat(c.safety()).isEqualTo(CharacterContent.MINOR);
         assertThat(c.expressions()).containsExactly("삐짐", "행복", "경멸", "하품", "화남", "웃음", "수줍음", "집중");
-        assertThat(c.world().lore()).extracting(CharacterContent.Lore::code).contains("pince", "library");
-        assertThat(c.moves())
-                .extracting(CharacterContent.Move::code)
-                .contains("yes_and")
-                .doesNotContain("callback");
         assertThat(c.habits()).containsEntry("흥", CharacterContent.NO_OPENING);
         assertThat(c.rules()).contains("정답을 물으면 정답"); // PM: 답 대신 힌트만 → 정답은 정답, 힌트는 힌트
         assertThat(c.fallbackExpression("화남")).isEqualTo("화남"); // 8개 모두 에셋이 있어 목록 안 표정은 그대로
@@ -146,68 +139,63 @@ class CharacterContentTest {
                 .getResponse()
                 .getContentAsString();
         CharacterContent c = LlmJson.read(json, CharacterContent.class);
-        CharacterContent edited = new CharacterContent(
-                c.characterId(),
-                c.code(),
-                c.speaker(),
-                c.bible() + "\n- 실험: 모든 문장을 '흠'으로 끝낸다.",
-                c.rules(),
-                c.safety(),
-                c.expressions(),
-                c.expressionFallbacks(),
-                c.stageTones(),
-                c.studyStyle(),
-                c.breakStyle(),
-                c.world(),
-                c.moves(),
-                c.lines(),
-                c.samples(),
-                c.scores(),
-                c.habits());
+        CharacterContent edited = withBible(c, c.bible() + "\n- 실험: 모든 문장을 '흠'으로 끝낸다.");
         mvc.perform(put(API + "/1/content")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(LlmJson.write(edited)))
+                        .content(LlmJson.write(edited.withVersion(999))))
                 .andExpect(status().isOk());
         assertThat(contents.find(1).orElseThrow().bible()).endsWith("'흠'으로 끝낸다.");
+        assertThat(contents.find(1).orElseThrow().version()).isEqualTo(c.version()); // 실험실 저장은 버전을 바꾸지 않는다
 
         mvc.perform(post(API + "/reseed/malfoy")).andExpect(status().isOk());
         assertThat(contents.find(1).orElseThrow().bible()).doesNotContain("'흠'으로");
     }
 
     @Test
-    void firstSeedKeepsAnExistingWorldAndFindsTheCharacterByName() {
+    void seedSkipsExistingContentAndReseedFindsTheCharacterByName() {
         CharacterContent git = CharacterContentSeeder.load("malfoy", 1);
-        World w = git.world();
-        World edited = new World(
-                w.code(),
-                w.name(),
-                w.setting(),
-                List.of(new Lore("lab_only", "실험 카드", List.of("실험"), "실험실에서 고친 지식")),
-                List.of());
         Optional<Long> reseeded;
         try {
-            repository.replace(withWorld(git, edited)); // 실험실에서 세계 지식을 고침
-            repository.replace(git, false); // 같은 세계의 다른 캐릭터를 처음 불러올 때와 같다
-            assertThat(repository.find(1).orElseThrow().world().lore())
-                    .extracting(Lore::code)
-                    .containsExactly("lab_only");
-            assertThat(seeder.seed("malfoy", false)).isEmpty(); // 이미 있으면 파일을 읽지 않고 건너뜀
+            repository.replace(withBible(git, git.bible() + "\n- 실험실에서 고침")); // 실험실에서 고친 DB 값
+            assertThat(seeder.seed("malfoy", false)).isEmpty(); // 이미 있으면 건너뜀
+            assertThat(repository.find(1).orElseThrow().bible()).endsWith("실험실에서 고침");
         } finally {
             reseeded = seeder.seed("malfoy", true); // 이름(말포이)으로 캐릭터 1을 찾아 git 값으로 되돌림 (다른 테스트를 위해 항상)
             contents.evict(1);
         }
         assertThat(reseeded).contains(1L);
-        assertThat(repository.find(1).orElseThrow().world().lore())
-                .extracting(Lore::code)
-                .contains("pince");
+        assertThat(repository.find(1).orElseThrow().bible()).isEqualTo(git.bible());
     }
 
-    private static CharacterContent withWorld(CharacterContent c, World world) {
+    @Test
+    void higherFileVersionReplacesTheDatabaseAtStartup() {
+        CharacterContent git = CharacterContentSeeder.load("malfoy", 1);
+        assertThat(git.version()).isPositive();
+        try {
+            // 공용 DB처럼 옛 버전이 들어가 있고 실험실에서 고친 값 → 파일 버전이 높으니 파일로 다시 불러옴
+            repository.replace(withBible(git, git.bible() + "\n- 옛 버전").withVersion(git.version() - 1));
+            assertThat(seeder.seed("malfoy", false)).contains(1L);
+            CharacterContent upgraded = repository.find(1).orElseThrow();
+            assertThat(upgraded.bible()).isEqualTo(git.bible());
+            assertThat(upgraded.version()).isEqualTo(git.version());
+
+            // 같은 버전이면 그대로 둔다 (실험실에서 고친 값 유지)
+            repository.replace(withBible(git, git.bible() + "\n- 같은 버전"));
+            assertThat(seeder.seed("malfoy", false)).isEmpty();
+            assertThat(repository.find(1).orElseThrow().bible()).endsWith("같은 버전");
+        } finally {
+            seeder.seed("malfoy", true); // 다른 테스트를 위해 git 값으로 되돌림
+            contents.evict(1);
+        }
+    }
+
+    private static CharacterContent withBible(CharacterContent c, String bible) {
         return new CharacterContent(
                 c.characterId(),
                 c.code(),
+                c.version(),
                 c.speaker(),
-                c.bible(),
+                bible,
                 c.rules(),
                 c.safety(),
                 c.expressions(),
@@ -215,8 +203,6 @@ class CharacterContentTest {
                 c.stageTones(),
                 c.studyStyle(),
                 c.breakStyle(),
-                world,
-                c.moves(),
                 c.lines(),
                 c.samples(),
                 c.scores(),

@@ -3,6 +3,7 @@ package com.capsule.relation;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.capsule.TestcontainersConfiguration;
+import com.capsule.common.time.ClockConfig;
 import com.capsule.relation.api.RelationCommands;
 import com.capsule.relation.api.RelationQuery;
 import com.capsule.relation.api.RelationTypes.AffinityChange;
@@ -12,7 +13,6 @@ import com.capsule.relation.api.RelationTypes.SessionEventRef;
 import com.capsule.relation.api.RelationTypes.SignalType;
 import com.capsule.relation.api.RelationTypes.StudySettlement;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -81,7 +81,7 @@ class RelationServiceTest {
     }
 
     void studiedYesterday(int streakDays) {
-        LocalDate yesterday = LocalDate.now(ZoneId.of("Asia/Seoul")).minusDays(1);
+        LocalDate yesterday = LocalDate.now(ClockConfig.KST).minusDays(1);
         jdbc.update(
                 "UPDATE user_character_relations SET last_study_date = ?, streak_days = ? WHERE user_id = ?",
                 yesterday,
@@ -134,6 +134,24 @@ class RelationServiceTest {
                 userId); // 합을 맞춰 둔다 (10 = 50 − 15 − 25)
         assertThat(chat(session, severe).points()).isEqualTo(5);
         assertThat(query.view(userId, CHARACTER).stageName()).isEqualTo("아는 사이");
+    }
+
+    @Test
+    void severeWordsAtZeroStillFreezeGainsForTheDay() {
+        // 0점이면 깎인 값이 0이라 기록이 남지 않는다(delta <> 0). 그래도 그날은 오르지 않아야 한다
+        long session = newSession();
+        commands.meet(userId, CHARACTER);
+        jdbc.update("UPDATE user_character_relations SET relation_points = 0 WHERE user_id = ?", userId);
+        jdbc.update(
+                "INSERT INTO relation_logs (relation_id, delta, reason) SELECT id, -50, 'STREAK' FROM"
+                        + " user_character_relations WHERE user_id = ?",
+                userId); // 합을 맞춰 둔다 (0 = 50 − 50)
+        assertThat(chat(session, new ChatScore(SignalType.HATE_OR_SEXUAL, -5, 30))
+                        .delta())
+                .isZero();
+        assertThat(chat(session, PLUS_ONE).delta()).isZero();
+        assertThat(query.view(userId, CHARACTER).points()).isZero();
+        assertThat(logSum() + 50).isZero(); // 기록의 합 + 50 = 지금 점수
     }
 
     @Test

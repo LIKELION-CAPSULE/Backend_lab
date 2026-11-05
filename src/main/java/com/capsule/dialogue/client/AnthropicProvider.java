@@ -5,7 +5,6 @@ import static com.capsule.dialogue.client.LlmJson.str;
 
 import com.capsule.dialogue.config.LlmProperties;
 import com.capsule.dialogue.dto.ProviderRequest;
-import com.capsule.dialogue.engine.Llm;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -25,7 +24,7 @@ class AnthropicProvider implements LlmProvider {
 
     AnthropicProvider(LlmProperties props) {
         this.settings = props.anthropic();
-        this.http = LlmHttp.client(settings.baseUrl(), props.httpTimeout(), h -> {
+        this.http = LlmHttp.client(settings.baseUrl(), props.connectTimeout(), props.httpTimeout(), h -> {
             h.set("x-api-key", settings.hasKey() ? settings.apiKey() : "");
             h.set("anthropic-version", settings.version());
         });

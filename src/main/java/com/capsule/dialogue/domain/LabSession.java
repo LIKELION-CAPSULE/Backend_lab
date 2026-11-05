@@ -9,7 +9,7 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 import org.hibernate.annotations.ColumnTransformer;
 
-/** 실험실 대화방. config = LabConfig JSON, state = ENGINE 파이프라인 상태 JSON */
+/** 실험실 대화방. config = LabConfig JSON */
 @Entity
 @Table(name = "llm_lab_sessions")
 public class LabSession {
@@ -26,10 +26,6 @@ public class LabSession {
     @ColumnTransformer(write = "?::jsonb")
     private String config;
 
-    @Column(columnDefinition = "jsonb")
-    @ColumnTransformer(write = "?::jsonb")
-    private String state;
-
     private Instant createdAt;
     private Instant updatedAt;
 
@@ -44,19 +40,14 @@ public class LabSession {
         this.updatedAt = now;
     }
 
-    /** 파이프라인이 바뀌면 엔진 상태는 버린다 */
     public void update(String title, String pipeline, String config, Instant now) {
         if (title != null) this.title = title;
-        if (pipeline != null && !pipeline.equals(this.pipeline)) {
-            this.pipeline = pipeline;
-            this.state = null;
-        }
+        if (pipeline != null) this.pipeline = pipeline;
         if (config != null) this.config = config;
         this.updatedAt = now;
     }
 
-    public void saveState(String state, Instant now) {
-        this.state = state;
+    public void touch(Instant now) {
         this.updatedAt = now;
     }
 
@@ -78,10 +69,6 @@ public class LabSession {
 
     public String config() {
         return config;
-    }
-
-    public String state() {
-        return state;
     }
 
     public Instant createdAt() {

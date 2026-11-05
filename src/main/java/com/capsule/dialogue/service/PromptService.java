@@ -1,7 +1,6 @@
 package com.capsule.dialogue.service;
 
 import com.capsule.common.error.ApiException;
-import com.capsule.dialogue.config.ContentLoader;
 import com.capsule.dialogue.domain.PromptKey;
 import com.capsule.dialogue.domain.PromptVersion;
 import com.capsule.dialogue.repository.PromptVersionRepository;
@@ -70,8 +69,6 @@ public class PromptService {
     /** 새 버전(DRAFT). activate면 바로 켠다 */
     @Transactional
     public PromptVersion create(PromptKey key, Long characterId, String body, String note, boolean activate) {
-        if (key.characterOnly() && characterId == null)
-            throw new ApiException(HttpStatus.BAD_REQUEST, "CHARACTER_REQUIRED");
         if (body == null || body.isBlank()) throw new ApiException(HttpStatus.BAD_REQUEST, "EMPTY_PROMPT");
         if (key == PromptKey.FIXED_LINES) checkYaml(body);
         int next = versions.maxVersion(key.key(), characterId) + 1;
@@ -92,31 +89,6 @@ public class PromptService {
                 });
         v.activate(Instant.now(clock));
         return versions.saveAndFlush(v);
-    }
-
-    /** 대화 엔진 파일 네 개를 한 번에 올린다. 엔진이 읽을 수 있는 내용인지 먼저 확인한다 */
-    @Transactional
-    public List<PromptVersion> importEnginePack(
-            long characterId,
-            String characterYml,
-            String actor,
-            String director,
-            String judge,
-            String note,
-            boolean activate) {
-        try {
-            ContentLoader.fromTexts(characterYml, actor, director, judge);
-        } catch (RuntimeException e) {
-            throw new ApiException(
-                    HttpStatus.BAD_REQUEST,
-                    "INVALID_ENGINE_PACK",
-                    Map.<String, Object>of("reason", String.valueOf(e.getMessage())));
-        }
-        return List.of(
-                create(PromptKey.ENGINE_CHARACTER, characterId, characterYml, note, activate),
-                create(PromptKey.ENGINE_ACTOR, characterId, actor, note, activate),
-                create(PromptKey.ENGINE_DIRECTOR, characterId, director, note, activate),
-                create(PromptKey.ENGINE_JUDGE, characterId, judge, note, activate));
     }
 
     /** {{이름}} 자리를 채운다. 모르는 이름은 그대로 둔다 (실험실 원문에서 빠진 값이 보이도록) */

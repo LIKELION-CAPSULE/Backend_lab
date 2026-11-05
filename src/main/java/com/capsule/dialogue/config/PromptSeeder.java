@@ -33,8 +33,7 @@ class PromptSeeder implements ApplicationRunner {
     @Override
     public void run(ApplicationArguments args) {
         for (PromptKey key : PromptKey.values()) {
-            if (key.characterOnly()) continue;
-            String seed = ContentLoader.read(key.seedPath()).replace("\r\n", "\n"); // Windows 체크아웃도 같은 본문으로
+            String seed = CharacterContentSeeder.read(key.seedPath()).replace("\r\n", "\n"); // Windows 체크아웃도 같은 본문으로
             if (versions.existsByPromptKeyAndCharacterIdIsNullAndBody(key.key(), seed)) continue;
             try {
                 prompts.create(key, null, seed, "시드: classpath:" + key.seedPath(), true);

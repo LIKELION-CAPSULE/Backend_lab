@@ -1,7 +1,6 @@
 package com.capsule.dialogue.client;
 
 import com.capsule.dialogue.dto.ProviderRequest;
-import com.capsule.dialogue.engine.Llm;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -13,13 +12,6 @@ import org.springframework.stereotype.Component;
  */
 @Component
 class FakeProvider implements LlmProvider {
-
-    /** 감독 계획: 모든 캐릭터에 있는 필수 수(yes_and) 하나만 고른다 */
-    static final String DIRECTOR_PLAN = """
-            {"intent":"가짜","frame":"in_world","safety":"none",
-             "plans":[{"move":"yes_and","beat_id":"","scene":"","ask_type":"none"}],
-             "followup_target":"","callback":"","pay_loop":"","open_loop":"","new_bit":"",
-             "user_fact":"","user_pref":"","mood":"","tension_delta":0,"status_shift":"","lore":[]}""";
 
     @Override
     public String name() {
@@ -37,9 +29,6 @@ class FakeProvider implements LlmProvider {
         String text = switch (r.purpose()) {
             case CHAT ->
                 LlmJson.write(Map.of("reply", "「" + head(last, 20) + "」… 그렇구나. 한 문제만 더 해보자.", "emotion", "NEUTRAL"));
-            case DIRECTOR -> DIRECTOR_PLAN;
-            case ACTOR -> "「" + head(lastLine(last).replaceFirst("^사용자: ", ""), 20) + "」… 그렇구나.";
-            case JUDGE -> "{\"scores\":[7,6,5],\"pick\":1,\"why\":\"가짜 심사\"}";
             case REACTION -> LlmJson.write(Map.of("content", "(가짜 반응) " + head(last, 30), "emotion", "NEUTRAL"));
             case SUMMARY -> "(가짜 요약) " + head(last, 60);
             case MEMORY -> "(가짜 기억) " + head(last, 20);
@@ -75,11 +64,6 @@ class FakeProvider implements LlmProvider {
                 .limit(codePoints)
                 .collect(StringBuilder::new, StringBuilder::appendCodePoint, StringBuilder::append)
                 .toString();
-    }
-
-    private static String lastLine(String s) {
-        String[] lines = s.strip().split("\n");
-        return lines[lines.length - 1];
     }
 
     private static int length(List<String> texts) {

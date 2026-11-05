@@ -48,4 +48,9 @@ public interface RelationRepository extends JpaRepository<Relation, Long> {
     @Modifying(flushAutomatically = true)
     @Query("update Relation r set r.streakDays = :days, r.lastStudyDate = :date where r.id = :id")
     void updateStreak(long id, int days, LocalDate date);
+
+    /** 깎인 점수가 0이어도(0점에서 심한 말) 그날 오름 멈춤이 걸리게 기록 대신 여기에 남긴다 */
+    @Modifying(flushAutomatically = true)
+    @Query("update Relation r set r.lastSevereAt = :at where r.id = :id")
+    void markSevere(long id, Instant at);
 }

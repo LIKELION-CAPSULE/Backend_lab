@@ -12,7 +12,6 @@ import com.capsule.dialogue.dto.LabConfig;
 import com.capsule.dialogue.dto.LlmContext;
 import com.capsule.dialogue.dto.LlmPurpose;
 import com.capsule.dialogue.dto.ProviderRequest;
-import com.capsule.dialogue.engine.Llm;
 import com.capsule.dialogue.repository.LlmUsageRepository;
 import java.time.Clock;
 import java.time.Duration;
@@ -67,7 +66,9 @@ class LlmGatewayTest {
                 "anthropic",
                 fallback,
                 Duration.ofSeconds(5),
+                Duration.ofSeconds(5),
                 1,
+                Duration.ofMillis(300),
                 logContent,
                 new LlmProperties.Provider("", "k", "v", Map.of("smart", "claude-x"), null, null),
                 new LlmProperties.Provider("", "k", null, Map.of("smart", "gpt-x"), "minimal", null),
@@ -143,7 +144,7 @@ class LlmGatewayTest {
         Scripted anthropic = new Scripted("anthropic", LlmCallException.http("anthropic", 400, "bad"));
         Scripted openai = new Scripted("openai", OK);
         LabConfig pinned = new LabConfig(
-                null, null, null, null, "anthropic", "claude-pinned", 0.2, 50, null, null, null, null, null, null);
+                null, null, null, null, "anthropic", "claude-pinned", 0.2, 50, null, null, null, null, null);
 
         assertThatThrownBy(
                         () -> call(gateway("openai", false, anthropic, openai), LlmContext.lab(LlmContext.LAB, pinned)))

@@ -127,7 +127,8 @@ public class FixedLines {
         return t.reactions() == null ? null : t.reactions().get(key);
     }
 
-    private static String key(String trigger, Integer intensity) {
+    /** 상황 칸 이름: AWAY 강도 2·3은 AWAY_2 · AWAY_3, 그 밖에는 trigger 그대로 (fixed.lines · character_lines 같이 씀) */
+    static String key(String trigger, Integer intensity) {
         return intensity != null && intensity > 1 ? trigger + "_" + intensity : trigger;
     }
 

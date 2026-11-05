@@ -3,6 +3,7 @@
 뼈대 단계에서 "자리만 만든" 판단 영역의 목록이다. 지금은 결정적인 Fake가 돌고, 코드에는 `// TODO(judgment): J-xx` 주석이 있다.
 도메인 단계에서 담당자가 자기 항목을 가져가 기획과 함께 정한다. 항목마다 GitHub 이슈가 있다(상태 칸의 번호, 전체 보드는 #21). 구현하는 PR은 본문 '연관된 이슈'에 ID와 이슈 번호를 적고(이슈의 마지막 항목이면 `Closes #번호`, 아니면 `#번호`만. 이슈 하나가 항목 여러 개를 묶고 있음), 머지되면 이 표의 상태를 '완료'로 바꾼다.
 코드 위치는 `src/main/java/com/capsule/` 기준이다.
+2026-11-05: 대화 엔진(감독 · 배우, `DialogueState`), `character.yml`, `settleStudyTime`은 지웠다. 아래 항목 설명의 그 이름들은 당시 기록이다 (지금 캐릭터 설정은 `characters/<code>/profile.yml`).
 
 | ID | 모듈 | 담당 | 무엇이 미정인가 | 코드 위치 | 지금 Fake 동작 | 근거 명세 | 상태 |
 |---|---|---|---|---|---|---|---|
@@ -19,8 +20,8 @@
 | J-11 | session | seonguk | 종료 시 프론트 값과 서버 계산값이 "크게" 다를 때의 기준 | `session/service/SessionService.java` `end()` | 명세의 부등식 검증만 하고 프론트 값 사용 | api.md 22 "같이 챙길 것" | 미정 (#20) |
 | J-12 | dialogue | seunghee | 이벤트 반응 감정 `emotion` 값 목록과 정하는 기준 (LLM 출력) | `dialogue/service/DialogueService.java` `react` | **① 정함 (승희 2026-11-05)**: 상태 변화는 LLM이 캐릭터 표정 목록에서, 동작 4종은 미리 쓴 대사 칸의 표정. ② LLM 실패 대체 대사면 null (추천: 그 대사 칸의 표정) | api.md 19 (2026-11-04) | ② 미정 (#33) |
 | J-13 | dialogue | seunghee | 캐릭터가 기억할 사실의 기준 · 개수 (2026-11-04 추가) | `dialogue/service/MemoryKeeper.java` `keepQuestion`, 값은 `capsule.dialogue.memory-max` | 결정 모델 보기 설명: 저장(목표 · 계획, 이어지는 고민, 취향 · 습관, 캐릭터와 한 약속, 자기 이야기) / 무시(인사 · 잡담 · 공부 문제 자체 · 그때뿐인 상태 · 일정에 이미 있는 것). 최대 20개(승희). PM은 기억 기능을 데모데이 뒤로 미룸 | api.md 20 | 임시값 구현, PM 확인 필요 |
-| J-14 | dialogue | seunghee | 공부 중 '수다가 길어졌다'의 기준 (2026-11-05 추가) | `dialogue/service/DialogueService.java` `CHATTY_MESSAGES` · `CHATTY_WINDOW` | 최근 10분에 사용자 말 8번 이상(이번 말 포함)이면 상황 카드에 "공부로 돌려보낸다" 한 줄. 막지 않음, 쉬는 시간엔 안 함 | api.md 20 | 임시값 구현, PM 확인 필요 |
-| J-15 | dialogue | seunghee | '공부 포기'의 기준 (2026-11-05 추가) | `dialogue/service/DialogueService.java` `GIVE_UP_RATIO` | 직접 끝냈는데(NORMAL) 목표 시간의 절반 미만이면 완료 대사 대신 공부 포기 대사(`character_lines` GIVE_UP). 자동 종료 · 목표 시간 없는 세션은 포기로 보지 않음. 기준 시간은 공부 시간 `studySeconds`(자리 지킴 + 자리 비움, 쉬는 시간 제외)로 확정(승희 2026-11-05). 절반 · 직접 끝냄(NORMAL)만이라는 조건은 확정 필요 | api.md 22 | 임시값 구현, PM 확인 필요 |
+| J-14 | dialogue | seunghee | 공부 중 '수다가 길어졌다'의 기준 (2026-11-05 추가) | `application.yml` `capsule.dialogue.chatty-messages` · `chatty-window` (`DialogueService.chatty`) | 최근 10분에 사용자 말 8번 이상(이번 말 포함)이면 상황 카드에 "공부로 돌려보낸다" 한 줄. 막지 않음, 쉬는 시간엔 안 함 | api.md 20 | 임시값 구현, PM 확인 필요 |
+| J-15 | dialogue | seunghee | '공부 포기'의 기준 (2026-11-05 추가) | `application.yml` `capsule.dialogue.give-up-ratio` (`DialogueService.gaveUp`) | 직접 끝냈는데(NORMAL) 목표 시간의 절반 미만이면 완료 대사 대신 공부 포기 대사(`character_lines` GIVE_UP). 자동 종료 · 목표 시간 없는 세션은 포기로 보지 않음. 기준 시간은 공부 시간 `studySeconds`(자리 지킴 + 자리 비움, 쉬는 시간 제외)로 확정(승희 2026-11-05). 절반 · 직접 끝냄(NORMAL)만이라는 조건은 확정 필요 | api.md 22 | 임시값 구현, PM 확인 필요 |
 
 ## 판단 항목을 가져갈 때 같이 볼 것
 - **J-05 답 길이 규칙**(공부 중 1~2문장, 쉬는 시간 2~4문장)을 적용하려면 dialogue가 "지금 휴식 중인지"를 알아야 한다. 지금 `session.api.SessionQuery`에는 없어서 계약 확장이 필요하다(contract-change 스킬).

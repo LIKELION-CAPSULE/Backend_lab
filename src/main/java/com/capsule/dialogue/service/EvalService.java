@@ -2,6 +2,7 @@ package com.capsule.dialogue.service;
 
 import com.capsule.common.error.ApiException;
 import com.capsule.content.api.ContentTypes.CharacterInfo;
+import com.capsule.dialogue.client.Llm;
 import com.capsule.dialogue.client.LlmGateway;
 import com.capsule.dialogue.client.LlmJson;
 import com.capsule.dialogue.config.DialogueProperties;
@@ -24,8 +25,6 @@ import com.capsule.dialogue.dto.LlmContext;
 import com.capsule.dialogue.dto.LlmPurpose;
 import com.capsule.dialogue.dto.RatingRequest;
 import com.capsule.dialogue.dto.TranscriptTurn;
-import com.capsule.dialogue.engine.DialogueState;
-import com.capsule.dialogue.engine.Llm;
 import com.capsule.dialogue.repository.EvalCaseRepository;
 import com.capsule.dialogue.repository.EvalResultRepository;
 import com.capsule.dialogue.repository.EvalRunRepository;
@@ -229,7 +228,6 @@ public class EvalService {
                 runConfig.temperature(),
                 runConfig.maxTokens(),
                 runConfig.pinnedPrompts(),
-                runConfig.engine(),
                 context.facts(),
                 context.onBreak(),
                 context.chatty(),
@@ -239,21 +237,19 @@ public class EvalService {
         ChatPipeline pipeline = lab.pipeline(run.pipeline());
         List<ChatLine> history = new ArrayList<>();
         List<TranscriptTurn> transcript = new ArrayList<>();
-        DialogueState state = null;
         String error = null;
         long total = 0;
         for (String userText : Arrays.asList(LlmJson.read(c.turns(), String[].class))) {
             long t0 = System.nanoTime();
             try {
                 ChatOutcome o = lab.chatTurn(
-                        pipeline, LabService.input(character, config, List.copyOf(history), userText, state), ctx);
+                        pipeline, LabService.input(character, config, List.copyOf(history), userText), ctx);
                 long ms = LabService.elapsedMs(t0);
                 total += ms;
                 transcript.add(
                         new TranscriptTurn(userText, o.reply(), o.emotion(), lab.points(o, character.id()), ms, null));
                 history.add(new ChatLine(ChatMessage.USER, userText));
                 history.add(new ChatLine(ChatMessage.CHARACTER, o.reply()));
-                state = o.engineState();
             } catch (RuntimeException e) {
                 long ms = LabService.elapsedMs(t0);
                 total += ms;

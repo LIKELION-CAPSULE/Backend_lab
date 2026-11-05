@@ -28,10 +28,4 @@ class SessionClosingAdapter implements SessionClosingHandler {
     public String close(SessionClosing closing, Draft draft) {
         return dialogue.close(closing, draft instanceof ClosingDraft d ? d : null);
     }
-
-    @Override
-    @Deprecated(forRemoval = true)
-    public String close(SessionClosing closing) {
-        return dialogue.close(closing, null);
-    }
 }

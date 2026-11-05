@@ -1041,9 +1041,9 @@ GET /api/me/memories?date=2026-11-12
   "characters": [
     {
       "characterId": 1,
-      "motion": { "group": "Idle", "file": "motions/look_around.motion3.json" },
-      "expression": { "name": "pout", "file": "exp/pout.exp3.json" },
-      "affinity": { "delta": -1, "points": 79, "stage": 3, "stageName": "Lv.3", "level": 1, "levelUp": false }
+      "motion": null,
+      "expression": { "name": "웃음", "file": "exp/expression6.exp3.json" },
+      "affinity": { "delta": -1, "points": 47, "stage": 2, "stageName": "친한 사이", "level": 1, "levelUp": false }
     }
   ]
 }
@@ -1156,10 +1156,10 @@ GET /api/me/memories?date=2026-11-12
   "characters": [
     {
       "characterId": 1,
-      "content": "…언제 와?",
-      "emotion": "SAD",
-      "motion": { "group": "Idle", "file": "motions/sulk.motion3.json" },
-      "expression": { "name": "sad", "file": "exp/sad.exp3.json" },
+      "content": "야, 어디 가? …금방 와.",
+      "emotion": "삐짐",
+      "motion": null,
+      "expression": { "name": "삐짐", "file": "exp/expression1.exp3.json" },
       "fallback": false,
       "audioBase64": null
     }
@@ -1263,11 +1263,11 @@ GET /api/me/memories?date=2026-11-12
 {
   "requestId": "9c3a...",
   "characterId": 1,
-  "content": "어렵다고 포기할 거야? 한 문제만 더 풀어봐.",
-  "emotion": "ANGRY",
-  "motion": { "group": "TapBody", "file": "motions/arms_crossed.motion3.json" },
-  "expression": { "name": "pout", "file": "exp/pout.exp3.json" },
-  "affinity": { "delta": 1, "points": 81, "stage": 3, "stageName": "Lv.3", "level": 1, "levelUp": false },
+  "content": "갑자기 그런 말 하지 마. …집중 깨져.",
+  "emotion": "수줍음",
+  "motion": null,
+  "expression": { "name": "수줍음", "file": "exp/expression7.exp3.json" },
+  "affinity": { "delta": 1, "points": 51, "stage": 2, "stageName": "친한 사이", "level": 1, "levelUp": false },
   "fallback": false,
   "audioBase64": null
 }

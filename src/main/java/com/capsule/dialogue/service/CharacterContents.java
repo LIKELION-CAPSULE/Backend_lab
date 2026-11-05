@@ -1,5 +1,6 @@
 package com.capsule.dialogue.service;
 
+import com.capsule.dialogue.config.DialogueProperties;
 import com.capsule.dialogue.dto.CharacterContent;
 import com.capsule.dialogue.dto.ReactionLine;
 import com.capsule.dialogue.repository.CharacterContentRepository;
@@ -20,40 +21,44 @@ import org.springframework.stereotype.Component;
 @Component
 public class CharacterContents {
 
-    private static final Duration TTL = Duration.ofSeconds(30);
-    /** 순서대로 돌려 쓰는 상황 대사의 다음 자리. 세션 수만큼 늘어나지 않게 오래된 것부터 버린다 */
-    private static final int MAX_CURSORS = 10_000;
-
     private record Cached(Optional<CharacterContent> content, Instant at) {}
 
     private final CharacterContentRepository repository;
     private final Clock clock;
+    private final Duration ttl;
     private final Map<Long, Cached> cache = new ConcurrentHashMap<>();
     // ponytail: 순서 자리를 메모리에 둔다. 재시작하면 첫 대사부터. 여러 대가 되면 세션별 자리를 DB로
-    private final Map<String, Integer> cursors = new LinkedHashMap<>(16, 0.75f, true) {
-        @Override
-        protected boolean removeEldestEntry(Map.Entry<String, Integer> eldest) {
-            return size() > MAX_CURSORS;
-        }
-    };
+    /** 순서대로 돌려 쓰는 상황 대사의 다음 자리. 세션 수만큼 늘어나지 않게 content-max-cursors를 넘으면 오래된 것부터 버린다 */
+    private final Map<String, Integer> cursors;
 
-    CharacterContents(CharacterContentRepository repository, Clock clock) {
+    CharacterContents(CharacterContentRepository repository, Clock clock, DialogueProperties props) {
         this.repository = repository;
         this.clock = clock;
+        this.ttl = props.contentCacheTtl();
+        int maxCursors = props.contentMaxCursors();
+        this.cursors = new LinkedHashMap<>(16, 0.75f, true) {
+            @Override
+            protected boolean removeEldestEntry(Map.Entry<String, Integer> eldest) {
+                return size() > maxCursors;
+            }
+        };
     }
 
     public Optional<CharacterContent> find(long characterId) {
         Instant now = Instant.now(clock);
         Cached c = cache.get(characterId);
-        if (c == null || c.at().plus(TTL).isBefore(now)) {
+        if (c == null || c.at().plus(ttl).isBefore(now)) {
             c = new Cached(repository.find(characterId), now);
             cache.put(characterId, c);
         }
         return c.content();
     }
 
+    /** 실험실 저장. 버전은 보낸 값이 아니라 DB 값 그대로: profile.yml version을 올리면 다음 시작 때 파일이 이긴다 */
     public void replace(CharacterContent content) {
-        repository.replace(content);
+        // 시더와 같은 기준(code)으로 읽는다: 다른 캐릭터로 옮겨 저장해도 버전이 0으로 떨어지지 않게
+        int version = repository.versionOf(content.code()).orElse(0);
+        repository.replace(content.withVersion(version));
         cache.remove(content.characterId());
     }
 
@@ -85,7 +90,7 @@ public class CharacterContents {
             cursors.put(key, i + 1);
         }
         CharacterContent.Line l = lines.get(i % lines.size());
-        String text = l.text().replace("{name}", nickname == null || nickname.isBlank() ? "너" : nickname);
+        String text = l.text().replace("{name}", PromptVars.name(nickname));
         return Optional.of(new ReactionLine(text, l.expression()));
     }
 }

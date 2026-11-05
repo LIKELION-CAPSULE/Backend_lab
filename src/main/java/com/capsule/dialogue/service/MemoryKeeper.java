@@ -1,20 +1,20 @@
 package com.capsule.dialogue.service;
 
+import com.capsule.common.time.ClockConfig;
 import com.capsule.content.api.ContentTypes.CharacterInfo;
 import com.capsule.dialogue.client.Decider;
 import com.capsule.dialogue.client.Decider.Decision;
+import com.capsule.dialogue.client.Llm;
 import com.capsule.dialogue.client.LlmGateway;
 import com.capsule.dialogue.config.DialogueProperties;
 import com.capsule.dialogue.domain.CharacterMemory;
 import com.capsule.dialogue.dto.ChatLine;
 import com.capsule.dialogue.dto.LlmContext;
 import com.capsule.dialogue.dto.LlmPurpose;
-import com.capsule.dialogue.engine.Llm;
 import com.capsule.dialogue.repository.CharacterMemoryRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -35,12 +35,12 @@ import org.springframework.stereotype.Component;
 public class MemoryKeeper {
 
     private static final Logger log = LoggerFactory.getLogger(MemoryKeeper.class);
-    private static final ZoneId DAY_ZONE = ZoneId.of("Asia/Seoul");
     static final String KEEP = "memory";
     static final String DROP = "drop";
     static final String NOOP = "NOOP";
     static final String ADD = "ADD";
-    static final int MAX_LENGTH = 80; // DB CHECK. 프롬프트는 40자 이내로 쓰게 한다
+    /** 설정이 아니라 상수: DB CHECK character_memories.content 1~80자 (V20261104_204409). 프롬프트는 40자 이내로 쓰게 한다 */
+    static final int MAX_LENGTH = 80;
 
     /** 결정 모델 판단과 상관없이 저장하지 않는다: 전화번호 · 주민번호 · 계좌 · 카드처럼 긴 숫자 */
     private static final Pattern PRIVATE = Pattern.compile("(\\d{2,4}-\\d{3,4}-\\d{4}|\\d{6}-?\\d{7}|\\d{10,})");
@@ -235,6 +235,6 @@ public class MemoryKeeper {
     }
 
     private LocalDate today() {
-        return LocalDate.now(clock.withZone(DAY_ZONE));
+        return LocalDate.now(clock.withZone(ClockConfig.KST));
     }
 }

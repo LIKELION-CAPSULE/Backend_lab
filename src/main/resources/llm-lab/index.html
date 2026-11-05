@@ -222,10 +222,10 @@ function confirmBtn(label, fn) {
 
 /* ---------- 공용 부품 ---------- */
 const USER_F = ['nickname', 'relationLevel', 'onBreak', 'chatty', 'summary', 'facts', 'memories'];
-const MODEL_F = ['provider', 'model', 'temperature', 'maxTokens', 'pinnedPrompts', 'engine'];
+const MODEL_F = ['provider', 'model', 'temperature', 'maxTokens', 'pinnedPrompts'];
 // 실험 조건(LabConfig) 편집기. 빈 칸 = null = 서버 기본값
 function configEditor(cfg, fields = [...USER_F, ...MODEL_F], title = '실험 조건', open = false) {
-  const c = cfg || {}, e = c.engine || {}, has = f => fields.includes(f);
+  const c = cfg || {}, has = f => fields.includes(f);
   const num = (v, a) => h('input', {type: 'number', value: v ?? '', placeholder: '기본', ...a});
   const i = {
     nickname: h('input', {value: c.nickname ?? '', placeholder: '기본'}),
@@ -240,9 +240,6 @@ function configEditor(cfg, fields = [...USER_F, ...MODEL_F], title = '실험 조
     temperature: num(c.temperature, {step: 0.1, min: 0}),
     maxTokens: num(c.maxTokens, {min: 1}),
     pinnedPrompts: h('textarea', {rows: 2, class: 'mono', spellcheck: false, value: c.pinnedPrompts ? JSON.stringify(c.pinnedPrompts) : '', placeholder: '{"chat.system": 12}'}),
-    quality: h('input', {type: 'checkbox', checked: e.quality === true}),
-    noDirector: h('input', {type: 'checkbox', checked: e.useDirector === false}),
-    eventFreq: num(e.eventFreq, {step: 0.05, min: 0, max: 1}),
   };
   const el = h('details', {class: 'cfg', open}, h('summary', null, title), h('div', {class: 'cfggrid'},
     has('nickname') && field('닉네임', i.nickname),
@@ -256,9 +253,7 @@ function configEditor(cfg, fields = [...USER_F, ...MODEL_F], title = '실험 조
     has('summary') && field('지난 세션 카드', i.summary, 'wide'),
     has('facts') && field('캐릭터가 아는 사실 (답장 전에 결정 모델이 하나를 고름)', i.facts, 'wide'),
     has('memories') && field('일정 (한 줄에 하나)', i.memories, 'wide'),
-    has('pinnedPrompts') && field('프롬프트 버전 고정 (키 → 버전 id, JSON)', i.pinnedPrompts, 'wide'),
-    has('engine') && h('div', {class: 'f wide'}, h('span', null, '대화 엔진 (ENGINE 파이프라인만 · 비우면 기본값)'),
-      h('div', null, chk(i.quality, '품질 모드 (후보 3개 + 심사)'), chk(i.noDirector, '감독 끄기'), h('label', {class: 'chk'}, '사건 빈도', i.eventFreq)))));
+    has('pinnedPrompts') && field('프롬프트 버전 고정 (키 → 버전 id, JSON)', i.pinnedPrompts, 'wide')));
   const txt = x => x.value.trim() || null, nv = x => x.value === '' ? null : Number(x.value);
   return {el, get() {
     const o = {};
@@ -274,10 +269,6 @@ function configEditor(cfg, fields = [...USER_F, ...MODEL_F], title = '실험 조
     if (has('temperature')) o.temperature = nv(i.temperature);
     if (has('maxTokens')) o.maxTokens = nv(i.maxTokens);
     if (has('pinnedPrompts')) o.pinnedPrompts = parsePinned(i.pinnedPrompts.value);
-    if (has('engine')) {
-      const en = {quality: i.quality.checked || null, useDirector: i.noDirector.checked ? false : null, eventFreq: nv(i.eventFreq)};
-      o.engine = Object.values(en).some(v => v != null) ? en : null;
-    }
     return o;
   }};
 }
@@ -528,7 +519,7 @@ function promptsTab() {
   fChar.onchange = fKey.onchange = () => busy(null, loadVersions);
   async function loadVersions() {
     const p = META.promptKeys.find(k => k.key === fKey.value);
-    keyInfo.textContent = p ? `${p.description} · .${p.format}${p.characterOnly ? ' · 캐릭터 전용' : ''}` : '키를 고르면 설명이 나와요';
+    keyInfo.textContent = p ? `${p.description} · .${p.format}` : '키를 고르면 설명이 나와요';
     const q = new URLSearchParams();
     if (fKey.value) q.set('key', fKey.value);
     if (fChar.value) q.set('characterId', fChar.value);
@@ -588,7 +579,6 @@ function promptsTab() {
   const newBtn = h('button', {class: 'ghost', onclick: () => {
     const p = META.promptKeys.find(k => k.key === fKey.value);
     if (!p) return toast('키를 먼저 고르세요', 'info');
-    if (p.characterOnly && !fChar.value) return toast('캐릭터 전용 키예요. 캐릭터를 고르세요', 'info');
     edit({key: p.key, characterId: fChar.value ? Number(fChar.value) : null, body: ''});
   }}, '빈 버전 쓰기');
   const aChar = charSel('', true), aBox = h('div');
@@ -600,31 +590,12 @@ function promptsTab() {
         {class: 'click', title: '편집기에서 열기', onclick: () => edit(v)})))
       : muted('없음'));
   }
-  const pChar = charSel(), pNote = h('input', {class: 'grow', placeholder: '메모'}), pAct = h('input', {type: 'checkbox'});
-  const files = [['characterYml', 'character.yml'], ['actor', 'actor.md'], ['director', 'director.md'], ['judge', 'judge.md']];
-  const pTa = {};
-  const pFields = files.map(([k, name]) => {
-    const ta = pTa[k] = h('textarea', {class: 'mono', rows: 5, spellcheck: false, placeholder: `${name} 내용 (붙여넣기 또는 파일 고르기)`});
-    const file = h('input', {type: 'file', accept: '.yml,.yaml,.md,.txt', onchange: () => file.files[0]?.text().then(t => { ta.value = t; })});
-    return h('div', {class: 'f'}, h('span', null, name, ' ', file), ta);
-  });
-  const packBtn = h('button', {class: 'primary', onclick: () => busy(packBtn, async () => {
-    const b = {characterId: Number(pChar.value), note: pNote.value.trim() || null, activate: pAct.checked};
-    for (const [k] of files) b[k] = pTa[k].value.trim() ? pTa[k].value : null;
-    const vs = await api('POST', '/prompts/engine-pack', b) || [];
-    toast('올렸어요: ' + vs.map(v => `${v.key} v${v.version}`).join(', '), 'ok');
-    await loadVersions();
-    loadActive().catch(() => {});
-  })}, '올리기');
   return {
     el: h('div', null,
       h('div', {class: 'split'},
         h('div', {class: 'card'}, h('div', {class: 'row'}, field('캐릭터', fChar), field('키', fKey), newBtn), keyInfo, listBox),
         h('div', {class: 'card'}, edEmpty, edBox)),
-      h('div', {class: 'grid2'},
-        h('div', {class: 'card'}, h('h3', null, '지금 쓰는 프롬프트'), field('캐릭터', aChar), aBox),
-        h('div', {class: 'card'}, h('h3', null, '대화 엔진 파일 올리기'), field('캐릭터', pChar), pFields,
-          h('div', {class: 'row'}, pNote, chk(pAct, '바로 켜기'), packBtn)))),
+      h('div', {class: 'card'}, h('h3', null, '지금 쓰는 프롬프트'), field('캐릭터', aChar), aBox)),
     show: () => busy(null, () => Promise.all([loadVersions(), loadActive()])),
   };
 }
@@ -770,7 +741,7 @@ function usageTab() {
   };
 }
 
-/* ---------- 6. 캐릭터 설정 (DB의 세계관 · 캐릭터, ADR 0022 결정 15) ---------- */
+/* ---------- 6. 캐릭터 설정 (DB의 캐릭터 설정, ADR 0022 결정 15) ---------- */
 function characterTab() {
   const ch = charSel(), view = h('div', null, muted('캐릭터를 고르고 불러오기')), json = h('textarea', {class: 'mono big', spellcheck: false});
   let current = null;
@@ -778,11 +749,10 @@ function characterTab() {
   const text = t => h('div', {class: 'pre'}, t || '—');
   const sec = (title, ...body) => h('details', {class: 'card', open: true}, h('summary', null, title), body);
   function render(c) {
-    const w = c.world || {};
     view.replaceChildren(
       sec('기본',
         table(['항목', '값'], [
-          tr(['말하는 이름', c.speaker]), tr(['코드', c.code]), tr(['안전 기준', c.safety]),
+          tr(['말하는 이름', c.speaker]), tr(['코드', c.code]), tr(['버전 (profile.yml version, 저장해도 그대로)', c.version]), tr(['안전 기준', c.safety]),
           tr(['표정', join(c.expressions)]),
           tr(['대체 표정', Object.entries(c.expressionFallbacks || {}).map(([k, v]) => `${k} → ${v}`).join(', ')])])),
       sec('관계 단계별 관계 설명 (고정 블록, 지금 단계 것만)',
@@ -793,15 +763,6 @@ function characterTab() {
         h('h4', null, '공부 중 (study_style)'), text(c.studyStyle), h('h4', null, '쉬는 시간 (break_style)'), text(c.breakStyle)),
       sec('공통 페르소나 (고정 블록)', text(c.bible)),
       sec('절대 규칙 (고정 블록)', text(c.rules)),
-      sec(`세계: ${w.name || ''} (지금 답장에 안 씀 · 결정 19, 다음 정리 때 뺌)`, text(w.setting),
-        h('h4', null, `세계 지식 ${(w.lore || []).length}장`),
-        table(['코드', '제목', '키워드', '본문'], (w.lore || []).map(l => tr([l.code, l.title, join(l.keywords), l.body]))),
-        h('h4', null, `세계 사건 ${(w.events || []).length}개`),
-        table(['코드', '사건', '어울리는 반응', '같이 꺼낼 지식', '빈도'], (w.events || []).map(e => tr([e.code, e.text, e.hook, e.loreCode, e.weight])))),
-      sec(`대화 기술 ${(c.moves || []).length}개 (지금 답장에 안 씀 · 결정 19, 다음 정리 때 뺌)`,
-        table(['코드', '이름', '쓰는 법', '어울리는 말', '쓰는 때', '예시'], (c.moves || []).map(m => tr([m.code, m.name, m.how,
-          join(m.signals) || '평소', join(m.modes) || '언제나',
-          h('div', null, (m.examples || []).map(e => h('div', {class: 'small'}, `사용자: ${e.user} → ${e.reply}`)))])))),
       sec(`미리 쓴 대사 ${(c.lines || []).length}줄 (순간 동작은 그대로, 상태 변화는 단계별 AI 예시 · 5초 대체)`,
         table(['상황', '단계부터', '순서', '대사', '표정'], (c.lines || []).map(l => tr([l.situation, l.minStage, l.sort, l.text, l.expression])))),
       sec('대화 점수표',

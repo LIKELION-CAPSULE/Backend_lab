@@ -1,5 +1,6 @@
 package com.capsule.dialogue.service;
 
+import com.capsule.dialogue.client.Llm;
 import com.capsule.dialogue.client.LlmGateway;
 import com.capsule.dialogue.client.LlmJson;
 import com.capsule.dialogue.config.DialogueProperties;
@@ -9,7 +10,6 @@ import com.capsule.dialogue.dto.ChatInput;
 import com.capsule.dialogue.dto.ChatOutcome;
 import com.capsule.dialogue.dto.LlmContext;
 import com.capsule.dialogue.dto.LlmPurpose;
-import com.capsule.dialogue.engine.Llm;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -24,9 +24,6 @@ import tools.jackson.databind.JsonNode;
  */
 @Component
 class SimpleChatPipeline implements ChatPipeline {
-
-    // TODO(judgment): J-05 LLM에 넘길 대화 수 (승희 2026-11-04: 15줄. 프롬프트가 길수록 지시를 덜 따름)
-    static final int HISTORY_LIMIT = 15;
 
     private final LlmGateway llm;
     private final PromptService prompts;
@@ -62,7 +59,7 @@ class SimpleChatPipeline implements ChatPipeline {
                 in.onBreak()
                         ? "쉬는 시간 (2~4문장, 공부 재촉 없이 수다)"
                         : "공부 중 (1~2문장, 짧게)" + (in.chatty() ? ". " + SceneChatPipeline.CHATTY : ""));
-        vars.put("relationLevel", "Lv." + in.relationLevel());
+        vars.put("relationLevel", "Lv." + in.stage()); // 프롬프트 변수 이름은 그대로 (바꾸면 프롬프트 새 버전)
         vars.put("summary", PromptVars.orNone(in.summary(), "없음 (처음 만남)"));
         // 아는 사실은 결정 모델이 이번 말에 맞춰 고른 하나만 (ADR 0022 결정 16)
         vars.put("facts", factPicker.pick(in, ctx).map(f -> "- " + f).orElse("없음"));
@@ -71,7 +68,8 @@ class SimpleChatPipeline implements ChatPipeline {
         List<Llm.SystemBlock> system = List.of(
                 new Llm.SystemBlock(PromptService.render(systemPrompt.body(), vars), true),
                 new Llm.SystemBlock(PromptService.render(contextPrompt.body(), vars), false));
-        List<Llm.ChatTurn> messages = new ArrayList<>(PromptVars.turns(in.history(), HISTORY_LIMIT));
+        // TODO(judgment): J-05 LLM에 넘길 대화 수 (승희 2026-11-04: 15줄 history-lines. 프롬프트가 길수록 지시를 덜 따름)
+        List<Llm.ChatTurn> messages = new ArrayList<>(PromptVars.turns(in.history(), props.historyLines()));
         messages.add(new Llm.ChatTurn("user", in.userMessage()));
         List<PromptVersion> used = List.of(systemPrompt, contextPrompt);
         Llm.Result r = llm.complete(LlmPurpose.CHAT, system, messages, ctx.withPrompts(PromptVars.ids(used)), null);
@@ -91,6 +89,6 @@ class SimpleChatPipeline implements ChatPipeline {
         trace.put("prompts", PromptVars.versions(used));
         trace.put("jsonParsed", json != null);
         trace.put("raw", r.text());
-        return ChatOutcome.of(reply.strip(), emotion, null, trace);
+        return ChatOutcome.of(reply.strip(), emotion, trace);
     }
 }

@@ -42,16 +42,5 @@ public final class SessionTypes {
             String characterName,
             String endType,
             int studySeconds,
-            Integer targetMinutes) {
-
-        /**
-         * @deprecated 목표 시간을 넘기는 생성자를 쓴다 (공부 포기 대사, 2026-11-05 확장).
-         *     제거 예정 PR: 남은 사용처(DialogueEngineTest · DialogueTest)를 옮긴 뒤 session 정리 PR (성욱)
-         */
-        @Deprecated(forRemoval = true)
-        public SessionClosing(
-                long sessionId, long userId, long characterId, String characterName, String endType, int studySeconds) {
-            this(sessionId, userId, characterId, characterName, endType, studySeconds, null);
-        }
-    }
+            Integer targetMinutes) {}
 }

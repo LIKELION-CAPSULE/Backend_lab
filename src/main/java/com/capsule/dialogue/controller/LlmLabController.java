@@ -4,7 +4,6 @@ import com.capsule.common.error.ApiException;
 import com.capsule.dialogue.config.CharacterContentSeeder;
 import com.capsule.dialogue.domain.PromptKey;
 import com.capsule.dialogue.dto.CharacterContent;
-import com.capsule.dialogue.dto.EnginePackRequest;
 import com.capsule.dialogue.dto.EvalCaseRequest;
 import com.capsule.dialogue.dto.EvalCaseView;
 import com.capsule.dialogue.dto.EvalResultView;
@@ -80,7 +79,7 @@ class LlmLabController {
         this.seeder = seeder;
     }
 
-    // --- 캐릭터 · 세계관 설정 (DB가 원본, ADR 0022 결정 15) ---
+    // --- 캐릭터 설정 (DB가 원본, ADR 0022 결정 15) ---
 
     @GetMapping("/api/characters/{id}/content")
     CharacterContent content(@PathVariable long id) {
@@ -143,16 +142,6 @@ class LlmLabController {
         Map<String, PromptView> set = new LinkedHashMap<>();
         prompts.activeSet(characterId).forEach((k, v) -> set.put(k, PromptView.from(v)));
         return set;
-    }
-
-    @PostMapping("/api/prompts/engine-pack")
-    List<PromptView> enginePack(@Valid @RequestBody EnginePackRequest r) {
-        return prompts
-                .importEnginePack(
-                        r.characterId(), r.characterYml(), r.actor(), r.director(), r.judge(), r.note(), r.activate())
-                .stream()
-                .map(PromptView::from)
-                .toList();
     }
 
     // --- 실험 대화방 ---

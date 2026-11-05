@@ -4,14 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.capsule.content.api.ContentTypes.CharacterInfo;
+import com.capsule.dialogue.client.Llm;
 import com.capsule.dialogue.client.LlmJson;
 import com.capsule.dialogue.config.CharacterContentSeeder;
 import com.capsule.dialogue.domain.ChatMessage;
 import com.capsule.dialogue.dto.CharacterContent;
 import com.capsule.dialogue.dto.ChatInput;
 import com.capsule.dialogue.dto.ChatLine;
-import com.capsule.dialogue.dto.EngineOptions;
-import com.capsule.dialogue.engine.Llm;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -39,9 +38,7 @@ class SceneChatPipelineTest {
                 List.of("시험: 중간고사 (2026-11-20)"),
                 history,
                 message,
-                null,
                 Map.of(),
-                EngineOptions.DEFAULT,
                 onBreak,
                 chatty,
                 52);
@@ -66,6 +63,16 @@ class SceneChatPipelineTest {
                 .contains("(방금 일어난 일: 상황 AWAY) → …말도 없이 가네."); // 상황마다 예시 두 줄
         assertThat(four.get("events")).contains("(방금 일어난 일: 상황 AWAY) → 어디 가? 빨리 와, 너 없으면 재미없단 말이야.");
         assertThat(four.get("events")).doesNotContain("DROWSY").doesNotContain("졸려");
+    }
+
+    @Test
+    void blankNicknameIsCalledYouLikeTheFixedLines() {
+        // 상황 대사(CharacterContents)와 같이 닉네임이 비면 "너"로. 전에는 ", 왔구나."처럼 이름 자리가 비었다
+        for (String blank : new String[] {"", " ", null}) {
+            Map<String, String> four = SceneChatPipeline.systemVars(MALFOY, 4, blank, SITUATION);
+            assertThat(four.get("samples")).contains("너, 왔구나. 기다렸어.").doesNotContain("{name}");
+            assertThat(four.get("events")).doesNotContain("{name}");
+        }
     }
 
     @Test
@@ -125,6 +132,7 @@ class SceneChatPipelineTest {
         CharacterContent assetFallback = new CharacterContent(
                 c.characterId(),
                 c.code(),
+                c.version(),
                 c.speaker(),
                 c.bible(),
                 c.rules(),
@@ -134,8 +142,6 @@ class SceneChatPipelineTest {
                 c.stageTones(),
                 c.studyStyle(),
                 c.breakStyle(),
-                c.world(),
-                c.moves(),
                 c.lines(),
                 c.samples(),
                 c.scores(),
@@ -172,6 +178,17 @@ class SceneChatPipelineTest {
     }
 
     @Test
+    void reactionAcceptsPlainTextAndContentKey() {
+        // 스모크: BREAK_END 반응이 JSON 없이 맨 글로 와서 형식 오류 → 고정 대사로 갔다
+        assertThat(ReactionWriter.parse(result("좋아, 다시 하자.", "stop"), e -> e))
+                .isEqualTo(new com.capsule.dialogue.dto.ReactionLine("좋아, 다시 하자.", null));
+        assertThat(ReactionWriter.parse(result("{\"content\":\"왔네.\",\"emotion\":\"웃음\"}", "stop"), e -> e))
+                .isEqualTo(new com.capsule.dialogue.dto.ReactionLine("왔네.", "웃음"));
+        assertThatThrownBy(() -> ReactionWriter.parse(result("{\"reply\":\"좋아, 다시", "length"), e -> e))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
     void todayNotePicksTheWeekday() {
         // 2026-11-05는 목요일 → TODAY 네 번째 줄
         java.time.Clock thursday =
@@ -181,10 +198,14 @@ class SceneChatPipelineTest {
 
     @Test
     void givingUpIsEndingBeforeHalfTheTarget() {
-        assertThat(DialogueService.gaveUp(closing("NORMAL", 20 * 60, 50))).isTrue();
-        assertThat(DialogueService.gaveUp(closing("NORMAL", 30 * 60, 50))).isFalse();
-        assertThat(DialogueService.gaveUp(closing("AUTO_CLOSED", 60, 50))).isFalse(); // 자동 종료는 포기가 아님
-        assertThat(DialogueService.gaveUp(closing("NORMAL", 60, null))).isFalse();
+        double ratio = YmlDefaults.DIALOGUE.giveUpRatio(); // 0.5
+        assertThat(DialogueService.gaveUp(closing("NORMAL", 20 * 60, 50), ratio))
+                .isTrue();
+        assertThat(DialogueService.gaveUp(closing("NORMAL", 30 * 60, 50), ratio))
+                .isFalse();
+        assertThat(DialogueService.gaveUp(closing("AUTO_CLOSED", 60, 50), ratio))
+                .isFalse(); // 자동 종료는 포기가 아님
+        assertThat(DialogueService.gaveUp(closing("NORMAL", 60, null), ratio)).isFalse();
     }
 
     static com.capsule.session.api.SessionTypes.SessionClosing closing(String endType, int seconds, Integer target) {

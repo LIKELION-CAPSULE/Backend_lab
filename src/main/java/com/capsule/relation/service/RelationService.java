@@ -2,6 +2,7 @@ package com.capsule.relation.service;
 
 import static com.capsule.relation.api.RelationTypes.START_POINTS;
 
+import com.capsule.common.time.ClockConfig;
 import com.capsule.relation.api.RelationCommands;
 import com.capsule.relation.api.RelationQuery;
 import com.capsule.relation.api.RelationTypes.AffinityChange;
@@ -35,9 +36,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @Transactional
 class RelationService implements RelationQuery, RelationCommands {
-
-    /** 심한 말 뒤 그날은 오르지 않는다 */
-    private static final String SEVERE = SignalType.HATE_OR_SEXUAL.name();
 
     private final RelationRepository relations;
     private final RelationLogRepository logs;
@@ -147,23 +145,12 @@ class RelationService implements RelationQuery, RelationCommands {
      */
     // TODO(judgment): J-01 연속 출석 점수 (임시: 2일째부터 하루 +1)
     private void streak(Relation rel, long sessionId) {
-        LocalDate today = LocalDate.now(clock.withZone(AffinityPolicy.DAY_ZONE));
+        LocalDate today = LocalDate.now(clock.withZone(ClockConfig.KST));
         if (today.equals(rel.lastStudyDate())) return;
         int days = today.minusDays(1).equals(rel.lastStudyDate()) ? rel.streakDays() + 1 : 1;
         relations.updateStreak(rel.id(), days, today);
         entityManager.refresh(rel);
         if (days >= 2) record(rel, "STREAK", policy.props.streakPoints(), sessionId, null, null, null);
-    }
-
-    @Override
-    @Deprecated(forRemoval = true)
-    public AffinityChange applyChat(long userId, long characterId, long sessionId, UUID requestId, int delta) {
-        return applyChatScore(
-                userId,
-                characterId,
-                sessionId,
-                requestId,
-                new ChatScore(SignalType.NEUTRAL, Math.clamp(delta, -5, 5), 0));
     }
 
     @Override
@@ -176,27 +163,21 @@ class RelationService implements RelationQuery, RelationCommands {
         if (delta > 0) {
             Instant today = todayStart();
             // TODO(judgment): J-06 오르는 쪽 하루 상한 (임시 +15), 심한 말 뒤 그날 오름 멈춤
-            delta = logs.existsByRelationIdAndSignalAndCreatedAtGreaterThanEqual(rel.id(), SEVERE, today)
+            boolean severeToday =
+                    rel.lastSevereAt() != null && !rel.lastSevereAt().isBefore(today);
+            delta = severeToday
                     ? 0
                     : Math.min(
                             delta, Math.max(0, policy.props.chatDailyGainCap() - logs.chatGainSince(rel.id(), today)));
         }
-        return change(
-                rel,
-                record(
-                        rel,
-                        "CHAT",
-                        delta,
-                        sessionId,
-                        null,
-                        requestId,
-                        score.signal().name()));
-    }
-
-    @Override
-    @Deprecated(forRemoval = true)
-    public StudySettlement settleStudyTime(long userId, long characterId, long sessionId, int studySeconds) {
-        return settleStudy(userId, characterId, sessionId, studySeconds, studySeconds);
+        List<RelationLog> changed = record(
+                rel, "CHAT", delta, sessionId, null, requestId, score.signal().name());
+        // 0점이라 기록이 남지 않아도 그날 오름 멈춤이 걸리게 따로 남긴다
+        if (score.signal() == SignalType.HATE_OR_SEXUAL) {
+            relations.markSevere(rel.id(), Instant.now(clock));
+            entityManager.refresh(rel);
+        }
+        return change(rel, changed);
     }
 
     @Override
@@ -223,8 +204,8 @@ class RelationService implements RelationQuery, RelationCommands {
     }
 
     private Instant todayStart() {
-        return LocalDate.now(clock.withZone(AffinityPolicy.DAY_ZONE))
-                .atStartOfDay(AffinityPolicy.DAY_ZONE)
+        return LocalDate.now(clock.withZone(ClockConfig.KST))
+                .atStartOfDay(ClockConfig.KST)
                 .toInstant();
     }
 

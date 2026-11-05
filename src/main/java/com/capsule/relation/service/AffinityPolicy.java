@@ -5,7 +5,6 @@ import static com.capsule.relation.api.RelationTypes.MIN_POINTS;
 
 import com.capsule.relation.api.RelationTypes.ChatScore;
 import com.capsule.relation.config.RelationProperties;
-import java.time.ZoneId;
 import org.springframework.stereotype.Component;
 
 /**
@@ -14,9 +13,6 @@ import org.springframework.stereotype.Component;
  */
 @Component
 class AffinityPolicy {
-
-    /** 하루를 나누는 날짜 기준 */
-    static final ZoneId DAY_ZONE = ZoneId.of("Asia/Seoul");
 
     final RelationProperties props;
 
@@ -30,7 +26,7 @@ class AffinityPolicy {
         return Math.clamp(points, MIN_POINTS, MAX_POINTS);
     }
 
-    /** 대화 한 번에 오를 수 있는 최대 (DB CHECK relation_logs_chat_range와 같음) */
+    /** 대화 한 번에 오를 수 있는 최대. 설정이 아니라 상수: DB CHECK relation_logs_chat_range(−100~5, V20261104_165439)와 같음 */
     static final int CHAT_MAX_GAIN = 5;
 
     /**

@@ -5,7 +5,6 @@ import static com.capsule.dialogue.client.LlmJson.str;
 
 import com.capsule.dialogue.config.LlmProperties;
 import com.capsule.dialogue.dto.ProviderRequest;
-import com.capsule.dialogue.engine.Llm;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -29,7 +28,7 @@ class OpenAiProvider implements LlmProvider {
 
     OpenAiProvider(LlmProperties props) {
         this.settings = props.openai();
-        this.http = LlmHttp.client(settings.baseUrl(), props.httpTimeout(), h -> {
+        this.http = LlmHttp.client(settings.baseUrl(), props.connectTimeout(), props.httpTimeout(), h -> {
             if (settings.hasKey()) h.setBearerAuth(settings.apiKey());
         });
     }

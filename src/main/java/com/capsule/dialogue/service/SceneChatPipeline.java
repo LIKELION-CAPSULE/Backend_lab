@@ -1,8 +1,10 @@
 package com.capsule.dialogue.service;
 
 import com.capsule.common.time.ClockConfig;
+import com.capsule.dialogue.client.Llm;
 import com.capsule.dialogue.client.LlmGateway;
 import com.capsule.dialogue.client.LlmJson;
+import com.capsule.dialogue.config.DialogueProperties;
 import com.capsule.dialogue.domain.ChatMessage;
 import com.capsule.dialogue.domain.PromptKey;
 import com.capsule.dialogue.domain.PromptVersion;
@@ -12,7 +14,6 @@ import com.capsule.dialogue.dto.ChatLine;
 import com.capsule.dialogue.dto.ChatOutcome;
 import com.capsule.dialogue.dto.LlmContext;
 import com.capsule.dialogue.dto.LlmPurpose;
-import com.capsule.dialogue.engine.Llm;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -47,6 +48,7 @@ class SceneChatPipeline implements ChatPipeline {
     private final SimpleChatPipeline generic;
     private final FactPicker factPicker;
     private final FixedLines fixed;
+    private final DialogueProperties props;
     private final Clock clock;
 
     SceneChatPipeline(
@@ -56,6 +58,7 @@ class SceneChatPipeline implements ChatPipeline {
             SimpleChatPipeline generic,
             FactPicker factPicker,
             FixedLines fixed,
+            DialogueProperties props,
             Clock clock) {
         this.llm = llm;
         this.prompts = prompts;
@@ -63,6 +66,7 @@ class SceneChatPipeline implements ChatPipeline {
         this.generic = generic;
         this.factPicker = factPicker;
         this.fixed = fixed;
+        this.props = props;
         this.clock = clock;
     }
 
@@ -83,11 +87,10 @@ class SceneChatPipeline implements ChatPipeline {
         String card = card(c, in, fact, PromptVars.now(clock), today(c, clock));
         List<Llm.SystemBlock> blocks = List.of(
                 new Llm.SystemBlock(
-                        PromptService.render(
-                                system.body(), systemVars(c, in.relationLevel(), in.nickname(), situation(c, in))),
+                        PromptService.render(system.body(), systemVars(c, in.stage(), in.nickname(), situation(c, in))),
                         true),
                 new Llm.SystemBlock(card, false));
-        List<Llm.ChatTurn> messages = new ArrayList<>(PromptVars.turns(in.history(), SimpleChatPipeline.HISTORY_LIMIT));
+        List<Llm.ChatTurn> messages = new ArrayList<>(PromptVars.turns(in.history(), props.historyLines()));
         messages.add(new Llm.ChatTurn("user", in.userMessage()));
         Llm.Result r = llm.complete(LlmPurpose.CHAT, blocks, messages, ctx.withPrompts(List.of(system.id())), null);
 
@@ -99,11 +102,11 @@ class SceneChatPipeline implements ChatPipeline {
         Map<String, Object> trace = new LinkedHashMap<>();
         trace.put("pipeline", SCENE);
         trace.put("prompts", PromptVars.versions(List.of(system)));
-        trace.put("stage", in.relationLevel());
+        trace.put("stage", in.stage());
         trace.put("fact", fact);
         trace.put("scene", card);
         trace.put("raw", r.text());
-        return ChatOutcome.of(reply.strip(), emotion, null, trace);
+        return ChatOutcome.of(reply.strip(), emotion, trace);
     }
 
     private Function<String, String> situation(CharacterContent c, ChatInput in) {
@@ -140,7 +143,7 @@ class SceneChatPipeline implements ChatPipeline {
     }
 
     private static String named(String text, String nickname) {
-        return text.replace("{name}", nickname);
+        return text.replace("{name}", PromptVars.name(nickname));
     }
 
     /**

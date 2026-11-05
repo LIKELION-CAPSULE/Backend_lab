@@ -13,7 +13,6 @@ import com.capsule.dialogue.client.Decider;
 import com.capsule.dialogue.client.Decider.Decision;
 import com.capsule.dialogue.config.DialogueProperties;
 import com.capsule.dialogue.dto.ChatInput;
-import com.capsule.dialogue.dto.EngineOptions;
 import com.capsule.dialogue.dto.LlmContext;
 import java.util.List;
 import java.util.Map;
@@ -24,7 +23,7 @@ class FactPickerTest {
 
     static final List<String> FACTS = List.of("사용자는 토익 800 목표", "사용자는 밤에 공부가 잘 됨");
     final Decider decider = mock(Decider.class);
-    final DialogueProperties props = mock(DialogueProperties.class);
+    final DialogueProperties props = YmlDefaults.DIALOGUE;
     final FactPicker picker = new FactPicker(decider, props);
     final LlmContext ctx = LlmContext.app(1, 1, null);
 
@@ -38,16 +37,13 @@ class FactPickerTest {
                 List.of(),
                 List.of(),
                 "토익 점수 걱정돼",
-                null,
                 Map.of(),
-                EngineOptions.DEFAULT,
                 false,
                 false,
                 0);
     }
 
-    void answer(String choice, double confidence) {
-        when(props.signalMinConfidence()).thenReturn(0.6);
+    void answer(String choice, double confidence) { // 확신 기준은 signal-min-confidence 0.6
         when(decider.decide(anyString(), any(), any()))
                 .thenReturn(Map.of(FactPicker.QUESTION, new Decision(choice, confidence)));
     }

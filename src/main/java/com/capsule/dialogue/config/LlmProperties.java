@@ -1,7 +1,7 @@
 package com.capsule.dialogue.config;
 
+import com.capsule.dialogue.client.Llm;
 import com.capsule.dialogue.dto.LlmPurpose;
-import com.capsule.dialogue.engine.Llm;
 import java.time.Duration;
 import java.util.Map;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -14,7 +14,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param jev TypeSafe Jev 결정 모델 (DECIDE 용도만). models의 fast = 고정할 버전
  * @param fallbackProvider 기본 공급자가 실패하면 한 번 더 시도할 공급자. 비우면 없음
  * @param httpTimeout 공급자 HTTP 한 번의 한도. 서비스의 5초 대체 대사(명세 19·20)와 별개로, 늦은 응답도 끝까지 받아 기록한다
+ * @param connectTimeout 공급자 HTTP 연결 한도
  * @param maxRetries 429·5xx·연결 오류일 때 같은 공급자로 다시 시도할 횟수
+ * @param retryBackoff 다시 시도하기 전에 쉬는 시간
  * @param logContent true면 서비스(APP) 호출도 프롬프트·응답 원문을 llm_usages에 남긴다. 실험실·평가는 항상 남긴다
  * @param prices 모델별 가격(달러/백만 토큰). 없으면 Llm.DEFAULT_PRICES, 거기도 없으면 0
  */
@@ -23,7 +25,9 @@ public record LlmProperties(
         String provider,
         String fallbackProvider,
         Duration httpTimeout,
+        Duration connectTimeout,
         int maxRetries,
+        Duration retryBackoff,
         boolean logContent,
         Provider anthropic,
         Provider openai,

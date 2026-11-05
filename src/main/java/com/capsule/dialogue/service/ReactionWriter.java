@@ -1,10 +1,10 @@
 package com.capsule.dialogue.service;
 
 import com.capsule.content.api.ContentTypes.CharacterInfo;
+import com.capsule.dialogue.client.Llm;
 import com.capsule.dialogue.client.LlmGateway;
 import com.capsule.dialogue.client.LlmJson;
 import com.capsule.dialogue.config.DialogueProperties;
-import com.capsule.dialogue.domain.ChatMessage;
 import com.capsule.dialogue.domain.PromptKey;
 import com.capsule.dialogue.domain.PromptVersion;
 import com.capsule.dialogue.dto.CharacterContent;
@@ -12,14 +12,12 @@ import com.capsule.dialogue.dto.ChatLine;
 import com.capsule.dialogue.dto.LlmContext;
 import com.capsule.dialogue.dto.LlmPurpose;
 import com.capsule.dialogue.dto.ReactionLine;
-import com.capsule.dialogue.engine.Llm;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.UnaryOperator;
-import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 
@@ -67,7 +65,7 @@ public class ReactionWriter {
             CharacterInfo character,
             String trigger,
             Integer intensity,
-            int relationLevel,
+            int stage,
             String nickname,
             String summary,
             List<ChatLine> recent,
@@ -75,17 +73,19 @@ public class ReactionWriter {
             LlmContext ctx) {
         Optional<CharacterContent> content = contents.find(character.id());
         if (content.isPresent())
-            return scene(content.get(), trigger, intensity, relationLevel, nickname, summary, recent, pinned, ctx);
+            return scene(content.get(), trigger, intensity, stage, nickname, summary, recent, pinned, ctx);
         long id = character.id();
         PromptVersion system = prompts.resolve(PromptKey.REACTION_SYSTEM, id, pinned);
         PromptVersion lines = fixed.version(id, pinned);
         Map<String, String> vars = PromptVars.character(character);
         vars.put("nickname", nickname);
-        vars.put("relationLevel", "Lv." + relationLevel);
+        vars.put("relationLevel", "Lv." + stage); // 프롬프트 변수 이름은 그대로 (바꾸면 프롬프트 새 버전)
         vars.put("summary", PromptVars.orNone(summary, "없음 (처음 만남)"));
-        vars.put("recent", recent.isEmpty() ? "없음" : transcript(recent, nickname, character.name()));
+        vars.put(
+                "recent",
+                recent.isEmpty() ? "없음" : PromptVars.transcript(recent, PromptVars.name(nickname), character.name()));
         vars.put("situation", fixed.situation(id, trigger, intensity, pinned));
-        List<String> examples = fixed.examples(id, trigger, intensity, relationLevel, pinned);
+        List<String> examples = fixed.examples(id, trigger, intensity, stage, pinned);
         vars.put("examples", examples.isEmpty() ? "없음" : "- " + String.join("\n- ", examples));
         vars.put("emotions", String.join(", ", props.emotions()));
         Llm.Result r = llm.complete(
@@ -102,7 +102,7 @@ public class ReactionWriter {
             CharacterContent c,
             String trigger,
             Integer intensity,
-            int relationLevel,
+            int stage,
             String nickname,
             String summary,
             List<ChatLine> recent,
@@ -121,7 +121,7 @@ public class ReactionWriter {
                                         system.body(),
                                         SceneChatPipeline.systemVars(
                                                 c,
-                                                relationLevel,
+                                                stage,
                                                 nickname,
                                                 s -> fixed.situation(c.characterId(), s, null, pinned))),
                                 true),
@@ -153,18 +153,19 @@ public class ReactionWriter {
         return String.join("\n", L);
     }
 
-    private static String transcript(List<ChatLine> recent, String nickname, String speaker) {
-        return recent.stream()
-                .map(l -> (ChatMessage.USER.equals(l.sender()) ? nickname : speaker) + ": " + l.content())
-                .collect(Collectors.joining("\n"));
-    }
-
-    /** 장면 블록은 {reply, emotion}, 공통 프롬프트는 {content, emotion} */
-    private static ReactionLine parse(Llm.Result r, UnaryOperator<String> emotion) {
-        JsonNode json = LlmJson.objectIn(r.text());
-        String content = json == null ? null : LlmJson.str(json.path("reply"));
-        if (content == null && json != null) content = LlmJson.str(json.path("content"));
+    /**
+     * 장면 블록은 {reply, emotion}, 공통 프롬프트는 {content, emotion}. 답장(20)과 같이 JSON 없는 맨 글은 그 글을 대사로(감정 없음),
+     * 깨진 JSON은 IllegalStateException (스모크에서 맨 글 한 줄을 형식 오류로 버려 고정 대사로 갔다)
+     */
+    static ReactionLine parse(Llm.Result r, UnaryOperator<String> emotion) {
+        JsonNode json = SceneChatPipeline.replyJson(r);
+        // reply → content → JSON 앞에 쓴 글 순서 (공통 프롬프트는 content라 앞 글보다 먼저 본다)
+        String content = json == null ? r.text() : LlmJson.str(json.path("reply"));
+        if (json != null && (content == null || content.isBlank())) content = LlmJson.str(json.path("content"));
+        if (json != null && (content == null || content.isBlank()))
+            content = SceneChatPipeline.replyText(r.text(), json);
         if (content == null || content.isBlank()) throw new IllegalStateException("반응 대사 형식 오류: " + r.text());
-        return new ReactionLine(content.strip(), emotion.apply(LlmJson.str(json.path("emotion"))));
+        return new ReactionLine(
+                content.strip(), json == null ? null : emotion.apply(LlmJson.str(json.path("emotion"))));
     }
 }

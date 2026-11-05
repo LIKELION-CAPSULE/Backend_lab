@@ -21,9 +21,6 @@ public interface RelationLogRepository extends JpaRepository<RelationLog, Long> 
 
     Optional<RelationLog> findFirstByRelationIdAndSessionIdAndReason(long relationId, long sessionId, String reason);
 
-    /** 이 시각 이후 이 종류의 말이 있었는지 (심한 말 뒤 그날 오름 멈춤) */
-    boolean existsByRelationIdAndSignalAndCreatedAtGreaterThanEqual(long relationId, String signal, Instant since);
-
     @Query("select coalesce(sum(l.delta), 0) from RelationLog l"
             + " where l.relationId = :relationId and l.sessionId = :sessionId")
     int sumBySession(long relationId, long sessionId);
