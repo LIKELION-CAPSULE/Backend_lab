@@ -530,8 +530,9 @@ class SessionApiTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.activeSession").value(nullValue()))
                 .andExpect(jsonPath("$.rooms[0].thumbnailUrl").value(ROOM.thumbnailUrl()))
-                .andExpect(jsonPath("$.rooms[0].characters[0].profileImageUrl").value(CHAERIN.profileImageUrl()))
-                .andExpect(jsonPath("$.rooms[0].characters[0].homeImageUrl").value(CHAERIN.homeImageUrl()));
+                // 홈 카드는 전신 그림(homeImageUrl)을 profileImageUrl 칸으로 (api.md 11, 2026-11-06)
+                .andExpect(jsonPath("$.rooms[0].characters[0].profileImageUrl").value(CHAERIN.homeImageUrl()))
+                .andExpect(jsonPath("$.rooms[0].characters[0].homeImageUrl").doesNotExist());
         assertThat(activeSessionLookup.find(userId)).isEmpty();
 
         long sessionId = start(userId);
