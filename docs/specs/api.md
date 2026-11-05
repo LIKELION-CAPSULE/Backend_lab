@@ -1674,7 +1674,7 @@ json
 
 #### 🛫 Request
 
-20번과 같음 (`requestId` · `characterId` · `content` · `inputType` · `tts`). `Accept: text/event-stream`을 보냄.
+20번과 같음 (`requestId` · `characterId` · `content` · `inputType` · `tts`). `Accept: text/event-stream, application/json`을 보냄 (둘 다: 스트림을 열기 전 오류는 JSON이라 `text/event-stream`만 보내면 에러 응답을 못 받음).
 
 #### 🛬 Response
 
