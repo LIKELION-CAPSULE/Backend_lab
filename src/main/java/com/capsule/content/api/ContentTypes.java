@@ -12,6 +12,10 @@ public final class ContentTypes {
 
     public record AvatarInfo(long id, String name, String thumbnailUrl, boolean active, ModelInfo model) {}
 
+    /**
+     * @param profileImageUrl 캐릭터 사진 (홈 · 룸 상세 · 공부 화면)
+     * @param homeImageUrl 홈 포스터 카드에 겹치는 전신 그림, 없으면 null (api.md 11, 2026-11-06 확장)
+     */
     public record CharacterInfo(
             long id,
             long roomId,
@@ -20,7 +24,26 @@ public final class ContentTypes {
             List<String> personality,
             String intro,
             boolean active,
-            ModelInfo model) {}
+            ModelInfo model,
+            String homeImageUrl) {
+
+        /**
+         * @deprecated 홈 그림을 받는 생성자를 쓴다 (2026-11-06 확장).
+         *     제거 예정 PR: 남은 사용처(테스트)를 옮긴 뒤 content 정리 PR (성욱)
+         */
+        @Deprecated(forRemoval = true)
+        public CharacterInfo(
+                long id,
+                long roomId,
+                String name,
+                String profileImageUrl,
+                List<String> personality,
+                String intro,
+                boolean active,
+                ModelInfo model) {
+            this(id, roomId, name, profileImageUrl, personality, intro, active, model, null);
+        }
+    }
 
     /**
      * characters는 활성 캐릭터만, 정렬 순서대로.

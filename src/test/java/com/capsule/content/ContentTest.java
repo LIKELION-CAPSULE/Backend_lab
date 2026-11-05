@@ -93,6 +93,8 @@ class ContentTest {
         assertThat(room.bannerUrl())
                 .isEqualTo("https://cdn.capsule.invalid/images/malfoy-ts/hogwarts-night-detail-banner-v1.webp");
         assertThat(room.characters().get(0).profileImageUrl())
+                .isEqualTo("https://cdn.capsule.invalid/images/malfoy-ts/malfoy-ts-study-v1.webp");
+        assertThat(room.characters().get(0).homeImageUrl())
                 .isEqualTo("https://cdn.capsule.invalid/images/malfoy-ts/malfoy-ts-fullbody-v1.webp");
 
         assertThat(roomQuery.defaultBackground(1))

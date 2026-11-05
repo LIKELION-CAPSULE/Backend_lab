@@ -33,6 +33,7 @@ public class CharacterEntity {
 
     String intro;
     String profileImageUrl;
+    String homeImageUrl;
     int sortOrder;
     boolean isActive;
 
@@ -62,6 +63,10 @@ public class CharacterEntity {
 
     public String profileImageUrl() {
         return profileImageUrl;
+    }
+
+    public String homeImageUrl() {
+        return homeImageUrl;
     }
 
     public boolean isActive() {
