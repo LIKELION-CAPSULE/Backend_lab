@@ -35,7 +35,7 @@ Spring Boot 모듈러 모놀리스다. 앱은 하나지만 `com.capsule` 아래 
 | (공용) | `application.yml` | 항상 | `capsule.*` 기본값 전부. 비밀값은 환경변수로만 |
 | local | `application-local.yml` | `scripts/run-local.sh` | Docker 로컬 DB, 예시 시드(`db/seed`), Swagger 켬, 실험실 켬, Fake 카카오·메일, LLM 원문 기록 |
 | shared-db | `application-shared-db.yml` | `run-local.sh --shared` (local 위에) | 공용 개발 DB(Supabase 개발 프로젝트). 앱은 Flyway를 끔 → 마이그레이션은 develop 머지 때 Actions만 (ADR 0017) |
-| dev-server | `application-dev-server.yml` | Railway, `local,shared-db,dev-server` | 실제 Redis·Brevo·카카오, `CAPSULE_LLM_PROVIDER` 필수, 실험실은 `CAPSULE_LLM_LAB_ENABLED=true` + `CAPSULE_LLM_LAB_TOKEN`일 때만(기본 끔), 원문 기록 끔 |
+| dev-server | `application-dev-server.yml` | Railway, `local,shared-db,dev-server` | 실제 Redis·Brevo·카카오, `CAPSULE_LLM_PROVIDER` 필수, 실험실은 `CAPSULE_LLM_LAB_ENABLED=true` + 관리자 계정(`CAPSULE_ADMIN_USERS_<아이디>`)이나 `CAPSULE_LLM_LAB_TOKEN`일 때만(기본 끔), 원문 기록 끔 |
 | prod | `application-prod.yml` | 운영 | Supabase DB(Session pooler), 시드 없음, 기본값 없이 빠지면 시작 실패 |
 | test | `src/test/resources/application-test.yml` | 테스트 | LLM `fake`, `memory-async: false`, 실험실 켬 |
 
@@ -74,7 +74,7 @@ flowchart LR
 | `http/` | IntelliJ HTTP 요청 예시: `flow.http`(전체 흐름), `llm-lab.http`, `eval-malfoy.http`(평가 대본) |
 | `scripts/` | `verify.sh`, `new-migration.sh`, `run-local.sh`, `setup.sh`, `smoke-flow.sh` |
 | `docs/specs/` | 명세 원본 `api.md`, `schema.sql`, `flow.md`, `judgment-backlog.md`(TODO(judgment) 목록), `skeleton-plan.md` |
-| `docs/decisions/` | ADR 0001~0026 |
+| `docs/decisions/` | ADR 0001~0027 |
 | `.harness/` | `phase`(지금 `domain`), `zones.conf`(구역·담당표), `zones.py` |
 | `.claude/` | `skills/`, `agents/reviewer.md`, `hooks/`, `settings.json` |
 | `.github/` | PR 템플릿, 이슈 템플릿, `workflows/dev-db-migrate.yml`(공용 개발 DB 마이그레이션) |
@@ -151,7 +151,8 @@ flowchart LR
 |---|---|
 | `DialogueController` | `POST /api/sessions/{id}/events/{eventId}/reaction`(19), `/messages`(20), `/messages/stream`(28, SSE) |
 | `LlmLabController` | `/internal/llm-lab/**` 실험실: 프롬프트 버전, 실험 대화방, 플레이그라운드, 평가, 사용량, 캐릭터 설정 편집·reseed. `capsule.llm.lab.enabled`일 때만 생김 |
-| `SettingsController` | `/internal/llm-lab/api/settings` 운영 설정: 모든 `RuntimeSettings` 묶음(relation · dialogue · llm) 보기 · 저장. 실험실과 같은 보안, 공용 개발 DB에 토큰 없이 붙은 노트북은 저장 403 (ADR 0026) |
+| `SettingsController` | `/internal/llm-lab/api/settings` 운영 설정: 모든 `RuntimeSettings` 묶음(relation · dialogue · llm) 보기 · 저장. 실험실과 같은 보안, 공용 개발 DB에 인증 없이 붙은 노트북은 저장 403, 저장 로그에 바꾼 관리자 (ADR 0026) |
+| `LabLoginController` | `POST /internal/llm-lab/api/login` 관리자 로그인 → 서명한 토큰. 접속 주소마다 1분 10번 (ADR 0027) |
 
 **service — 서비스 흐름**
 
@@ -199,7 +200,8 @@ flowchart LR
 | `LlmProperties` | `capsule.llm.*` (routes, models, prices, thinking) |
 | `PromptSeeder` | 시작할 때 `prompts/` 파일 본문이 DB에 없으면 새 ACTIVE 버전으로 |
 | `CharacterContentSeeder` | 시작할 때 `characters/<code>/profile.yml`의 `version`이 DB보다 높으면 다시 불러옴 |
-| `LabSecurityConfig` | 실험실 보안: 토큰 없으면 이 컴퓨터(loopback)에서만, 토큰 있으면 `X-Lab-Token`. 프록시 뒤에서 토큰 없이 켜면 시작 실패 |
+| `LabSecurityConfig` | 실험실 보안: `X-Lab-Token`에 관리자 로그인 토큰 또는 고정 토큰. 둘 다 설정이 없을 때만 이 컴퓨터(loopback)에서. 프록시 뒤에서 둘 다 없이 켜면 시작 실패 |
+| `AdminProperties`, `LabAdmins` | 관리자 계정(`capsule.admin.users`, 환경변수 `CAPSULE_ADMIN_USERS_<아이디>`, `{bcrypt}`/`{noop}`)과 로그인 토큰 발급 · 확인. 비밀번호를 바꾸면 그 전 토큰은 무효 (ADR 0027) |
 | `DialogueSettingsConfig` | 운영 설정 `dialogue` · `llm` 묶음(테이블 `dialogue_settings`): 바꿀 수 있는 칸 목록과 범위 검사. API 키 · 주소 · `log-content` · `lab`은 열지 않음 |
 
 **adapter**: `SessionClosingAdapter` — session의 `SessionClosingHandler`를 `DialogueService.draft/close`로 연결한다.

@@ -35,37 +35,58 @@ class LabSecurityConfig {
     SecurityFilterChain llmLabSecurity(
             HttpSecurity http,
             LlmProperties props,
+            LabAdmins admins,
             @Value("${server.forward-headers-strategy:none}") String forwardHeaders)
             throws Exception {
         String token = props.lab().token();
-        if ((token == null || token.isBlank()) && !"none".equalsIgnoreCase(forwardHeaders))
+        if (!present(token) && !admins.enabled() && !"none".equalsIgnoreCase(forwardHeaders))
             throw new IllegalStateException("프록시 뒤(server.forward-headers-strategy=" + forwardHeaders
-                    + ")에서 실험실을 켜려면 CAPSULE_LLM_LAB_TOKEN이 필요 (접속 주소를 꾸밀 수 있음)");
+                    + ")에서 실험실을 켜려면 관리자 계정(CAPSULE_ADMIN_USERS_<아이디>)이나 CAPSULE_LLM_LAB_TOKEN이 필요"
+                    + " (접속 주소를 꾸밀 수 있음)");
+        String required = admins.enabled() ? "LAB_LOGIN_REQUIRED" : "LAB_TOKEN_REQUIRED"; // 화면이 로그인 · 토큰 칸을 고름
         http.securityMatcher("/internal/llm-lab", "/internal/llm-lab/**")
                 .csrf(csrf -> csrf.disable()) // 같은 출처 화면에서 JSON으로만 부름. 쿠키 인증을 쓰지 않음
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(a -> a.requestMatchers(
                                 HttpMethod.GET, "/internal/llm-lab", "/internal/llm-lab/", "/internal/llm-lab/flow")
                         .permitAll()
+                        .requestMatchers(HttpMethod.POST, "/internal/llm-lab/api/login")
+                        .permitAll()
                         .anyRequest()
-                        .access((auth, ctx) -> new AuthorizationDecision(allowed(ctx.getRequest(), token))))
+                        .access((auth, ctx) -> new AuthorizationDecision(allowed(ctx.getRequest(), token, admins))))
                 .exceptionHandling(e -> e.authenticationEntryPoint((request, response, ex) -> {
                     response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                     response.setContentType(MediaType.APPLICATION_JSON_VALUE);
                     response.setCharacterEncoding(StandardCharsets.UTF_8.name());
                     response.getWriter()
-                            .write(
-                                    "{\"code\":\"LAB_TOKEN_REQUIRED\",\"message\":\"LAB_TOKEN_REQUIRED\",\"detail\":{}}");
+                            .write("{\"code\":\"" + required + "\",\"message\":\"" + required + "\",\"detail\":{}}");
                 }));
         return http.build();
     }
 
-    static boolean allowed(HttpServletRequest request, String token) {
-        if (token == null || token.isBlank()) return loopback(request.getRemoteAddr());
+    /**
+     * 관리자 로그인 토큰 → 고정 토큰 순서로 본다. 둘 중 하나라도 설정돼 있으면 이 컴퓨터에서 온 요청도 헤더가 있어야 한다.
+     * 둘 다 없을 때(로컬 기본)만 loopback으로 통과
+     */
+    static boolean allowed(HttpServletRequest request, String token, LabAdmins admins) {
         String given = request.getHeader("X-Lab-Token");
-        return given != null
-                && MessageDigest.isEqual(
-                        given.getBytes(StandardCharsets.UTF_8), token.getBytes(StandardCharsets.UTF_8));
+        if (given != null) {
+            var admin = admins.verify(given);
+            if (admin.isPresent()) {
+                request.setAttribute(LabAdmins.REQUEST_ATTRIBUTE, admin.get());
+                return true;
+            }
+            if (present(token)
+                    && MessageDigest.isEqual(
+                            given.getBytes(StandardCharsets.UTF_8), token.getBytes(StandardCharsets.UTF_8)))
+                return true;
+        }
+        if (present(token) || admins.enabled()) return false;
+        return loopback(request.getRemoteAddr());
+    }
+
+    private static boolean present(String s) {
+        return s != null && !s.isBlank();
     }
 
     private static boolean loopback(String address) {
