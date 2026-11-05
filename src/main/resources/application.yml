@@ -95,7 +95,7 @@ capsule:
     llm-budget: 5s # 명세 19·20·22: 이 안에 LLM이 못 만들면 고정 대사 (실험실은 넘었는지 표시만)
     in-flight-wait: 8s # 명세 20: 같은 requestId가 처리 중이면 이만큼 기다린다 (LLM 5초 + 저장 여유). 지나면 이 요청이 이어서 답함
     in-flight-poll: 200ms #   기다리는 동안 답장이 저장됐는지 보는 간격
-    message-limit: 10 # 명세 20: 사용자 한 명이 window 안에 보낼 수 있는 메시지 수 (넘으면 429, 재전송은 세지 않음)
+    message-limit: 30 # 명세 20: 사용자 한 명이 window 안에 보낼 수 있는 메시지 수 (넘으면 429, 재전송은 세지 않음)
     message-limit-window: 1m
     chatty-messages: 8 # J-14 임시값(승희 2026-11-05): 최근 chatty-window 안 사용자 말이 이번 말까지 8번이면 '수다가 길어졌다'
     chatty-window: 10m
