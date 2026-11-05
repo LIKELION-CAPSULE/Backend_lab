@@ -156,17 +156,6 @@ class RelationService implements RelationQuery, RelationCommands {
     }
 
     @Override
-    @Deprecated(forRemoval = true)
-    public AffinityChange applyChat(long userId, long characterId, long sessionId, UUID requestId, int delta) {
-        return applyChatScore(
-                userId,
-                characterId,
-                sessionId,
-                requestId,
-                new ChatScore(SignalType.NEUTRAL, Math.clamp(delta, -5, 5), 0));
-    }
-
-    @Override
     public AffinityChange applyChatScore(
             long userId, long characterId, long sessionId, UUID requestId, ChatScore score) {
         Relation rel = lock(userId, characterId);
@@ -191,12 +180,6 @@ class RelationService implements RelationQuery, RelationCommands {
                         null,
                         requestId,
                         score.signal().name()));
-    }
-
-    @Override
-    @Deprecated(forRemoval = true)
-    public StudySettlement settleStudyTime(long userId, long characterId, long sessionId, int studySeconds) {
-        return settleStudy(userId, characterId, sessionId, studySeconds, studySeconds);
     }
 
     @Override

@@ -13,12 +13,6 @@ public interface SessionClosingHandler {
     /** dialogue가 만든 마무리 초안. session은 내용을 모르고 그대로 돌려준다 */
     interface Draft {}
 
-    /**
-     * @deprecated {@link #draft} + {@link #close(SessionClosing, Draft)} 사용. LLM을 트랜잭션 안에서 기다린다. 제거 예정 PR: 이전 뒤
-     */
-    @Deprecated(forRemoval = true)
-    String close(SessionClosing closing);
-
     /** 트랜잭션 밖에서 먼저: 이번 세션 카드와 완료 대사를 만든다(LLM, 최대 5초). 대화 데이터는 쓰지 않는다 (LLM 호출 기록만 남음) */
     default Draft draft(SessionClosing closing) {
         return null;
@@ -28,7 +22,5 @@ public interface SessionClosingHandler {
      * 공부 종료 트랜잭션 안: 초안을 저장하고 메시지를 지운 뒤, 완료 대사(closingLine)를 돌려준다. session이 study_sessions.closing_line에 저장.
      * draft가 null이면(자동 마감 배치) 여기서 만든다: 그동안 LLM을 트랜잭션 안에서 기다린다
      */
-    default String close(SessionClosing closing, Draft draft) {
-        return close(closing);
-    }
+    String close(SessionClosing closing, Draft draft);
 }
