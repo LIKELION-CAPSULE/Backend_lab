@@ -89,11 +89,11 @@ class ContentTest {
         assertThat(room.name()).isEqualTo("밤의 호그와트 도서관");
         assertThat(room.characters()).extracting(CharacterInfo::name).containsExactly("말포이");
         assertThat(room.thumbnailUrl())
-                .isEqualTo("https://cdn.capsule.invalid/images/malfoy-ts/hogwarts-night-poster-v1.webp");
+                .isEqualTo("https://cdn.capsule.invalid/images/malfoy-ts/hogwarts-night-seated-background-v1.webp");
         assertThat(room.bannerUrl())
                 .isEqualTo("https://cdn.capsule.invalid/images/malfoy-ts/hogwarts-night-detail-banner-v1.webp");
         assertThat(room.characters().get(0).profileImageUrl())
-                .isEqualTo("https://cdn.capsule.invalid/images/malfoy-ts/malfoy-ts-study-v1.webp");
+                .isEqualTo("https://cdn.capsule.invalid/images/malfoy-ts/malfoy-ts-fullbody-v1.webp");
 
         assertThat(roomQuery.defaultBackground(1))
                 .contains(new BackgroundInfo(
