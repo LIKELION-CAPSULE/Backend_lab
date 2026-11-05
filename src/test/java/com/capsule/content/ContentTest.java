@@ -66,7 +66,15 @@ class ContentTest {
                         .value("https://cdn.capsule.invalid/haru/v1/Haru.model3.json"))
                 .andExpect(jsonPath("$.avatars[0].model.scale").value(1.0))
                 .andExpect(jsonPath("$.avatars[0].model.offsetX").value(0))
-                .andExpect(jsonPath("$.avatars[0].model.offsetY").value(0));
+                .andExpect(jsonPath("$.avatars[0].model.offsetY").value(0))
+                // 공식 샘플 아바타 2개 추가 (2026-11-06), 정렬 순서대로
+                .andExpect(jsonPath("$.avatars.length()").value(3))
+                .andExpect(jsonPath("$.avatars[1].name").value("히요리"))
+                .andExpect(jsonPath("$.avatars[1].model.modelJsonUrl")
+                        .value("https://cdn.capsule.invalid/hiyori/v1/hiyori_pro_t11.model3.json"))
+                .andExpect(jsonPath("$.avatars[2].name").value("나토리"))
+                .andExpect(jsonPath("$.avatars[2].model.modelJsonUrl")
+                        .value("https://cdn.capsule.invalid/natori/v1/natori_pro_t06.model3.json"));
     }
 
     @Test
