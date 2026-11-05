@@ -19,4 +19,9 @@ public interface ConversationRepository extends JpaRepository<Conversation, Long
             VALUES (:userId, :characterId, :now)
             ON CONFLICT (user_id, character_id) DO NOTHING""", nativeQuery = true)
     void insertIfAbsent(long userId, long characterId, Instant now);
+
+    /** 회원 탈퇴. chat_messages · conversation_recaps는 DB의 ON DELETE CASCADE로 같이 지워진다 */
+    @Modifying
+    @Query("delete from Conversation c where c.userId = :userId")
+    void deleteByUserId(long userId);
 }
