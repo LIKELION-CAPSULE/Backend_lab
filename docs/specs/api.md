@@ -1604,6 +1604,7 @@ json
 - 와이어프레임: 마이페이지 '회원 탈퇴' (추가 필요)
 - 백엔드: Not started
 - 프론트: Not started
+- 노션: https://app.notion.com/p/40fb9a07e592813bb828d6221ebd26ca
 
 > 2026-11-05: 회원 탈퇴 추가. DB 최종본의 탈퇴 원칙(소프트 삭제, `users` 행은 남기고 개인정보만 비움)을 API로
 
