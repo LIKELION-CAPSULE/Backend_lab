@@ -42,6 +42,8 @@ class SceneChatPipeline implements ChatPipeline {
     static final String CHATTY = "수다가 길어졌다: 공부 중인데 대화만 계속하고 있다. 이번 말은 짧게 받아 주고 공부로 돌려보낸다 (다그치지 말고 캐릭터 말투로)";
     /** 고정 블록에 예시로 넣는 상태 변화 (순간 동작은 미리 쓴 대사 그대로라 뺀다) */
     static final String TODAY = "TODAY";
+    /** 한 말에 넣는 로어북 카드 수 상한: 여러 이름을 한꺼번에 꺼내도 프롬프트가 커지지 않게 */
+    static final int LORE_CARDS = 2;
 
     static final List<String> STATE_SITUATIONS =
             List.of("GREETING", "AWAY", "AWAY_2", "AWAY_3", "RETURN", "BREAK", "BREAK_END");
@@ -175,6 +177,12 @@ class SceneChatPipeline implements ChatPipeline {
         if (today != null && in.history().isEmpty()) L.add(c.speaker() + " 오늘: " + today);
         // 기억 (ADR 0022 결정 16): 아는 사실은 결정 모델이 이번 말에 맞춰 고른 하나만, 세션 카드는 최근 2장, 원문은 메시지로 15줄
         if (fact != null) L.add("<꺼낼 수 있는 기억> " + fact + " (자연스러울 때만, 단정하지 말고)");
+        // 로어북: 사용자가 방금 꺼낸 원작 얘기만 (키워드가 걸린 카드 최대 2장, 안 걸리면 아무것도 안 넣음)
+        List<CharacterContent.Lore> lore = c.loreFor(in.userMessage(), LORE_CARDS);
+        if (!lore.isEmpty())
+            L.add("<사용자가 꺼낸 원작 얘기 (네 입장)>\n"
+                    + lore.stream().map(l -> "- " + l.title() + ": " + l.text()).collect(Collectors.joining("\n"))
+                    + "\n</사용자가 꺼낸 원작 얘기>");
         if (in.summary() != null && !in.summary().isBlank())
             L.add("<지난 세션 흐름 (최근 것이 아래)>\n" + in.summary() + "\n</지난 세션 흐름>");
         // 사용자 일정은 공부 시작(이 세션 첫 대화)에만 (PM 확정: 시작과 끝에만)

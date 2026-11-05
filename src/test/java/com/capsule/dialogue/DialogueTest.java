@@ -31,6 +31,7 @@ import com.capsule.content.api.ReactionQuery;
 import com.capsule.dialogue.client.Decider;
 import com.capsule.dialogue.client.LlmGateway;
 import com.capsule.dialogue.config.CharacterContentSeeder;
+import com.capsule.dialogue.config.DialogueProperties;
 import com.capsule.dialogue.dto.LlmPurpose;
 import com.capsule.dialogue.service.ChatReplier;
 import com.capsule.relation.api.RelationCommands;
@@ -115,6 +116,9 @@ class DialogueTest {
 
     @Autowired
     SessionClosingHandler closingHandler;
+
+    @Autowired
+    DialogueProperties props;
 
     long userId;
     long sessionId;
@@ -578,8 +582,8 @@ class DialogueTest {
     }
 
     @Test
-    void eleventhMessageInAMinuteIsRejected() throws Exception {
-        for (int i = 0; i < 10; i++) {
+    void messageOverTheLimitInAMinuteIsRejected() throws Exception {
+        for (int i = 0; i < props.messageLimit(); i++) {
             send(UUID.randomUUID(), "파이팅").andExpect(status().isOk());
         }
         UUID rejected = UUID.randomUUID();
@@ -591,7 +595,7 @@ class DialogueTest {
 
     @Test
     void resendWhileFirstIsStillRunningIsNotCountedAgainstRateLimit() throws Exception {
-        for (int i = 0; i < 9; i++) {
+        for (int i = 0; i < props.messageLimit() - 1; i++) {
             send(UUID.randomUUID(), "파이팅").andExpect(status().isOk());
         }
         UUID requestId = UUID.randomUUID();
@@ -604,7 +608,7 @@ class DialogueTest {
                 .when(llm)
                 .complete(any(), any(), any(), any(), any());
 
-        // 10번째 요청이 LLM을 기다리는 동안 같은 requestId로 재전송 → 한도(10)에 세지 않고 같은 답장
+        // 한도의 마지막 요청이 LLM을 기다리는 동안 같은 requestId로 재전송 → 한도에 세지 않고 같은 답장
         CompletableFuture<MvcResult> first = CompletableFuture.supplyAsync(() -> {
             try {
                 return send(requestId, "졸려").andReturn();

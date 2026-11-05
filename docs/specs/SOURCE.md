@@ -10,7 +10,7 @@
 | `schema.sql` | DB: https://app.notion.com/p/40db9a07e59280abad14da2dde00c864 | 맨 위 안내 주석을 뺀 나머지를 페이지의 SQL 코드 블록에 |
 | `flow.md`, `skeleton-plan.md`, `judgment-backlog.md` | 없음 | 레포에만 |
 
-노션 사본 반영: 2026-11-05 `bea3ecd` (최종 정리: 아바타 9 · 16, 룸 배너 12, 목표 시간 최소 3분 16, 예시 JSON 18~20, 공부 포기 22, schema.sql 엔진 · 세계관 제거 · content_version · last_severe_at. 프론트 연동 가이드 페이지 새로). 그 전: `f0d9a0b`. 노션 상위 페이지와 DB 페이지 맨 위에도 같은 커밋을 적는다.
+노션 사본 반영: 2026-11-05 `b207fb6` (회원 탈퇴 27. DB 행 추가, HTTP method에 DELETE 선택지 추가. schema.sql은 안 바뀌어 DB 페이지는 `bea3ecd` 그대로). 그 전: `bea3ecd` (최종 정리: 아바타 9 · 16, 룸 배너 12, 목표 시간 최소 3분 16, 예시 JSON 18~20, 공부 포기 22, schema.sql 엔진 · 세계관 제거 · content_version · last_severe_at. 프론트 연동 가이드 페이지 새로), `f0d9a0b`. 노션 상위 페이지와 DB 페이지 맨 위에도 같은 커밋을 적는다.
 
 ## 이력 (노션이 원본이던 때, spec-sync로 가져옴)
 - 7차(11-04): 동작 이벤트 3종 DROWSY · YAWN · WAVE. API 18·19번, schema.sql `session_events.type`·주석

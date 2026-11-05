@@ -45,6 +45,8 @@
 --     character_profiles.world_id 삭제, 안 쓰던 conversations.summary · summary_updated_at 삭제,
 --     character_profiles.content_version 추가 (profile.yml version이 더 높으면 시작할 때 다시 불러옴)
 --   - user_character_relations.last_severe_at 추가: 0점에서 심한 말을 하면 기록(delta 0)이 안 남아 그날 오름 멈춤이 안 걸리던 것
+--   - character_profiles.lore 추가 (로어북): 키워드가 사용자 말에 나올 때만 답장 프롬프트에 넣는 원작 설정 카드.
+--     지운 world_lore를 캐릭터별 카드로 되살림 (해리 포터를 말해도 반응이 밋밋하던 것)
 -- =====================================================================
 
 BEGIN;
@@ -498,6 +500,7 @@ CREATE TABLE character_profiles (
     study_style          text        NOT NULL,           -- 공부 중 답 길이 · 구성 (예: 1~2문장, 공부 얘기 중심)
     break_style          text        NOT NULL,           -- 쉬는 시간 답 길이 · 구성 (예: 2~4문장, 공부 재촉 없이 수다)
     samples              jsonb       NOT NULL DEFAULT '[]',  -- 관계 단계별 말투 샘플 [{"minStage", "user", "reply"}] (ADR 0022 결정 19)
+    lore                 jsonb       NOT NULL DEFAULT '[]',  -- 로어북 [{"title", "keys": [...], "text"}]. 사용자 말에 keys 중 하나가 있으면 그 카드만 답장 프롬프트에 (최대 2장)
     content_version      integer     NOT NULL DEFAULT 0,     -- 불러온 profile.yml의 version. 파일 쪽이 더 높으면 앱 시작 때 파일로 다시 불러온다 (실험실에서 고친 값은 덮임)
     updated_at           timestamptz NOT NULL DEFAULT now()
 );
