@@ -15,8 +15,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.capsule.TestcontainersConfiguration;
@@ -326,6 +328,109 @@ class DialogueTest {
                         Integer.class,
                         sessionId))
                 .isEqualTo(1);
+    }
+
+    // --- 28 메시지 스트리밍 ---
+
+    @Test
+    void streamMessageSendsReplyThenDone() throws Exception {
+        UUID requestId = UUID.randomUUID();
+        when(relationCommands.applyChatScore(eq(userId), eq(CHARACTER_ID), eq(sessionId), eq(requestId), any()))
+                .thenReturn(change(1, 81));
+
+        String body = streamed(requestId, "이거 너무 어려워", MediaType.TEXT_EVENT_STREAM);
+        // 대사가 먼저 reply로, 끝에 20번 응답 전체가 done으로 (Fake 공급자는 원문을 한 번에 넘긴다)
+        assertThat(body).contains("event:reply\ndata:{\"content\":\"「이거 너무 어려워」… 그렇구나. 한 문제만 더 해보자.\"}");
+        assertThat(body.indexOf("event:reply")).isLessThan(body.indexOf("event:done"));
+        assertThat(body)
+                .contains("event:done\ndata:{\"requestId\":\"" + requestId + "\"")
+                .contains("\"affinity\":{\"delta\":1")
+                .contains("\"fallback\":false")
+                .doesNotContain("event:error");
+        assertThat(rows(requestId)).isEqualTo(2);
+
+        // 재전송은 저장된 답장을 done 한 번으로 (20과 같은 규칙: 감정 null)
+        String again = streamed(requestId, "이거 너무 어려워", MediaType.TEXT_EVENT_STREAM);
+        assertThat(again).doesNotContain("event:reply").contains("event:done").contains("\"emotion\":null");
+        assertThat(rows(requestId)).isEqualTo(2);
+    }
+
+    @Test
+    void streamWorksBehindAProxyThatOnlyAcceptsJson() throws Exception {
+        // 프론트 프록시는 지금 accept: application/json을 붙인다. 그래도 스트림이 와야 프록시를 안 고쳐도 된다
+        String body = streamed(UUID.randomUUID(), "안녕", MediaType.APPLICATION_JSON);
+        assertThat(body).contains("event:reply").contains("event:done");
+    }
+
+    @Test
+    void streamErrorsBeforeOpeningAreJson() throws Exception {
+        mvc.perform(post("/api/sessions/{sessionId}/messages/stream", sessionId)
+                        .with(jwt().jwt(j -> j.subject(String.valueOf(userId))))
+                        // 명세 28: Accept는 둘 다 (event-stream만 보내면 에러 JSON을 쓸 수 없어 실패한다)
+                        .accept(MediaType.TEXT_EVENT_STREAM, MediaType.APPLICATION_JSON)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"requestId\":\"" + UUID.randomUUID() + "\",\"characterId\":999,\"content\":\"안녕\","
+                                + "\"inputType\":\"TEXT\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("CHARACTER_NOT_IN_SESSION"));
+    }
+
+    @Test
+    void streamWithoutAFirstWordInTimeFallsBack() throws Exception {
+        doAnswer(invocation -> {
+                    Thread.sleep(6_000);
+                    return invocation.callRealMethod();
+                })
+                .when(llm)
+                .complete(any(), any(), any(), any(), any());
+        UUID requestId = UUID.randomUUID();
+        when(relationCommands.applyChatScore(userId, CHARACTER_ID, sessionId, requestId, ChatScore.none()))
+                .thenReturn(change(0, 80));
+
+        String body = streamed(requestId, "이거 어려워", MediaType.TEXT_EVENT_STREAM);
+        // 첫 대사가 5초 안에 안 왔으니 reply 없이 대체 대사 done 한 번 (늦게 온 글은 보내지 않는다)
+        assertThat(body).doesNotContain("event:reply");
+        assertThat(body).contains("\"content\":\"미안, 잠깐 딴생각했어. 다시 말해줄래?\"").contains("\"fallback\":true");
+        verify(relationCommands).applyChatScore(userId, CHARACTER_ID, sessionId, requestId, ChatScore.none());
+    }
+
+    @Test
+    void streamKeepsWaitingOnceTheFirstWordIsOut() throws Exception {
+        // 첫 대사는 바로 나왔는데 끝나는 데 6초: 이미 보인 글을 대체 대사로 바꾸지 않고 끝까지 기다린다
+        doAnswer(invocation -> {
+                    java.util.function.Consumer<String> onText = invocation.getArgument(4);
+                    if (invocation.getArgument(0) != LlmPurpose.CHAT || onText == null)
+                        return invocation.callRealMethod();
+                    onText.accept("{\"reply\":\"잠깐만");
+                    Object result = invocation.callRealMethod(); // 게이트웨이는 시작할 때만 마감을 본다
+                    Thread.sleep(6_000); // 스트림이 늦게 끝남
+                    return result;
+                })
+                .when(llm)
+                .complete(any(), any(), any(), any(), any());
+        UUID requestId = UUID.randomUUID();
+        when(relationCommands.applyChatScore(eq(userId), eq(CHARACTER_ID), eq(sessionId), eq(requestId), any()))
+                .thenReturn(change(0, 80));
+
+        String body = streamed(requestId, "이거 어려워", MediaType.TEXT_EVENT_STREAM);
+        assertThat(body).contains("event:reply\ndata:{\"content\":\"잠깐만\"}");
+        assertThat(body)
+                .contains("\"content\":\"「이거 어려워」… 그렇구나. 한 문제만 더 해보자.\"")
+                .contains("\"fallback\":false");
+    }
+
+    /** 28을 불러 스트림이 끝날 때까지 받은 본문 */
+    private String streamed(UUID requestId, String content, MediaType accept) throws Exception {
+        MvcResult started = mvc.perform(post("/api/sessions/{sessionId}/messages/stream", sessionId)
+                        .with(jwt().jwt(j -> j.subject(String.valueOf(userId))))
+                        .accept(accept)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"requestId\":\"" + requestId + "\",\"characterId\":" + CHARACTER_ID
+                                + ",\"content\":\"" + content + "\",\"inputType\":\"TEXT\"}"))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+        mvc.perform(asyncDispatch(started)).andExpect(status().isOk());
+        return started.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
     }
 
     /** 이 말을 보내고 relation에 넘긴 점수 */

@@ -20,7 +20,11 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.UnaryOperator;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
@@ -76,11 +80,11 @@ class SceneChatPipeline implements ChatPipeline {
     }
 
     @Override
-    public ChatOutcome reply(ChatInput in, LlmContext ctx) {
+    public ChatOutcome reply(ChatInput in, LlmContext ctx, Consumer<String> onText) {
         long characterId = in.character().id();
         // 설정을 아직 안 채운 캐릭터는 공통 프롬프트(SIMPLE)로 말한다: 새 캐릭터 행만 넣어도 대화는 된다
         java.util.Optional<CharacterContent> found = contents.find(characterId);
-        if (found.isEmpty()) return generic.reply(in, ctx);
+        if (found.isEmpty()) return generic.reply(in, ctx, onText);
         CharacterContent c = found.get();
         PromptVersion system = prompts.resolve(PromptKey.SCENE_SYSTEM, characterId, in.pinnedPrompts());
         String fact = factPicker.pick(in, ctx).orElse(null); // 아는 사실은 결정 모델이 고른 하나만 (없으면 안 넣음)
@@ -92,12 +96,13 @@ class SceneChatPipeline implements ChatPipeline {
                 new Llm.SystemBlock(card, false));
         List<Llm.ChatTurn> messages = new ArrayList<>(PromptVars.turns(in.history(), props.historyLines()));
         messages.add(new Llm.ChatTurn("user", in.userMessage()));
-        Llm.Result r = llm.complete(LlmPurpose.CHAT, blocks, messages, ctx.withPrompts(List.of(system.id())), null);
+        Llm.Result r = llm.complete(LlmPurpose.CHAT, blocks, messages, ctx.withPrompts(List.of(system.id())), onText);
 
         JsonNode json = replyJson(r);
-        String reply = replyText(r.text(), json);
+        Plain plain = json == null ? plain(r.text(), c::emotion) : null;
+        String reply = plain != null ? plain.text() : replyText(r.text(), json);
         if (reply == null || reply.isBlank()) throw new IllegalStateException("빈 답장: " + r.text());
-        String emotion = json == null ? null : c.emotion(LlmJson.str(json.path("emotion")));
+        String emotion = plain != null ? plain.emotion() : c.emotion(LlmJson.str(json.path("emotion")));
 
         Map<String, Object> trace = new LinkedHashMap<>();
         trace.put("pipeline", SCENE);
@@ -182,6 +187,24 @@ class SceneChatPipeline implements ChatPipeline {
         L.add("지금: " + (in.onBreak() ? c.breakStyle() : c.studyStyle()));
         L.add("</상황>");
         return String.join("\n", L);
+    }
+
+    /** JSON 없는 맨 글 끝에 붙인 감정: "…갱신. emotion=웃음", "(emotion: 웃음)" (실제 키 스트리밍 확인 9번 중 1번) */
+    private static final Pattern PLAIN_EMOTION = Pattern.compile(
+            "\\s*[(\\[]?\\s*\\bemotion\\s*[=:]\\s*\"?([^\\s\")\\]]+)\"?\\s*[)\\]]?\\s*$", Pattern.CASE_INSENSITIVE);
+
+    /** 맨 글을 대사와 감정으로 나눈 것 */
+    record Plain(String text, String emotion) {}
+
+    /**
+     * 맨 글(JSON 없는 답): 끝의 감정 표시를 떼어 감정으로 (말풍선에 "emotion=웃음"이 나가지 않게).
+     * 그 이름이 이 캐릭터의 감정일 때만 뗀다: 영어 공부 중 "emotion: 감정" 같은 대사를 자르지 않게
+     */
+    static Plain plain(String text, UnaryOperator<String> emotion) {
+        Matcher m = PLAIN_EMOTION.matcher(text);
+        if (!m.find()) return new Plain(text, null);
+        String e = emotion.apply(m.group(1));
+        return e == null ? new Plain(text, null) : new Plain(text.substring(0, m.start()), e);
     }
 
     /** 답장 글: JSON의 reply. 대사를 글로 쓰고 뒤에 {"emotion": …}만 붙인 답(실제 키 평가 76번 중 1번)은 앞의 글 */

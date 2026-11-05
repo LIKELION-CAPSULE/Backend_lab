@@ -3,6 +3,7 @@ package com.capsule.dialogue.service;
 import com.capsule.dialogue.dto.ChatInput;
 import com.capsule.dialogue.dto.ChatOutcome;
 import com.capsule.dialogue.dto.LlmContext;
+import java.util.function.Consumer;
 
 /**
  * 메시지 답장(명세 20)을 만드는 방법. 서비스와 실험실이 같은 구현을 부른다 (실험실에서 본 품질 = 서비스 품질).
@@ -17,5 +18,10 @@ public interface ChatPipeline {
 
     String name();
 
-    ChatOutcome reply(ChatInput in, LlmContext ctx);
+    default ChatOutcome reply(ChatInput in, LlmContext ctx) {
+        return reply(in, ctx, null);
+    }
+
+    /** @param onText null이 아니면 답장 LLM을 스트리밍으로 부르며 지금까지 받은 원문(JSON 그대로)을 넘긴다 (명세 28) */
+    ChatOutcome reply(ChatInput in, LlmContext ctx, Consumer<String> onText);
 }

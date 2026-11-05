@@ -20,6 +20,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,6 +51,11 @@ public class ChatReplier {
     }
 
     public ChatOutcome reply(ChatPipeline pipeline, ChatInput in, LlmContext ctx) {
+        return reply(pipeline, in, ctx, null);
+    }
+
+    /** @param onText 답장 LLM 원문 스트림 (명세 28). null이면 한 번에 */
+    public ChatOutcome reply(ChatPipeline pipeline, ChatInput in, LlmContext ctx, Consumer<String> onText) {
         SignalType guess = ChatScorer.detect(in.userMessage(), props.lowEffortMaxChars());
         boolean decide = DialogueProperties.DECIDER.equals(props.signalDetector());
         boolean confirm = !decide && guess == SignalType.HATE_OR_SEXUAL;
@@ -58,7 +64,7 @@ public class ChatReplier {
                 : null;
         ChatOutcome outcome;
         try {
-            outcome = pipeline.reply(in, ctx);
+            outcome = pipeline.reply(in, ctx, onText);
         } catch (RuntimeException e) {
             if (asked != null) asked.cancel(true);
             throw e;
