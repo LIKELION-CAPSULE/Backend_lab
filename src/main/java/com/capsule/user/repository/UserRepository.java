@@ -25,4 +25,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
                     + " VALUES (:provider, :providerUserId, :userId)",
             nativeQuery = true)
     void insertSocialAccount(String provider, String providerUserId, long userId);
+
+    /** 탈퇴 (api.md 27): 같은 소셜 계정으로 다시 가입할 수 있게 연결을 지운다 */
+    @Modifying
+    @Query(value = "DELETE FROM user_social_accounts WHERE user_id = :userId", nativeQuery = true)
+    void deleteSocialAccounts(long userId);
 }

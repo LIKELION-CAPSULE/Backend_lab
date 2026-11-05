@@ -15,6 +15,7 @@ import org.springframework.http.HttpStatus;
 public class User {
 
     private static final int NICKNAME_MAX = 20;
+    public static final String WITHDRAWN_NICKNAME = "탈퇴한 사용자";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -71,6 +72,16 @@ public class User {
     public void changePassword(String passwordHash, Instant now) {
         this.password = passwordHash;
         this.updatedAt = now;
+    }
+
+    /** 회원 탈퇴 (api.md 27): 행은 남기고 개인정보만 비운다. 닉네임은 NOT NULL이라 고정 문구 */
+    public void withdraw(Instant now) {
+        this.nickname = WITHDRAWN_NICKNAME;
+        this.email = null;
+        this.password = null;
+        this.avatarId = null;
+        this.updatedAt = now;
+        this.withdrawnAt = now;
     }
 
     public void updateProfile(String nickname, long avatarId, Instant now) {
