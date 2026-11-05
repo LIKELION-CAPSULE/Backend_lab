@@ -43,11 +43,10 @@ public class ExpressionPicker {
     public String pick(CharacterContent c, String said, String reply, LlmContext ctx) {
         if (c.expressions().isEmpty() || reply == null || reply.isBlank()) return null;
         String state = (said == null || said.isBlank() ? "" : "사용자: " + said + "\n") + c.speaker() + ": " + reply;
-        Decider.Question q =
-                new Decider.Question(
-                        c.speaker() + "가 이 대사를 말하는 순간의 얼굴 표정을 하나 고른다. 말투가 아니라 이 대사에서 드러나는 감정"
-                                + "(칭찬받음 · 챙김 · 놀람 · 졸림 · 진지함 · 서운함 · 화)을 본다",
-                        c.expressionChoices());
+        Decider.Question q = new Decider.Question(
+                c.speaker() + "가 이 대사를 말하는 순간의 얼굴 표정을 하나 고른다. 말투가 아니라 이 대사에서 드러나는 감정"
+                        + "(칭찬받음 · 챙김 · 놀람 · 졸림 · 진지함 · 서운함 · 화)을 본다",
+                c.expressionChoices());
         CompletableFuture<Decision> f = CompletableFuture.supplyAsync(
                 () -> decider.decide(state, Map.of(QUESTION, q), ctx.withDeadline(null))
                         .get(QUESTION),
