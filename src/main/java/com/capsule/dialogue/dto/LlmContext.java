@@ -11,7 +11,7 @@ import java.util.UUID;
  * @param traceId 한 요청(대화 한 턴 등)에서 나간 호출을 묶는 값
  * @param promptVersionIds 이 호출에 쓴 prompt_versions.id
  * @param provider · model · temperature · maxTokens 실험실·평가에서만 채운다. null이면 설정(capsule.llm) 값
- * @param deadline 서비스가 기다리는 마감(명세의 5초). 지나면 게이트웨이가 새 호출(재시도·대체 공급자)을
+ * @param deadline 서비스가 기다리는 마감(llm-budget, 명세 19·20·22). 지나면 게이트웨이가 새 호출(재시도·대체 공급자)을
  *     시작하지 않는다: 결과가 버려질 호출에 돈을 쓰지 않게. null이면 마감 없음(실험실은 늦어도 끝까지 받아 실제 지연을 본다)
  */
 public record LlmContext(

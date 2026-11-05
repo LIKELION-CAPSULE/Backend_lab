@@ -265,7 +265,7 @@ class DialogueTest {
     void slowLlmReactionFallsBackToFixedLineWithoutEmotion() throws Exception {
         event(13, "RETURN", false, false);
         doAnswer(invocation -> {
-                    Thread.sleep(6_000);
+                    Thread.sleep(8_000); // llm-budget(7초)보다 길게
                     return invocation.callRealMethod();
                 })
                 .when(llm)
@@ -382,7 +382,7 @@ class DialogueTest {
     @Test
     void streamWithoutAFirstWordInTimeFallsBack() throws Exception {
         doAnswer(invocation -> {
-                    Thread.sleep(6_000);
+                    Thread.sleep(8_000); // llm-budget(7초)보다 길게
                     return invocation.callRealMethod();
                 })
                 .when(llm)
@@ -392,7 +392,7 @@ class DialogueTest {
                 .thenReturn(change(0, 80));
 
         String body = streamed(requestId, "이거 어려워", MediaType.TEXT_EVENT_STREAM);
-        // 첫 대사가 5초 안에 안 왔으니 reply 없이 대체 대사 done 한 번 (늦게 온 글은 보내지 않는다)
+        // 첫 대사가 마감(7초) 안에 안 왔으니 reply 없이 대체 대사 done 한 번 (늦게 온 글은 보내지 않는다)
         assertThat(body).doesNotContain("event:reply");
         assertThat(body).contains("\"content\":\"미안, 잠깐 딴생각했어. 다시 말해줄래?\"").contains("\"fallback\":true");
         verify(relationCommands).applyChatScore(userId, CHARACTER_ID, sessionId, requestId, ChatScore.none());
@@ -628,7 +628,7 @@ class DialogueTest {
     @Test
     void slowLlmFallsBackWithoutAffinityChange() throws Exception {
         doAnswer(invocation -> {
-                    Thread.sleep(6_000);
+                    Thread.sleep(8_000); // llm-budget(7초)보다 길게
                     return invocation.callRealMethod();
                 })
                 .when(llm)

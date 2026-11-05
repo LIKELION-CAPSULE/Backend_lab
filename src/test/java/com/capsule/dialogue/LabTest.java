@@ -171,8 +171,16 @@ class LabTest {
                 .andExpect(jsonPath("$[0].usages[0].request.messages[0].text").value("수학 3단원 끝내고 쉴게"))
                 .andExpect(jsonPath("$[0].usages[0].request.messages[2].text")
                         .value(org.hamcrest.Matchers.containsString("5분째 돌아오지 않았다")))
+                .andExpect(jsonPath("$[0].usages[0].request.system[1].text")
+                        .value(org.hamcrest.Matchers.containsString("흥, 도망간 줄 알았잖아."))) // 단계 1의 AWAY_3 대사가 반응 카드에 예시로
+                // 반응 고정 블록은 바이블 · 규칙만: 답장의 관계 설명 · 말투 샘플(단계 1 "앉든가")은 없다
                 .andExpect(jsonPath("$[0].usages[0].request.system[0].text")
-                        .value(org.hamcrest.Matchers.containsString("흥, 도망간 줄 알았잖아."))); // 단계 1의 AWAY_3 대사가 예시로
+                        .value(org.hamcrest.Matchers.allOf(
+                                org.hamcrest.Matchers.containsString("너는 말포이다"),
+                                org.hamcrest.Matchers.containsString("(방금 일어난 일: …)"),
+                                org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("앉든가")),
+                                org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("서먹한 사이")),
+                                org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("도망간 줄")))));
 
         mvc.perform(get(API + "/usages/summary").param("days", "1"))
                 .andExpect(status().isOk())

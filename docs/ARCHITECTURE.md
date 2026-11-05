@@ -225,7 +225,8 @@ flowchart LR
 
 | 파일 | 프롬프트 키 | 쓰는 곳 |
 |---|---|---|
-| `prompts/scene.system.md` | `SCENE_SYSTEM` | 답장(SCENE)과 상태 반응의 고정 블록 틀. 캐시됨 |
+| `prompts/scene.system.md` | `SCENE_SYSTEM` | 답장(SCENE)의 고정 블록 틀. 캐시됨 |
+| `prompts/scene.reaction.md` | `SCENE_REACTION` | 상태 반응(SCENE)의 고정 블록 틀(바이블 · 규칙만). 캐시됨 |
 | `prompts/chat.system.md`, `chat.context.md` | `CHAT_SYSTEM`, `CHAT_CONTEXT` | SIMPLE 답장 (캐릭터 설정이 없을 때) |
 | `prompts/reaction.system.md` | `REACTION_SYSTEM` | 캐릭터 설정이 없는 캐릭터의 상태 반응 |
 | `prompts/summary.system.md` | `SUMMARY_SYSTEM` | 종료 때 세션 흐름 카드 |
@@ -300,7 +301,7 @@ sequenceDiagram
 3. `SceneChatPipeline.reply` (캐릭터 설정이 없으면 `SimpleChatPipeline`):
    - 프롬프트 `SCENE_SYSTEM`을 `PromptService.resolve`로 고른다.
    - `FactPicker.pick`: 아는 사실이 있으면 결정 모델에게 [NONE + 사실 f1..fN] 중 하나를 고르게 한다. `fact-pick-wait`(1.5초) 넘거나 확신도 0.6 미만이면 안 넣는다.
-   - 시스템 블록 1 (캐시 O): `scene.system`에 `systemVars` — 페르소나(`bible`, 원작 말투 산문), 규칙, 지금 단계의 관계 설명, 단계별 말투 샘플, 상태 변화 예시 대사(상황마다 2줄).
+   - 시스템 블록 1 (캐시 O): `scene.system`에 `systemVars` — 페르소나(`bible`, 원작 말투 산문), 규칙, 지금 단계의 관계 설명, 단계별 말투 샘플. 상태 변화 예시는 넣지 않는다(상태 반응 카드에만).
    - 시스템 블록 2 (캐시 X, `card`): 닉네임·시각·공부한 분 / 첫 대화면 캐릭터의 오늘 근황(TODAY 대사, 요일로) / 고른 사실 하나 / 로어북 카드(이번 말에 키워드가 걸린 것 최대 2장) / 지난 세션 흐름 / 첫 대화면 사용자 일정 / 피할 말버릇 / 공부 중 수다가 길면 공부로 돌려보내기 지시 / 공부 중·쉬는 시간 말하는 법.
    - 메시지: 이번 세션 최근 `history-lines`(15)줄 + 이번 말. `LlmPurpose.CHAT`.
    - 결과 해석(`spoken`): LLM은 대사만 쓴다(말포이 v3, 3~6문장). 그 글이 대사다. 옛 형식 · 가짜 AI의 JSON이면 `reply`. 토큰 한도로 잘렸거나 JSON 모양인데 깨졌으면 예외 → 대체 대사.
@@ -347,7 +348,7 @@ sequenceDiagram
 - trigger 규칙은 18과 같다. `intensity`는 `AWAY`에만(없으면 1, 1~`away-intensity-max` 3, 넘으면 400). 강도 2·3은 상황 칸 `AWAY_2`·`AWAY_3`.
 - 관계 단계만 읽어 말투를 고른다. 호감도는 18이 이미 반영했다.
 - AI 대사: `reaction-llm-triggers` = `GREETING`, `AWAY`, `RETURN`, `BREAK`, `BREAK_END`. `ReactionWriter.generate`를 5초 안에(`LlmPurpose.REACTION`).
-  - 캐릭터 설정이 있으면 답장과 같은 고정 블록(`scene.system` + `systemVars`, 캐시) + 반응 카드(`ReactionWriter.card`: 닉네임, GREETING이면 오늘 근황, 지난 세션 흐름, 피할 말버릇, "한 문장, 다그치지 않기"). 메시지는 이번 세션 최근 `reaction-context-lines`(6)줄 + `(방금 일어난 일: …)`. LLM은 대사만 쓰고 표정은 답장과 같이 `ExpressionPicker`가.
+  - 캐릭터 설정이 있으면 반응 고정 블록(`scene.reaction`: 바이블 + 규칙만, 캐시) + 반응 카드(`ReactionWriter.card`: 닉네임, 그 단계 관계 설명 한 줄, GREETING이면 오늘 근황, 지난 세션 흐름, 이 상황 · 단계의 미리 쓴 대사 두 줄(말투 예시), 피할 말버릇, "한 문장, 다그치지 않기"). 메시지는 이번 세션 최근 `reaction-context-lines`(6)줄 + `(방금 일어난 일: …)`. LLM은 대사만 쓰고 표정은 답장과 같이 `ExpressionPicker`가.
   - 설정이 없으면 `reaction.system` 공통 프롬프트, 감정 후보는 `capsule.dialogue.emotions`.
 - 미리 쓴 대사: 동작 이벤트(`DROWSY`·`YAWN`·`WAVE`·`HEAD_TURN`)와 LLM이 5초를 넘기거나 실패한 경우. `CharacterContents.next`(그 상황·단계 대사를 세션 단위로 순서대로) → 없으면 `FixedLines.reaction`(공통 `fixed.lines.yml`).
 - LLM이 실패해서 미리 쓴 대사로 간 경우 감정은 비우고(`fallback: true`) 동작도 없다(TODO J-12). 처음부터 미리 쓴 대사인 동작 이벤트는 그 대사 칸의 감정을 쓴다.
@@ -482,7 +483,7 @@ sequenceDiagram
 | 피할 말버릇 | `profile.yml`의 `habits` |
 | 표정 이름 · 표정 고르는 기준 | `profile.yml`의 `expressions`, `expressionGuide` (결정 모델 질문 문구는 `ExpressionPicker`) |
 | 표정 → Live2D 모션 매핑 | `live2d_reaction_maps` (content, 예시 데이터는 `db/seed/R__demo_content.sql`) |
-| 답장·반응 공통 틀 | `prompts/scene.system.md` (설정 없는 캐릭터는 `chat.system.md`·`chat.context.md`·`reaction.system.md`) |
+| 답장 · 반응 틀 | `prompts/scene.system.md` · `prompts/scene.reaction.md` (설정 없는 캐릭터는 `chat.system.md`·`chat.context.md`·`reaction.system.md`) |
 | 세션 카드·완료 대사 프롬프트 | `prompts/summary.system.md`, `prompts/closing.system.md` |
 | 공통 고정 대사·대체 대사 | `prompts/fixed.lines.yml` |
 | 상황 카드에 넣는 내용 | `SceneChatPipeline.card`, 반응은 `ReactionWriter.card` |

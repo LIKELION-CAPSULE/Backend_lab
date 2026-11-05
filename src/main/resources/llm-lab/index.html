@@ -369,15 +369,15 @@ function metaChips(x, calls) {
   return h('div', {class: 'chips'},
     x.emotion != null && h('span', {class: 'chip'}, '감정 ' + x.emotion),
     x.affinity != null && h('span', {class: 'chip'}, '호감도 ' + signed(x.affinity)),
-    h('span', {class: 'chip' + (x.overBudget ? ' over' : '')}, fmtMs(x.latencyMs) + (x.overBudget ? ' · 5초 초과: 서비스였다면 대체 대사' : '')),
+    h('span', {class: 'chip' + (x.overBudget ? ' over' : '')}, fmtMs(x.latencyMs) + (x.overBudget ? ' · 마감(7초) 초과: 서비스였다면 대체 대사' : '')),
     'costUsd' in x && h('span', {class: 'chip'}, fmtCost(x.costUsd)),
     calls != null && h('span', {class: 'chip'}, `LLM 호출 ${calls}회`));
 }
-// ponytail: 평가 대본은 턴별 overBudget이 없어 5초를 여기서 잰다. 서버가 주게 되면 그 값으로
+// ponytail: 평가 대본은 턴별 overBudget이 없어 마감(llm-budget 7초)을 여기서 잰다. 서버가 주게 되면 그 값으로
 const transcript = ts => h('div', {class: 'tx'}, (ts || []).map(t => [
   h('div', {class: 'bubble user'}, t.user),
   t.error ? h('div', {class: 'errbox'}, t.error) : h('div', {class: 'bubble bot'}, t.reply ?? ''),
-  metaChips({emotion: t.emotion, affinity: t.affinity, latencyMs: t.latencyMs, overBudget: t.latencyMs > 5000})]));
+  metaChips({emotion: t.emotion, affinity: t.affinity, latencyMs: t.latencyMs, overBudget: t.latencyMs > 7000})]));
 function turnView(t) {
   const det = h('div', {hidden: true});
   return h('div', {class: 'turn'},
@@ -529,7 +529,7 @@ function playTab() {
   })}, '실행');
   function render(k, rs) {
     const head = muted(`${rs.length}번 · 평균 ${fmtMs(avg(rs.map(r => r.latencyMs)))} · 합계 ${fmtCost(sum(rs, r => r.costUsd))}`
-      + ` · 5초 초과 ${rs.filter(r => r.overBudget).length}번 · 실패 ${rs.filter(r => r.error).length}번`);
+      + ` · 마감 초과 ${rs.filter(r => r.overBudget).length}번 · 실패 ${rs.filter(r => r.error).length}번`);
     head.classList.add('wide');
     out.replaceChildren(head, ...rs.map(r => {
       const o = r.output || {}, text = {chat: o.reply, reaction: o.content, summary: o.summary, closing: o.closingLine,
@@ -761,8 +761,8 @@ function evalTab() {
 function usageTab() {
   const days = h('input', {type: 'number', min: 1, value: 7, onchange: () => busy(null, load)});
   const sumBox = h('div'), recentBox = h('div');
-  const cols = ['day', 'source', 'provider', 'model', 'purpose', 'calls', 'errors', 'inputTokens', 'outputTokens', 'cacheReadTokens', 'cacheWriteTokens', 'costUsd', 'avgLatencyMs', 'p95LatencyMs', 'over5s'];
-  const head = ['날짜', '출처', '공급자', '모델', '목적', '호출', '오류', '입력', '출력', '캐시 읽기', '캐시 쓰기', '비용', '평균 지연', 'p95 지연', '5초 초과'];
+  const cols = ['day', 'source', 'provider', 'model', 'purpose', 'calls', 'errors', 'inputTokens', 'outputTokens', 'cacheReadTokens', 'cacheWriteTokens', 'costUsd', 'avgLatencyMs', 'p95LatencyMs', 'overBudget'];
+  const head = ['날짜', '출처', '공급자', '모델', '목적', '호출', '오류', '입력', '출력', '캐시 읽기', '캐시 쓰기', '비용', '평균 지연', 'p95 지연', '마감 초과'];
   async function load() {
     const [rows, recent] = await Promise.all([api('GET', '/usages/summary?days=' + clampInt(days.value, 1, 365)), api('GET', '/usages')]);
     sumBox.replaceChildren(h('div', {class: 'strong'}, `합계 ${fmtCost(sum(rows || [], r => r.costUsd))} · 호출 ${sum(rows || [], r => r.calls)}번 · 오류 ${sum(rows || [], r => r.errors)}번`),
@@ -800,7 +800,7 @@ function characterTab() {
         h('h4', null, '공부 중 (study_style)'), text(c.studyStyle), h('h4', null, '쉬는 시간 (break_style)'), text(c.breakStyle)),
       sec('공통 페르소나 (고정 블록)', text(c.bible)),
       sec('절대 규칙 (고정 블록)', text(c.rules)),
-      sec(`미리 쓴 대사 ${(c.lines || []).length}줄 (순간 동작은 그대로, 상태 변화는 단계별 AI 예시 · 5초 대체)`,
+      sec(`미리 쓴 대사 ${(c.lines || []).length}줄 (순간 동작은 그대로, 상태 변화는 단계별 AI 예시 · 마감 초과 대체)`,
         table(['상황', '단계부터', '순서', '대사', '표정'], (c.lines || []).map(l => tr([l.situation, l.minStage, l.sort, l.text, l.expression])))),
       sec('대화 점수표',
         table(['말의 종류', '점수', '감점 %', '세션 1번', '반복 시'], Object.entries(c.scores || {}).map(([k, s]) => tr([k, s.points, s.lossPercent || '', s.oncePerSession ? '예' : '', s.repeatPoints])))),
@@ -842,7 +842,7 @@ function characterTab() {
 const SECTIONS = [
   ['llm', 'AI 공급자 · 모델', 'provider = 기본 공급자, fallback-provider = 실패하면 한 번 더 (같은 요청을 다른 공급자로). routes = 용도별 등급 · 출력 한도 · 그 용도만 쓸 공급자(DECIDE → jev). API 키 · 주소는 Railway 변수로만'],
   ['relation', '호감도 · 레벨', '하루 오름 상한, 자리 비움 감점, 연속 출석, 레벨 1당 자리 지킴 초, 관계 단계(호감도 구간). 대화 한 번의 점수표는 캐릭터 설정의 scores (없으면 아래 대화의 chat-scores)'],
-  ['dialogue', '대화', '답장 파이프라인, 상태 반응을 AI로 만들 trigger, 말 종류 판정, 기본 점수표, 기억 크기, 5초 기준(llm-budget), 메시지 속도 제한. 시간은 PT5S · PT0.3S 형식'],
+  ['dialogue', '대화', '답장 파이프라인, 상태 반응을 AI로 만들 trigger, 말 종류 판정, 기본 점수표, 기억 크기, 대체 대사 마감(llm-budget, 7초), 메시지 속도 제한. 시간은 PT5S · PT0.3S 형식'],
 ];
 const kebab = s => s.replace(/[A-Z]/g, c => '-' + c.toLowerCase());
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -879,7 +879,7 @@ function settingsTab() {
   const intro = h('div', {class: 'card'},
     h('h3', null, '운영 설정: 배포 없이 서비스 동작 바꾸기'),
     muted('저장하면 다음 요청부터 실제 서비스(공부 · 대화 · 호감도)에 들어갑니다. 바꾼 칸만 DB에 남고, 나머지는 application.yml 값입니다. ↺ 또는 \'전부 yml 값으로\'로 되돌립니다.'),
-    muted('프롬프트(답장 · 반응 공통 틀 scene.system 등)는 \'프롬프트\' 탭에서 새 버전을 켜면, 말투 · 미리 쓴 대사 · 점수표 · 로어북은 \'캐릭터 설정\' 탭에서 저장하면 바로 들어갑니다 (캐릭터 설정은 git에서 profile.yml version을 올려 배포하면 git 값으로 덮어씀).'));
+    muted('프롬프트(답장 틀 scene.system · 반응 틀 scene.reaction 등)는 \'프롬프트\' 탭에서 새 버전을 켜면, 말투 · 미리 쓴 대사 · 점수표 · 로어북은 \'캐릭터 설정\' 탭에서 저장하면 바로 들어갑니다 (캐릭터 설정은 git에서 profile.yml version을 올려 배포하면 git 값으로 덮어씀).'));
   function card(s) {
     const [, title, hint] = SECTIONS.find(x => x[0] === s.section) || [s.section, s.section, ''];
     const rows = s.fields.map(f => {

@@ -72,7 +72,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 상태 반응(api.md 19), 메시지(20), 공부 종료 때 대화 마무리(22, session이 부름).
- * 여기서는 API 규칙(검증·재전송·저장·5초 대체 대사)만 지키고, LLM이 쓰는 글은 ReactionWriter · ChatPipeline · ClosingWriter가 맡는다.
+ * 여기서는 API 규칙(검증·재전송·저장·마감 대체 대사)만 지키고, LLM이 쓰는 글은 ReactionWriter · ChatPipeline · ClosingWriter가 맡는다.
  * 메시지의 LLM 호출은 DB 트랜잭션 밖에서 한다: 읽기 → LLM → 저장(한 트랜잭션).
  */
 @Service
@@ -181,7 +181,7 @@ public class DialogueService {
         // 호감도는 상태 변화 전송(18)이 반영하고 그 응답으로 돌려준다. 여기서는 관계 단계(호감도 구간)만 읽어 말투를 고른다
         int stage = relationQuery.view(userId, characterId).stage();
         // 상태 변화는 LLM이 대사 + 표정 (ADR 0022 결정 18), 동작 이벤트는 미리 쓴 대사(캐릭터 설정, 순서대로 → 없으면 공통 고정 대사).
-        // LLM이 5초를 넘기거나 실패해도 미리 쓴 대사로
+        // LLM이 마감(llm-budget)을 넘기거나 실패해도 미리 쓴 대사로
         ReactionLine line = null;
         boolean fallback = false;
         if (reactionWriter.usesLlm(trigger)) {
@@ -299,7 +299,7 @@ public class DialogueService {
     }
 
     /**
-     * 읽기 → LLM(트랜잭션 밖, 5초) → 저장(한 트랜잭션: 호감도 · 답장).
+     * 읽기 → LLM(트랜잭션 밖, llm-budget) → 저장(한 트랜잭션: 호감도 · 답장).
      * 저장 트랜잭션은 호감도(applyChat)부터 부른다: applyChat은 relation 행을 잠그고, 공부 종료(22)도 정산 때 같은 행을 잠근 채
      * 커밋까지 간다. 그래서 종료와 겹치면 여기서 종료가 끝나길 기다린 뒤 아래 세션 확인에서 끝난 것을 보고 아무것도 남기지 않는다.
      * 종료보다 먼저 잡으면 이 답장까지 커밋된 뒤에 종료가 정산·요약한다. 잠금 순서가 종료(세션 → relation → 대화)와 같아 교착이 없다.
@@ -428,7 +428,7 @@ public class DialogueService {
 
     /**
      * 명세 28: 답장을 스트리밍으로 만들며 대사를 흘려 보낸다.
-     * 첫 대사를 llm-budget(5초) 안에 못 보내면 대체 대사(20과 같은 시간). 첫 대사를 보낸 뒤에는 끝까지 기다린다:
+     * 첫 대사를 llm-budget 안에 못 보내면 대체 대사(20과 같은 시간). 첫 대사를 보낸 뒤에는 끝까지 기다린다:
      * 이미 보인 글을 대체 대사로 바꾸지 않으려고. 끝까지의 상한은 LLM http-timeout이다
      */
     private Optional<ChatOutcome> streamed(ChatInput input, LlmContext ctx, Consumer<String> onReply) {
@@ -469,7 +469,7 @@ public class DialogueService {
     }
 
     /** 명세 19·20: 감정 이름으로 반응 표에서 모션·표정을 고른다. 감정이 없거나 그 감정 행이 없으면 동작 없음 */
-    // TODO(judgment): J-07 ②·J-12 ② 감정이 없을 때(LLM 5초 초과 등) 기본 감정을 쓸지. 지금은 동작 없음
+    // TODO(judgment): J-07 ②·J-12 ② 감정이 없을 때(LLM 마감 초과 등) 기본 감정을 쓸지. 지금은 동작 없음
     private Reaction emotionReaction(long characterId, String emotion) {
         if (emotion == null) return Reaction.NONE;
         return reactions.pick(characterId, emotion, null);
@@ -501,7 +501,7 @@ public class DialogueService {
      * 공부 종료 1단계: 트랜잭션 밖에서 이번 세션 대화를 흐름 카드 한 장으로 쓰고 완료 대사를 만든다 (기억 ②). DB에 쓰지 않는다:
      * LLM을 기다리는 동안 DB 연결을 잡지 않게 (개발 서버 풀 2).
      * 대화방에 남은 메시지를 전부 쓴다: 카드에 넣은 메시지는 지우므로, 남은 게 있으면 앞선 종료에서 카드 쓰기가 실패한 것이다.
-     * LLM이 실패하거나 5초를 넘겨도 공부 종료는 성공해야 하므로 고정 문구로 대신한다. 카드와 완료 대사는 같이 보낸다(둘 다 5초 안).
+     * LLM이 실패하거나 마감을 넘겨도 공부 종료는 성공해야 하므로 고정 문구로 대신한다. 카드와 완료 대사는 같이 보낸다(둘 다 llm-budget 안).
      */
     public ClosingDraft draft(SessionClosing closing) {
         List<ChatMessage> pending = conversations
@@ -682,7 +682,7 @@ public class DialogueService {
                 .orTimeout(props.current().llmBudget().toMillis(), TimeUnit.MILLISECONDS);
     }
 
-    /** llm-budget(5초) 안에 끝나지 않거나 실패하면 빈 값 → 호출한 쪽이 고정 대사를 쓴다 */
+    /** llm-budget 안에 끝나지 않거나 실패하면 빈 값 → 호출한 쪽이 고정 대사를 쓴다 */
     private static <T> Optional<T> await(CompletableFuture<T> call) {
         try {
             return Optional.ofNullable(call.join());

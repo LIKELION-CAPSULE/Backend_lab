@@ -82,7 +82,7 @@ public class LabService {
                    sum(cost_usd) AS cost_usd,
                    avg(latency_ms) AS avg_latency_ms,
                    percentile_cont(0.95) WITHIN GROUP (ORDER BY latency_ms) AS p95_latency_ms,
-                   count(*) FILTER (WHERE latency_ms > :budgetMs) AS over5s
+                   count(*) FILTER (WHERE latency_ms > :budgetMs) AS over_budget
             FROM llm_usages
             WHERE created_at >= now() - make_interval(days => :days)
             GROUP BY 1, 2, 3, 4, 5

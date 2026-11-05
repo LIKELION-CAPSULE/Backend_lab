@@ -64,7 +64,12 @@ class SimpleChatPipeline implements ChatPipeline {
                 "mode",
                 in.onBreak()
                         ? "쉬는 시간 (2~4문장, 공부 재촉 없이 수다)"
-                        : "공부 중 (1~2문장, 짧게)" + (in.chatty() ? ". " + SceneChatPipeline.CHATTY : ""));
+                        : "공부 중 (1~2문장, 짧게)"
+                                + (in.chatty()
+                                        ? ". "
+                                                + SceneChatPipeline.chattyDirective(
+                                                        SceneChatPipeline.userTurns(in.history()))
+                                        : ""));
         vars.put("relationLevel", "Lv." + in.stage()); // 프롬프트 변수 이름은 그대로 (바꾸면 프롬프트 새 버전)
         vars.put("summary", PromptVars.orNone(in.summary(), "없음 (처음 만남)"));
         // 아는 사실은 결정 모델이 이번 말에 맞춰 고른 하나만 (ADR 0022 결정 16)

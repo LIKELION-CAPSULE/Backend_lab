@@ -12,7 +12,7 @@ import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Component;
 
-/** 공부 종료(명세 22)에서 LLM이 쓰는 글: 이번 세션 흐름 카드, 완료 대사. 시간 제한(5초)은 부르는 쪽이 지킨다 */
+/** 공부 종료(명세 22)에서 LLM이 쓰는 글: 이번 세션 흐름 카드, 완료 대사. 시간 제한(llm-budget)은 부르는 쪽이 지킨다 */
 @Component
 public class ClosingWriter {
 
