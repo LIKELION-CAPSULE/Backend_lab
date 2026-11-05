@@ -26,6 +26,7 @@ Spring Boot 모듈러 모놀리스다. 앱은 하나지만 `com.capsule` 아래 
 | 배포 | Railway(Dockerfile) 개발 서버, 운영 DB·에셋은 Supabase, 메일은 Brevo HTTPS | ADR 0016~0020, 0024 |
 | LLM | SDK 없이 RestClient·JDK HttpClient로 Anthropic·OpenAI·Jev 호출, 프롬프트는 DB 버전 | ADR 0022 |
 | 스트리밍 | Spring MVC `SseEmitter` (명세 28) | ADR 0025 |
+| 운영 설정 | yml 값 위에 실험실 '운영 설정'에서 바꾼 칸만 DB에서 덮어씀 (`RuntimeSettings`) | ADR 0026 |
 
 ### 프로필
 
@@ -34,7 +35,7 @@ Spring Boot 모듈러 모놀리스다. 앱은 하나지만 `com.capsule` 아래 
 | (공용) | `application.yml` | 항상 | `capsule.*` 기본값 전부. 비밀값은 환경변수로만 |
 | local | `application-local.yml` | `scripts/run-local.sh` | Docker 로컬 DB, 예시 시드(`db/seed`), Swagger 켬, 실험실 켬, Fake 카카오·메일, LLM 원문 기록 |
 | shared-db | `application-shared-db.yml` | `run-local.sh --shared` (local 위에) | 공용 개발 DB(Supabase 개발 프로젝트). 앱은 Flyway를 끔 → 마이그레이션은 develop 머지 때 Actions만 (ADR 0017) |
-| dev-server | `application-dev-server.yml` | Railway, `local,shared-db,dev-server` | 실제 Redis·Brevo·카카오, `CAPSULE_LLM_PROVIDER` 필수, 실험실 끔, 원문 기록 끔 |
+| dev-server | `application-dev-server.yml` | Railway, `local,shared-db,dev-server` | 실제 Redis·Brevo·카카오, `CAPSULE_LLM_PROVIDER` 필수, 실험실은 `CAPSULE_LLM_LAB_ENABLED=true` + `CAPSULE_LLM_LAB_TOKEN`일 때만(기본 끔), 원문 기록 끔 |
 | prod | `application-prod.yml` | 운영 | Supabase DB(Session pooler), 시드 없음, 기본값 없이 빠지면 시작 실패 |
 | test | `src/test/resources/application-test.yml` | 테스트 | LLM `fake`, `memory-async: false`, 실험실 켬 |
 
@@ -73,7 +74,7 @@ flowchart LR
 | `http/` | IntelliJ HTTP 요청 예시: `flow.http`(전체 흐름), `llm-lab.http`, `eval-malfoy.http`(평가 대본) |
 | `scripts/` | `verify.sh`, `new-migration.sh`, `run-local.sh`, `setup.sh`, `smoke-flow.sh` |
 | `docs/specs/` | 명세 원본 `api.md`, `schema.sql`, `flow.md`, `judgment-backlog.md`(TODO(judgment) 목록), `skeleton-plan.md` |
-| `docs/decisions/` | ADR 0001~0025 |
+| `docs/decisions/` | ADR 0001~0026 |
 | `.harness/` | `phase`(지금 `domain`), `zones.conf`(구역·담당표), `zones.py` |
 | `.claude/` | `skills/`, `agents/reviewer.md`, `hooks/`, `settings.json` |
 | `.github/` | PR 템플릿, 이슈 템플릿, `workflows/dev-db-migrate.yml`(공용 개발 DB 마이그레이션) |
@@ -92,6 +93,7 @@ flowchart LR
 | error | `ApiException`, `ErrorResponse`, `GlobalExceptionHandler` | 명세 에러 코드 그대로 내보내기 `{code, message, detail}` |
 | ratelimit | `RateLimiter` | Redis 고정 창 횟수 제한 (INCR + EXPIRE) |
 | security | `SecurityConfig`, `AuthProperties`, `LoginUser`, `LoginUserArgumentResolver` | JWT 검증, `@LoginUser long userId` |
+| settings | `RuntimeSettings` | 운영 설정 한 묶음: yml 값 + DB에 저장한 칸(허용 목록만). 읽기는 메모리 사본, 30초마다 다시 읽음 (ADR 0026) |
 | time | `ClockConfig` | 현재 시각은 `Clock`으로만, 날짜는 한국(KST) 기준 |
 
 ### user (담당 성욱) — 가입·로그인·내 정보·일정·탈퇴 (api 1~8, 10, 13, 14, 24~27)
@@ -137,7 +139,7 @@ flowchart LR
 | service | `RelationService`(규칙 적용·기록), `AffinityPolicy`(공식: 단계·레벨·대화 변화량), `RelationLab`(실험실 흐름 테스트용) |
 | controller | `RelationLabController` (`/internal/llm-lab/api/relations`, 실험실 전용) |
 | domain | `Relation`(`user_character_relations`), `RelationLog`(`relation_logs`), `RelationSettlement`(`relation_settlements`) |
-| config | `RelationProperties` (`capsule.relation.*`) |
+| config | `RelationProperties` (`capsule.relation.*`), `RelationSettingsConfig` (운영 설정 `relation` 묶음, 테이블 `relation_settings`) |
 
 ### dialogue (담당 승희) — 상태 반응(19), 메시지(20), 스트리밍(28), 종료 마무리(22), LLM 전부
 
@@ -149,6 +151,7 @@ flowchart LR
 |---|---|
 | `DialogueController` | `POST /api/sessions/{id}/events/{eventId}/reaction`(19), `/messages`(20), `/messages/stream`(28, SSE) |
 | `LlmLabController` | `/internal/llm-lab/**` 실험실: 프롬프트 버전, 실험 대화방, 플레이그라운드, 평가, 사용량, 캐릭터 설정 편집·reseed. `capsule.llm.lab.enabled`일 때만 생김 |
+| `SettingsController` | `/internal/llm-lab/api/settings` 운영 설정: 모든 `RuntimeSettings` 묶음(relation · dialogue · llm) 보기 · 저장. 실험실과 같은 보안 (ADR 0026) |
 
 **service — 서비스 흐름**
 
@@ -196,7 +199,8 @@ flowchart LR
 | `LlmProperties` | `capsule.llm.*` (routes, models, prices, thinking) |
 | `PromptSeeder` | 시작할 때 `prompts/` 파일 본문이 DB에 없으면 새 ACTIVE 버전으로 |
 | `CharacterContentSeeder` | 시작할 때 `characters/<code>/profile.yml`의 `version`이 DB보다 높으면 다시 불러옴 |
-| `LabSecurityConfig` | 실험실 보안: 토큰 없으면 이 컴퓨터(loopback)에서만, 토큰 있으면 `X-Lab-Token` |
+| `LabSecurityConfig` | 실험실 보안: 토큰 없으면 이 컴퓨터(loopback)에서만, 토큰 있으면 `X-Lab-Token`. 프록시 뒤에서 토큰 없이 켜면 시작 실패 |
+| `DialogueSettingsConfig` | 운영 설정 `dialogue` · `llm` 묶음(테이블 `dialogue_settings`): 바꿀 수 있는 칸 목록과 범위 검사. API 키 · 주소 · `log-content` · `lab`은 열지 않음 |
 
 **adapter**: `SessionClosingAdapter` — session의 `SessionClosingHandler`를 `DialogueService.draft/close`로 연결한다.
 
@@ -210,6 +214,7 @@ flowchart LR
 | `character_memories` | `CharacterMemory` | 캐릭터가 아는 사실 (최대 20개, 1~80자) |
 | `character_profiles`, `character_lines`, `character_scores`, `character_habits` | `CharacterContentRepository` (JDBC, 문서 하나처럼 읽고 씀) → `CharacterContent` DTO | 캐릭터 설정: 페르소나·규칙·표정·관계 단계별 말투·샘플·로어북(`lore` jsonb) / 상황별 미리 쓴 대사 / 점수표 / 피할 말버릇 |
 | `prompt_versions` | `PromptVersion`, `PromptKey` | 프롬프트 본문 버전 (DRAFT·ACTIVE·ARCHIVED) |
+| `dialogue_settings` | `RuntimeSettings` (JDBC) | 운영 설정 `dialogue` · `llm`에서 바꾼 칸 (ADR 0026) |
 | `llm_usages` | `LlmUsage` | LLM 호출 기록: 용도·공급자·모델·토큰·비용·지연·TTFT·프롬프트 버전 |
 | `llm_lab_sessions`, `llm_lab_turns`, `llm_eval_cases`, `llm_eval_runs`, `llm_eval_results` | `LabSession`, `LabTurn`, `EvalCase`, `EvalRun`, `EvalResult` | 실험실·평가 |
 
@@ -421,6 +426,9 @@ sequenceDiagram
 
 ## 4. 설정값 표 (`application.yml`)
 
+아래는 yml 기본값이다. `capsule.relation.*` · `capsule.dialogue.*` · `capsule.llm.*`의 대부분은 실험실 '운영 설정' 탭에서 배포 없이 바꿀 수 있고, 바꾼 칸이 이긴다(ADR 0026).
+못 바꾸는 칸: API 키 · 공급자 주소 · 버전 헤더, `http-timeout` · `connect-timeout`, `log-content`, `lab.*`, `content-cache-ttl` · `content-max-cursors`.
+
 | 키 | 값 | 뜻 |
 |---|---|---|
 | `capsule.llm.provider` | `${CAPSULE_LLM_PROVIDER:fake}` | 기본 공급자: fake · anthropic · openai |
@@ -476,10 +484,10 @@ sequenceDiagram
 | 상황 카드에 넣는 내용 | `SceneChatPipeline.card`, 반응은 `ReactionWriter.card` |
 | 말 종류 정규식 | `ChatScorer` (패턴 상수) |
 | 기억할 가치 기준·한 줄 쓰기 지시 | `MemoryKeeper.keepQuestion`, `MemoryKeeper.WRITE_SYSTEM` |
-| 호감도 숫자 | `application.yml` `capsule.relation.*`, 공식은 `AffinityPolicy` |
+| 호감도 숫자 | 바로: 실험실 '운영 설정'의 호감도 · 레벨. 기본값: `application.yml` `capsule.relation.*`. 공식은 `AffinityPolicy` |
 | 메시지 속도 제한 | `capsule.dialogue.message-limit`·`message-limit-window` |
 | 5초 기준 | `capsule.dialogue.llm-budget` |
-| 공급자 | 환경변수 `CAPSULE_LLM_PROVIDER`(+ 키), 결정 모델은 `CAPSULE_LLM_DECIDE_PROVIDER` |
+| 공급자 | 바로: 실험실 '운영 설정'의 AI 공급자 · 모델(provider · fallback-provider · routes, 키가 있는 공급자만). 기본값: 환경변수 `CAPSULE_LLM_PROVIDER`(+ 키), 결정 모델은 `CAPSULE_LLM_DECIDE_PROVIDER` |
 | 용도별 모델 등급·토큰 한도 | `capsule.llm.routes` |
 | 등급 → 실제 모델 이름 | `capsule.llm.anthropic.models`, `capsule.llm.openai.models` (Claude는 `thinking` 표도 같이) |
 | 가격 | OpenAI 등은 `capsule.llm.prices`, Claude는 `Llm.DEFAULT_PRICES` |

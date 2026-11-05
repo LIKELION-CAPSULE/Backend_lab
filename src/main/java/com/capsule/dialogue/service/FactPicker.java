@@ -1,5 +1,6 @@
 package com.capsule.dialogue.service;
 
+import com.capsule.common.settings.RuntimeSettings;
 import com.capsule.dialogue.client.Decider;
 import com.capsule.dialogue.client.Decider.Decision;
 import com.capsule.dialogue.config.DialogueProperties;
@@ -31,9 +32,9 @@ public class FactPicker {
     static final String NONE = "NONE";
 
     private final Decider decider;
-    private final DialogueProperties props;
+    private final RuntimeSettings<DialogueProperties> props;
 
-    FactPicker(Decider decider, DialogueProperties props) {
+    FactPicker(Decider decider, RuntimeSettings<DialogueProperties> props) {
         this.decider = decider;
         this.props = props;
     }
@@ -48,20 +49,22 @@ public class FactPicker {
         Decider.Question q = new Decider.Question(
                 "캐릭터가 사용자의 마지막 말에 답할 때 꺼내면 자연스러운 '사용자에 대해 아는 사실'을 하나 고른다." + " 억지로 이어 붙여야 하면 NONE을 고른다", criteria);
         CompletableFuture<Decision> f = CompletableFuture.supplyAsync(
-                () -> decider.decide(ChatReplier.state(in, props.signalContextLines()), Map.of(QUESTION, q), ctx)
+                () -> decider.decide(
+                                ChatReplier.state(in, props.current().signalContextLines()), Map.of(QUESTION, q), ctx)
                         .get(QUESTION),
                 THREADS);
         Decision d;
         try {
             // TODO(judgment): J-05 사실 고르기를 기다리는 한도 (5초 안에 답장이 나가야 하므로 짧게, fact-pick-wait)
-            d = f.get(props.factPickWait().toMillis(), TimeUnit.MILLISECONDS);
+            d = f.get(props.current().factPickWait().toMillis(), TimeUnit.MILLISECONDS);
         } catch (Exception e) {
             f.cancel(true);
             log.info("아는 사실 고르기 생략 (늦거나 실패): {}", e.toString());
             return Optional.empty();
         }
-        if (d == null || NONE.equals(d.choice()) || d.confidence() < props.signalMinConfidence())
-            return Optional.empty();
+        if (d == null
+                || NONE.equals(d.choice())
+                || d.confidence() < props.current().signalMinConfidence()) return Optional.empty();
         int i = Integer.parseInt(d.choice().substring(1)) - 1;
         return i >= 0 && i < facts.size() ? Optional.of(facts.get(i)) : Optional.empty();
     }

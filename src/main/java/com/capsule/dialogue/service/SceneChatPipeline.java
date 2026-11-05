@@ -1,5 +1,6 @@
 package com.capsule.dialogue.service;
 
+import com.capsule.common.settings.RuntimeSettings;
 import com.capsule.common.time.ClockConfig;
 import com.capsule.dialogue.client.Llm;
 import com.capsule.dialogue.client.LlmGateway;
@@ -54,7 +55,7 @@ class SceneChatPipeline implements ChatPipeline {
     private final SimpleChatPipeline generic;
     private final FactPicker factPicker;
     private final FixedLines fixed;
-    private final DialogueProperties props;
+    private final RuntimeSettings<DialogueProperties> props;
     private final Clock clock;
 
     SceneChatPipeline(
@@ -64,7 +65,7 @@ class SceneChatPipeline implements ChatPipeline {
             SimpleChatPipeline generic,
             FactPicker factPicker,
             FixedLines fixed,
-            DialogueProperties props,
+            RuntimeSettings<DialogueProperties> props,
             Clock clock) {
         this.llm = llm;
         this.prompts = prompts;
@@ -96,7 +97,8 @@ class SceneChatPipeline implements ChatPipeline {
                         PromptService.render(system.body(), systemVars(c, in.stage(), in.nickname(), situation(c, in))),
                         true),
                 new Llm.SystemBlock(card, false));
-        List<Llm.ChatTurn> messages = new ArrayList<>(PromptVars.turns(in.history(), props.historyLines()));
+        List<Llm.ChatTurn> messages =
+                new ArrayList<>(PromptVars.turns(in.history(), props.current().historyLines()));
         messages.add(new Llm.ChatTurn("user", in.userMessage()));
         Llm.Result r = llm.complete(LlmPurpose.CHAT, blocks, messages, ctx.withPrompts(List.of(system.id())), onText);
 

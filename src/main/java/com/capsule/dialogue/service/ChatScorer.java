@@ -1,5 +1,6 @@
 package com.capsule.dialogue.service;
 
+import com.capsule.common.settings.RuntimeSettings;
 import com.capsule.dialogue.config.DialogueProperties;
 import com.capsule.dialogue.config.DialogueProperties.ScoreRule;
 import com.capsule.dialogue.dto.CharacterContent;
@@ -39,10 +40,10 @@ public class ChatScorer {
                     + "|한남(?!동|대|산|역)|김치녀|틀딱|급식충|장애인 ?새끼|게이 ?새끼)",
             U);
 
-    private final DialogueProperties props;
+    private final RuntimeSettings<DialogueProperties> props;
     private final CharacterContents contents;
 
-    ChatScorer(DialogueProperties props, CharacterContents contents) {
+    ChatScorer(RuntimeSettings<DialogueProperties> props, CharacterContents contents) {
         this.props = props;
         this.contents = contents;
     }
@@ -73,16 +74,17 @@ public class ChatScorer {
         Map<SignalType, ScoreRule> table = contents.find(characterId)
                 .map(CharacterContent::scores)
                 .filter(s -> !s.isEmpty())
-                .orElse(props.chatScores());
+                .orElse(props.current().chatScores());
         ScoreRule rule = table.get(signal);
         if (rule == null) return new ChatScore(signal, 0, 0);
         boolean seen = earlier.contains(signal);
         if (rule.oncePerSession() && seen) return new ChatScore(signal, 0, 0);
         int points = seen && rule.repeatPoints() != null ? rule.repeatPoints() : rule.points();
         if (points > 0) {
-            List<SignalType> window =
-                    earlier.subList(Math.max(0, earlier.size() - (props.chatRepeatWindow() - 1)), earlier.size());
-            if (window.stream().filter(signal::equals).count() >= props.chatRepeatLimit()) points = 0;
+            List<SignalType> window = earlier.subList(
+                    Math.max(0, earlier.size() - (props.current().chatRepeatWindow() - 1)), earlier.size());
+            if (window.stream().filter(signal::equals).count()
+                    >= props.current().chatRepeatLimit()) points = 0;
         }
         return new ChatScore(signal, points, rule.lossPercent());
     }

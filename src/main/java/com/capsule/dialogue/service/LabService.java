@@ -3,6 +3,7 @@ package com.capsule.dialogue.service;
 import static com.capsule.relation.api.RelationTypes.START_POINTS;
 
 import com.capsule.common.error.ApiException;
+import com.capsule.common.settings.RuntimeSettings;
 import com.capsule.common.time.ClockConfig;
 import com.capsule.content.api.CharacterQuery;
 import com.capsule.content.api.ContentTypes.CharacterInfo;
@@ -99,8 +100,8 @@ public class LabService {
     private final LlmGateway gateway;
     private final CharacterQuery characters;
     private final RoomQuery rooms;
-    private final LlmProperties llmProps;
-    private final DialogueProperties dialogueProps;
+    private final RuntimeSettings<LlmProperties> llmProps;
+    private final RuntimeSettings<DialogueProperties> dialogueProps;
     private final JdbcClient jdbc;
     private final Clock clock;
 
@@ -117,8 +118,8 @@ public class LabService {
             LlmGateway gateway,
             CharacterQuery characters,
             RoomQuery rooms,
-            LlmProperties llmProps,
-            DialogueProperties dialogueProps,
+            RuntimeSettings<LlmProperties> llmProps,
+            RuntimeSettings<DialogueProperties> dialogueProps,
             JdbcTemplate jdbcTemplate,
             Clock clock) {
         this.sessions = sessions;
@@ -142,7 +143,7 @@ public class LabService {
     public LabMeta meta() {
         List<LabMeta.Route> routes = Arrays.stream(LlmPurpose.values())
                 .map(p -> {
-                    LlmProperties.Route r = llmProps.route(p);
+                    LlmProperties.Route r = llmProps.current().route(p);
                     Map<String, String> models = new LinkedHashMap<>();
                     for (String name : List.of("anthropic", "openai")) models.put(name, modelOrNull(name, r));
                     return new LabMeta.Route(p.name(), r.tier(), r.maxTokens(), r.temperature(), models);
@@ -155,7 +156,7 @@ public class LabService {
                         .map(e -> new LabMeta.Provider(e.getKey(), e.getValue()))
                         .toList(),
                 pipelines.keySet().stream().sorted().toList(),
-                dialogueProps.chatPipeline(),
+                dialogueProps.current().chatPipeline(),
                 routes,
                 Arrays.stream(PromptKey.values())
                         .map(k -> new LabMeta.Key(k.key(), k.format(), k.description()))
@@ -165,8 +166,9 @@ public class LabService {
                         .map(c -> new LabMeta.Character(c.id(), c.name()))
                         .toList(),
                 TRIGGERS,
-                dialogueProps.emotions(),
-                llmProps.lab().token() != null && !llmProps.lab().token().isBlank());
+                dialogueProps.current().emotions(),
+                llmProps.current().lab().token() != null
+                        && !llmProps.current().lab().token().isBlank());
     }
 
     // --- 실험 대화방 ---
@@ -187,7 +189,8 @@ public class LabService {
     public LabSessionView create(LabSessionRequest r) {
         if (r.characterId() == null) throw new ApiException(HttpStatus.BAD_REQUEST, "CHARACTER_REQUIRED");
         character(r.characterId());
-        String pipeline = pipeline(r.pipeline() == null ? dialogueProps.chatPipeline() : r.pipeline())
+        String pipeline = pipeline(
+                        r.pipeline() == null ? dialogueProps.current().chatPipeline() : r.pipeline())
                 .name();
         String title = r.title() == null || r.title().isBlank() ? "실험 " + Instant.now(clock) : r.title();
         LabSession s = sessions.save(new LabSession(
@@ -274,7 +277,8 @@ public class LabService {
         Map<String, Long> pinned = config.pinnedOrEmpty();
         Function<LlmContext, Map<String, Object>> call = switch (r.kind()) {
             case "chat" -> {
-                ChatPipeline p = pipeline(r.pipeline() == null ? dialogueProps.chatPipeline() : r.pipeline());
+                ChatPipeline p =
+                        pipeline(r.pipeline() == null ? dialogueProps.current().chatPipeline() : r.pipeline());
                 String message = required(r.message(), "message");
                 yield ctx -> {
                     ChatOutcome o = chatTurn(p, input(c, config, history, message), ctx);
@@ -304,7 +308,11 @@ public class LabService {
                             config.summary(),
                             // 서비스(19)처럼 최근 몇 줄만
                             history.subList(
-                                    Math.max(0, history.size() - dialogueProps.reactionContextLines()), history.size()),
+                                    Math.max(
+                                            0,
+                                            history.size()
+                                                    - dialogueProps.current().reactionContextLines()),
+                                    history.size()),
                             pinned,
                             ctx);
                     return map("content", l.content(), "emotion", l.emotion());
@@ -344,7 +352,10 @@ public class LabService {
                         c,
                         config.factsOrEmpty(),
                         history.subList(
-                                Math.max(0, history.size() - dialogueProps.signalContextLines()), history.size()),
+                                Math.max(
+                                        0,
+                                        history.size() - dialogueProps.current().signalContextLines()),
+                                history.size()),
                         message,
                         ctx);
             }
@@ -496,7 +507,7 @@ public class LabService {
 
     private String modelOrNull(String provider, LlmProperties.Route route) {
         try {
-            return llmProps.model(provider, route);
+            return llmProps.current().model(provider, route);
         } catch (IllegalStateException e) {
             return null;
         }
@@ -504,7 +515,7 @@ public class LabService {
 
     /** 서비스의 대체 대사 기준(llm-budget, 명세 19·20). 실험실은 기다리되 넘었는지 표시만 한다 */
     private long budgetMs() {
-        return dialogueProps.llmBudget().toMillis();
+        return dialogueProps.current().llmBudget().toMillis();
     }
 
     private static String required(String value, String name) {

@@ -53,8 +53,9 @@ class AnthropicProvider implements LlmProvider {
                         .map(m -> Map.of("role", m.role(), "content", m.text()))
                         .toList());
         if (r.temperature() != null) body.put("temperature", r.temperature());
-        // 모델별 생각 설정 (#92). 설정에 없는 모델은 보내지 않는다: between_tools처럼 한 모델만 받는 값이 다른 모델에서 400이 나지 않게
-        LlmProperties.Thinking config = settings.thinkingFor(r.model());
+        // 모델별 생각 설정 (#92, 게이트웨이가 모델 이름으로 골라 줌). 표에 없는 모델은 보내지 않는다:
+        //   between_tools처럼 한 모델만 받는 값이 다른 모델에서 400이 나지 않게
+        LlmProperties.Thinking config = r.thinking();
         if (config != null) {
             if (present(config.type())) body.put("thinking", Map.of("type", config.type()));
             if (present(config.effort())) body.put("output_config", Map.of("effort", config.effort()));

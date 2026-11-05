@@ -1,5 +1,6 @@
 package com.capsule.dialogue.service;
 
+import com.capsule.common.settings.RuntimeSettings;
 import com.capsule.content.api.ContentTypes.CharacterInfo;
 import com.capsule.dialogue.client.Llm;
 import com.capsule.dialogue.client.LlmGateway;
@@ -33,7 +34,7 @@ public class ReactionWriter {
     private final LlmGateway llm;
     private final PromptService prompts;
     private final FixedLines fixed;
-    private final DialogueProperties props;
+    private final RuntimeSettings<DialogueProperties> props;
     /** 오늘 근황을 넣는 상태 변화: 공부 시작 인사만 (쉬기 시작에도 넣었더니 한마디마다 근황을 꺼냈다) */
     static final List<String> TODAY_TRIGGERS = List.of("GREETING");
 
@@ -44,7 +45,7 @@ public class ReactionWriter {
             LlmGateway llm,
             PromptService prompts,
             FixedLines fixed,
-            DialogueProperties props,
+            RuntimeSettings<DialogueProperties> props,
             CharacterContents contents,
             Clock clock) {
         this.llm = llm;
@@ -56,8 +57,8 @@ public class ReactionWriter {
     }
 
     public boolean usesLlm(String trigger) {
-        return props.reactionLlmTriggers() != null
-                && props.reactionLlmTriggers().contains(trigger);
+        return props.current().reactionLlmTriggers() != null
+                && props.current().reactionLlmTriggers().contains(trigger);
     }
 
     /** 형식이 틀리면(대사 없음) 예외 → 부르는 쪽이 고정 대사로 */
@@ -87,14 +88,14 @@ public class ReactionWriter {
         vars.put("situation", fixed.situation(id, trigger, intensity, pinned));
         List<String> examples = fixed.examples(id, trigger, intensity, stage, pinned);
         vars.put("examples", examples.isEmpty() ? "없음" : "- " + String.join("\n- ", examples));
-        vars.put("emotions", String.join(", ", props.emotions()));
+        vars.put("emotions", String.join(", ", props.current().emotions()));
         Llm.Result r = llm.complete(
                 LlmPurpose.REACTION,
                 List.of(new Llm.SystemBlock(PromptService.render(system.body(), vars), false)),
                 List.of(new Llm.ChatTurn("user", "지금 상황에 맞는 한마디를 해 줘.")),
                 ctx.withPrompts(PromptVars.ids(List.of(system, lines))),
                 null);
-        return parse(r, e -> PromptVars.emotion(e, props.emotions()));
+        return parse(r, e -> PromptVars.emotion(e, props.current().emotions()));
     }
 
     /** 캐릭터 설정이 있는 캐릭터: 답장과 같은 고정 블록 + 반응 카드. 표정은 그 캐릭터의 표정 목록에서 */

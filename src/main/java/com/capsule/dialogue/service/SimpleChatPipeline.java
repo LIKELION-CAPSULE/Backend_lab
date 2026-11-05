@@ -1,5 +1,6 @@
 package com.capsule.dialogue.service;
 
+import com.capsule.common.settings.RuntimeSettings;
 import com.capsule.dialogue.client.Llm;
 import com.capsule.dialogue.client.LlmGateway;
 import com.capsule.dialogue.client.LlmJson;
@@ -28,12 +29,16 @@ class SimpleChatPipeline implements ChatPipeline {
 
     private final LlmGateway llm;
     private final PromptService prompts;
-    private final DialogueProperties props;
+    private final RuntimeSettings<DialogueProperties> props;
     private final FactPicker factPicker;
     private final Clock clock;
 
     SimpleChatPipeline(
-            LlmGateway llm, PromptService prompts, DialogueProperties props, FactPicker factPicker, Clock clock) {
+            LlmGateway llm,
+            PromptService prompts,
+            RuntimeSettings<DialogueProperties> props,
+            FactPicker factPicker,
+            Clock clock) {
         this.llm = llm;
         this.prompts = prompts;
         this.props = props;
@@ -52,7 +57,7 @@ class SimpleChatPipeline implements ChatPipeline {
         PromptVersion systemPrompt = prompts.resolve(PromptKey.CHAT_SYSTEM, characterId, in.pinnedPrompts());
         PromptVersion contextPrompt = prompts.resolve(PromptKey.CHAT_CONTEXT, characterId, in.pinnedPrompts());
         Map<String, String> vars = PromptVars.character(in.character());
-        vars.put("emotions", String.join(", ", props.emotions()));
+        vars.put("emotions", String.join(", ", props.current().emotions()));
         vars.put("now", PromptVars.now(clock));
         vars.put("nickname", in.nickname());
         vars.put(
@@ -70,7 +75,8 @@ class SimpleChatPipeline implements ChatPipeline {
                 new Llm.SystemBlock(PromptService.render(systemPrompt.body(), vars), true),
                 new Llm.SystemBlock(PromptService.render(contextPrompt.body(), vars), false));
         // TODO(judgment): J-05 LLM에 넘길 대화 수 (승희 2026-11-04: 15줄 history-lines. 프롬프트가 길수록 지시를 덜 따름)
-        List<Llm.ChatTurn> messages = new ArrayList<>(PromptVars.turns(in.history(), props.historyLines()));
+        List<Llm.ChatTurn> messages =
+                new ArrayList<>(PromptVars.turns(in.history(), props.current().historyLines()));
         messages.add(new Llm.ChatTurn("user", in.userMessage()));
         List<PromptVersion> used = List.of(systemPrompt, contextPrompt);
         Llm.Result r = llm.complete(LlmPurpose.CHAT, system, messages, ctx.withPrompts(PromptVars.ids(used)), onText);
@@ -83,7 +89,10 @@ class SimpleChatPipeline implements ChatPipeline {
             throw new IllegalStateException("답장 JSON이 깨짐 (stop_reason=" + r.stopReason() + "): " + r.text());
         String reply = json != null ? LlmJson.str(json.path("reply")) : r.text();
         if (reply == null || reply.isBlank()) throw new IllegalStateException("빈 답장: " + r.text());
-        String emotion = json == null ? null : PromptVars.emotion(LlmJson.str(json.path("emotion")), props.emotions());
+        String emotion = json == null
+                ? null
+                : PromptVars.emotion(
+                        LlmJson.str(json.path("emotion")), props.current().emotions());
 
         Map<String, Object> trace = new LinkedHashMap<>();
         trace.put("pipeline", SIMPLE);

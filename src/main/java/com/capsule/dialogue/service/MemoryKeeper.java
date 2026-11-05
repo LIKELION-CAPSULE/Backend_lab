@@ -1,5 +1,6 @@
 package com.capsule.dialogue.service;
 
+import com.capsule.common.settings.RuntimeSettings;
 import com.capsule.common.time.ClockConfig;
 import com.capsule.content.api.ContentTypes.CharacterInfo;
 import com.capsule.dialogue.client.Decider;
@@ -55,14 +56,14 @@ public class MemoryKeeper {
     private final Decider decider;
     private final LlmGateway llm;
     private final CharacterMemoryRepository memories;
-    private final DialogueProperties props;
+    private final RuntimeSettings<DialogueProperties> props;
     private final Clock clock;
 
     MemoryKeeper(
             Decider decider,
             LlmGateway llm,
             CharacterMemoryRepository memories,
-            DialogueProperties props,
+            RuntimeSettings<DialogueProperties> props,
             Clock clock) {
         this.decider = decider;
         this.llm = llm;
@@ -126,7 +127,7 @@ public class MemoryKeeper {
             return;
         }
         memories.save(new CharacterMemory(userId, character.id(), line, requestId, now));
-        if (known.size() + 1 > props.memoryMax()) drop(character, userId, ctx);
+        if (known.size() + 1 > props.current().memoryMax()) drop(character, userId, ctx);
     }
 
     /** 넘치면 하나 버린다. 결정 모델이 못 고르면 가장 오래된 것 */
@@ -201,7 +202,9 @@ public class MemoryKeeper {
                 .findFirst()
                 .orElse(null);
         out.put("line", write(character, current, recent, userMessage, ctx));
-        out.put("overflow", current == null && known.size() + 1 > props.memoryMax());
+        out.put(
+                "overflow",
+                current == null && known.size() + 1 > props.current().memoryMax());
         return out;
     }
 
