@@ -10,8 +10,9 @@
 하네스를 쓰기 전에 이 장만 읽으면 됨. 성욱에게 처음 설명할 때도 이 장 순서대로 하면 됨.
 
 ### 한 줄 답
-- **하네스 프레임워크**: 기성 팩(Superpowers, pstack, CCPM)을 설치하지 않음. Claude Code 기본 기능(훅, 스킬, 서브에이전트, settings) + GitHub Actions(anthropics/claude-code-action)로 직접 구성함
-- **앱 스택**: Spring Boot + Spring Modulith(모듈러 모놀리스) + PostgreSQL + Redis + Flyway + Testcontainers + Gradle(Spotless)
+- **하네스 프레임워크**: 기성 팩(Superpowers, pstack, CCPM)을 설치하지 않음. Claude Code 기본 기능(훅, 스킬, 서브에이전트, settings)으로 직접 구성함. PR CI · Claude 자동 리뷰(claude-code-action)는 2026-11-05에 뺐다(ADR 0023). Actions는 공용 개발 DB 마이그레이션(`dev-db-migrate`)만
+- **앱 스택**: Spring Boot + Spring Modulith(모듈러 모놀리스) + PostgreSQL + Redis + Flyway + Testcontainers + Gradle(Spotless). 배포는 Supabase(DB · 에셋) + Railway(개발 서버), LLM은 자체 게이트웨이(ADR 0022)
+- **코드 구조 · 파이프라인**: 폴더별 구조, 20 · 28 · 19 · 22 흐름, 설정값, 어디를 고치면 되나는 `docs/ARCHITECTURE.md`
 - **명세 원본**: 레포 `docs/specs/`(api.md, schema.sql). 명세 PR로 고치고, 머지 뒤 spec-sync가 노션 사본(프론트·기획용, 읽기 전용)에 반영 (2026-11-04부터, ADR 0013)
 - **개발 파이프라인**: 명세(뼈대 때는 노션에서 가져옴) → 얇은 뼈대(단순한 건 구현, 판단·LLM은 자리만) → 도메인 분리 개발 → PR 3단 리뷰
 
@@ -56,7 +57,7 @@
 | 모듈 안 레이어 패키지 | 모듈 바로 아래 controller·service·dto·repository·domain(+adapter·client·config), 크루윙 백엔드와 같은 모양. 다른 모듈은 `api`만 씀 | `docs/decisions/0012` |
 | Spring Security + JWT | 리소스 서버 스타터로 검증·발급, 리프레시 토큰은 Redis의 무작위 값 | `docs/decisions/0011` |
 | PostgreSQL + Flyway | 관계형 중심. 스키마가 PostgreSQL 전용 기능(IDENTITY, text[], 부분 인덱스)을 씀. 스키마 변경 이력 공유 | `docs/decisions/0002` |
-| Redis | 리프레시 토큰, 이메일 인증번호, 로그인 잠금 (DB 최종본 원칙: 만료 있는 값은 DB에 안 둠) | `docs/decisions/0009` |
+| Redis | 리프레시 토큰, 이메일 인증번호, 로그인 잠금, 요청 속도 제한(채팅 1분 30번 등) (DB 최종본 원칙: 만료 있는 값은 DB에 안 둠) | `docs/decisions/0009` |
 | Testcontainers | H2의 "테스트 통과, 실서버 실패"를 막음 | `docs/decisions/0003` |
 | git flow (가볍게) | main ← develop ← feature. 에이전트는 많이 바꾸므로 브랜치는 짧게 | `docs/decisions/0004` |
 | Spotless | 포맷 논쟁 제거, Stop 훅이 자동 정리 | - |
@@ -65,6 +66,10 @@
 | PR 제목 커밋 규칙, 라벨 없음 | 위 표 | `docs/decisions/0014` |
 | 명세가 바뀌면 코드 반영까지 추적 | 명세만 바뀌고 코드가 남는 일을 막음. 영향 범위는 자동으로 찾고, 반영할 PR · 이슈가 본문에 없으면 pr-write 검사 실패 | `docs/decisions/0015` |
 | PR CI 없음, 검사는 로컬 | Actions 대기열이 멈춰 PR이 계속 돌았음. 같은 `zones.py`를 verify · pr-write가 돌림. `dev-db-migrate`는 배포라 남김 | `docs/decisions/0021`, `0023` |
+| 배포 DB · 에셋은 Supabase, 공용 개발 DB는 develop 머지 때만 마이그레이션 | 2인 팀이 DB 서버를 운영하지 않음. 공용 DB에 넣는 길을 하나로 | `docs/decisions/0016`, `0017`, `0024` |
+| 개발 서버는 Railway + Dockerfile, Swagger는 local 프로필만, 메일은 Brevo API | 프론트 연동을 먼저. 운영에 API 목록을 공개하지 않음 | `docs/decisions/0018`, `0019`, `0020` |
+| LLM은 공급자 중립 게이트웨이 + DB 프롬프트 버전 + 실험실 | 공급자를 설정 한 줄로 바꾸고, 프롬프트를 배포 없이 바꾸고 숫자로 비교 | `docs/decisions/0022` |
+| 채팅 답장 스트리밍은 SSE(SseEmitter, 명세 28) | 첫 글자부터 보여 체감 속도를 줄임. MVC · 가상 스레드로 충분 | `docs/decisions/0025` |
 
 ### 이 원칙은 앞으로도 적용됨
 - 프레임워크·라이브러리·구조·파이프라인을 새로 고르거나 바꿀 때는 **코드보다 이유 설명이 먼저**: 무엇을 / 왜 / 버린 대안 → 확인 → `docs/decisions/`에 ADR 추가
@@ -107,13 +112,13 @@
 
 ### 모듈과 담당 (확정, skeleton-plan.md 1장)
 
-| 모듈 | 담당 | 테이블 | API (노션 순서) |
+| 모듈 | 담당 | 테이블 | API (api.md 순서) |
 |---|---|---|---|
-| user | 성욱 | users, user_social_accounts, terms, term_versions, user_terms, user_memories | 1~8, 10, 13, 14, 24 |
+| user | 성욱 | users, user_social_accounts, terms, term_versions, user_terms, user_memories | 1~8, 10, 13, 14, 24~27 |
 | content | 성욱 | live2d_*, avatars, study_rooms, room_backgrounds, characters, character_contents | 9 |
 | session | 성욱 | study_sessions, session_characters, session_events | 11, 12(룸 상세), 16~18, 21~23 |
-| relation | 승희 | user_character_relations, relation_logs, user_unlocked_contents, user_unlocked_backgrounds | (18, 22에서 호출됨) |
-| dialogue | 승희 | conversations, chat_messages, llm_usages | 19, 20 |
+| relation | 승희 | user_character_relations, relation_logs, user_unlocked_contents, user_unlocked_backgrounds, relation_settlements | (18, 22에서 호출됨) |
+| dialogue | 승희 | conversations, conversation_recaps, character_memories, chat_messages, llm_usages, character_profiles, character_lines, character_scores, character_habits, prompt_versions, llm_lab_*, llm_eval_* | 19, 20, 28 |
 
 나눈 이유: DB 최종본의 섹션 구분을 그대로 따름. 성욱 쪽은 대부분 단순 구현(인증, 콘텐츠 조회, 세션 기록)이고, 승희 쪽은 기획 판단이 몰린 호감도·해금 공식과 LLM 대화. 판단이 몰린 두 모듈을 한 사람이 맡아야 서로 기다리지 않음.
 
@@ -237,10 +242,10 @@ skeleton 스킬이 하는 일:
 ```
 
 ### 4-3. 승희의 LLM 파트 (dialogue 모듈)
-- 뼈대에는 `dialogue/api`(대화 계약) + `dialogue/client/LlmClient`(포트) + `FakeLlmClient`만 있음
-- 실제 LLM 어댑터는 `capsule.llm.mode=real`일 때 주입되는 새 구현으로 추가 → Fake는 테스트·로컬 기본값으로 계속 유지 (E2E가 API 비용 없이 돎)
+- LLM 호출의 입구는 `dialogue/client/LlmGateway` 하나. 공급자 어댑터(`AnthropicProvider` · `OpenAiProvider` · `JevProvider`(결정 전용) · `FakeProvider`)는 `capsule.llm.provider`(fake · anthropic · openai)로 고른다 (ADR 0022). dialogue에는 `api` 패키지가 없다(다른 모듈 계약을 구현하는 `adapter`만). 구조 · 파이프라인 전체는 `docs/ARCHITECTURE.md`
+- 기본값은 `fake`라 테스트 · 로컬(`.env.local`에 공급자가 없을 때)은 Fake로 돈다 (E2E가 API 비용 없이 돎, 테스트는 환경변수가 있어도 fake). 개발 서버(`dev-server` 프로필)는 `CAPSULE_LLM_PROVIDER`가 필수라 빠지면 시작에 실패한다 (2026-11-05 #112, ADR 0018)
 - API 키는 `.env.local` (Claude는 읽지 못하게 막혀 있음). `scripts/run-local.sh`가 LLM 줄만 읽어 환경변수로 넘긴다: `CAPSULE_LLM_PROVIDER` · `CAPSULE_LLM_FALLBACK_PROVIDER` · `CAPSULE_LLM_DECIDE_PROVIDER` · `ANTHROPIC_API_KEY` · `OPENAI_API_KEY` · `JEV_API_KEY` · `CAPSULE_LLM_LAB_TOKEN`. worktree에 `.env.local`이 없으면 메인 체크아웃의 것을 쓴다(worktree마다 복사하지 않음). 셸에 이미 있는 값이 이긴다
-- 대화 품질 평가(골든 대화 세트)는 Phase C에서 하네스에 추가 예정
+- 대화 품질 평가는 LLM 실험실(`/internal/llm-lab`, local에서만)의 평가 탭으로 한다: 골든 대본 × 반복, LLM 심사 0~10 + 사람 1~5, 실행끼리 비교 (ADR 0022 결정 8). verify에는 들어가지 않는다(실제 LLM 비용). 채팅 답장 스트리밍(28)은 ADR 0025
 
 ---
 
@@ -344,6 +349,7 @@ skeleton 스킬이 하는 일:
 | `scripts/new-migration.sh` | 타임스탬프 + 모듈 이름 마이그레이션 생성 | DB 변경 시 |
 | `scripts/run-local.sh` | worktree별 DB·포트로 로컬 실행 (`--reset`, `--info`). `--shared`는 공용 개발 DB(Supabase)에 붙고 마이그레이션은 안 함 (ADR 0017) | 로컬 확인 |
 | `scripts/setup.sh` | 1인 1회 세팅 | 클론 직후 |
+| `scripts/smoke-flow.sh` | 떠 있는 서버에 프론트 시나리오를 실제 요청으로 돌리고 단계별 대사 · 표정 · 호감도 표 | 실제 LLM 확인 · 배포 뒤 |
 | `.github/workflows/dev-db-migrate.yml` | develop의 마이그레이션 · 예시 시드를 공용 개발 DB에 넣음. 공용 DB에 넣는 유일한 곳 (ADR 0017) | develop에 `db/**`가 바뀐 push |
 | `.gitattributes` | 텍스트 파일 LF 고정 (Windows에서 받아도 `.sh`·`gradlew`가 CRLF로 깨지지 않게) | checkout 시 |
 | `CLAUDE.md` | 에이전트 상시 컨텍스트 (짧게, 상세는 링크) | 매 요청 |
@@ -376,7 +382,7 @@ skeleton 스킬이 하는 일:
 | DeepSeek Harness Super-agent 글 | 규칙은 구조에(훅·CI), 사람이 동시에 보는 세션 3~5개 | Router/Worker 시스템 (2인 규모엔 사람이 그 역할) |
 | CCPM | 판단 백로그 → GitHub 이슈, 작업 맥락을 GitHub에 남기기 | PRD→에픽 전체 공정 |
 | Clash / Grove | - | 충돌 예측 자동화 (구역 분리 + 짧은 브랜치 + 공용 PR 우선으로 충분) |
-| anthropics/claude-code-action | PR 자동 리뷰, `@claude` | 모든 PR 자동 리뷰 (비용) |
+| anthropics/claude-code-action | (처음엔 PR 자동 리뷰 · `@claude`, 2026-11-05에 뺌, ADR 0023) | 모든 PR 자동 리뷰 (비용) |
 | Sentry 글쓰기 가이드, Humanizer | PR 본문 문체 규칙(pr-write) | - |
 
 ---
@@ -408,5 +414,5 @@ skeleton 스킬이 하는 일:
 - 확인 질문(ask)의 사유는 사람 화면에만 보임. Claude는 승인/거절 결과만 앎
 - develop/main 보호: 지금은 GitHub 브랜치 보호를 못 써서(Free 플랜 조직의 private 저장소) 사람은 약속으로만 막힘. Claude는 훅이 develop/main에서의 파일 수정과 develop/main으로의 push를 막음. `git -C <경로> push`처럼 형태가 다른 명령까지는 못 잡음 (2-3장)
 - 확인한 것 (2026-11-03, Windows 11 + Git Bash): Claude Code 안 훅 호출(SessionStart 상태 출력, zone_guard가 develop 수정을 실제로 차단), 한글·Windows 경로 판정, GitHub Actions `verify` 첫 실행(setup-java cache 실패를 찾아 고침)
-- 아직 확인 못 한 것: 실제 Gradle 빌드, spec-sync의 노션 읽기 → 뼈대 단계에서 확인
-- 대화 품질(LLM) 평가는 아직 없음 → Phase C
+- 뼈대 단계에서 확인함: 실제 Gradle 빌드, spec-sync의 노션 반영
+- 대화 품질(LLM) 평가는 실험실에서 사람이 돌린다(ADR 0022 결정 8). PR 전에 자동으로 도는 대화 회귀 평가는 없음

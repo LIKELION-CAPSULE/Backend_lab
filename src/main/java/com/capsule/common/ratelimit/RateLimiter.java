@@ -4,7 +4,7 @@ import java.time.Duration;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
-/** Redis 요청 횟수 제한. 예: 인증번호 1분 1번, 메시지 1분 10번. */
+/** Redis 요청 횟수 제한. 예: 인증번호 1분 1번, 메시지 1분 30번. */
 @Component
 public class RateLimiter {
 

@@ -3,7 +3,7 @@
 - 결정
   - 채팅 답장을 만들어지는 대로 보내는 API를 새로 둔다: `POST /api/sessions/{sessionId}/messages/stream` (명세 28). 20번은 그대로 둔다(프론트가 옮기는 동안 둘 다)
   - 응답은 SSE(`text/event-stream`). `reply` = 지금까지의 대사 전체(조각이 아님), 마지막 `done` = 20번 응답 전체, 스트림을 연 뒤 오류는 `error`
-  - Spring MVC의 `SseEmitter`로 만든다. 답장은 가상 스레드에서 만들고, LLM 공급자의 스트리밍(`onText`, 이미 있음)에서 받은 원문 JSON에서 대사만 꺼내(`ReplyStream`) 보낸다
+  - Spring MVC의 `SseEmitter`로 만든다. 답장은 가상 스레드에서 만들고, LLM 공급자의 스트리밍(`onText`, 이미 있음)에서 받은 원문 JSON에서 대사만 꺼내(`ReplyStream`) 보낸다. JSON 없이 글로만 쓴 답은 그 글이 대사이고, 끝에 붙은 `emotion=…`은 그 이름이 캐릭터 감정일 때만 말풍선에서 빼고 감정으로 쓴다(`SceneChatPipeline.plain`, 실제 키 확인 9번 중 1번)
   - 검증 · 재전송 · 속도 제한(`DialogueService.accept`)은 스트림을 열기 전에 한다: 그 오류는 보통 JSON 에러 응답이라 프론트의 기존 처리를 그대로 쓴다
   - 대체 대사 기준: 첫 대사를 llm-budget(5초) 안에 못 보내면 대체 대사. 첫 대사를 보낸 뒤에는 끝까지 기다린다(상한은 LLM http-timeout). 이미 보인 글을 대체 대사로 바꾸지 않으려고
 - 이유
