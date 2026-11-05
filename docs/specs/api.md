@@ -30,6 +30,7 @@
 | 24 | 인증 | POST | `/api/auth/logout` | 로그아웃 |
 | 25 | 인증 | POST | `/api/auth/password/reset-request` | 비밀번호 재설정 메일 요청 |
 | 26 | 인증 | POST | `/api/auth/password/reset` | 비밀번호 재설정 |
+| 27 | 인증 | DELETE | `/api/me` | 회원 탈퇴 |
 
 순서 15는 노션에 없음 (번호 비어 있음).
 
@@ -1596,3 +1597,52 @@ json
 1. 비밀번호 규칙 검사 (틀리면 토큰은 쓰지 않은 채로 400. 다시 입력 가능)
 2. 토큰을 꺼내면서 지움 (한 번만 사용). 없으면 400 RESET_TOKEN_INVALID
 3. 비밀번호를 bcrypt로 바꾸고, 로그인 실패 잠금을 풀고, 그 사용자의 리프레시 토큰을 모두 폐기
+
+## 27. DELETE /api/me — 회원 탈퇴
+- 분류: 인증
+- 설명: 소프트 삭제. 개인정보를 비우고 대화 기억 · 일정을 지운 뒤 모든 기기 로그아웃. 진행 중 세션이 있으면 거절
+- 와이어프레임: 마이페이지 '회원 탈퇴' (추가 필요)
+- 백엔드: Not started
+- 프론트: Not started
+
+> 2026-11-05: 회원 탈퇴 추가. DB 최종본의 탈퇴 원칙(소프트 삭제, `users` 행은 남기고 개인정보만 비움)을 API로
+
+#### 설명
+
+탈퇴합니다. `users` 행은 남기고(공부 기록 · 호감도 기록이 이 행을 가리킴) 이메일 · 비밀번호 · 닉네임을 비웁니다. 사용자가 직접 말한 내용(일정, 캐릭터와의 대화 기억)은 지웁니다. 같은 이메일이나 같은 카카오 계정으로 다시 가입하면 새 계정이 되고, 이전 기록은 이어지지 않습니다.
+
+리프레시 토큰을 모두 폐기해서 다른 기기도 토큰 갱신이 안 됩니다. 이미 받은 액세스 토큰은 만료될 때까지(최대 30분) 남지만, 탈퇴한 계정이라 내 정보 조회 등은 401이 됩니다. 프론트는 갖고 있던 토큰을 버리고 H01로 보냅니다.
+
+#### 와이어프레임 대조
+
+| 화면 요소 | 이 API가 하는 일 |
+| --- | --- |
+| 마이페이지 '회원 탈퇴' (추가 필요) | 확인 창("대화 기억과 일정이 모두 지워져요") → 이 API → H01 |
+
+> ⚠️ 현재 와이어프레임에 탈퇴 진입점과 확인 창이 없음 (H03 '마이페이지'가 목업). 추가 필요
+
+- 저장: `users` (개인정보 비움 · `withdrawn_at`), `user_social_accounts` · `user_memories` · `conversations`(+ `chat_messages` · `conversation_recaps`) · `character_memories` 삭제, Redis (리프레시 토큰 폐기) · 인증: 필요
+
+#### [DELETE] /api/me
+
+본문 없음.
+
+> ⚠️ 비밀번호 다시 입력 · 탈퇴 사유 수집은 하지 않음 (확정 필요)
+
+#### 🛬 Response
+
+> ✅ **204 No Content** · 리프레시 토큰 쿠키를 비움 → 프론트는 토큰을 버리고 H01로. 이미 탈퇴한 계정이어도 204
+
+> ❌ **409** SESSION_IN_PROGRESS (진행 중 세션이 있음. "공부를 끝낸 뒤 탈퇴할 수 있어요" → 세션 이어하기 후 종료)
+
+#### 서버가 하는 일 (한 트랜잭션)
+
+1. 진행 중 세션이 있으면 409. 세션이 남아 있으면 자동 마감이 탈퇴 뒤에 정산 · 대화 카드를 다시 만들기 때문
+2. `users`: `withdrawn_at = now()`, `email` · `password` NULL, `nickname`은 '탈퇴한 사용자'(NOT NULL이라 고정 문구), `avatar_id` · `profile_image_url` NULL
+3. `user_social_accounts` 행 삭제 (같은 소셜 계정으로 재가입 가능)
+4. `user_memories` 삭제, `conversations`(대화 원문 · 세션 카드는 CASCADE) · `character_memories` 삭제
+5. 남기는 것: `user_terms`(동의 기록), `study_sessions` · `session_events`, `user_character_relations` · `relation_logs` · `relation_settlements` · `user_unlocked_*`, `llm_usages`. 모두 개인을 알아볼 내용이 없는 기록
+6. 커밋 뒤 그 사용자의 리프레시 토큰을 모두 폐기 (비밀번호 재설정과 같은 방식)
+
+- 카카오 연결 끊기(카카오 unlink API)는 하지 않음. 카카오 토큰을 저장하지 않아서 서버가 부를 수 없음 (어드민 키 방식으로 할지 확정 필요)
+- 재가입 제한 기간 없음 (확정 필요)
