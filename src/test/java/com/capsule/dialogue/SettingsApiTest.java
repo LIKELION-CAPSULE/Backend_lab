@@ -116,6 +116,12 @@ class SettingsApiTest {
         mvc.perform(get("/internal/llm-lab/api/meta"))
                 .andExpect(
                         jsonPath("$.routes[?(@.purpose == 'CHAT')].maxTokens").value(123));
+
+        // 용도 공급자로 fake를 넣어 '실제 서버를 가짜로' 검사를 돌아가지 못한다
+        ((ObjectNode) routes.path("CHAT")).put("provider", "fake");
+        save("llm", json.createObjectNode().set("routes", routes).toString())
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail.path").value("routes"));
     }
 
     @Test
@@ -130,6 +136,12 @@ class SettingsApiTest {
             {"relation", "{\"stages\": [{\"min\": 10, \"name\": \"x\"}]}", "stages"},
             {"dialogue", "{\"chatPipeline\": \"ENGINE\"}", "chatPipeline"},
             {"dialogue", "{\"llmBudget\": \"PT0S\"}", "llmBudget"},
+            // 빈 칸(null)도 500이 아니라 400
+            {"llm", "{\"provider\": null}", "provider"},
+            {"dialogue", "{\"llmBudget\": null}", "llmBudget"},
+            {"llm", "{\"openai.reasoningEffort\": \"hard\"}", "openai.reasoningEffort"},
+            {"dialogue", "{\"inFlightWait\": \"PT2S\"}", "inFlightWait"}, // llm-budget(5초)보다 짧음
+            {"dialogue", "{\"awayIntensityMax\": 5}", "awayIntensityMax"}, // 명세 19 요청 검사 계약: 닫힌 칸
         }) {
             save(bad[0], bad[1])
                     .andExpect(status().isBadRequest())

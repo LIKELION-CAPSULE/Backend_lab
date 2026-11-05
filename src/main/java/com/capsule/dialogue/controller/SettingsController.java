@@ -2,11 +2,13 @@ package com.capsule.dialogue.controller;
 
 import com.capsule.common.error.ApiException;
 import com.capsule.common.settings.RuntimeSettings;
+import com.capsule.dialogue.config.LlmProperties;
 import io.swagger.v3.oas.annotations.Hidden;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.core.env.Environment;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -28,10 +30,14 @@ import tools.jackson.databind.JsonNode;
 class SettingsController {
 
     private final Map<String, RuntimeSettings<?>> sections = new LinkedHashMap<>();
+    /** 공용 개발 DB에 토큰 없이 붙은 노트북(run-local.sh --shared): 그 행은 개발 서버가 읽으므로 저장을 막는다 */
+    private final boolean readOnly;
 
-    SettingsController(List<RuntimeSettings<?>> all) {
+    SettingsController(List<RuntimeSettings<?>> all, Environment env, LlmProperties llm) {
         for (RuntimeSettings<?> s : all)
             if (sections.put(s.section(), s) != null) throw new IllegalStateException("운영 설정 이름이 겹침: " + s.section());
+        String token = llm.lab().token();
+        this.readOnly = env.matchesProfiles("shared-db") && (token == null || token.isBlank());
     }
 
     @GetMapping
@@ -44,6 +50,7 @@ class SettingsController {
     RuntimeSettings.View save(@PathVariable String section, @RequestBody JsonNode overrides) {
         RuntimeSettings<?> s = sections.get(section);
         if (s == null) throw new ApiException(HttpStatus.NOT_FOUND, "SETTING_NOT_FOUND");
+        if (readOnly) throw new ApiException(HttpStatus.FORBIDDEN, "SETTINGS_READ_ONLY");
         return s.update(overrides);
     }
 }

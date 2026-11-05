@@ -93,7 +93,7 @@ flowchart LR
 | error | `ApiException`, `ErrorResponse`, `GlobalExceptionHandler` | 명세 에러 코드 그대로 내보내기 `{code, message, detail}` |
 | ratelimit | `RateLimiter` | Redis 고정 창 횟수 제한 (INCR + EXPIRE) |
 | security | `SecurityConfig`, `AuthProperties`, `LoginUser`, `LoginUserArgumentResolver` | JWT 검증, `@LoginUser long userId` |
-| settings | `RuntimeSettings` | 운영 설정 한 묶음: yml 값 + DB에 저장한 칸(허용 목록만). 읽기는 메모리 사본, 30초마다 다시 읽음 (ADR 0026) |
+| settings | `RuntimeSettings` | 운영 설정 한 묶음: yml 값 + DB에 저장한 칸(허용 목록만). 읽기는 메모리 사본(요청 스레드는 DB를 안 읽음), 30초가 지나면 가상 스레드가 따로 다시 읽음 (ADR 0026) |
 | time | `ClockConfig` | 현재 시각은 `Clock`으로만, 날짜는 한국(KST) 기준 |
 
 ### user (담당 성욱) — 가입·로그인·내 정보·일정·탈퇴 (api 1~8, 10, 13, 14, 24~27)
@@ -151,7 +151,7 @@ flowchart LR
 |---|---|
 | `DialogueController` | `POST /api/sessions/{id}/events/{eventId}/reaction`(19), `/messages`(20), `/messages/stream`(28, SSE) |
 | `LlmLabController` | `/internal/llm-lab/**` 실험실: 프롬프트 버전, 실험 대화방, 플레이그라운드, 평가, 사용량, 캐릭터 설정 편집·reseed. `capsule.llm.lab.enabled`일 때만 생김 |
-| `SettingsController` | `/internal/llm-lab/api/settings` 운영 설정: 모든 `RuntimeSettings` 묶음(relation · dialogue · llm) 보기 · 저장. 실험실과 같은 보안 (ADR 0026) |
+| `SettingsController` | `/internal/llm-lab/api/settings` 운영 설정: 모든 `RuntimeSettings` 묶음(relation · dialogue · llm) 보기 · 저장. 실험실과 같은 보안, 공용 개발 DB에 토큰 없이 붙은 노트북은 저장 403 (ADR 0026) |
 
 **service — 서비스 흐름**
 
@@ -427,7 +427,7 @@ sequenceDiagram
 ## 4. 설정값 표 (`application.yml`)
 
 아래는 yml 기본값이다. `capsule.relation.*` · `capsule.dialogue.*` · `capsule.llm.*`의 대부분은 실험실 '운영 설정' 탭에서 배포 없이 바꿀 수 있고, 바꾼 칸이 이긴다(ADR 0026).
-못 바꾸는 칸: API 키 · 공급자 주소 · 버전 헤더, `http-timeout` · `connect-timeout`, `log-content`, `lab.*`, `content-cache-ttl` · `content-max-cursors`.
+못 바꾸는 칸: API 키 · 공급자 주소 · 버전 헤더, `http-timeout` · `connect-timeout`, `log-content`, `lab.*`, `content-cache-ttl` · `content-max-cursors`, `away-intensity-max`(명세 19 요청 검사).
 
 | 키 | 값 | 뜻 |
 |---|---|---|

@@ -8,7 +8,6 @@ import com.capsule.dialogue.service.ChatPipeline;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.stream.Stream;
 import org.springframework.context.annotation.Bean;
@@ -43,6 +42,8 @@ class DialogueSettingsConfig {
     static final Set<String> PROVIDERS = Set.of("fake", "anthropic", "openai");
     static final Set<String> THINKING_TYPES = Set.of("disabled", "between_tools", "adaptive");
     static final Set<String> EFFORTS = Set.of("low", "medium", "high", "xhigh", "max");
+    /** OpenAI reasoning_effort (모델마다 받는 값이 다르다: 5.1 이후는 minimal 대신 none) */
+    static final Set<String> REASONING_EFFORTS = Set.of("none", "minimal", "low", "medium", "high", "xhigh");
 
     @Bean
     RuntimeSettings<DialogueProperties> dialogueSettings(JdbcTemplate jdbc, JsonMapper json, DialogueProperties yml) {
@@ -53,7 +54,9 @@ class DialogueSettingsConfig {
                 "dialogue",
                 yml,
                 DialogueProperties.class,
-                RuntimeSettings.allExcept(DialogueProperties.class, "contentCacheTtl", "contentMaxCursors"),
+                // 캐시 둘은 만들 때 한 번만 읽고, away-intensity-max는 프론트와의 요청 검사 계약(명세 19 "1~3 밖이면 400")
+                RuntimeSettings.allExcept(
+                        DialogueProperties.class, "contentCacheTtl", "contentMaxCursors", "awayIntensityMax"),
                 DialogueSettingsConfig::checkDialogue);
     }
 
@@ -66,11 +69,11 @@ class DialogueSettingsConfig {
     /** 나누기 · 잘라 내기 · 기다리기가 깨지지 않을 범위만 본다. 값이 좋은지는 실험실에서 */
     static void checkDialogue(DialogueProperties v) {
         require(
-                Set.of(ChatPipeline.SCENE, ChatPipeline.SIMPLE).contains(v.chatPipeline()),
+                in(Set.of(ChatPipeline.SCENE, ChatPipeline.SIMPLE), v.chatPipeline()),
                 "chatPipeline",
                 "SCENE · SIMPLE");
         require(
-                Set.of(DialogueProperties.PATTERN, DialogueProperties.DECIDER).contains(v.signalDetector()),
+                in(Set.of(DialogueProperties.PATTERN, DialogueProperties.DECIDER), v.signalDetector()),
                 "signalDetector",
                 "PATTERN · DECIDER");
         require(v.emotions() != null && !v.emotions().isEmpty(), "emotions", "하나 이상");
@@ -79,29 +82,26 @@ class DialogueSettingsConfig {
         ratio(v.signalMinConfidence(), "signalMinConfidence");
         ratio(v.severeMinConfidence(), "severeMinConfidence");
         ratio(v.giveUpRatio(), "giveUpRatio");
-        Map.of(
-                        "chatRepeatWindow", v.chatRepeatWindow(),
-                        "memoryMax", v.memoryMax(),
-                        "recapMax", v.recapMax(),
-                        "messageLimit", v.messageLimit(),
-                        "chattyMessages", v.chattyMessages(),
-                        "awayIntensityMax", v.awayIntensityMax(),
-                        "historyLines", v.historyLines())
-                .forEach((k, n) -> require(n >= 1, k, "1 이상"));
-        Map.of(
-                        "chatRepeatLimit", v.chatRepeatLimit(),
-                        "reactionContextLines", v.reactionContextLines(),
-                        "signalContextLines", v.signalContextLines(),
-                        "lowEffortMaxChars", v.lowEffortMaxChars())
-                .forEach((k, n) -> require(n >= 0, k, "0 이상"));
-        Map.of(
-                        "llmBudget", v.llmBudget(),
-                        "inFlightWait", v.inFlightWait(),
-                        "inFlightPoll", v.inFlightPoll(),
-                        "messageLimitWindow", v.messageLimitWindow(),
-                        "chattyWindow", v.chattyWindow(),
-                        "factPickWait", v.factPickWait())
-                .forEach((k, d) -> require(d != null && d.isPositive(), k, "0보다 긴 시간 (예: PT5S)"));
+        atLeast(v.chatRepeatWindow(), 1, "chatRepeatWindow");
+        atLeast(v.memoryMax(), 1, "memoryMax");
+        atLeast(v.recapMax(), 1, "recapMax");
+        atLeast(v.messageLimit(), 1, "messageLimit");
+        atLeast(v.chattyMessages(), 1, "chattyMessages");
+        atLeast(v.awayIntensityMax(), 1, "awayIntensityMax");
+        atLeast(v.historyLines(), 1, "historyLines");
+        atLeast(v.chatRepeatLimit(), 0, "chatRepeatLimit");
+        atLeast(v.reactionContextLines(), 0, "reactionContextLines");
+        atLeast(v.signalContextLines(), 0, "signalContextLines");
+        atLeast(v.lowEffortMaxChars(), 0, "lowEffortMaxChars");
+        positive(v.llmBudget(), "llmBudget");
+        positive(v.inFlightWait(), "inFlightWait");
+        positive(v.inFlightPoll(), "inFlightPoll");
+        positive(v.messageLimitWindow(), "messageLimitWindow");
+        positive(v.chattyWindow(), "chattyWindow");
+        positive(v.factPickWait(), "factPickWait");
+        // 재전송 대기는 답장(llm-budget) + 저장보다 길어야 하고, 사실 고르기는 답장 안에서 끝나야 한다
+        require(v.inFlightWait().compareTo(v.llmBudget()) > 0, "inFlightWait", "llm-budget보다 길게");
+        require(v.factPickWait().compareTo(v.llmBudget()) < 0, "factPickWait", "llm-budget보다 짧게");
     }
 
     /**
@@ -109,12 +109,12 @@ class DialogueSettingsConfig {
      * yml과 다른 공급자로 바꿀 때만 키가 있는지 본다: 키 없는 로컬에서도 다른 칸은 바꿀 수 있게
      */
     static void checkLlm(LlmProperties v, LlmProperties yml) {
-        require(PROVIDERS.contains(v.provider()), "provider", "fake · anthropic · openai");
+        require(in(PROVIDERS, v.provider()), "provider", "fake · anthropic · openai");
         require(!"fake".equals(v.provider()) || "fake".equals(yml.provider()), "provider", "실제 LLM 서버를 가짜로 바꿀 수 없음");
         String fallback = v.fallbackProvider();
         require(
                 blank(fallback)
-                        || PROVIDERS.contains(fallback)
+                        || in(PROVIDERS, fallback)
                                 && (!"fake".equals(fallback) || fallback.equals(yml.fallbackProvider())),
                 "fallbackProvider",
                 "비움 · anthropic · openai");
@@ -131,11 +131,16 @@ class DialogueSettingsConfig {
                 "용도 전부");
         v.routes().forEach((purpose, r) -> {
             String path = "routes";
-            require(r.maxTokens() > 0, path, purpose + " max-tokens는 1 이상");
+            require(r != null && r.maxTokens() > 0, path, purpose + " max-tokens는 1 이상");
+            LlmProperties.Route before = yml.routes().get(purpose);
+            String ymlProvider = before == null ? null : before.provider();
             require(
-                    blank(r.provider()) || PROVIDERS.contains(r.provider()) || "jev".equals(r.provider()),
+                    blank(r.provider())
+                            || in(Set.of("anthropic", "openai", "jev"), r.provider())
+                            || r.provider().equals(ymlProvider), // fake는 yml이 fake일 때만 (가짜 대사가 화면에 나가지 않게)
                     path,
                     purpose + " provider는 비움 · anthropic · openai · jev");
+            requireKey(r.provider(), ymlProvider, yml, path);
             Stream.of(r.provider(), v.provider(), fallback)
                     .filter(p -> !blank(p))
                     .forEach(p -> require(
@@ -143,6 +148,8 @@ class DialogueSettingsConfig {
         });
         requireKey(v.provider(), yml.provider(), yml, "provider");
         requireKey(fallback, yml.fallbackProvider(), yml, "fallbackProvider");
+        String effort = v.openai() == null ? null : v.openai().reasoningEffort();
+        require(blank(effort) || in(REASONING_EFFORTS, effort), "openai.reasoningEffort", "비움 · " + REASONING_EFFORTS);
         if (v.anthropic() != null && v.anthropic().thinking() != null)
             v.anthropic().thinking().forEach((model, t) -> {
                 require(
@@ -169,6 +176,19 @@ class DialogueSettingsConfig {
         } catch (IllegalStateException e) {
             return null;
         }
+    }
+
+    /** Set.of(...).contains(null)은 NPE라서 (JSON null이 400이 아니라 500이 되지 않게) */
+    private static boolean in(Set<String> values, String v) {
+        return v != null && values.contains(v);
+    }
+
+    private static void atLeast(int n, int min, String path) {
+        require(n >= min, path, min + " 이상");
+    }
+
+    private static void positive(Duration d, String path) {
+        require(d != null && d.isPositive(), path, "0보다 긴 시간 (예: PT5S)");
     }
 
     private static void ratio(double x, String path) {

@@ -50,14 +50,15 @@ public class LlmGateway {
             List<Llm.ChatTurn> messages,
             LlmContext ctx,
             Consumer<String> onText) {
-        LlmProperties.Route route = props.current().route(purpose);
-        String primary = primary(ctx, route);
+        // 호출 한 번은 한 사본으로: 저장하는 순간에 걸쳐도 용도(옛 값) · 모델(새 값)이 섞여 깨지지 않게
+        LlmProperties settings = props.current();
+        LlmProperties.Route route = settings.route(purpose);
+        String primary = primary(settings, ctx, route);
         LlmCallException last = null;
-        for (String name : order(ctx, route)) {
+        for (String name : order(settings, ctx, route)) {
             LlmProvider provider = provider(name);
-            String model = ctx.model() != null && name.equals(primary)
-                    ? ctx.model()
-                    : props.current().model(name, route);
+            String model = ctx.model() != null && name.equals(primary) ? ctx.model() : settings.model(name, route);
+            LlmProperties.Provider p = settings.providerSettings(name);
             ProviderRequest req = new ProviderRequest(
                     purpose,
                     model,
@@ -65,8 +66,8 @@ public class LlmGateway {
                     messages,
                     ctx.maxTokens() != null ? ctx.maxTokens() : route.maxTokens(),
                     ctx.temperature() != null ? ctx.temperature() : route.temperature(),
-                    reasoningEffort(name),
-                    thinking(name, model));
+                    p == null ? null : p.reasoningEffort(),
+                    p == null ? null : p.thinkingFor(model)); // 표에 없는 모델(실험에서 고정한 모델 등)은 null = 안 보냄
             for (int attempt = 0; ; attempt++) {
                 if (ctx.deadline() != null && !Instant.now(clock).isBefore(ctx.deadline())) {
                     // 서비스가 이미 대체 대사로 넘어갔다: 결과가 버려질 호출은 시작하지 않는다 (기록할 호출도 없음)
@@ -79,7 +80,7 @@ public class LlmGateway {
                 } catch (LlmCallException e) {
                     record(ctx, req, name, null, e.getMessage(), t0);
                     last = e;
-                    if (!e.retryable() || attempt >= props.current().maxRetries()) break;
+                    if (!e.retryable() || attempt >= settings.maxRetries()) break;
                     pause();
                     continue;
                 } catch (RuntimeException e) {
@@ -109,20 +110,19 @@ public class LlmGateway {
     }
 
     /** 실험 고정 > 용도의 공급자(예: DECIDE → jev) > 기본 공급자 */
-    private String primary(LlmContext ctx, LlmProperties.Route route) {
+    private static String primary(LlmProperties settings, LlmContext ctx, LlmProperties.Route route) {
         if (ctx.provider() != null) return ctx.provider();
-        return present(route.provider()) ? route.provider() : props.current().provider();
+        return present(route.provider()) ? route.provider() : settings.provider();
     }
 
     /**
      * 실험에서 공급자를 고정했으면 대체 공급자로 넘기지 않는다 (비교 실험이 섞이지 않게).
      * 용도의 공급자가 실패하면 기본 공급자 → 대체 공급자 순서로 한 번씩 (예: Jev가 죽어도 LLM이 결정한다)
      */
-    private List<String> order(LlmContext ctx, LlmProperties.Route route) {
-        String primary = primary(ctx, route);
+    private static List<String> order(LlmProperties settings, LlmContext ctx, LlmProperties.Route route) {
+        String primary = primary(settings, ctx, route);
         if (ctx.provider() != null) return List.of(primary);
-        return java.util.stream.Stream.of(
-                        primary, props.current().provider(), props.current().fallbackProvider())
+        return java.util.stream.Stream.of(primary, settings.provider(), settings.fallbackProvider())
                 .filter(LlmGateway::present)
                 .distinct()
                 .toList();
@@ -136,17 +136,6 @@ public class LlmGateway {
         LlmProvider p = providers.get(name);
         if (p == null) throw new IllegalStateException("모르는 LLM 공급자: " + name + " (있는 것: " + providers.keySet() + ")");
         return p;
-    }
-
-    private String reasoningEffort(String providerName) {
-        LlmProperties.Provider p = props.current().providerSettings(providerName);
-        return p == null ? null : p.reasoningEffort();
-    }
-
-    /** 모델 이름별 생각 설정 (#92). 표에 없는 모델(실험에서 고정한 다른 모델 등)은 null = 보내지 않음 */
-    private LlmProperties.Thinking thinking(String providerName, String model) {
-        LlmProperties.Provider p = props.current().providerSettings(providerName);
-        return p == null ? null : p.thinkingFor(model);
     }
 
     private void record(LlmContext ctx, ProviderRequest req, String provider, Llm.Result r, String error, long t0) {

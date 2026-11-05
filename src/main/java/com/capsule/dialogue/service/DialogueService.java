@@ -565,8 +565,8 @@ public class DialogueService {
                     conversation.id(), closing.sessionId(), d.card().get(), Instant.now(clock)));
             // 최근 recap-max장만 남긴다. 오래된 흐름은 지워져도 된다 (오래 남길 사실은 기억 ①에 있음)
             List<ConversationRecap> all = recapRepository.findByConversationIdOrderByIdDesc(conversation.id());
-            if (all.size() > props.current().recapMax())
-                recapRepository.deleteAll(all.subList(props.current().recapMax(), all.size()));
+            int keep = props.current().recapMax(); // 한 번만 읽기: 사이에 커지면 subList가 범위를 넘는다
+            if (all.size() > keep) recapRepository.deleteAll(all.subList(keep, all.size()));
             messages.deleteAllByIdInBatch(d.pendingIds());
         }
         // 카드 쓰기에 실패하면 메시지를 남긴다: 다음 종료 때 그 세션 카드에 같이 들어간다
