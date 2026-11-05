@@ -1,10 +1,11 @@
 -- 로컬·테스트 전용 예시 시드 (skeleton-plan A6). local/test 프로필에서만 Flyway가 읽는다. 배포 DB에는 들어가지 않음
 -- 반복 마이그레이션(R__): 내용이 바뀌면 다시 실행되므로 다시 실행해도 안전하게 쓴다
--- 값은 api.md 예시(룸 1 · 캐릭터 1 · 기본 아바타). 캐릭터 1은 첫 캐릭터 말포이(PM 2026-11-04, 모델 · 이미지 주소는 그대로).
+-- 값은 api.md 예시(룸 1 · 캐릭터 1 · 기본 아바타). 캐릭터 1은 첫 캐릭터 말포이(PM 2026-11-04, 모델 주소는 그대로).
 --   화면 문구(성격 · 소개 · 룸 · 배경 이름)는 말포이 설정(characters/malfoy/profile.yml의 세계 · 바이블)에 맞춤
--- 룸 1 썸네일 · 배경, 캐릭터 1 프로필은 프론트 에셋 전달본(2026-11-05)의 실제 이미지 (Supabase 버킷 live2d-model/images/,
---   전달본 runtime/ 경로 그대로): 야간 도서관 포스터 · 야간 도서관 배경 · 금발 채린 그림. 배포 DB는 정식 마이그레이션으로 따로 넣을 것
---   상세 배너는 banner_url(api.md 12). 홈 카드 전경(scenes/home-v2/night-home-subject-v2)은 버킷에 있지만 API 칸이 없어 DB에 넣지 않음
+-- 룸 1 · 캐릭터 1 이미지는 말포이 TS 에셋 전달본(backend-asset-handoff-malfoy-ts-2026-11-05)의 web/ 파일.
+--   Supabase 버킷 live2d-model의 images/malfoy-ts/ 아래에 파일 이름 그대로 올린다. 배포 DB는 정식 마이그레이션으로 따로 넣을 것
+--   포스터 카드 = poster, 상세 배너 = detail-banner(api.md 12), 공부 배경 = background, 캐릭터 사진 = study(이전 채린 그림과 같은 역할)
+--   나머지(홈 환영 배너 · 홈 전경 · 반응 · 호감 · 완료 리포트 · 룸 제목)는 API 칸이 없어 DB에 넣지 않음 (프론트가 직접 사용)
 -- 이미지 칸은 CDN 상대 경로로 넣는다. 서버가 CAPSULE_CDN_BASE_URL을 붙여 내려줌 (schema.sql 이미지 칸 규칙, #105)
 -- 캐릭터 1 Live2D(모델 1)는 실제 에셋 (2026-11-05, Supabase 버킷 live2d-model의 chaerin/v1/, #9).
 --   CAPSULE_CDN_BASE_URL=https://<project-ref>.supabase.co/storage/v1/object/public/live2d-model 이면 그대로 열린다
@@ -66,13 +67,13 @@ ON CONFLICT (id) DO UPDATE SET model_id = EXCLUDED.model_id, name = EXCLUDED.nam
 
 INSERT INTO study_rooms (id, name, description, thumbnail_url, banner_url, sort_order) OVERRIDING SYSTEM VALUE
 VALUES (1, '밤의 호그와트 도서관', '지기 싫어하는 슬리데린 라이벌 말포이와 촛불 아래에서 같이 공부해요.',
-        'images/rooms/night-study.webp', 'images/room-detail-banners/night-detail-banner-v1.webp', 1)
+        'images/malfoy-ts/hogwarts-night-poster-v1.webp', 'images/malfoy-ts/hogwarts-night-detail-banner-v1.webp', 1)
 ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description,
     thumbnail_url = EXCLUDED.thumbnail_url, banner_url = EXCLUDED.banner_url, sort_order = EXCLUDED.sort_order;
 
 INSERT INTO room_backgrounds (id, room_id, name, image_url, is_default, sort_order) OVERRIDING SYSTEM VALUE
 VALUES (1, 1, '밤의 도서관',
-        'images/scenes/night-background-v1.webp',
+        'images/malfoy-ts/hogwarts-night-background-v1.webp',
         true, 1)
 ON CONFLICT (id) DO UPDATE SET room_id = EXCLUDED.room_id, name = EXCLUDED.name, image_url = EXCLUDED.image_url,
     is_default = EXCLUDED.is_default, sort_order = EXCLUDED.sort_order;
@@ -80,7 +81,7 @@ ON CONFLICT (id) DO UPDATE SET room_id = EXCLUDED.room_id, name = EXCLUDED.name,
 INSERT INTO characters (id, room_id, model_id, name, personality, intro, profile_image_url, sort_order)
     OVERRIDING SYSTEM VALUE
 VALUES (1, 1, 1, '말포이', '{츤데레, 슬리데린 5학년, 라이벌}', '지기 싫어서 일부러 내 옆자리에 앉는 슬리데린 라이벌',
-        'images/characters/kang-study.webp', 1)
+        'images/malfoy-ts/malfoy-ts-study-v1.webp', 1)
 ON CONFLICT (id) DO UPDATE SET room_id = EXCLUDED.room_id, model_id = EXCLUDED.model_id, name = EXCLUDED.name,
     personality = EXCLUDED.personality, intro = EXCLUDED.intro, profile_image_url = EXCLUDED.profile_image_url,
     sort_order = EXCLUDED.sort_order;
