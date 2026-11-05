@@ -44,6 +44,7 @@
 --   - 세계관 · 대화 기술 제거 (결정 19부터 안 씀): worlds · world_lore · world_events · character_moves ·
 --     character_profiles.world_id 삭제, 안 쓰던 conversations.summary · summary_updated_at 삭제,
 --     character_profiles.content_version 추가 (profile.yml version이 더 높으면 시작할 때 다시 불러옴)
+--   - user_character_relations.last_severe_at 추가: 0점에서 심한 말을 하면 기록(delta 0)이 안 남아 그날 오름 멈춤이 안 걸리던 것
 -- =====================================================================
 
 BEGIN;
@@ -271,6 +272,7 @@ CREATE TABLE user_character_relations (
     total_present_seconds int         NOT NULL DEFAULT 0 CHECK (total_present_seconds >= 0),  -- 그중 자리 지킴 (레벨 기준)
     streak_days           int         NOT NULL DEFAULT 0 CHECK (streak_days >= 0),            -- 연속 출석 일수 (한국 날짜)
     last_study_date       date,                              -- 마지막으로 공부를 시작한 날 (한국 날짜)
+    last_severe_at        timestamptz,                       -- 심한 말(HATE_OR_SEXUAL)을 받은 마지막 시각. 그 한국 날짜에는 대화로 오르지 않음
     first_met_at          timestamptz NOT NULL DEFAULT now(),
     last_met_at           timestamptz NOT NULL DEFAULT now(),
     UNIQUE (user_id, character_id)
