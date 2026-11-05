@@ -78,7 +78,7 @@ capsule:
     signal-detector: PATTERN
     signal-min-confidence: 0.6 # DECIDER일 때 확신도가 이보다 낮으면 NEUTRAL(0점). 실험실 평가로 조정
     severe-min-confidence: 0.8 # 패턴이 혐오 · 성적이라고 하면 결정 모델이 한 번 더 확인. 이보다 낮으면 RUDE로
-    # 대화 한 번의 점수표 (임시: 말포이 PM 표). 없는 종류는 0. 캐릭터별 표는 말포이 콘텐츠를 앱으로 옮길 때 character.yml로
+    # 대화 한 번의 점수표 (임시: 말포이 PM 표). 없는 종류는 0. 캐릭터 설정(profile.yml scores)이 있으면 그 표를 쓴다
     #   once-per-session: 세션당 1번만 점수, repeat-points: 같은 세션에서 또 나오면 이 점수, loss-percent: 지금 값의 %를 깎음(points는 최소 감점)
     chat-scores:
       COMPLIMENT: { points: 1 }

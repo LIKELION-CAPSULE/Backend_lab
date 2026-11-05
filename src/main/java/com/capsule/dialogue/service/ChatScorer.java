@@ -26,7 +26,7 @@ public class ChatScorer {
     private static final Pattern NEGATIVE = Pattern.compile("(힘들|우울|지쳐|지친|그만두|포기|죽겠|무서|불안)", U);
     private static final Pattern RUDE = Pattern.compile("(ㅗ|ㅅㅂ|씨발|시발|꺼져|닥쳐|미친|병신|ㅈ같)", U);
     private static final Pattern COMPLIMENT =
-            Pattern.compile("(이쁘|예쁘|귀엽|멋있|멋지|잘한다|천재|대단|똑똑|잘생|머리 ?(진짜 ?|완전 ?|좀 ?)?좋)", U);
+            Pattern.compile("(이쁘|예쁘|귀엽|멋있|멋지|잘한다|천재|대단|똑똑|잘생(겼|긴|김)|머리 ?(진짜 ?|완전 ?|좀 ?)?좋)", U);
     /** 호감도 신호 THANKS (PM 2026-11-04) */
     private static final Pattern THANKS = Pattern.compile("(고마워|고맙|감사|땡큐|ㄱㅅ|ㄳ|thank)", U | Pattern.CASE_INSENSITIVE);
     /**
