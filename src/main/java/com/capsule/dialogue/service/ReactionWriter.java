@@ -155,7 +155,8 @@ public class ReactionWriter {
     }
 
     /**
-     * 장면 블록은 {reply, emotion}, 공통 프롬프트는 {content, emotion}. 답장(20)과 같이 JSON 없는 맨 글은 그 글을 대사로(감정 없음),
+     * 장면 블록(scene.system)은 "대사 [emotion=감정]"(옛 형식 {reply, emotion}도 받음), 공통 프롬프트는 {content, emotion}.
+     * JSON 없는 맨 글은 그 글을 대사로(태그가 있으면 감정),
      * 깨진 JSON은 IllegalStateException (스모크에서 맨 글 한 줄을 형식 오류로 버려 고정 대사로 갔다)
      */
     static ReactionLine parse(Llm.Result r, UnaryOperator<String> emotion) {

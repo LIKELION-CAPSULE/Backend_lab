@@ -52,11 +52,13 @@ class SceneChatPipelineTest {
     void fixedBlockCarriesOnlyThisStagesVoice() {
         Map<String, String> one = SceneChatPipeline.systemVars(MALFOY, 1, "민수", SITUATION);
         Map<String, String> four = SceneChatPipeline.systemVars(MALFOY, 4, "민수", SITUATION);
-        assertThat(one.get("relation")).contains("단계 1").contains("이름은 부르지 않는다");
-        assertThat(four.get("relation")).contains("단계 4 · 특별한 관계").contains("질투도 숨기지 않는다");
+        assertThat(one.get("relation")).contains("서먹한 사이").contains("이름은 부르지 않는다");
+        assertThat(four.get("relation")).contains("특별한 사이").contains("속마음");
         // 말투 샘플은 그 단계 묶음만, {name}은 닉네임으로
-        assertThat(one.get("samples")).contains("…또 왔냐. 조용히 앉아.").doesNotContain("기다렸어");
-        assertThat(four.get("samples")).contains("민수, 왔구나. 기다렸어.").doesNotContain("조용히 앉아");
+        assertThat(one.get("samples")).contains("보면 몰라? 앉든가.").doesNotContain("입꼬리");
+        assertThat(four.get("samples")).contains("입꼬리가 실수한 거야").doesNotContain("앉든가");
+        assertThat(SceneChatPipeline.systemVars(MALFOY, 3, "민수", SITUATION).get("samples"))
+                .contains("웃기지 마, 민수.");
         // 상태 변화 예시: 단계 1은 PM 대사, 단계 4는 단계 4 대사. 순간 동작은 넣지 않는다
         assertThat(one.get("events"))
                 .contains("(방금 일어난 일: 상황 AWAY) → 야 어디가?!")
@@ -69,9 +71,9 @@ class SceneChatPipelineTest {
     void blankNicknameIsCalledYouLikeTheFixedLines() {
         // 상황 대사(CharacterContents)와 같이 닉네임이 비면 "너"로. 전에는 ", 왔구나."처럼 이름 자리가 비었다
         for (String blank : new String[] {"", " ", null}) {
-            Map<String, String> four = SceneChatPipeline.systemVars(MALFOY, 4, blank, SITUATION);
-            assertThat(four.get("samples")).contains("너, 왔구나. 기다렸어.").doesNotContain("{name}");
-            assertThat(four.get("events")).doesNotContain("{name}");
+            Map<String, String> three = SceneChatPipeline.systemVars(MALFOY, 3, blank, SITUATION);
+            assertThat(three.get("samples")).contains("웃기지 마, 너.").doesNotContain("{name}");
+            assertThat(three.get("events")).doesNotContain("{name}");
         }
     }
 
@@ -115,14 +117,14 @@ class SceneChatPipelineTest {
         assertThat(card.lines().toList())
                 .element(card.lines().toList().size() - 2)
                 .asString()
-                .startsWith("지금: 지금은 공부 중이다. 1~2문장");
+                .startsWith("지금: 지금은 공부 중이다. 3~6문장");
     }
 
     @Test
     void breakAndChattyChangeTheLastLines() {
         String rest = card(input("오늘 뭐 해", List.of(), List.of(), true, true), null);
         String chatty = card(input("ㅋㅋ 또 뭐 해", List.of(), List.of(), false, true), null);
-        assertThat(rest).contains("지금: 지금은 쉬는 시간이다. 2~4문장").doesNotContain(SceneChatPipeline.CHATTY); // 쉬는 시간엔 수다가 정상
+        assertThat(rest).contains("지금: 지금은 쉬는 시간이다. 3~6문장").doesNotContain(SceneChatPipeline.CHATTY); // 쉬는 시간엔 수다가 정상
         assertThat(chatty).contains(SceneChatPipeline.CHATTY);
     }
 
@@ -190,6 +192,11 @@ class SceneChatPipelineTest {
                 .isInstanceOf(IllegalStateException.class);
         assertThatThrownBy(() -> SceneChatPipeline.replyJson(result("{\"reply\":\"흥, 그 정도는", "max_tokens")))
                 .isInstanceOf(IllegalStateException.class);
+        // 맨 글(기본 형식) 속 낱말 "emotion"이나 { 로 시작하는 수식은 깨진 JSON이 아니다
+        assertThat(SceneChatPipeline.replyJson(result("\"emotion\"은 감정이야. 외워. [emotion=집중]", "end_turn")))
+                .isNull();
+        assertThat(SceneChatPipeline.replyJson(result("{1, 2}부터 봐. 그게 집합이야. [emotion=집중]", "end_turn")))
+                .isNull();
     }
 
     static Llm.Result result(String text, String stopReason) {
@@ -216,6 +223,9 @@ class SceneChatPipelineTest {
         // 맨 글 끝에 감정을 붙인 답 (스트리밍 확인 9번 중 1번): 말풍선에서 떼고 감정으로
         assertThat(ReactionWriter.parse(result("왔네. emotion=웃음", "stop"), e -> e))
                 .isEqualTo(new com.capsule.dialogue.dto.ReactionLine("왔네.", "웃음"));
+        // scene.system 기본 형식: 대사 + [emotion=…]
+        assertThat(ReactionWriter.parse(result("왔네, 오늘은 버텨 봐. [emotion=경멸]", "stop"), MALFOY::emotion))
+                .isEqualTo(new com.capsule.dialogue.dto.ReactionLine("왔네, 오늘은 버텨 봐.", "경멸"));
     }
 
     @Test
@@ -229,6 +239,18 @@ class SceneChatPipelineTest {
         // 감정 목록에 없는 말이면 대사의 일부로 둔다 (영어 공부 중 단어 뜻)
         assertThat(SceneChatPipeline.plain("그 단어? emotion: 감정", MALFOY::emotion))
                 .isEqualTo(new SceneChatPipeline.Plain("그 단어? emotion: 감정", null));
+        // 프롬프트의 끝 태그는 목록 밖 · 풀어 쓴 값이어도 뗀다 (실제로 말풍선에 샌 답)
+        assertThat(SceneChatPipeline.plain("난 세 줄 더 썼다. [emotion=자랑처럼 웃음과 경멸 사이, 결국 웃음]", MALFOY::emotion))
+                .isEqualTo(new SceneChatPipeline.Plain("난 세 줄 더 썼다.", "웃음"));
+        assertThat(SceneChatPipeline.plain("다음. [emotion=뿌듯함]", MALFOY::emotion))
+                .isEqualTo(new SceneChatPipeline.Plain("다음.", null));
+        assertThat(SceneChatPipeline.plain("걱정은 무슨. [emotion=걱정]", MALFOY::emotion))
+                .isEqualTo(new SceneChatPipeline.Plain("걱정은 무슨.", "집중"));
+        // 태그가 끝이 아니어도 (맨 앞, 뒤에 문장부호)
+        assertThat(SceneChatPipeline.plain("[emotion=경멸] 됐어, 다음.", MALFOY::emotion))
+                .isEqualTo(new SceneChatPipeline.Plain("됐어, 다음.", "경멸"));
+        assertThat(SceneChatPipeline.plain("됐어 [emotion=웃음]!", MALFOY::emotion))
+                .isEqualTo(new SceneChatPipeline.Plain("됐어!", "웃음"));
     }
 
     @Test
