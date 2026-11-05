@@ -66,7 +66,7 @@ capsule:
       token: ${CAPSULE_LLM_LAB_TOKEN:} # 공용 서버에서 켤 때만: X-Lab-Token 헤더 검사
       eval-parallelism: 3
   dialogue:
-    # SCENE(DB 캐릭터 설정 + 장면 카드, 기본, ADR 0022 결정 15) | SIMPLE(LLM 한 번, 공통 프롬프트)
+    # SCENE(DB 캐릭터 설정 고정 블록 + 상황 카드, 기본, ADR 0022 결정 15 · 19) | SIMPLE(LLM 한 번, 공통 프롬프트)
     chat-pipeline: SCENE
     # 상태 반응(19)을 LLM으로 만들 trigger (승희 2026-11-05, ADR 0022 결정 18): 상태 변화는 LLM이 대사 + 표정,
     #   동작 이벤트(DROWSY · YAWN · WAVE · HEAD_TURN)는 미리 쓴 대사(character_lines). LLM이 5초를 넘기면 미리 쓴 대사로

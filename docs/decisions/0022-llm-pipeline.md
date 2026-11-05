@@ -34,8 +34,8 @@
       - ②는 공부 종료 때 **그 세션만** 카드 한 장(코드가 "11/03 55분" 머리말, LLM이 70자 안팎 흐름). 지난 카드를 다시 압축하지 않고, 3장째부터 오래된 것을 지운다. 오래 남길 사실은 ①이 이미 뽑았으므로 흐름은 잊어도 된다. 카드 쓰기에 실패하면 메시지를 남겨 다음 종료 카드에 같이 넣는다.
       - ~~쓸지 말지는 답장 모델이 정한다(매번 다 넣음)~~ → 결정 16으로 바뀜. `conversations.summary`는 더 쓰지 않는다.
   15. **세계관 · 캐릭터 설정은 DB 데이터 (2026-11-04, 승희).** 첫 캐릭터는 말포이(PM 확정). 대사를 어떻게 만드는지는 결정 19.
-      - 테이블(dialogue 모듈): `character_profiles`(공통 페르소나 · 절대 규칙 · 안전 기준 · 표정 · 대체 표정 · 관계 단계별 관계 설명 · 공부 중 / 쉬는 시간 말하는 법 · 관계 단계별 말투 샘플) · `character_lines`(상황별 미리 쓴 대사, 관계 단계별 묶음을 순서대로. 공부 포기 GIVE_UP · 오늘 근황 TODAY 포함) · `character_scores`(대화 점수표) · `character_habits`(피할 말버릇). `characters`(content)는 화면용 정보만. `worlds` · `world_lore` · `world_events` · `character_moves`는 결정 19부터 답장에 쓰지 않는다(다음 정리 때 뺀다).
-      - 처음 값은 git의 `classpath:characters/<code>/profile.yml`에서 **DB가 비어 있을 때만** 불러온다(`CharacterContentSeeder`). 그 뒤로는 DB가 원본이고 실험실(API `/internal/llm-lab/api/characters/{id}/content` GET · PUT · reseed, 화면 '캐릭터 설정' 탭)에서 고친다. 운영에도 같은 길로 들어간다.
+      - 테이블(dialogue 모듈): `character_profiles`(공통 페르소나 · 절대 규칙 · 안전 기준 · 표정 · 대체 표정 · 관계 단계별 관계 설명 · 공부 중 / 쉬는 시간 말하는 법 · 관계 단계별 말투 샘플) · `character_lines`(상황별 미리 쓴 대사, 관계 단계별 묶음을 순서대로. 공부 포기 GIVE_UP · 오늘 근황 TODAY 포함) · `character_scores`(대화 점수표) · `character_habits`(피할 말버릇). `characters`(content)는 화면용 정보만. `worlds` · `world_lore` · `world_events` · `character_moves`는 결정 19부터 쓰지 않아 뺐다(V20261105_070742).
+      - 처음 값은 git의 `classpath:characters/<code>/profile.yml`에서 불러온다(`CharacterContentSeeder`, 앱 시작 때). DB에 그 캐릭터 설정이 없으면 넣고, **profile.yml의 `version`이 DB의 `content_version`보다 높으면 파일로 다시 불러온다**(실험실에서 고친 값은 덮임). 같거나 낮으면 DB가 원본이고 실험실 저장은 버전을 바꾸지 않으므로, git에서 문구를 고쳤으면 version을 올려야 공용 DB · 개발 서버에 들어간다. 평소에는 실험실(API `/internal/llm-lab/api/characters/{id}/content` GET · PUT · reseed, 화면 '캐릭터 설정' 탭)에서 고친다. 운영에도 같은 길로 들어간다.
       - 5초 대체 대사 · 완료 대사 · 순간 동작 대사는 그 캐릭터의 `character_lines`(지금 관계 단계 묶음을 순서대로, PM 확정). 설정이 없는 캐릭터는 공통 프롬프트(SIMPLE)와 공통 고정 대사(`fixed.lines`). 표정 에셋이 없으면 `expression_fallbacks`로 대신.
       - 대화 점수표는 `character_scores`가 있으면 그것, 없으면 설정의 기본 표.
   16. **답장 프롬프트를 작게: 아는 사실은 결정 모델이 하나만 고른다 (2026-11-04, 승희).** 프롬프트가 길어질수록 지시를 덜 따르기 때문이다.

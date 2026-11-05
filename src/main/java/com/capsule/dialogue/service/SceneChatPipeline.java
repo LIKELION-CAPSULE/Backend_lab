@@ -87,8 +87,7 @@ class SceneChatPipeline implements ChatPipeline {
         String card = card(c, in, fact, PromptVars.now(clock), today(c, clock));
         List<Llm.SystemBlock> blocks = List.of(
                 new Llm.SystemBlock(
-                        PromptService.render(
-                                system.body(), systemVars(c, in.relationLevel(), in.nickname(), situation(c, in))),
+                        PromptService.render(system.body(), systemVars(c, in.stage(), in.nickname(), situation(c, in))),
                         true),
                 new Llm.SystemBlock(card, false));
         List<Llm.ChatTurn> messages = new ArrayList<>(PromptVars.turns(in.history(), props.historyLines()));
@@ -103,7 +102,7 @@ class SceneChatPipeline implements ChatPipeline {
         Map<String, Object> trace = new LinkedHashMap<>();
         trace.put("pipeline", SCENE);
         trace.put("prompts", PromptVars.versions(List.of(system)));
-        trace.put("stage", in.relationLevel());
+        trace.put("stage", in.stage());
         trace.put("fact", fact);
         trace.put("scene", card);
         trace.put("raw", r.text());
@@ -144,7 +143,7 @@ class SceneChatPipeline implements ChatPipeline {
     }
 
     private static String named(String text, String nickname) {
-        return text.replace("{name}", nickname);
+        return text.replace("{name}", PromptVars.name(nickname));
     }
 
     /**

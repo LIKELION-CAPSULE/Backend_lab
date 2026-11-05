@@ -5,7 +5,6 @@ import com.capsule.dialogue.client.Llm;
 import com.capsule.dialogue.client.LlmGateway;
 import com.capsule.dialogue.client.LlmJson;
 import com.capsule.dialogue.config.DialogueProperties;
-import com.capsule.dialogue.domain.ChatMessage;
 import com.capsule.dialogue.domain.PromptKey;
 import com.capsule.dialogue.domain.PromptVersion;
 import com.capsule.dialogue.dto.CharacterContent;
@@ -19,7 +18,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.UnaryOperator;
-import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 
@@ -67,7 +65,7 @@ public class ReactionWriter {
             CharacterInfo character,
             String trigger,
             Integer intensity,
-            int relationLevel,
+            int stage,
             String nickname,
             String summary,
             List<ChatLine> recent,
@@ -75,17 +73,19 @@ public class ReactionWriter {
             LlmContext ctx) {
         Optional<CharacterContent> content = contents.find(character.id());
         if (content.isPresent())
-            return scene(content.get(), trigger, intensity, relationLevel, nickname, summary, recent, pinned, ctx);
+            return scene(content.get(), trigger, intensity, stage, nickname, summary, recent, pinned, ctx);
         long id = character.id();
         PromptVersion system = prompts.resolve(PromptKey.REACTION_SYSTEM, id, pinned);
         PromptVersion lines = fixed.version(id, pinned);
         Map<String, String> vars = PromptVars.character(character);
         vars.put("nickname", nickname);
-        vars.put("relationLevel", "Lv." + relationLevel);
+        vars.put("relationLevel", "Lv." + stage); // 프롬프트 변수 이름은 그대로 (바꾸면 프롬프트 새 버전)
         vars.put("summary", PromptVars.orNone(summary, "없음 (처음 만남)"));
-        vars.put("recent", recent.isEmpty() ? "없음" : transcript(recent, nickname, character.name()));
+        vars.put(
+                "recent",
+                recent.isEmpty() ? "없음" : PromptVars.transcript(recent, PromptVars.name(nickname), character.name()));
         vars.put("situation", fixed.situation(id, trigger, intensity, pinned));
-        List<String> examples = fixed.examples(id, trigger, intensity, relationLevel, pinned);
+        List<String> examples = fixed.examples(id, trigger, intensity, stage, pinned);
         vars.put("examples", examples.isEmpty() ? "없음" : "- " + String.join("\n- ", examples));
         vars.put("emotions", String.join(", ", props.emotions()));
         Llm.Result r = llm.complete(
@@ -102,7 +102,7 @@ public class ReactionWriter {
             CharacterContent c,
             String trigger,
             Integer intensity,
-            int relationLevel,
+            int stage,
             String nickname,
             String summary,
             List<ChatLine> recent,
@@ -121,7 +121,7 @@ public class ReactionWriter {
                                         system.body(),
                                         SceneChatPipeline.systemVars(
                                                 c,
-                                                relationLevel,
+                                                stage,
                                                 nickname,
                                                 s -> fixed.situation(c.characterId(), s, null, pinned))),
                                 true),
@@ -151,12 +151,6 @@ public class ReactionWriter {
         L.add("이번 말: 방금 일어난 일에 바로 반응하는 한마디. 한 문장, 말풍선 두 줄 이내. 사용자를 탓하거나 다그치지 않는다");
         L.add("</상황>");
         return String.join("\n", L);
-    }
-
-    private static String transcript(List<ChatLine> recent, String nickname, String speaker) {
-        return recent.stream()
-                .map(l -> (ChatMessage.USER.equals(l.sender()) ? nickname : speaker) + ": " + l.content())
-                .collect(Collectors.joining("\n"));
     }
 
     /** 장면 블록은 {reply, emotion}, 공통 프롬프트는 {content, emotion} */

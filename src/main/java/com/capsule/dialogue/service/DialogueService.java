@@ -156,19 +156,20 @@ public class DialogueService {
     // --- 19 상태 반응 ---
 
     public ReactionResponse react(
-            long userId, long sessionId, long eventId, UUID requestId, Integer intensity, Boolean tts) {
+            long userId, long sessionId, long eventId, UUID requestId, Integer requestedIntensity, Boolean tts) {
         SessionInfo session = openSession(userId, sessionId);
         SessionEventInfo event = sessions.findEvent(sessionId, eventId)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "EVENT_NOT_FOUND"));
         long characterId = session.characterId();
         String trigger = triggerOf(event);
-        Integer awayLevel = trigger.equals("AWAY") ? (intensity == null ? 1 : intensity) : null;
-        if (awayLevel != null && (awayLevel < 1 || awayLevel > props.awayIntensityMax())) {
+        // 강도는 AWAY에만 (없으면 1). 다른 trigger는 보내도 무시
+        Integer intensity = trigger.equals("AWAY") ? (requestedIntensity == null ? 1 : requestedIntensity) : null;
+        if (intensity != null && (intensity < 1 || intensity > props.awayIntensityMax())) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_REQUEST");
         }
 
         // 호감도는 상태 변화 전송(18)이 반영하고 그 응답으로 돌려준다. 여기서는 관계 단계(호감도 구간)만 읽어 말투를 고른다
-        int relationLevel = relationQuery.view(userId, characterId).stage();
+        int stage = relationQuery.view(userId, characterId).stage();
         // 상태 변화는 LLM이 대사 + 표정 (ADR 0022 결정 18), 동작 이벤트는 미리 쓴 대사(캐릭터 설정, 순서대로 → 없으면 공통 고정 대사).
         // LLM이 5초를 넘기거나 실패해도 미리 쓴 대사로
         ReactionLine line = null;
@@ -185,15 +186,20 @@ public class DialogueService {
                     .orElse(List.of());
             LlmContext ctx = LlmContext.app(userId, sessionId, deadline());
             Optional<ReactionLine> generated = withinBudget(() -> reactionWriter.generate(
-                    character, trigger, awayLevel, relationLevel, nickname, summary, recent, Map.of(), ctx));
+                    character, trigger, intensity, stage, nickname, summary, recent, Map.of(), ctx));
             fallback = generated.isEmpty();
             line = generated.orElse(null);
         }
         if (line == null) {
-            String situation = awayLevel != null && awayLevel > 1 ? trigger + "_" + awayLevel : trigger;
             line = characterContents
-                    .next(characterId, situation, trigger, relationLevel, String.valueOf(sessionId), nickname(userId))
-                    .orElseGet(() -> fixedLines.reaction(characterId, trigger, awayLevel, relationLevel, Map.of()));
+                    .next(
+                            characterId,
+                            FixedLines.key(trigger, intensity),
+                            trigger,
+                            stage,
+                            String.valueOf(sessionId),
+                            nickname(userId))
+                    .orElseGet(() -> fixedLines.reaction(characterId, trigger, intensity, stage, Map.of()));
             // TODO(judgment): J-12 ② LLM이 실패한 대체 대사의 감정. 지금은 없음(동작 없음), 추천은 그 대사 칸의 표정
             if (fallback) line = new ReactionLine(line.content(), null);
         }
@@ -289,7 +295,7 @@ public class DialogueService {
                                 characterId,
                                 "REPLY_FALLBACK",
                                 null,
-                                input.relationLevel(),
+                                input.stage(),
                                 String.valueOf(sessionId),
                                 input.nickname())
                         .map(ReactionLine::content)
