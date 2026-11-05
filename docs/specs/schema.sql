@@ -47,6 +47,10 @@
 --   - user_character_relations.last_severe_at 추가: 0점에서 심한 말을 하면 기록(delta 0)이 안 남아 그날 오름 멈춤이 안 걸리던 것
 --   - character_profiles.lore 추가 (로어북): 키워드가 사용자 말에 나올 때만 답장 프롬프트에 넣는 원작 설정 카드.
 --     지운 world_lore를 캐릭터별 카드로 되살림 (해리 포터를 말해도 반응이 밋밋하던 것)
+--
+-- 2026-11-06 변경
+--   - 운영 설정 (ADR 0026): relation_settings · dialogue_settings 추가. 실험실 '운영 설정' 화면에서 바꾼 칸만 저장하고,
+--     나머지는 application.yml 값. 배포 없이 호감도 숫자 · 대화 설정 · AI 공급자와 모델을 바꾼다
 -- =====================================================================
 
 BEGIN;
@@ -403,6 +407,13 @@ CREATE TABLE relation_settlements (
     PRIMARY KEY (relation_id, session_id)
 );
 
+-- 운영 설정 (ADR 0026): 호감도 숫자(capsule.relation.*) 중 실험실 '운영 설정'에서 바꾼 칸만. 없는 칸은 application.yml 값
+CREATE TABLE relation_settings (
+    section    text        PRIMARY KEY CHECK (section IN ('relation')),
+    overrides  jsonb       NOT NULL DEFAULT '{}',  -- 칸 → 값 (예: {"chatDailyGainCap": 20}). 칸 이름은 설정 레코드의 필드 이름
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+
 -- ---------------------------------------------------------------------
 -- 8. 대화 LLM (S08)
 -- ---------------------------------------------------------------------
@@ -555,6 +566,14 @@ CREATE TABLE prompt_versions (
 );
 CREATE UNIQUE INDEX uq_prompt_versions_active ON prompt_versions (prompt_key, character_id) NULLS NOT DISTINCT
     WHERE status = 'ACTIVE';
+
+-- 운영 설정 (ADR 0026): 대화 설정(capsule.dialogue.*)과 AI 공급자 · 모델(capsule.llm.*) 중 실험실 '운영 설정'에서 바꾼 칸만.
+-- 없는 칸은 application.yml 값. API 키 · 공급자 주소 · 원문 기록 여부는 바꿀 수 있는 칸이 아니다(환경변수 · yml로만)
+CREATE TABLE dialogue_settings (
+    section    text        PRIMARY KEY CHECK (section IN ('dialogue', 'llm')),
+    overrides  jsonb       NOT NULL DEFAULT '{}',  -- 칸 → 값 (예: {"provider": "anthropic", "anthropic.models": {...}}). 점은 안쪽 칸
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
 
 -- LLM 실험실 (내부 품질 테스트. 서비스 데이터와 섞지 않음)
 CREATE TABLE llm_lab_sessions (
