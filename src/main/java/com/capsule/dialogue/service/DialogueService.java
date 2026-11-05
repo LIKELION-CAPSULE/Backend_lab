@@ -5,6 +5,7 @@ import static com.capsule.dialogue.domain.ChatMessage.USER;
 
 import com.capsule.common.error.ApiException;
 import com.capsule.common.ratelimit.RateLimiter;
+import com.capsule.common.settings.RuntimeSettings;
 import com.capsule.common.time.ClockConfig;
 import com.capsule.content.api.CharacterQuery;
 import com.capsule.content.api.ContentTypes.CharacterInfo;
@@ -93,7 +94,7 @@ public class DialogueService {
     private final RateLimiter rateLimiter;
     private final ReactionWriter reactionWriter;
     private final FixedLines fixedLines;
-    private final ChatPipeline chat;
+    private final List<ChatPipeline> pipelines;
     private final ChatReplier replier;
     private final ChatScorer scorer;
     private final CharacterContents characterContents;
@@ -103,7 +104,7 @@ public class DialogueService {
     private final ConversationRecapRepository recapRepository;
     private final ChatMessageRepository messages;
     private final TransactionTemplate tx;
-    private final DialogueProperties props;
+    private final RuntimeSettings<DialogueProperties> props;
     private final Clock clock;
 
     DialogueService(
@@ -127,7 +128,7 @@ public class DialogueService {
             ConversationRecapRepository recapRepository,
             ChatMessageRepository messages,
             PlatformTransactionManager transactionManager,
-            DialogueProperties props,
+            RuntimeSettings<DialogueProperties> props,
             Clock clock) {
         this.sessions = sessions;
         this.characters = characters;
@@ -139,11 +140,7 @@ public class DialogueService {
         this.rateLimiter = rateLimiter;
         this.reactionWriter = reactionWriter;
         this.fixedLines = fixedLines;
-        this.chat = pipelines.stream()
-                .filter(p -> p.name().equals(props.chatPipeline()))
-                .findFirst()
-                .orElseThrow(
-                        () -> new IllegalStateException("capsule.dialogue.chat-pipeline을 모름: " + props.chatPipeline()));
+        this.pipelines = pipelines;
         this.replier = replier;
         this.scorer = scorer;
         this.characterContents = characterContents;
@@ -157,6 +154,15 @@ public class DialogueService {
         this.clock = clock;
     }
 
+    /** 지금 설정의 답장 파이프라인. 운영 설정에서 바꾸면 다음 메시지부터 (이름은 저장할 때 검사함) */
+    private ChatPipeline chat() {
+        String name = props.current().chatPipeline();
+        return pipelines.stream()
+                .filter(p -> p.name().equals(name))
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("capsule.dialogue.chat-pipeline을 모름: " + name));
+    }
+
     // --- 19 상태 반응 ---
 
     public ReactionResponse react(
@@ -168,7 +174,7 @@ public class DialogueService {
         String trigger = triggerOf(event);
         // 강도는 AWAY에만 (없으면 1). 다른 trigger는 보내도 무시
         Integer intensity = trigger.equals("AWAY") ? (requestedIntensity == null ? 1 : requestedIntensity) : null;
-        if (intensity != null && (intensity < 1 || intensity > props.awayIntensityMax())) {
+        if (intensity != null && (intensity < 1 || intensity > props.current().awayIntensityMax())) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_REQUEST");
         }
 
@@ -186,7 +192,7 @@ public class DialogueService {
             String summary = conv.map(c -> recaps(c.id())).orElse(null);
             List<ChatLine> recent = conv.map(c -> tail(
                             lines(messages.findByConversationIdAndSessionIdOrderById(c.id(), sessionId)),
-                            props.reactionContextLines()))
+                            props.current().reactionContextLines()))
                     .orElse(List.of());
             LlmContext ctx = LlmContext.app(userId, sessionId, deadline());
             Optional<ReactionLine> generated = withinBudget(() -> reactionWriter.generate(
@@ -270,7 +276,10 @@ public class DialogueService {
             ChatMessage other = question(conversation, request).orElseThrow(() -> e);
             return new Accepted(session, conversation, request, null, other.createdAt());
         }
-        if (!rateLimiter.tryAcquire("rate:chat:" + userId, props.messageLimit(), props.messageLimitWindow())) {
+        if (!rateLimiter.tryAcquire(
+                "rate:chat:" + userId,
+                props.current().messageLimit(),
+                props.current().messageLimitWindow())) {
             messages.deleteQuestion(conversation.id(), request.requestId());
             throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "TOO_MANY_REQUESTS");
         }
@@ -323,7 +332,7 @@ public class DialogueService {
                 (int) Duration.between(session.startedAt(), Instant.now(clock)).toMinutes());
         LlmContext ctx = LlmContext.app(userId, sessionId, deadline());
         Optional<ChatOutcome> outcome =
-                onReply == null ? withinBudget(() -> replier.reply(chat, input, ctx)) : streamed(input, ctx, onReply);
+                onReply == null ? withinBudget(() -> replier.reply(chat(), input, ctx)) : streamed(input, ctx, onReply);
         String reply = outcome.map(ChatOutcome::reply)
                 .orElseGet(() -> characterContents
                         .next(
@@ -387,10 +396,10 @@ public class DialogueService {
                 userId,
                 requestId,
                 request.content(),
-                tail(history, props.signalContextLines()),
+                tail(history, props.current().signalContextLines()),
                 LlmContext.app(userId, sessionId, null));
-        if (!props.memoryEnabled()) return response;
-        if (props.memoryAsync()) LLM_THREADS.execute(remember);
+        if (!props.current().memoryEnabled()) return response;
+        if (props.current().memoryAsync()) LLM_THREADS.execute(remember);
         else remember.run();
         return response;
     }
@@ -401,14 +410,14 @@ public class DialogueService {
      */
     private MessageResponse awaitAnswer(
             SessionInfo session, Conversation conversation, MessageRequest request, Instant askedAt) {
-        Instant deadline = askedAt.plus(props.inFlightWait());
+        Instant deadline = askedAt.plus(props.current().inFlightWait());
         while (Instant.now(clock).isBefore(deadline)) {
             Optional<MessageResponse> answered = answered(conversation, session, request);
             if (answered.isPresent()) {
                 return answered.get();
             }
             try {
-                Thread.sleep(props.inFlightPoll());
+                Thread.sleep(props.current().inFlightPoll());
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 throw new IllegalStateException(e);
@@ -440,13 +449,13 @@ public class DialogueService {
             }
         };
         CompletableFuture<ChatOutcome> call =
-                CompletableFuture.supplyAsync(() -> replier.reply(chat, input, ctx, onText), LLM_THREADS);
+                CompletableFuture.supplyAsync(() -> replier.reply(chat(), input, ctx, onText), LLM_THREADS);
         try {
-            return Optional.ofNullable(call.get(props.llmBudget().toMillis(), TimeUnit.MILLISECONDS));
+            return Optional.ofNullable(call.get(props.current().llmBudget().toMillis(), TimeUnit.MILLISECONDS));
         } catch (TimeoutException e) {
             if (state.compareAndSet(0, 2)) {
                 // 기다리기만 멈춘다: 진행 중인 LLM 호출은 끝까지 돌고 기록된다(20과 같음). 그 뒤 온 글은 state 2라 안 보낸다
-                log.warn("스트리밍 답장의 첫 대사가 {} 안에 안 옴, 고정 대사로 대체", props.llmBudget());
+                log.warn("스트리밍 답장의 첫 대사가 {} 안에 안 옴, 고정 대사로 대체", props.current().llmBudget());
                 return Optional.empty();
             }
             return await(call);
@@ -530,7 +539,7 @@ public class DialogueService {
         Optional<String> scriptedClosing = characterContents
                 .next(
                         closing.characterId(),
-                        gaveUp(closing, props.giveUpRatio()) ? "GIVE_UP" : "CLOSING",
+                        gaveUp(closing, props.current().giveUpRatio()) ? "GIVE_UP" : "CLOSING",
                         "CLOSING",
                         stage,
                         "user-" + closing.userId(),
@@ -556,7 +565,8 @@ public class DialogueService {
                     conversation.id(), closing.sessionId(), d.card().get(), Instant.now(clock)));
             // 최근 recap-max장만 남긴다. 오래된 흐름은 지워져도 된다 (오래 남길 사실은 기억 ①에 있음)
             List<ConversationRecap> all = recapRepository.findByConversationIdOrderByIdDesc(conversation.id());
-            if (all.size() > props.recapMax()) recapRepository.deleteAll(all.subList(props.recapMax(), all.size()));
+            int keep = props.current().recapMax(); // 한 번만 읽기: 사이에 커지면 subList가 범위를 넘는다
+            if (all.size() > keep) recapRepository.deleteAll(all.subList(keep, all.size()));
             messages.deleteAllByIdInBatch(d.pendingIds());
         }
         // 카드 쓰기에 실패하면 메시지를 남긴다: 다음 종료 때 그 세션 카드에 같이 들어간다
@@ -607,7 +617,7 @@ public class DialogueService {
     /** 지난 세션 흐름 카드를 오래된 것부터 줄마다. 없으면 null */
     private String recaps(long conversationId) {
         List<String> cards = recapRepository.findByConversationIdOrderByIdDesc(conversationId).stream()
-                .limit(props.recapMax())
+                .limit(props.current().recapMax())
                 .map(ConversationRecap::content)
                 .collect(java.util.stream.Collectors.toCollection(java.util.ArrayList::new));
         if (cards.isEmpty()) return null;
@@ -658,11 +668,11 @@ public class DialogueService {
      */
     // TODO(judgment): J-14 '수다가 길어졌다'의 기준 (승희 2026-11-05 임시: 최근 10분에 사용자 말 8번, 이번 말 포함)
     private boolean chatty(List<ChatMessage> earlier) {
-        Instant since = Instant.now(clock).minus(props.chattyWindow());
+        Instant since = Instant.now(clock).minus(props.current().chattyWindow());
         long recent = earlier.stream()
                 .filter(m -> USER.equals(m.sender()) && m.createdAt().isAfter(since))
                 .count();
-        return recent + 1 >= props.chattyMessages();
+        return recent + 1 >= props.current().chattyMessages();
     }
 
     private Optional<ChatMessage> question(Conversation conversation, MessageRequest request) {
@@ -671,12 +681,12 @@ public class DialogueService {
 
     /** 서비스 LLM 호출의 마감: 이 시각이 지나면 게이트웨이가 새 호출을 시작하지 않는다 (결과가 버려지므로) */
     private Instant deadline() {
-        return Instant.now(clock).plus(props.llmBudget());
+        return Instant.now(clock).plus(props.current().llmBudget());
     }
 
     private <T> CompletableFuture<T> start(Supplier<T> call) {
         return CompletableFuture.supplyAsync(call, LLM_THREADS)
-                .orTimeout(props.llmBudget().toMillis(), TimeUnit.MILLISECONDS);
+                .orTimeout(props.current().llmBudget().toMillis(), TimeUnit.MILLISECONDS);
     }
 
     /** llm-budget(5초) 안에 끝나지 않거나 실패하면 빈 값 → 호출한 쪽이 고정 대사를 쓴다 */

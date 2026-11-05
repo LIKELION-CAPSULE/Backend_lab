@@ -8,6 +8,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.capsule.common.settings.RuntimeSettings;
 import com.capsule.content.api.ContentTypes.CharacterInfo;
 import com.capsule.dialogue.client.Decider;
 import com.capsule.dialogue.client.Decider.Decision;
@@ -24,7 +25,7 @@ class FactPickerTest {
     static final List<String> FACTS = List.of("사용자는 토익 800 목표", "사용자는 밤에 공부가 잘 됨");
     final Decider decider = mock(Decider.class);
     final DialogueProperties props = YmlDefaults.DIALOGUE;
-    final FactPicker picker = new FactPicker(decider, props);
+    final FactPicker picker = new FactPicker(decider, RuntimeSettings.fixed(props));
     final LlmContext ctx = LlmContext.app(1, 1, null);
 
     static ChatInput input(List<String> facts) {

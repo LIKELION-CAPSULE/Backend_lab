@@ -6,6 +6,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+import com.capsule.common.settings.RuntimeSettings;
 import com.capsule.dialogue.config.LlmProperties;
 import com.capsule.dialogue.domain.LlmUsage;
 import com.capsule.dialogue.dto.LabConfig;
@@ -28,6 +29,7 @@ import org.mockito.ArgumentCaptor;
 class LlmGatewayTest {
 
     static final Llm.Result OK = new Llm.Result("답", new Llm.Usage(10, 0, 0, 5), null, 3, "end_turn", false);
+    static final LlmProperties.Thinking THINKING = new LlmProperties.Thinking("disabled", "low");
 
     /** script 순서대로 결과를 주거나 예외를 던진다 */
     static class Scripted implements LlmProvider {
@@ -70,7 +72,8 @@ class LlmGatewayTest {
                 1,
                 Duration.ofMillis(300),
                 logContent,
-                new LlmProperties.Provider("", "k", "v", Map.of("smart", "claude-x"), null, null),
+                new LlmProperties.Provider(
+                        "", "k", "v", Map.of("smart", "claude-x"), null, Map.of("claude-x", THINKING)),
                 new LlmProperties.Provider("", "k", null, Map.of("smart", "gpt-x"), "minimal", null),
                 new LlmProperties.Provider("", "k", null, Map.of("smart", "jev-x"), null, null),
                 Map.of(
@@ -80,7 +83,7 @@ class LlmGatewayTest {
                         new LlmProperties.Route("smart", 100, null, "jev")),
                 Map.of(),
                 new LlmProperties.Lab(false, "", 1));
-        return new LlmGateway(List.of(providers), props, usages, Clock.systemUTC());
+        return new LlmGateway(List.of(providers), RuntimeSettings.fixed(props), usages, Clock.systemUTC());
     }
 
     Llm.Result call(LlmGateway g, LlmContext ctx) {
@@ -121,8 +124,12 @@ class LlmGatewayTest {
         call(gateway("openai", false, anthropic, openai), LlmContext.app(1, 2, null));
 
         assertThat(anthropic.requests).hasSize(1); // 401은 재시도하지 않음
+        // 공급자 설정은 그 공급자 · 모델 것만: 생각 설정은 claude-x에만, reasoning_effort는 OpenAI에만
+        assertThat(anthropic.requests.getFirst().thinking()).isEqualTo(THINKING);
+        assertThat(anthropic.requests.getFirst().reasoningEffort()).isNull();
         assertThat(openai.requests.getFirst().model()).isEqualTo("gpt-x");
         assertThat(openai.requests.getFirst().reasoningEffort()).isEqualTo("minimal");
+        assertThat(openai.requests.getFirst().thinking()).isNull();
         assertThat(recorded(2)).extracting(LlmUsage::provider).containsExactly("anthropic", "openai");
     }
 
@@ -152,6 +159,7 @@ class LlmGatewayTest {
         assertThat(openai.requests).isEmpty(); // 실험 조건을 고정했으면 대체하지 않는다
         ProviderRequest sent = anthropic.requests.getFirst();
         assertThat(sent.model()).isEqualTo("claude-pinned");
+        assertThat(sent.thinking()).isNull(); // 표에 없는 모델: 보내지 않음 (모델 기본값)
         assertThat(sent.temperature()).isEqualTo(0.2);
         assertThat(sent.maxTokens()).isEqualTo(50);
         assertThat(recorded(1).getFirst().request()).contains("claude-pinned"); // 실험실은 원문을 남긴다

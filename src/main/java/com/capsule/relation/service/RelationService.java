@@ -129,11 +129,11 @@ class RelationService implements RelationQuery, RelationCommands {
         Relation rel = lock(event.userId(), event.characterId());
         if (event.eventType().equals("FOCUS") && event.firstFocusOfSession()) streak(rel, event.sessionId());
         if (event.awaySeconds() != null
-                && event.awaySeconds() > policy.props.awayMinSeconds()
+                && event.awaySeconds() > policy.props().awayMinSeconds()
                 && !logs.existsByRelationIdAndSessionEventId(rel.id(), event.sessionEventId())) {
             // TODO(judgment): J-01 자리 비움 감점 (임시: 1분 넘게 비우면 −1, 하루 최대 −3)
-            int left = policy.props.awayDailyCap() + logs.eventLossSince(rel.id(), todayStart());
-            int delta = Math.max(policy.props.awayPenalty(), -Math.max(0, left));
+            int left = policy.props().awayDailyCap() + logs.eventLossSince(rel.id(), todayStart());
+            int delta = Math.max(policy.props().awayPenalty(), -Math.max(0, left));
             record(rel, "SESSION_EVENT", delta, event.sessionId(), event.sessionEventId(), null, null);
         }
         return changeOf(event);
@@ -150,7 +150,7 @@ class RelationService implements RelationQuery, RelationCommands {
         int days = today.minusDays(1).equals(rel.lastStudyDate()) ? rel.streakDays() + 1 : 1;
         relations.updateStreak(rel.id(), days, today);
         entityManager.refresh(rel);
-        if (days >= 2) record(rel, "STREAK", policy.props.streakPoints(), sessionId, null, null, null);
+        if (days >= 2) record(rel, "STREAK", policy.props().streakPoints(), sessionId, null, null, null);
     }
 
     @Override
@@ -168,7 +168,8 @@ class RelationService implements RelationQuery, RelationCommands {
             delta = severeToday
                     ? 0
                     : Math.min(
-                            delta, Math.max(0, policy.props.chatDailyGainCap() - logs.chatGainSince(rel.id(), today)));
+                            delta,
+                            Math.max(0, policy.props().chatDailyGainCap() - logs.chatGainSince(rel.id(), today)));
         }
         List<RelationLog> changed = record(
                 rel, "CHAT", delta, sessionId, null, requestId, score.signal().name());

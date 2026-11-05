@@ -1,5 +1,6 @@
 package com.capsule.dialogue.client;
 
+import com.capsule.common.settings.RuntimeSettings;
 import com.capsule.dialogue.config.LlmProperties;
 import com.capsule.dialogue.domain.LlmUsage;
 import com.capsule.dialogue.dto.LlmContext;
@@ -22,7 +23,7 @@ import org.springframework.stereotype.Component;
 /**
  * LLM 호출의 유일한 입구 (ADR 0022). 서비스·실험실은 용도(LlmPurpose)만 말하고, 여기서
  * ① 공급자·모델·한도를 정하고(설정 + 실험 덮어쓰기) ② 실패하면 재시도 → 대체 공급자 ③ 호출마다 llm_usages에 기록한다.
- * 기록이 실패해도 호출 결과는 그대로 돌려준다.
+ * 기록이 실패해도 호출 결과는 그대로 돌려준다. 설정은 호출마다 지금 값(실험실 '운영 설정'에서 바꾼 값, ADR 0026)을 읽는다.
  */
 @Component
 public class LlmGateway {
@@ -30,16 +31,17 @@ public class LlmGateway {
     private static final Logger log = LoggerFactory.getLogger(LlmGateway.class);
 
     private final Map<String, LlmProvider> providers;
-    private final LlmProperties props;
+    private final RuntimeSettings<LlmProperties> props;
     private final LlmUsageRepository usages;
     private final Clock clock;
 
-    LlmGateway(List<LlmProvider> providers, LlmProperties props, LlmUsageRepository usages, Clock clock) {
+    LlmGateway(
+            List<LlmProvider> providers, RuntimeSettings<LlmProperties> props, LlmUsageRepository usages, Clock clock) {
         this.providers = providers.stream().collect(Collectors.toMap(LlmProvider::name, Function.identity()));
         this.props = props;
         this.usages = usages;
         this.clock = clock;
-        provider(props.provider()); // 설정 오타는 앱 시작 때 잡는다
+        provider(props.defaults().provider()); // 설정 오타는 앱 시작 때 잡는다
     }
 
     public Llm.Result complete(
@@ -48,19 +50,24 @@ public class LlmGateway {
             List<Llm.ChatTurn> messages,
             LlmContext ctx,
             Consumer<String> onText) {
-        LlmProperties.Route route = props.route(purpose);
-        String primary = primary(ctx, route);
+        // 호출 한 번은 한 사본으로: 저장하는 순간에 걸쳐도 용도(옛 값) · 모델(새 값)이 섞여 깨지지 않게
+        LlmProperties settings = props.current();
+        LlmProperties.Route route = settings.route(purpose);
+        String primary = primary(settings, ctx, route);
         LlmCallException last = null;
-        for (String name : order(ctx, route)) {
+        for (String name : order(settings, ctx, route)) {
             LlmProvider provider = provider(name);
+            String model = ctx.model() != null && name.equals(primary) ? ctx.model() : settings.model(name, route);
+            LlmProperties.Provider p = settings.providerSettings(name);
             ProviderRequest req = new ProviderRequest(
                     purpose,
-                    ctx.model() != null && name.equals(primary) ? ctx.model() : props.model(name, route),
+                    model,
                     system,
                     messages,
                     ctx.maxTokens() != null ? ctx.maxTokens() : route.maxTokens(),
                     ctx.temperature() != null ? ctx.temperature() : route.temperature(),
-                    reasoningEffort(name));
+                    p == null ? null : p.reasoningEffort(),
+                    p == null ? null : p.thinkingFor(model)); // 표에 없는 모델(실험에서 고정한 모델 등)은 null = 안 보냄
             for (int attempt = 0; ; attempt++) {
                 if (ctx.deadline() != null && !Instant.now(clock).isBefore(ctx.deadline())) {
                     // 서비스가 이미 대체 대사로 넘어갔다: 결과가 버려질 호출은 시작하지 않는다 (기록할 호출도 없음)
@@ -73,7 +80,7 @@ public class LlmGateway {
                 } catch (LlmCallException e) {
                     record(ctx, req, name, null, e.getMessage(), t0);
                     last = e;
-                    if (!e.retryable() || attempt >= props.maxRetries()) break;
+                    if (!e.retryable() || attempt >= settings.maxRetries()) break;
                     pause();
                     continue;
                 } catch (RuntimeException e) {
@@ -99,23 +106,23 @@ public class LlmGateway {
     }
 
     public String defaultProvider() {
-        return props.provider();
+        return props.current().provider();
     }
 
     /** 실험 고정 > 용도의 공급자(예: DECIDE → jev) > 기본 공급자 */
-    private String primary(LlmContext ctx, LlmProperties.Route route) {
+    private static String primary(LlmProperties settings, LlmContext ctx, LlmProperties.Route route) {
         if (ctx.provider() != null) return ctx.provider();
-        return present(route.provider()) ? route.provider() : props.provider();
+        return present(route.provider()) ? route.provider() : settings.provider();
     }
 
     /**
      * 실험에서 공급자를 고정했으면 대체 공급자로 넘기지 않는다 (비교 실험이 섞이지 않게).
      * 용도의 공급자가 실패하면 기본 공급자 → 대체 공급자 순서로 한 번씩 (예: Jev가 죽어도 LLM이 결정한다)
      */
-    private List<String> order(LlmContext ctx, LlmProperties.Route route) {
-        String primary = primary(ctx, route);
+    private static List<String> order(LlmProperties settings, LlmContext ctx, LlmProperties.Route route) {
+        String primary = primary(settings, ctx, route);
         if (ctx.provider() != null) return List.of(primary);
-        return java.util.stream.Stream.of(primary, props.provider(), props.fallbackProvider())
+        return java.util.stream.Stream.of(primary, settings.provider(), settings.fallbackProvider())
                 .filter(LlmGateway::present)
                 .distinct()
                 .toList();
@@ -131,16 +138,11 @@ public class LlmGateway {
         return p;
     }
 
-    private String reasoningEffort(String providerName) {
-        LlmProperties.Provider p = props.providerSettings(providerName);
-        return p == null ? null : p.reasoningEffort();
-    }
-
     private void record(LlmContext ctx, ProviderRequest req, String provider, Llm.Result r, String error, long t0) {
         try {
             Llm.Usage u = r != null ? r.usage() : Llm.Usage.ZERO;
-            Llm.Price price = props.price(req.model());
-            boolean content = props.logContent() || !LlmContext.APP.equals(ctx.source());
+            Llm.Price price = props.current().price(req.model());
+            boolean content = props.current().logContent() || !LlmContext.APP.equals(ctx.source());
             usages.save(new LlmUsage(
                     ctx.userId(),
                     ctx.sessionId(),
@@ -169,7 +171,7 @@ public class LlmGateway {
 
     private void pause() {
         try {
-            Thread.sleep(props.retryBackoff());
+            Thread.sleep(props.current().retryBackoff());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }

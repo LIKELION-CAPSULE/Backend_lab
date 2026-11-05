@@ -3,23 +3,28 @@ package com.capsule.relation.service;
 import static com.capsule.relation.api.RelationTypes.MAX_POINTS;
 import static com.capsule.relation.api.RelationTypes.MIN_POINTS;
 
+import com.capsule.common.settings.RuntimeSettings;
 import com.capsule.relation.api.RelationTypes.ChatScore;
 import com.capsule.relation.config.RelationProperties;
 import org.springframework.stereotype.Component;
 
 /**
- * 호감도 · 단계 · 레벨 공식 (호감도 최종안, ADR 0022). 숫자는 RelationProperties(application.yml)에 있다.
+ * 호감도 · 단계 · 레벨 공식 (호감도 최종안, ADR 0022). 숫자는 RelationProperties(application.yml)에 있고,
+ * 실험실 '운영 설정'에서 바꾼 값이 있으면 그것을 쓴다 (ADR 0026). 범위 검사는 RelationSettingsConfig.check.
  * 호감도는 오르기 어렵고 내려가기 쉽다: 오르는 쪽만 하루 상한, 심한 말은 지금 값의 %로 깎는다.
  */
 @Component
 class AffinityPolicy {
 
-    final RelationProperties props;
+    private final RuntimeSettings<RelationProperties> settings;
 
-    AffinityPolicy(RelationProperties props) {
-        if (props.stages().isEmpty() || props.stages().getFirst().min() != MIN_POINTS)
-            throw new IllegalStateException("capsule.relation.stages의 첫 단계 min은 0이어야 함");
-        this.props = props;
+    AffinityPolicy(RuntimeSettings<RelationProperties> settings) {
+        this.settings = settings;
+    }
+
+    /** 지금 쓰는 숫자. 한 요청 안에서 여러 번 불러도 된다 (메모리 사본) */
+    RelationProperties props() {
+        return settings.current();
     }
 
     static int clamp(int points) {
@@ -41,23 +46,25 @@ class AffinityPolicy {
 
     /** 관계 단계 (1부터): 호감도가 그 단계 min 이상인 마지막 단계. 호감도가 내려가면 단계도 내려간다 */
     int stageOf(int points) {
+        var stages = props().stages();
         int stage = 0;
-        while (stage < props.stages().size()
-                && points >= props.stages().get(stage).min()) stage++;
+        while (stage < stages.size() && points >= stages.get(stage).min()) stage++;
         return stage;
     }
 
+    /** 단계가 줄었는데 옛 단계 번호가 오면 마지막 단계 이름 (운영 설정에서 단계 수를 바꾼 직후) */
     String stageName(int stage) {
-        return props.stages().get(stage - 1).name();
+        var stages = props().stages();
+        return stages.get(Math.min(stage, stages.size()) - 1).name();
     }
 
     // TODO(judgment): J-03 레벨 공식 (PM 임시: 자리 지킴 60분당 1레벨, 상한 없음)
     int levelOf(int totalPresentSeconds) {
-        return 1 + totalPresentSeconds / props.levelSeconds();
+        return 1 + totalPresentSeconds / props().levelSeconds();
     }
 
     /** 다음 레벨이 되는 누적 자리 지킴 시간 */
     int nextLevelSeconds(int level) {
-        return level * props.levelSeconds();
+        return level * props().levelSeconds();
     }
 }

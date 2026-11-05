@@ -1,6 +1,7 @@
 package com.capsule.dialogue.service;
 
 import com.capsule.common.error.ApiException;
+import com.capsule.common.settings.RuntimeSettings;
 import com.capsule.content.api.ContentTypes.CharacterInfo;
 import com.capsule.dialogue.client.Llm;
 import com.capsule.dialogue.client.LlmGateway;
@@ -77,8 +78,8 @@ public class EvalService {
     private final LabService lab;
     private final PromptService prompts;
     private final LlmGateway gateway;
-    private final LlmProperties llmProps;
-    private final DialogueProperties dialogueProps;
+    private final RuntimeSettings<LlmProperties> llmProps;
+    private final RuntimeSettings<DialogueProperties> dialogueProps;
     private final Clock clock;
 
     EvalService(
@@ -89,8 +90,8 @@ public class EvalService {
             LabService lab,
             PromptService prompts,
             LlmGateway gateway,
-            LlmProperties llmProps,
-            DialogueProperties dialogueProps,
+            RuntimeSettings<LlmProperties> llmProps,
+            RuntimeSettings<DialogueProperties> dialogueProps,
             Clock clock) {
         this.cases = cases;
         this.runs = runs;
@@ -151,7 +152,8 @@ public class EvalService {
     public EvalRunView start(EvalRunRequest r) {
         List<EvalCase> selected = cases.findAllById(r.caseIds());
         if (selected.size() != r.caseIds().size()) throw new ApiException(HttpStatus.NOT_FOUND, "EVAL_CASE_NOT_FOUND");
-        String pipeline = lab.pipeline(r.pipeline() == null ? dialogueProps.chatPipeline() : r.pipeline())
+        String pipeline = lab.pipeline(
+                        r.pipeline() == null ? dialogueProps.current().chatPipeline() : r.pipeline())
                 .name();
         LabConfig config = r.config() == null ? LabConfig.EMPTY : r.config();
         EvalRun run = runs.save(new EvalRun(
@@ -189,7 +191,7 @@ public class EvalService {
     }
 
     private void execute(EvalRun run, List<EvalCase> selected, LabConfig config) {
-        Semaphore slots = new Semaphore(Math.max(1, llmProps.lab().evalParallelism()));
+        Semaphore slots = new Semaphore(Math.max(1, llmProps.current().lab().evalParallelism()));
         List<Future<?>> jobs = new ArrayList<>();
         String status = EvalRun.DONE;
         try {

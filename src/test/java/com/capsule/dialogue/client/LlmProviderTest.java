@@ -63,15 +63,7 @@ class LlmProviderTest {
                 0,
                 Duration.ofMillis(300),
                 false,
-                new LlmProperties.Provider(
-                        base,
-                        "test-key",
-                        "2023-06-01",
-                        Map.of(),
-                        null,
-                        Map.of(
-                                "claude-haiku-5-5", new LlmProperties.Thinking("disabled", "low"),
-                                "claude-sonnet-5-5", new LlmProperties.Thinking("between_tools", "low"))),
+                new LlmProperties.Provider(base, "test-key", "2023-06-01", Map.of(), null, null),
                 new LlmProperties.Provider(base + "/v1", "test-key", null, Map.of(), "minimal", null),
                 new LlmProperties.Provider(base, "test-key", null, Map.of(), null, null),
                 Map.of(),
@@ -89,6 +81,12 @@ class LlmProviderTest {
     }
 
     static ProviderRequest request(Double temperature, String reasoningEffort, String model) {
+        return request(temperature, reasoningEffort, model, null);
+    }
+
+    /** thinking도 게이트웨이가 모델 이름으로 골라 넣는다 (LlmGatewayTest) */
+    static ProviderRequest request(
+            Double temperature, String reasoningEffort, String model, LlmProperties.Thinking thinking) {
         return new ProviderRequest(
                 LlmPurpose.CHAT,
                 model,
@@ -99,7 +97,8 @@ class LlmProviderTest {
                         new Llm.ChatTurn("user", "응")),
                 300,
                 temperature,
-                reasoningEffort);
+                reasoningEffort,
+                thinking);
     }
 
     // --- Anthropic ---
@@ -138,17 +137,18 @@ class LlmProviderTest {
 
     /** 5.5는 생각 설정이 없으면 생각 토큰이 max_tokens를 먹어 빈 답이 난다 (#92). 모델마다 받는 값이 달라서 모델별로 보낸다 */
     @Test
-    void anthropicSendsThinkingSettingsPerModel() {
+    void anthropicSendsThinkingSettingsFromRequest() {
         responseBody = """
                 {"content":[{"type":"text","text":"응"}],"stop_reason":"end_turn","usage":{"output_tokens":1}}""";
         AnthropicProvider provider = new AnthropicProvider(props());
 
-        provider.complete(request(null, null, "claude-haiku-5-5"), null);
+        provider.complete(request(null, null, "claude-haiku-5-5", new LlmProperties.Thinking("disabled", "low")), null);
         assertThat(requestBody.path("thinking").path("type").asString()).isEqualTo("disabled");
         assertThat(requestBody.path("output_config").path("effort").asString()).isEqualTo("low");
 
         // sonnet-5-5는 disabled가 400: 가장 낮은 설정 between_tools. thinking 안에 다른 칸을 넣으면 400이라 type만
-        provider.complete(request(null, null, "claude-sonnet-5-5"), null);
+        provider.complete(
+                request(null, null, "claude-sonnet-5-5", new LlmProperties.Thinking("between_tools", "low")), null);
         assertThat(requestBody.path("thinking").path("type").asString()).isEqualTo("between_tools");
         assertThat(requestBody.path("thinking").size()).isEqualTo(1);
         assertThat(requestBody.path("output_config").path("effort").asString()).isEqualTo("low");
@@ -300,6 +300,7 @@ class LlmProviderTest {
                 List.of(new Llm.SystemBlock("분류기", true)),
                 List.of(new Llm.ChatTurn("user", payload)),
                 200,
+                null,
                 null,
                 null);
 

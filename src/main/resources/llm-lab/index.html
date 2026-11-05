@@ -113,6 +113,7 @@ tr.sub>td{background:var(--bg);padding:8px}
   <button data-tab="eval">평가</button>
   <button data-tab="usage">호출 기록</button>
   <button data-tab="character">캐릭터 설정</button>
+  <button data-tab="settings">운영 설정</button>
 </nav>
 <main>
   <section class="tab" id="tab-chat"></section>
@@ -121,6 +122,7 @@ tr.sub>td{background:var(--bg);padding:8px}
   <section class="tab" id="tab-eval" hidden></section>
   <section class="tab" id="tab-usage" hidden></section>
   <section class="tab" id="tab-character" hidden></section>
+  <section class="tab" id="tab-settings" hidden></section>
 </main>
 <div id="toasts" class="toasts"></div>
 <script>
@@ -800,6 +802,93 @@ function characterTab() {
   };
 }
 
+/* ---------- 운영 설정 (ADR 0026) ---------- */
+// yml 값 위에 바꾼 칸만 DB에 저장한다. 저장하면 다음 요청부터 서비스에 들어간다 (이 서버는 바로, 서버가 여럿이면 30초 안)
+const SECTIONS = [
+  ['llm', 'AI 공급자 · 모델', 'provider = 기본 공급자, fallback-provider = 실패하면 한 번 더 (같은 요청을 다른 공급자로). routes = 용도별 등급 · 출력 한도 · 그 용도만 쓸 공급자(DECIDE → jev). API 키 · 주소는 Railway 변수로만'],
+  ['relation', '호감도 · 레벨', '하루 오름 상한, 자리 비움 감점, 연속 출석, 레벨 1당 자리 지킴 초, 관계 단계(호감도 구간). 대화 한 번의 점수표는 캐릭터 설정의 scores (없으면 아래 대화의 chat-scores)'],
+  ['dialogue', '대화', '답장 파이프라인, 상태 반응을 AI로 만들 trigger, 말 종류 판정, 기본 점수표, 기억 크기, 5초 기준(llm-budget), 메시지 속도 제한. 시간은 PT5S · PT0.3S 형식'],
+];
+const kebab = s => s.replace(/[A-Z]/g, c => '-' + c.toLowerCase());
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const brief = x => { const s = typeof x === 'object' && x !== null ? JSON.stringify(x) : String(x); return s.length > 60 ? s.slice(0, 60) + '…' : s; };
+
+function settingEditor(section, f) {
+  const v = f.value, d = f.defaultValue;
+  if (section === 'llm' && (f.path === 'provider' || f.path === 'fallbackProvider')) {
+    const names = META.providers.filter(p => p.name !== 'jev' && (f.path === 'provider' || p.name !== 'fake'))
+      .map(p => [p.name, p.ready ? p.name : p.name + ' (키 없음)']);
+    const el = sel(f.path === 'fallbackProvider' ? [['', '없음'], ...names] : names, v ?? '');
+    return {el, read: () => el.value === '' && d == null ? null : el.value, set: x => { el.value = x ?? ''; }};
+  }
+  if (typeof d === 'boolean') {
+    const el = h('input', {type: 'checkbox', checked: !!v});
+    return {el, read: () => el.checked, set: x => { el.checked = !!x; }};
+  }
+  if (typeof d === 'number') {
+    const el = h('input', {type: 'number', step: 'any', value: v});
+    return {el, read: () => Number(el.value), set: x => { el.value = x; }};
+  }
+  if (typeof d === 'string' && (v == null || typeof v === 'string')) {
+    const el = h('input', {value: v ?? ''});
+    return {el, read: () => el.value, set: x => { el.value = x ?? ''; }};
+  }
+  const show = x => JSON.stringify(x, null, 2);
+  const el = h('textarea', {class: 'mono', spellcheck: false, rows: Math.min(14, show(v).split('\n').length), value: show(v)});
+  return {el, read: () => JSON.parse(el.value), set: x => { el.value = show(x); }};
+}
+
+function settingsTab() {
+  const box = h('div', null, muted('불러오는 중…'));
+  let loaded = false;
+  const intro = h('div', {class: 'card'},
+    h('h3', null, '운영 설정: 배포 없이 서비스 동작 바꾸기'),
+    muted('저장하면 다음 요청부터 실제 서비스(공부 · 대화 · 호감도)에 들어갑니다. 바꾼 칸만 DB에 남고, 나머지는 application.yml 값입니다. ↺ 또는 \'전부 yml 값으로\'로 되돌립니다.'),
+    muted('프롬프트(답장 · 반응 공통 틀 scene.system 등)는 \'프롬프트\' 탭에서 새 버전을 켜면, 말투 · 미리 쓴 대사 · 점수표 · 로어북은 \'캐릭터 설정\' 탭에서 저장하면 바로 들어갑니다 (캐릭터 설정은 git에서 profile.yml version을 올려 배포하면 git 값으로 덮어씀).'));
+  function card(s) {
+    const [, title, hint] = SECTIONS.find(x => x[0] === s.section) || [s.section, s.section, ''];
+    const rows = s.fields.map(f => {
+      const ed = settingEditor(s.section, f);
+      return {f, ed, el: h('tr', null,
+        h('td', {class: 'mono'}, kebab(f.path)),
+        h('td', null, f.overridden ? h('span', {class: 'badge draft'}, '바꿈') : h('span', {class: 'muted small'}, 'yml')),
+        h('td', null, h('div', {class: 'row'}, h('div', {class: 'grow'}, ed.el),
+          h('button', {class: 'ghost', title: 'yml 값으로 (저장해야 반영)', onclick: () => ed.set(f.defaultValue)}, '↺'))),
+        h('td', {class: 'muted small mono', title: JSON.stringify(f.defaultValue)}, brief(f.defaultValue)))};
+    });
+    const put = async body => {
+      await api('PUT', '/settings/' + s.section, body);
+      toast(title + ' 저장했어요. 다음 요청부터 서비스에 들어가요', 'ok');
+      await load();
+    };
+    const saveBtn = h('button', {class: 'primary', onclick: () => busy(saveBtn, async () => {
+      const body = {};
+      for (const r of rows) {
+        let v;
+        try { v = r.ed.read(); } catch (e) { throw fail({code: 'JSON', message: kebab(r.f.path) + ': JSON 형식이 틀렸어요', detail: String(e)}); }
+        if (!same(v, r.f.defaultValue)) body[r.f.path] = v;
+      }
+      await put(body);
+    })}, '저장');
+    return h('details', {class: 'card', open: true},
+      h('summary', null, `${title} (${s.section}) · 바꾼 칸 ${s.fields.filter(f => f.overridden).length}개`),
+      muted(hint),
+      table(['칸 (yml 키)', '', '지금 값', 'yml 값'], rows.map(r => r.el)),
+      h('div', {class: 'acts'}, saveBtn, confirmBtn('전부 yml 값으로', () => put({})),
+        muted(s.updatedAt ? '마지막 저장 ' + fmtTime(s.updatedAt) : '저장한 적 없음 (전부 yml 값)')));
+  }
+  async function load() {
+    const all = await api('GET', '/settings');
+    const order = SECTIONS.map(x => x[0]);
+    all.sort((a, b) => order.indexOf(a.section) - order.indexOf(b.section));
+    box.replaceChildren(intro, ...all.map(card));
+    loaded = true;
+    META = await api('GET', '/meta'); // 기본 공급자 · 모델 표(머리줄)도 새 값으로
+    header();
+  }
+  return {el: box, show: () => { if (!loaded) busy(null, load); }};
+}
+
 /* ---------- 머리줄 · 시작 ---------- */
 function header() {
   const m = META;
@@ -827,7 +916,7 @@ async function init() {
   }
   header();
   if (META.tokenRequired && !TOKEN) askToken();
-  const makers = {chat: chatTab, play: playTab, prompts: promptsTab, eval: evalTab, usage: usageTab, character: characterTab};
+  const makers = {chat: chatTab, play: playTab, prompts: promptsTab, eval: evalTab, usage: usageTab, character: characterTab, settings: settingsTab};
   for (const k in makers) { TABS[k] = makers[k](); $('#tab-' + k).replaceChildren(TABS[k].el); }
   const k = location.hash.slice(1);
   showTab(TABS[k] ? k : 'chat');

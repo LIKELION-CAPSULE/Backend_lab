@@ -5,6 +5,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.net.InetAddress;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -21,6 +22,8 @@ import org.springframework.security.web.SecurityFilterChain;
  * 기본은 거부: 화면(HTML) 주소만 열고, 나머지는 전부
  * - capsule.llm.lab.token이 비어 있으면 이 컴퓨터(loopback)에서 온 요청만 (같은 와이파이의 다른 사람이 내 키로 호출하지 못하게)
  * - 토큰을 넣었으면 X-Lab-Token 헤더가 같아야 한다 (공용 개발 서버에 열 때)
+ * 프록시 뒤(forward-headers-strategy가 none이 아님)에서는 접속 주소를 X-Forwarded-For로 꾸밀 수 있어서 토큰 없이 켜면 시작에 실패한다.
+ * 운영 설정(ADR 0026)도 이 경로라 서비스 동작을 바꾸는 권한이 이 토큰 하나에 걸린다.
  * ponytail: 토큰 하나로만 막는다. 공용 서버에 오래 열어 둘 거면 사내 로그인(SSO) 뒤에 둘 것
  */
 @Configuration
@@ -29,8 +32,15 @@ class LabSecurityConfig {
 
     @Bean
     @Order(0)
-    SecurityFilterChain llmLabSecurity(HttpSecurity http, LlmProperties props) throws Exception {
+    SecurityFilterChain llmLabSecurity(
+            HttpSecurity http,
+            LlmProperties props,
+            @Value("${server.forward-headers-strategy:none}") String forwardHeaders)
+            throws Exception {
         String token = props.lab().token();
+        if ((token == null || token.isBlank()) && !"none".equalsIgnoreCase(forwardHeaders))
+            throw new IllegalStateException("프록시 뒤(server.forward-headers-strategy=" + forwardHeaders
+                    + ")에서 실험실을 켜려면 CAPSULE_LLM_LAB_TOKEN이 필요 (접속 주소를 꾸밀 수 있음)");
         http.securityMatcher("/internal/llm-lab", "/internal/llm-lab/**")
                 .csrf(csrf -> csrf.disable()) // 같은 출처 화면에서 JSON으로만 부름. 쿠키 인증을 쓰지 않음
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))

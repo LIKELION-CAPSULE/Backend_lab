@@ -1,5 +1,6 @@
 package com.capsule.dialogue.service;
 
+import com.capsule.common.settings.RuntimeSettings;
 import com.capsule.dialogue.client.Decider;
 import com.capsule.dialogue.client.Decider.Decision;
 import com.capsule.dialogue.config.DialogueProperties;
@@ -41,10 +42,10 @@ public class ChatReplier {
     public static final String QUESTION = "signal";
 
     private final Decider decider;
-    private final DialogueProperties props;
+    private final RuntimeSettings<DialogueProperties> props;
     private final Clock clock;
 
-    ChatReplier(Decider decider, DialogueProperties props, Clock clock) {
+    ChatReplier(Decider decider, RuntimeSettings<DialogueProperties> props, Clock clock) {
         this.decider = decider;
         this.props = props;
         this.clock = clock;
@@ -56,8 +57,8 @@ public class ChatReplier {
 
     /** @param onText 답장 LLM 원문 스트림 (명세 28). null이면 한 번에 */
     public ChatOutcome reply(ChatPipeline pipeline, ChatInput in, LlmContext ctx, Consumer<String> onText) {
-        SignalType guess = ChatScorer.detect(in.userMessage(), props.lowEffortMaxChars());
-        boolean decide = DialogueProperties.DECIDER.equals(props.signalDetector());
+        SignalType guess = ChatScorer.detect(in.userMessage(), props.current().lowEffortMaxChars());
+        boolean decide = DialogueProperties.DECIDER.equals(props.current().signalDetector());
         boolean confirm = !decide && guess == SignalType.HATE_OR_SEXUAL;
         CompletableFuture<Decision> asked = decide || confirm
                 ? CompletableFuture.supplyAsync(() -> read(in, decide ? question() : severeQuestion(), ctx), THREADS)
@@ -75,22 +76,22 @@ public class ChatReplier {
         if (confirm) {
             boolean severe = d != null
                     && SignalType.HATE_OR_SEXUAL.name().equals(d.choice())
-                    && d.confidence() >= props.severeMinConfidence();
+                    && d.confidence() >= props.current().severeMinConfidence();
             return outcome.withSignal(severe ? SignalType.HATE_OR_SEXUAL : SignalType.RUDE, confidence);
         }
         // TODO(judgment): J-06 B안: 확신이 낮으면 0점. 기준값은 실험실 평가로 정한다
-        if (d == null || d.confidence() < props.signalMinConfidence())
+        if (d == null || d.confidence() < props.current().signalMinConfidence())
             return outcome.withSignal(SignalType.NEUTRAL, confidence);
         SignalType chosen = SignalType.valueOf(d.choice());
         // 비율 감점은 A안과 같은 확신 기준을 넘어야 한다
-        if (chosen == SignalType.HATE_OR_SEXUAL && d.confidence() < props.severeMinConfidence())
-            chosen = SignalType.RUDE;
+        if (chosen == SignalType.HATE_OR_SEXUAL
+                && d.confidence() < props.current().severeMinConfidence()) chosen = SignalType.RUDE;
         return outcome.withSignal(chosen, confidence);
     }
 
     private Decision read(ChatInput in, Decider.Question q, LlmContext ctx) {
         try {
-            return decider.decide(state(in, props.signalContextLines()), Map.of(QUESTION, q), ctx)
+            return decider.decide(state(in, props.current().signalContextLines()), Map.of(QUESTION, q), ctx)
                     .get(QUESTION);
         } catch (RuntimeException e) {
             log.warn("말의 종류 고르기 실패: {}", e.toString());
