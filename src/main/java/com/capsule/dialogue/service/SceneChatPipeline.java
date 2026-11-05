@@ -163,8 +163,11 @@ class SceneChatPipeline implements ChatPipeline {
     static JsonNode replyJson(Llm.Result r) {
         JsonNode json = LlmJson.objectIn(r.text());
         boolean truncated = "max_tokens".equals(r.stopReason()) || "length".equals(r.stopReason());
+        // 깨진 JSON은 JSON 모양일 때만: 맨 글이 기본 형식이라 대사 속 "emotion"이나 {1, 2} 같은 글은 깨진 게 아니다
         if (json == null
-                && (truncated || r.text().strip().startsWith("{") || r.text().contains("\"emotion\"")))
+                && (truncated
+                        || r.text().strip().startsWith("{\"")
+                        || JSON_KEY.matcher(r.text()).find()))
             throw new IllegalStateException("답장 JSON이 깨짐 (stop_reason=" + r.stopReason() + "): " + r.text());
         return json;
     }
@@ -203,14 +206,39 @@ class SceneChatPipeline implements ChatPipeline {
     private static final Pattern PLAIN_EMOTION = Pattern.compile(
             "\\s*[(\\[]?\\s*\\bemotion\\s*[=:]\\s*\"?([^\\s\")\\]]+)\"?\\s*[)\\]]?\\s*$", Pattern.CASE_INSENSITIVE);
 
+    /** scene.system이 시키는 태그 [emotion=표정] (값에 공백 · 쉼표가 있어도). 보통 끝이지만 어디에 있든 뗀다 */
+    private static final Pattern EMOTION_TAG =
+            Pattern.compile("\\s*\\[\\s*emotion\\s*[=:]([^\\]\\n]*)\\]", Pattern.CASE_INSENSITIVE);
+
+    /** JSON 답의 키 ("reply": · "emotion":) */
+    private static final Pattern JSON_KEY = Pattern.compile("\"(reply|emotion)\"\\s*:");
+
     /** 맨 글을 대사와 감정으로 나눈 것 */
     record Plain(String text, String emotion) {}
+
+    /** 태그 값을 감정으로: 통째로 맞으면 그것, 아니면 낱말 중 목록에 맞는 마지막 것 ("웃음과 경멸 사이, 결국 웃음" → 웃음) */
+    private static String lastEmotion(String value, UnaryOperator<String> emotion) {
+        String whole = emotion.apply(value.replace("\"", "").strip());
+        if (whole != null) return whole;
+        String found = null;
+        for (String word : value.split("[^\\p{L}]+")) {
+            String e = word.isEmpty() ? null : emotion.apply(word);
+            if (e != null) found = e;
+        }
+        return found;
+    }
 
     /**
      * 맨 글(JSON 없는 답): 끝의 감정 표시를 떼어 감정으로 (말풍선에 "emotion=웃음"이 나가지 않게).
      * 그 이름이 이 캐릭터의 감정일 때만 뗀다: 영어 공부 중 "emotion: 감정" 같은 대사를 자르지 않게
      */
     static Plain plain(String text, UnaryOperator<String> emotion) {
+        // 프롬프트가 시키는 태그는 값이 목록 밖이거나 풀어 쓴 말이어도, 끝이 아니어도 태그째 뗀다 (말풍선에 새지 않게). 감정은 마지막 태그
+        Matcher tag = EMOTION_TAG.matcher(text);
+        String value = null;
+        while (tag.find()) value = tag.group(1);
+        if (value != null)
+            return new Plain(EMOTION_TAG.matcher(text).replaceAll("").strip(), lastEmotion(value, emotion));
         Matcher m = PLAIN_EMOTION.matcher(text);
         if (!m.find()) return new Plain(text, null);
         String e = emotion.apply(m.group(1));
