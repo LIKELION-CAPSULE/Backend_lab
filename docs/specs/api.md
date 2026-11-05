@@ -31,6 +31,7 @@
 | 25 | 인증 | POST | `/api/auth/password/reset-request` | 비밀번호 재설정 메일 요청 |
 | 26 | 인증 | POST | `/api/auth/password/reset` | 비밀번호 재설정 |
 | 27 | 인증 | DELETE | `/api/me` | 회원 탈퇴 |
+| 28 | 대화 | POST | `/api/sessions/{sessionId}/messages/stream` | 메시지 전송 (스트리밍) |
 
 순서 15는 노션에 없음 (번호 비어 있음).
 
@@ -1649,3 +1650,68 @@ json
 
 - 카카오 연결 끊기(카카오 unlink API)는 하지 않음. 카카오 토큰을 저장하지 않아서 서버가 부를 수 없음 (어드민 키 방식으로 할지 확정 필요)
 - 재가입 제한 기간 없음 (확정 필요)
+
+## 28. POST /api/sessions/{sessionId}/messages/stream — 메시지 전송 (스트리밍)
+- 분류: 대화
+- 설명: 20번과 같은 대화를 답장 글자가 만들어지는 대로 받음 (SSE). 마지막에 20번 응답 전체
+- 와이어프레임: H08 휴식 대화 · H20 공부 중 채팅
+- 백엔드: Not started
+- 프론트: Not started
+
+> 2026-11-05: 추가. 20번은 답장이 다 만들어질 때까지(1~3초) 아무것도 안 보여서 느리게 느껴짐. 첫 글자가 보이는 시간을 줄이려고 같은 대화를 흘려 보내는 API를 따로 둠. 20번은 그대로 (프론트가 옮기는 동안 둘 다 씀)
+
+#### 한 줄 요약
+
+요청 · 검증 · 저장 · 호감도 · 재전송 규칙은 **20번과 같습니다.** 다른 점은 응답이 한 번에 오지 않고 SSE(`text/event-stream`) 이벤트로 나눠 온다는 것뿐입니다: 답장 글자가 생길 때마다 `reply`, 끝나면 20번 응답 전체를 담은 `done` 한 번.
+
+#### 와이어프레임 대조
+
+| 화면 요소 | 이 API가 하는 일 |
+| --- | --- |
+| H08 · H20 '[친구 메시지]' · '입력 중…' | `reply` 이벤트가 올 때마다 말풍선 글을 바꿔 씀. 첫 `reply` 전까지 '입력 중…' |
+| H07 캐릭터 칸 (답장할 때 동작 · 얼굴) | `done`의 `motion` · `expression` |
+
+- 테이블: 20번과 같음 · 인증: 필요
+
+#### [POST] /api/sessions/{sessionId}/messages/stream
+
+#### 🛫 Request
+
+20번과 같음 (`requestId` · `characterId` · `content` · `inputType` · `tts`). `Accept: text/event-stream, application/json`을 보냄 (둘 다: 스트림을 열기 전 오류는 JSON이라 `text/event-stream`만 보내면 에러 응답을 못 받음).
+
+#### 🛬 Response
+
+> ✅ **200 OK** · `Content-Type: text/event-stream`. 이벤트 두 종류(+ 오류)가 이 순서로 옴
+
+| 이벤트 | 몇 번 | data |
+| --- | --- | --- |
+| `reply` | 0번 이상 | `{"content": "지금까지 만들어진 답장"}`. **지금까지의 글 전체**(조각이 아님). 받을 때마다 말풍선 글을 이 값으로 바꿈 |
+| `done` | 마지막 1번 | 20번 응답과 같은 JSON. `content`가 최종 답장이라 말풍선을 이 값으로 확정 (마지막 `reply`와 조금 다를 수 있음: 앞뒤 공백 · 따옴표 정리). 표정 · 호감도도 여기서 |
+| `error` | `done` 대신 1번 | 공통 에러 모양 `{"code", "message", "detail"}`. 스트림을 연 뒤에 생긴 오류만 (예: 답하는 사이 공부가 끝남 → `SESSION_ENDED`) |
+
+```
+event: reply
+data: {"content":"알지."}
+
+event: reply
+data: {"content":"알지. 그리핀도르 그 녀석,"}
+
+event: done
+data: {"requestId":"9c3a...","characterId":1,"content":"알지. 그리핀도르 그 녀석, 퀴디치에서 맨날 나랑 붙는 애.","emotion":"경멸","motion":null,"expression":{"name":"경멸","file":"exp/expression3.exp3.json"},"affinity":{"delta":0,"points":50,"stage":2,"stageName":"친한 사이","level":1,"levelUp":false},"fallback":false,"audioBase64":null}
+```
+
+> ❌ 스트림을 열기 전 오류는 20번과 같은 **보통 JSON 에러 응답**(HTTP 상태 그대로): **400** EMPTY_MESSAGE · INVALID_REQUEST · CHARACTER_NOT_IN_SESSION · **404** SESSION_NOT_FOUND · **409** SESSION_ENDED · **429** TOO_MANY_REQUESTS (20번과 횟수를 같이 셈)
+
+#### 서버가 하는 일
+
+20번 '서버가 하는 일'과 같고, 3번(LLM)을 스트리밍으로 부르면서 답장 글을 `reply`로 보낸다. 다른 점은 대체 대사 기준뿐이다:
+
+- **첫 글자를 5초 안에 못 보내면** 대체 대사 + `fallback: true` (`reply` 없이 `done`만). 20번의 "5초 넘으면 대체"와 같은 시간
+- **첫 글자를 보낸 뒤에는 끝까지 기다린다** (이미 보인 글을 대체 대사로 바꾸지 않으려고). 그래도 중간에 실패하면 `done`이 대체 대사(`fallback: true`)로 옴 → 말풍선을 `done.content`로 바꿈
+- 같은 `requestId`를 다시 보내면 저장된 답장을 `done` 한 번으로 (20번 재전송 규칙과 같음: `affinity.delta` 0, 감정 · 동작 · 표정 null)
+
+#### 규칙
+
+- 답 길이 · 수다 길어짐 · 일시정지 중 입력 막기는 20번과 같음
+- 프론트는 `EventSource`가 아니라 `fetch`로 부른다 (`EventSource`는 POST · 헤더를 못 보냄). 응답 본문을 읽으면서 빈 줄로 이벤트를 나눔
+- 연결이 끊기면 같은 `requestId`로 다시 보냄 (20번이든 28번이든). 이미 답했으면 `done`(28) 또는 보통 응답(20)으로 저장된 답장이 옴
