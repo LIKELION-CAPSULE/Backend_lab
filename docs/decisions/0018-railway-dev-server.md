@@ -2,7 +2,7 @@
 
 - 결정
   - 앱 서버는 Railway에서 돌린다. 빌드는 레포의 `Dockerfile`(Java 21, 실행 이미지는 JRE만), 설정은 `railway.json`(Dockerfile 빌드, `/actuator/health` 헬스체크)
-  - 먼저 프론트 연동용 개발 서버(Railway `dev` 환경)를 띄운다. 프로필 `local,shared-db,dev-server`: DB는 공용 개발 DB(0017), 카카오 · 메일은 Fake. → 2026-11-04 바뀜: 메일(0020)과 카카오 로그인도 실제로 동작하고 키가 필수다. 그래서 아래 '대가'의 Fake 카카오 로그인 구멍은 닫혔다
+  - 먼저 프론트 연동용 개발 서버(Railway `dev` 환경)를 띄운다. 프로필 `local,shared-db,dev-server`: DB는 공용 개발 DB(0017), 카카오 · 메일은 Fake. → 2026-11-04 바뀜: 메일(0020)과 카카오 로그인도 실제로 동작하고 키가 필수다. 그래서 아래 '대가'의 Fake 카카오 로그인 구멍은 닫혔다. → 2026-11-05: 대화 LLM도 실제로 쓴다. `CAPSULE_LLM_PROVIDER`가 필수(빠지면 시작 실패)이고, 상태 반응(19)을 미리 쓴 대사로 돌리던 `reaction-llm-triggers: []`는 뺐다
   - Redis는 같은 Railway 프로젝트의 Redis 서비스. 앱은 `REDIS_URL`(= `${{Redis.REDIS_URL}}`)로 붙는다. 0016 '남은 일'의 운영 Redis도 같은 방식으로 한다
   - 운영(production 환경, `prod` 프로필)은 실제 메일 어댑터(#18)가 생긴 뒤 같은 이미지로 띄운다
 - 이유
