@@ -3,6 +3,7 @@ package com.capsule.user.service;
 import com.capsule.common.error.ApiException;
 import com.capsule.common.time.ClockConfig;
 import com.capsule.user.api.UserTypes.MemoryInfo;
+import com.capsule.user.domain.User;
 import com.capsule.user.domain.UserMemory;
 import com.capsule.user.domain.UserMemory.Type;
 import com.capsule.user.dto.CreateMemoryRequest;
@@ -10,6 +11,7 @@ import com.capsule.user.dto.MemoryList;
 import com.capsule.user.dto.MemoryResponse;
 import com.capsule.user.dto.MemoryStatus;
 import com.capsule.user.repository.UserMemoryRepository;
+import com.capsule.user.repository.UserRepository;
 import java.time.Clock;
 import java.time.DateTimeException;
 import java.time.Instant;
@@ -49,16 +51,22 @@ public class MemoryService {
             .thenComparing(SAME_DAY);
 
     private final UserMemoryRepository memories;
+    private final UserRepository users;
     private final Clock clock;
 
-    MemoryService(UserMemoryRepository memories, Clock clock) {
+    MemoryService(UserMemoryRepository memories, UserRepository users, Clock clock) {
         this.memories = memories;
+        this.users = users;
         this.clock = clock;
     }
 
     /** EXAM·PROMISE는 날짜 필수, GOAL은 선택(B9). 날짜 없이 시간만·지난 날짜는 안 됨 */
     @Transactional
     public MemoryResponse create(long userId, CreateMemoryRequest req) {
+        // 탈퇴(api.md 27) 뒤 남은 액세스 토큰으로 일정이 다시 생기지 않게
+        if (users.findById(userId).filter(User::isActive).isEmpty()) {
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
+        }
         Type type = parse(req.type(), Type::valueOf);
         LocalDate dueDate = parse(req.dueDate(), LocalDate::parse);
         LocalTime dueTime = parse(req.dueTime(), s -> LocalTime.parse(s, HH_MM));

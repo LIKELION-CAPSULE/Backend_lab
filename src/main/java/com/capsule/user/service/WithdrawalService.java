@@ -42,12 +42,15 @@ public class WithdrawalService {
         this.clock = clock;
     }
 
-    /** 이미 탈퇴했거나 없는 사용자면 아무것도 하지 않는다 (명세: 그래도 204) */
+    /**
+     * 이미 탈퇴한 사용자면 DB는 그대로 두고 토큰 폐기만 다시 한다 (명세: 그래도 204).
+     * 커밋 뒤 Redis 폐기가 실패해 500이 났어도 다시 부르면 폐기된다
+     */
     public void withdraw(long userId) {
-        Boolean withdrawn = tx.execute(status -> {
+        tx.executeWithoutResult(status -> {
             User user = users.findById(userId).filter(User::isActive).orElse(null);
             if (user == null) {
-                return false;
+                return;
             }
             // 세션이 남으면 자동 마감이 탈퇴 뒤에 정산 · 대화 카드를 다시 만든다
             if (activeSessions.find(userId).isPresent()) {
@@ -57,10 +60,7 @@ public class WithdrawalService {
             users.deleteSocialAccounts(userId);
             memories.deleteByUserId(userId);
             events.publishEvent(new UserWithdrawnEvent(userId)); // dialogue가 대화 기억을 같은 트랜잭션에서 지움
-            return true;
         });
-        if (Boolean.TRUE.equals(withdrawn)) {
-            tokens.revokeAll(userId);
-        }
+        tokens.revokeAll(userId);
     }
 }

@@ -85,6 +85,12 @@ class WithdrawalApiTest extends UserApiTestSupport {
         // 모든 기기 로그아웃, 남은 액세스 토큰으로는 401, 다시 불러도 204
         mvc.perform(post("/api/auth/refresh").cookie(refresh)).andExpect(status().isUnauthorized());
         mvc.perform(get("/api/me").header("Authorization", auth)).andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/me/memories")
+                        .header("Authorization", auth)
+                        .contentType("application/json")
+                        .content("{\"type\":\"GOAL\",\"title\":\"다시\"}"))
+                .andExpect(status().isUnauthorized());
+        assertThat(count("user_memories", userId)).isZero();
         mvc.perform(delete("/api/me").header("Authorization", auth)).andExpect(status().isNoContent());
 
         // 이메일이 비워져서 같은 이메일로 새로 가입할 수 있다 (인증 요청은 1분 제한이라 DB로 확인)

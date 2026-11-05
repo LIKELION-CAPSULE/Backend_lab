@@ -2,7 +2,9 @@ package com.capsule.user.service;
 
 import com.capsule.common.error.ApiException;
 import com.capsule.common.security.AuthProperties;
+import com.capsule.user.domain.User;
 import com.capsule.user.dto.Issued;
+import com.capsule.user.repository.UserRepository;
 import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.Duration;
@@ -29,12 +31,15 @@ public class TokenService {
     private final JwtEncoder jwtEncoder;
     private final StringRedisTemplate redis;
     private final AuthProperties props;
+    private final UserRepository users;
     private final Clock clock;
 
-    TokenService(JwtEncoder jwtEncoder, StringRedisTemplate redis, AuthProperties props, Clock clock) {
+    TokenService(
+            JwtEncoder jwtEncoder, StringRedisTemplate redis, AuthProperties props, UserRepository users, Clock clock) {
         this.jwtEncoder = jwtEncoder;
         this.redis = redis;
         this.props = props;
+        this.users = users;
         this.clock = clock;
     }
 
@@ -67,6 +72,10 @@ public class TokenService {
         long issuedAt = issued == null ? 0 : Long.parseLong(issued); // 발급 시각이 없는 옛 토큰은 가장 오래된 것으로
         String revokedAt = redis.opsForValue().get(revokedAtKey(userId));
         if (revokedAt != null && issuedAt <= Long.parseLong(revokedAt)) {
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "REFRESH_TOKEN_INVALID");
+        }
+        // 탈퇴(api.md 27) 뒤 폐기가 빠졌어도 새 토큰을 주지 않는다
+        if (users.findById(userId).filter(User::isActive).isEmpty()) {
             throw new ApiException(HttpStatus.UNAUTHORIZED, "REFRESH_TOKEN_INVALID");
         }
         return issue(userId);
