@@ -19,7 +19,12 @@ DELETE FROM live2d_motions WHERE model_id = 1;
 
 INSERT INTO live2d_models (id, storage_prefix, model_json_path, scale, offset_x, offset_y) OVERRIDING SYSTEM VALUE
 VALUES (1, 'chaerin/v1/', 'chaerin.model3.json', 1.00, 0, 12),
-       (2, 'haru/v1/', 'Haru.model3.json', 1.00, 0, 0) -- 아바타: Live2D 공식 샘플 Haru (무료 소재 라이선스, 출처 표기 필요, 음성 참조 제거)
+       (2, 'haru/v1/', 'Haru.model3.json', 1.00, 0, 0), -- 아바타: Live2D 공식 샘플 Haru (무료 소재 라이선스, 출처 표기 필요, 음성 참조 제거)
+       -- 아바타 2 · 3 (2026-11-06): Live2D 공식 샘플 Hiyori PRO · Natori PRO. Haru와 같은 무료 소재 라이선스(Live2D 오리지널 캐릭터).
+       --   api.md 9 아바타 조건(얼굴 트래킹 표준 파라미터 6개 + 팔 · 손 파라미터)을 둘 다 만족. 음성 파일 · 참조 없음.
+       --   샘플 zip(cubism.live2d.com/sample-data/bin/<이름>/<이름>_ja.zip)의 runtime/을 버킷 live2d-model의 <이름>/v1/에 그대로 올린다
+       (3, 'hiyori/v1/', 'hiyori_pro_t11.model3.json', 1.00, 0, 0), -- 일러스트: かにビーム
+       (4, 'natori/v1/', 'natori_pro_t06.model3.json', 1.00, 0, 0) -- 일러스트: 先崎真琴
 ON CONFLICT (id) DO UPDATE SET storage_prefix = EXCLUDED.storage_prefix, model_json_path = EXCLUDED.model_json_path,
     scale = EXCLUDED.scale, offset_x = EXCLUDED.offset_x, offset_y = EXCLUDED.offset_y;
 
@@ -63,7 +68,9 @@ ON CONFLICT (id) DO UPDATE SET model_id = EXCLUDED.model_id, trigger_type = EXCL
 
 INSERT INTO avatars (id, model_id, name, thumbnail_url, sort_order) OVERRIDING SYSTEM VALUE
 VALUES (1, 2, '기본 아바타',
-        'haru/thumbnail.png', 1)
+        'haru/thumbnail.png', 1),
+       (2, 3, '히요리', 'hiyori/thumbnail.png', 2), -- 썸네일은 Haru처럼 얼굴 중심 512×512 투명 PNG
+       (3, 4, '나토리', 'natori/thumbnail.png', 3)
 ON CONFLICT (id) DO UPDATE SET model_id = EXCLUDED.model_id, name = EXCLUDED.name,
     thumbnail_url = EXCLUDED.thumbnail_url, sort_order = EXCLUDED.sort_order;
 
