@@ -8,6 +8,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 import org.slf4j.Logger;
@@ -23,7 +24,9 @@ import tools.jackson.databind.node.ObjectNode;
  * 실행 중에 바꾸는 설정 한 묶음 (ADR 0026). application.yml로 받은 값이 기본값이고, DB에 저장한 칸만 그 위에 덮어쓴다.
  * - 바꿀 수 있는 칸은 paths(허용 목록)뿐이다. API 키 · 공급자 주소처럼 바꾸면 위험한 칸은 넣지 않는다 (목록 밖 칸은 화면에도 안 나감)
  * - 칸은 점 경로(예: anthropic.models)이고, 그 칸 값을 통째로 바꾼다 (안쪽을 합치지 않음)
- * - 읽기(current)는 메모리 사본이다. 저장하면 이 인스턴스는 바로, 다른 인스턴스는 RELOAD 안에 바뀐다
+ * - 읽기(current)는 메모리 사본이고 DB를 건드리지 않는다. 처음 값은 빈을 만들 때(트랜잭션 밖) 읽고, 그 뒤 RELOAD가 지나면
+ *   가상 스레드 하나가 따로 다시 읽는다: 요청 스레드에서 읽으면 호출한 쪽 트랜잭션 안에서 SQL이 돌아, 실패할 때 그 트랜잭션이 깨진다
+ * - 저장하면 이 인스턴스는 바로, 다른 인스턴스는 RELOAD 뒤 다음 읽기에 바뀐다
  * - DB를 못 읽으면(마이그레이션 전) 이전 값으로 돌고 RELOAD 뒤 다시 읽는다. 저장된 값이 안 맞으면(칸 형식이 바뀐 배포 뒤) yml 값으로 돌고 로그를 남긴다
  *
  * 테이블은 모듈마다 자기 것을 쓴다(다른 모듈 테이블을 읽지 않으려고). 모양: section text PK, overrides jsonb, updated_at timestamptz
@@ -42,7 +45,8 @@ public final class RuntimeSettings<T> {
     private final Consumer<T> check;
     private final JdbcTemplate jdbc;
     private final JsonMapper json;
-    private final ReentrantLock lock = new ReentrantLock(); // synchronized는 가상 스레드를 DB 읽는 동안 묶어 둔다
+    private final ReentrantLock lock = new ReentrantLock(); // 저장과 다시 읽기의 순서. synchronized는 가상 스레드를 묶어 둔다
+    private final AtomicBoolean reloading = new AtomicBoolean();
     private volatile Snapshot<T> snap;
 
     private record Snapshot<T>(T value, JsonNode overrides, Instant updatedAt, long loadedAt) {}
@@ -69,7 +73,8 @@ public final class RuntimeSettings<T> {
         this.type = type;
         this.paths = List.copyOf(paths);
         this.check = check;
-        if (jdbc == null) snap = new Snapshot<>(defaults, null, null, 0);
+        if (jdbc == null) snap = new Snapshot<>(defaults, null, null, Long.MAX_VALUE);
+        else reload(); // 빈을 만들 때: 트랜잭션 밖, JdbcTemplate은 Flyway 뒤에 생긴다
     }
 
     /**
@@ -122,11 +127,29 @@ public final class RuntimeSettings<T> {
         return defaults;
     }
 
-    /** 지금 쓰는 값 */
+    /** 지금 쓰는 값. DB를 읽지 않는다: 오래됐으면 다시 읽기를 따로 시작하고 이번에는 지금 사본을 준다 */
     public T current() {
         Snapshot<T> s = snap;
-        if (s == null || (jdbc != null && System.nanoTime() - s.loadedAt() > RELOAD_NANOS)) s = reload();
+        if (jdbc != null && System.nanoTime() - s.loadedAt() > RELOAD_NANOS && reloading.compareAndSet(false, true))
+            Thread.ofVirtual().name("runtime-settings-" + section).start(() -> {
+                try {
+                    reload();
+                } finally {
+                    reloading.set(false);
+                }
+            });
         return s.value();
+    }
+
+    /** 테스트: 다음 current()가 다시 읽기를 시작하게 */
+    void expire() {
+        lock.lock();
+        try {
+            Snapshot<T> s = snap;
+            snap = new Snapshot<>(s.value(), s.overrides(), s.updatedAt(), System.nanoTime() - RELOAD_NANOS - 1);
+        } finally {
+            lock.unlock();
+        }
     }
 
     public View view() {
@@ -172,11 +195,11 @@ public final class RuntimeSettings<T> {
         return view();
     }
 
-    private Snapshot<T> reload() {
+    private void reload() {
         lock.lock();
         try {
             Snapshot<T> s = snap;
-            if (s != null && System.nanoTime() - s.loadedAt() <= RELOAD_NANOS) return s; // 기다리는 사이 다른 스레드가 읽음
+            if (s != null && System.nanoTime() - s.loadedAt() <= RELOAD_NANOS) return; // 방금 저장함
             JsonNode overrides;
             Instant updatedAt;
             try {
@@ -197,7 +220,7 @@ public final class RuntimeSettings<T> {
                 snap = s == null
                         ? new Snapshot<>(defaults, null, null, System.nanoTime())
                         : new Snapshot<>(s.value(), s.overrides(), s.updatedAt(), System.nanoTime());
-                return snap;
+                return;
             }
             T value;
             try {
@@ -210,7 +233,6 @@ public final class RuntimeSettings<T> {
                 value = defaults;
             }
             snap = new Snapshot<>(value, overrides, updatedAt, System.nanoTime());
-            return snap;
         } finally {
             lock.unlock();
         }
