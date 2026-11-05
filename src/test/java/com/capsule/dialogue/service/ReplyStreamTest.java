@@ -28,23 +28,14 @@ class ReplyStreamTest {
 
     @Test
     void plainTextAndCodeFencesToo() {
-        // JSON 없이 글만 쓰는 답은 그 글 (뒤에 붙는 {"emotion"} 앞까지)
+        // 글만 쓰는 답(기본 형식)은 그 글. 옛 습관으로 뒤에 붙는 {"emotion"} JSON 앞까지
         assertThat(ReplyStream.partial("흥, 그 정도는")).isEqualTo("흥, 그 정도는");
         assertThat(ReplyStream.partial("흥. {\"emotion\":\"경멸\"}")).isEqualTo("흥.");
-        assertThat(ReplyStream.partial("기록 갱신. emotion=웃")).isEqualTo("기록 갱신.");
-        assertThat(ReplyStream.partial("기록 갱신. (emotion")).isEqualTo("기록 갱신.");
-        // 끝 태그 [emotion=…]가 반쯤 온 것은 보이지 않는다
-        assertThat(ReplyStream.partial("기록 갱신. [")).isEqualTo("기록 갱신.");
-        assertThat(ReplyStream.partial("기록 갱신. [em")).isEqualTo("기록 갱신.");
-        assertThat(ReplyStream.partial("기록 갱신. [emotion=웃")).isEqualTo("기록 갱신.");
         assertThat(ReplyStream.partial("배열은 a[0]부터")).isEqualTo("배열은 a[0]부터");
-        // 대사 속 낱말 emotion · { 로 시작하는 글은 자르지 않는다 (맨 글이 기본 형식)
+        // 대사 속 낱말 emotion · { 로 시작하는 글은 자르지 않는다
         assertThat(ReplyStream.partial("Emotion은 감정이란 뜻이야")).isEqualTo("Emotion은 감정이란 뜻이야");
         assertThat(ReplyStream.partial("{1, 2}부터 봐")).isEqualTo("{1, 2}부터 봐");
         assertThat(ReplyStream.partial("{")).isNull();
-        // 맨 앞에 태그를 먼저 쓴 답은 태그를 건너뛴다
-        assertThat(ReplyStream.partial("[emo")).isNull();
-        assertThat(ReplyStream.partial("[emotion=경멸] 됐어")).isEqualTo("됐어");
         assertThat(ReplyStream.partial("```json\n{\"reply\":\"응")).isEqualTo("응");
         assertThat(ReplyStream.partial("```json\n")).isNull();
     }

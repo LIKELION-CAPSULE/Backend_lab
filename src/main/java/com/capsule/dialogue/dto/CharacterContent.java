@@ -12,7 +12,8 @@ import java.util.Map;
  *
  * @param version 불러온 profile.yml의 version. 파일 쪽이 더 높으면 앱 시작 때 다시 불러온다 (실험실 저장은 바꾸지 않음)
  * @param bible 공통 페르소나 (누구 · 지금 상황 · 성격 · 말하는 법)
- * @param expressionFallbacks 대체 표. 목록 안 키 = 에셋이 없는 표정 → 대신 쓸 표정, 목록 밖 키 = 모델이 쓴 감정 이름 → 목록 안 표정
+ * @param expressions 고를 수 있는 표정 (19 · 20 응답 emotion 값). 대사를 다 만든 뒤 결정 모델이 이 중 하나를 고른다 (ADR 0028)
+ * @param expressionGuide 표정 → 언제 쓰는지 (결정 모델 보기 설명). 없으면 이름만 보기로
  * @param stageTones 관계 단계 → 그 단계의 관계 설명 (거리감 · 호칭 · 챙김 수위)
  * @param samples 관계 단계별 말투 샘플 (ADR 0022 결정 19)
  * @param lore 로어북: 사용자 말에 키워드가 있을 때만 답장에 넣는 원작 설정 카드. 실험실이 빼고 저장하면 빈 목록
@@ -26,7 +27,7 @@ public record CharacterContent(
         String rules,
         String safety,
         List<String> expressions,
-        Map<String, String> expressionFallbacks,
+        Map<String, String> expressionGuide,
         Map<Integer, String> stageTones,
         String studyStyle,
         String breakStyle,
@@ -38,6 +39,7 @@ public record CharacterContent(
 
     public CharacterContent {
         lore = lore == null ? List.of() : List.copyOf(lore);
+        expressionGuide = expressionGuide == null ? Map.of() : expressionGuide;
     }
 
     public static final String MINOR = "MINOR";
@@ -55,7 +57,7 @@ public record CharacterContent(
                 rules,
                 safety,
                 expressions,
-                expressionFallbacks,
+                expressionGuide,
                 stageTones,
                 studyStyle,
                 breakStyle,
@@ -128,18 +130,10 @@ public record CharacterContent(
                 .toList();
     }
 
-    /** 에셋이 없는 표정이면 대신 쓸 표정 (없으면 그대로) */
-    public String fallbackExpression(String expression) {
-        return expression == null ? null : expressionFallbacks.getOrDefault(expression, expression);
-    }
-
-    /** 모델이 쓴 감정 이름을 표정 목록에 맞춘다: 목록에 있으면 그대로, 없으면 대체 표(예: 걱정 → 집중)로, 그래도 없으면 null */
-    public String emotion(String raw) {
-        if (raw == null) return null;
-        String e = raw.strip();
-        // 목록 안 이름이 먼저: 대체 표의 목록 안 키(에셋이 없는 표정의 대체)는 동작을 고를 때만 쓴다 (DialogueService)
-        if (expressions.contains(e)) return e;
-        String mapped = expressionFallbacks.get(e);
-        return mapped != null && expressions.contains(mapped) ? mapped : null;
+    /** 결정 모델 보기: 표정 목록 순서대로 이름 → 언제 쓰는지 (설명이 없으면 이름) */
+    public Map<String, String> expressionChoices() {
+        Map<String, String> choices = new java.util.LinkedHashMap<>();
+        for (String e : expressions) choices.put(e, expressionGuide.getOrDefault(e, e));
+        return choices;
     }
 }

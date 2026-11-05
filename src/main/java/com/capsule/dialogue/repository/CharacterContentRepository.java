@@ -64,7 +64,7 @@ public class CharacterContentRepository {
                 String rules,
                 String safety,
                 List<String> expressions,
-                String fallbacks,
+                String guide,
                 String tones,
                 String studyStyle,
                 String breakStyle,
@@ -72,7 +72,7 @@ public class CharacterContentRepository {
                 String lore) {}
         Optional<Row> profile = jdbc.sql("""
                         SELECT code, content_version, speaker, bible, rules, safety, expressions,
-                               expression_fallbacks::text AS fallbacks, stage_tones::text AS tones, study_style, break_style,
+                               expression_guide::text AS guide, stage_tones::text AS tones, study_style, break_style,
                                samples::text AS samples, lore::text AS lore
                         FROM character_profiles WHERE character_id = ?""")
                 .param(characterId)
@@ -84,7 +84,7 @@ public class CharacterContentRepository {
                         rs.getString("rules"),
                         rs.getString("safety"),
                         strings(rs, "expressions"),
-                        rs.getString("fallbacks"),
+                        rs.getString("guide"),
                         rs.getString("tones"),
                         rs.getString("study_style"),
                         rs.getString("break_style"),
@@ -134,7 +134,7 @@ public class CharacterContentRepository {
                 p.rules(),
                 p.safety(),
                 p.expressions(),
-                LlmJson.JSON.readValue(p.fallbacks(), STRING_MAP),
+                LlmJson.JSON.readValue(p.guide(), STRING_MAP),
                 tones,
                 p.studyStyle(),
                 p.breakStyle(),
@@ -156,7 +156,7 @@ public class CharacterContentRepository {
         jdbc.sql("""
                         INSERT INTO character_profiles
                             (character_id, code, content_version, speaker, bible, rules, safety, expressions,
-                             expression_fallbacks, stage_tones, study_style, break_style, samples, lore)
+                             expression_guide, stage_tones, study_style, break_style, samples, lore)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ARRAY(SELECT jsonb_array_elements_text(CAST(? AS jsonb))),
                                 CAST(? AS jsonb), CAST(? AS jsonb), ?, ?, CAST(? AS jsonb), CAST(? AS jsonb))""")
                 .params(
@@ -168,7 +168,7 @@ public class CharacterContentRepository {
                         c.rules(),
                         c.safety(),
                         LlmJson.write(c.expressions()),
-                        LlmJson.write(c.expressionFallbacks()),
+                        LlmJson.write(c.expressionGuide()),
                         LlmJson.write(c.stageTones()),
                         c.studyStyle(),
                         c.breakStyle(),

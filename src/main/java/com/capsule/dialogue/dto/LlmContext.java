@@ -52,4 +52,10 @@ public record LlmContext(
         return new LlmContext(
                 source, traceId, userId, sessionId, ids, provider, model, temperature, maxTokens, deadline);
     }
+
+    /** 마감만 바꾼 사본 (null이면 마감 없음: 부르는 쪽이 따로 기다리는 한도를 둘 때) */
+    public LlmContext withDeadline(Instant d) {
+        return new LlmContext(
+                source, traceId, userId, sessionId, promptVersionIds, provider, model, temperature, maxTokens, d);
+    }
 }

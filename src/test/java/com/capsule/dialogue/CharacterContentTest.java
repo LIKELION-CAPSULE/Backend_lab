@@ -53,7 +53,7 @@ class CharacterContentTest {
         assertThat(c.expressions()).containsExactly("삐짐", "행복", "경멸", "하품", "화남", "웃음", "수줍음", "집중");
         assertThat(c.habits()).containsEntry("흥", CharacterContent.NO_OPENING);
         assertThat(c.rules()).contains("정답을 물으면 정답"); // PM: 답 대신 힌트만 → 정답은 정답, 힌트는 힌트
-        assertThat(c.fallbackExpression("화남")).isEqualTo("화남"); // 8개 모두 에셋이 있어 목록 안 표정은 그대로
+        assertThat(c.expressionGuide()).containsKeys("수줍음", "하품"); // 결정 모델 보기 설명이 DB까지 간다
     }
 
     @Test
@@ -202,7 +202,7 @@ class CharacterContentTest {
                 c.rules(),
                 c.safety(),
                 c.expressions(),
-                c.expressionFallbacks(),
+                c.expressionGuide(),
                 c.stageTones(),
                 c.studyStyle(),
                 c.breakStyle(),
