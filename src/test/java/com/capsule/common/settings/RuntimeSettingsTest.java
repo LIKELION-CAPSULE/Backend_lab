@@ -15,6 +15,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.json.JsonMapper;
 
 /** 운영 설정: yml 값 위에 저장한 칸만 덮어쓰고, 허용 목록 밖 · 틀린 값은 저장하지 않는다 (ADR 0026) */
@@ -35,6 +37,9 @@ class RuntimeSettingsTest {
 
     @Autowired
     JsonMapper json;
+
+    @Autowired
+    PlatformTransactionManager txManager;
 
     String section;
 
@@ -109,5 +114,30 @@ class RuntimeSettingsTest {
         RuntimeSettings<Sample> noTable =
                 RuntimeSettings.stored(jdbc, json, "no_such_table", section, YML, Sample.class, PATHS, v -> {});
         assertThat(noTable.current()).isEqualTo(YML);
+    }
+
+    @Test
+    void readingInsideATransactionNeverRunsSqlThere() {
+        RuntimeSettings<Sample> noTable =
+                RuntimeSettings.stored(jdbc, json, "no_such_table", section, YML, Sample.class, PATHS, v -> {});
+        noTable.expire();
+
+        // 다시 읽기가 이 트랜잭션에서 돌았다면 테이블 없음으로 트랜잭션이 깨져 다음 SQL이 실패한다
+        Integer one = new TransactionTemplate(txManager).execute(st -> {
+            assertThat(noTable.current()).isEqualTo(YML);
+            return jdbc.queryForObject("SELECT 1", Integer.class);
+        });
+        assertThat(one).isEqualTo(1);
+    }
+
+    @Test
+    void otherInstancesSaveIsPickedUpInTheBackground() throws InterruptedException {
+        RuntimeSettings<Sample> a = settings();
+        settings().update(json.readTree("{\"count\": 7}"));
+        assertThat(a.current().count()).isEqualTo(2); // 아직 30초 안
+
+        a.expire();
+        for (int i = 0; i < 100 && a.current().count() != 7; i++) Thread.sleep(20);
+        assertThat(a.current().count()).isEqualTo(7);
     }
 }
