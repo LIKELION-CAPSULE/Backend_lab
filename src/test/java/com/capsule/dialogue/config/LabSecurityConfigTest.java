@@ -4,12 +4,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.capsule.common.security.AuthProperties;
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.Base64;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 /** 실험실 보안 (ADR 0026 · 0027): 프록시 뒤 토큰 없이 시작 금지, 관리자 로그인 토큰 */
 class LabSecurityConfigTest {
@@ -65,6 +68,19 @@ class LabSecurityConfigTest {
         // 비밀번호를 바꾸면 그 전 토큰은 바로 못 씀
         assertThat(admins(Map.of("seunghee", "{noop}new-pass"), NOW).verify(token))
                 .isEmpty();
+    }
+
+    @Test
+    void bcryptFromHtpasswdWorksAndOneAccountCannotBorrowAnothersToken() {
+        // htpasswd -bnBC 10 가 내는 $2y$ 형식 (ADR 0027의 만드는 법)
+        String hash = new BCryptPasswordEncoder(BCryptPasswordEncoder.BCryptVersion.$2Y, 4).encode("pw-1234");
+        LabAdmins admins = admins(Map.of("seunghee", "{bcrypt}" + hash, "seonguk", "{noop}other"), NOW);
+
+        String token = admins.login("seunghee", "pw-1234").orElseThrow().token();
+        assertThat(admins.verify(token)).contains("seunghee");
+        String other =
+                Base64.getUrlEncoder().withoutPadding().encodeToString("seonguk".getBytes(StandardCharsets.UTF_8));
+        assertThat(admins.verify(other + token.substring(token.indexOf('.')))).isEmpty();
     }
 
     @Test

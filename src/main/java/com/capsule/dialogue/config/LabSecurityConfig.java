@@ -19,12 +19,13 @@ import org.springframework.security.web.SecurityFilterChain;
 
 /**
  * 실험실(/internal/llm-lab/**) 전용 보안 체인. 공용 SecurityConfig(JWT)보다 먼저 이 경로만 맡는다. 실험실이 켜졌을 때만 생긴다(local).
- * 기본은 거부: 화면(HTML) 주소만 열고, 나머지는 전부
- * - capsule.llm.lab.token이 비어 있으면 이 컴퓨터(loopback)에서 온 요청만 (같은 와이파이의 다른 사람이 내 키로 호출하지 못하게)
- * - 토큰을 넣었으면 X-Lab-Token 헤더가 같아야 한다 (공용 개발 서버에 열 때)
- * 프록시 뒤(forward-headers-strategy가 none이 아님)에서는 접속 주소를 X-Forwarded-For로 꾸밀 수 있어서 토큰 없이 켜면 시작에 실패한다.
- * 운영 설정(ADR 0026)도 이 경로라 서비스 동작을 바꾸는 권한이 이 토큰 하나에 걸린다.
- * ponytail: 토큰 하나로만 막는다. 공용 서버에 오래 열어 둘 거면 사내 로그인(SSO) 뒤에 둘 것
+ * 기본은 거부: 화면(HTML) 주소와 로그인(POST /api/login)만 열고, 나머지는 전부
+ * - X-Lab-Token 헤더가 관리자 로그인 토큰(LabAdmins, ADR 0027)이거나 고정 토큰(capsule.llm.lab.token)과 같아야 한다
+ * - 관리자 계정도 고정 토큰도 없을 때(로컬 기본)만 이 컴퓨터(loopback)에서 온 요청을 헤더 없이 받는다
+ *   (같은 와이파이의 다른 사람이 내 키로 호출하지 못하게)
+ * 프록시 뒤(forward-headers-strategy가 none이 아님)에서는 접속 주소를 X-Forwarded-For로 꾸밀 수 있어서, 계정도 토큰도 없이 켜면
+ * 시작에 실패한다. 운영 설정(ADR 0026)도 이 경로라 서비스 동작을 바꾸는 권한이 관리자 로그인에 걸린다.
+ * ponytail: 계정 · 토큰은 환경변수로만. 공용 서버에 오래 열어 둘 거면 사내 로그인(SSO) 뒤에 둘 것
  */
 @Configuration
 @ConditionalOnProperty(name = "capsule.llm.lab.enabled", havingValue = "true")

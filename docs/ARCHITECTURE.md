@@ -152,7 +152,7 @@ flowchart LR
 | `DialogueController` | `POST /api/sessions/{id}/events/{eventId}/reaction`(19), `/messages`(20), `/messages/stream`(28, SSE) |
 | `LlmLabController` | `/internal/llm-lab/**` 실험실: 프롬프트 버전, 실험 대화방, 플레이그라운드, 평가, 사용량, 캐릭터 설정 편집·reseed. `capsule.llm.lab.enabled`일 때만 생김 |
 | `SettingsController` | `/internal/llm-lab/api/settings` 운영 설정: 모든 `RuntimeSettings` 묶음(relation · dialogue · llm) 보기 · 저장. 실험실과 같은 보안, 공용 개발 DB에 인증 없이 붙은 노트북은 저장 403, 저장 로그에 바꾼 관리자 (ADR 0026) |
-| `LabLoginController` | `POST /internal/llm-lab/api/login` 관리자 로그인 → 서명한 토큰. 접속 주소마다 1분 10번 (ADR 0027) |
+| `LabLoginController` | `POST /internal/llm-lab/api/login` 관리자 로그인 → 서명한 토큰. 접속 주소마다 1분 10번 · 전체 1분 30번 (ADR 0027) |
 
 **service — 서비스 흐름**
 

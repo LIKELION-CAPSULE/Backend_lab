@@ -240,7 +240,8 @@ async function login(e) {
   remember();
   $('#loginPass').value = '';
   $('#loginbar').hidden = true;
-  init();
+  // 쓰다가 로그인이 끝난 경우: 탭을 다시 만들지 않는다 (고치던 내용이 남게, 막힌 버튼만 다시 누르면 됨)
+  if (META) header(); else init();
 }
 // 서버에 세션이 없어 토큰을 지우면 끝 (바로 끊어야 하면 그 계정 비밀번호를 바꾼다)
 function logout() { TOKEN = ''; ADMIN = ''; remember(); location.reload(); }
