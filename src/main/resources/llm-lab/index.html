@@ -281,7 +281,7 @@ function configEditor(cfg, fields = [...USER_F, ...MODEL_F], title = '실험 조
   const el = h('details', {class: 'cfg', open}, h('summary', null, title), h('div', {class: 'cfggrid'},
     has('nickname') && field('닉네임', i.nickname),
     has('relationLevel') && field('관계 단계 (1~4, 호감도 0 · 30 · 70 · 90)', i.relationLevel),
-    has('onBreak') && field('쉬는 시간 (2~4문장 수다 · 끄면 공부 중 1~2문장)', chk(i.onBreak, '쉬는 중')),
+    has('onBreak') && field('쉬는 시간 (공부 재촉 없이 수다 · 끄면 공부 중)',chk(i.onBreak, '쉬는 중')),
     has('chatty') && field('수다가 길어짐 (공부 중 최근 10분에 8번 이상 → 공부로 돌려보냄)', chk(i.chatty, '수다 많음')),
     has('provider') && field('공급자', i.provider),
     has('model') && field('모델', i.model),

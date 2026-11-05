@@ -5,7 +5,7 @@ package com.capsule.dialogue.dto;
  * 새 용도를 더하면 llm_usages의 CHECK도 새 마이그레이션으로 넓힌다.
  */
 public enum LlmPurpose {
-    /** 메시지 답장 한 번에 (SIMPLE 파이프라인, 명세 20) */
+    /** 메시지 답장 (SCENE · SIMPLE 파이프라인, 명세 20 · 28) */
     CHAT,
     /** 상태 반응 대사 (명세 19, reaction-llm-triggers에 든 trigger만) */
     REACTION,

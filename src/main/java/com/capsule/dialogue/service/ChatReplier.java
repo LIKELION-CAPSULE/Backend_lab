@@ -4,9 +4,7 @@ import com.capsule.common.settings.RuntimeSettings;
 import com.capsule.dialogue.client.Decider;
 import com.capsule.dialogue.client.Decider.Decision;
 import com.capsule.dialogue.config.DialogueProperties;
-import com.capsule.dialogue.domain.ChatMessage;
 import com.capsule.dialogue.dto.ChatInput;
-import com.capsule.dialogue.dto.ChatLine;
 import com.capsule.dialogue.dto.ChatOutcome;
 import com.capsule.dialogue.dto.LlmContext;
 import com.capsule.relation.api.RelationTypes.SignalType;
@@ -15,14 +13,12 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
-import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -112,15 +108,10 @@ public class ChatReplier {
     /** @param contextLines 같이 보여 줄 앞 대화 수 (signal-context-lines) */
     // TODO(judgment): J-05 결정 모델에 같이 보여 줄 앞 대화 수
     static String state(ChatInput in, int contextLines) {
-        List<ChatLine> h = in.history();
-        String recent = h.subList(Math.max(0, h.size() - contextLines), h.size()).stream()
-                .map(l -> (ChatMessage.USER.equals(l.sender())
-                                ? "사용자: "
-                                : in.character().name() + ": ")
-                        + l.content())
-                .collect(Collectors.joining("\n"));
+        String recent = PromptVars.transcript(
+                PromptVars.tail(in.history(), contextLines), in.character().name());
         return "캐릭터: " + in.character().name() + "\n"
-                + "앞 대화 (맥락으로만 본다):\n" + (recent.isEmpty() ? "없음" : recent) + "\n"
+                + "앞 대화 (맥락으로만 본다):\n" + PromptVars.orNone(recent, "없음") + "\n"
                 + "사용자의 마지막 말: " + in.userMessage();
     }
 

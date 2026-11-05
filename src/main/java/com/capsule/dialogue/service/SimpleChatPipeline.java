@@ -63,8 +63,8 @@ class SimpleChatPipeline implements ChatPipeline {
         vars.put(
                 "mode",
                 in.onBreak()
-                        ? "쉬는 시간 (2~4문장, 공부 재촉 없이 수다)"
-                        : "공부 중 (1~2문장, 짧게)"
+                        ? "쉬는 시간 (3~6문장 안팎, 공부 재촉 없이 수다)"
+                        : "공부 중 (3~6문장 안팎)"
                                 + (in.chatty()
                                         ? ". "
                                                 + SceneChatPipeline.chattyDirective(
@@ -88,10 +88,7 @@ class SimpleChatPipeline implements ChatPipeline {
 
         // JSON 없이 글만 왔으면 그 글을 답장으로 쓴다 (감정 없음).
         // 단 한도에 걸려 잘린 JSON('{"reply":"…')은 말풍선에 내보내지 않고 실패로 본다 → 대체 대사
-        JsonNode json = LlmJson.objectIn(r.text());
-        boolean truncated = "max_tokens".equals(r.stopReason()) || "length".equals(r.stopReason());
-        if (json == null && (truncated || r.text().strip().startsWith("{")))
-            throw new IllegalStateException("답장 JSON이 깨짐 (stop_reason=" + r.stopReason() + "): " + r.text());
+        JsonNode json = SceneChatPipeline.replyJson(r);
         String reply = json != null ? LlmJson.str(json.path("reply")) : r.text();
         if (reply == null || reply.isBlank()) throw new IllegalStateException("빈 답장: " + r.text());
         String emotion = json == null

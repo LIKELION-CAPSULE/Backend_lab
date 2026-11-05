@@ -190,7 +190,7 @@ public class DialogueService {
             String nickname = nickname(userId);
             Optional<Conversation> conv = conversations.findByUserIdAndCharacterId(userId, characterId);
             String summary = conv.map(c -> recaps(c.id())).orElse(null);
-            List<ChatLine> recent = conv.map(c -> tail(
+            List<ChatLine> recent = conv.map(c -> PromptVars.tail(
                             lines(messages.findByConversationIdAndSessionIdOrderById(c.id(), sessionId)),
                             props.current().reactionContextLines()))
                     .orElse(List.of());
@@ -215,8 +215,8 @@ public class DialogueService {
         }
         // 명세 19: 모션·표정은 대사의 감정으로 고른다 (trigger 기준 '알아채는' 동작은 18이 줌)
         // TODO(judgment): J-04 ④ 강도를 동작에도 쓸지. 지금은 대사(고정 대사 칸 · LLM 입력)에만
-        // TODO(judgment): J-07 ①·J-12 ① 감정 후보를 어디서 정할지. 반응 표 목록을 LLM에 주면 content.api 계약 필요(#9, #33),
-        //   그 목록에서 trigger 이름(GREETING 등)은 빼야 함(같은 컬럼에 있음). 지금은 설정 capsule.dialogue.emotions
+        // 감정 후보는 캐릭터 표정 목록(character_profiles.expressions, 결정 모델이 고름, ADR 0028).
+        // 설정이 없는 캐릭터만 공통 후보(capsule.dialogue.emotions)
         Reaction reaction = emotionReaction(characterId, line.emotion());
         // 뼈대는 세션당 캐릭터 1명
         return new ReactionResponse(
@@ -396,7 +396,7 @@ public class DialogueService {
                 userId,
                 requestId,
                 request.content(),
-                tail(history, props.current().signalContextLines()),
+                PromptVars.tail(history, props.current().signalContextLines()),
                 LlmContext.app(userId, sessionId, null));
         if (!props.current().memoryEnabled()) return response;
         if (props.current().memoryAsync()) LLM_THREADS.execute(remember);
@@ -635,10 +635,6 @@ public class DialogueService {
         String due =
                 m.dueDate() == null ? "" : " (" + m.dueDate() + (m.dueTime() == null ? "" : " " + m.dueTime()) + ")";
         return type + ": " + m.title() + due;
-    }
-
-    private static List<ChatLine> tail(List<ChatLine> lines, int n) {
-        return lines.subList(Math.max(0, lines.size() - n), lines.size());
     }
 
     /** 직접 끝냈는데 목표 시간의 ratio(give-up-ratio)도 못 채웠으면 공부 포기 (자동 종료는 포기로 보지 않는다) */

@@ -90,7 +90,6 @@ public class CharacterContents {
             cursors.put(key, i + 1);
         }
         CharacterContent.Line l = lines.get(i % lines.size());
-        String text = l.text().replace("{name}", PromptVars.name(nickname));
-        return Optional.of(new ReactionLine(text, l.expression()));
+        return Optional.of(new ReactionLine(PromptVars.named(l.text(), nickname), l.expression()));
     }
 }

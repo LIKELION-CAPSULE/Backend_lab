@@ -23,7 +23,7 @@ Content-Type: application/json
 {
   "key": "chat.system",
   "characterId": 1,
-  "body": "너는 공부 앱 '캡슐'의 캐릭터 채린이다. (실험 버전 본문)\nJSON 한 줄만 출력: {\"reply\": \"대사\", \"emotion\": \"NEUTRAL\", \"affinity\": 0}",
+  "body": "너는 공부 앱 '캡슐'의 캐릭터 채린이다. (실험 버전 본문)\nJSON 한 줄만 출력: {\"reply\": \"대사\", \"emotion\": \"NEUTRAL\"}",
   "note": "말투 더 짧게",
   "activate": false
 }
@@ -121,20 +121,17 @@ Content-Type: application/json
 
 { "score": 3, "note": "두 번째 답이 너무 김" }
 
-### 17. 대화 엔진 파일 올리기 (ENGINE 파이프라인용, 캐릭터별): 화면의 '프롬프트' 탭에서 파일 네 개를 골라 올린다
-# director.md에는 수 목록 자리(중괄호 두 겹 + MOVES)가 있어야 한다. 엔진이 못 읽는 파일은 400 INVALID_ENGINE_PACK
-
 ### 18. 최근 LLM 호출 100개 (원문 포함)
 GET {{lab}}/usages
 
-### 19. 7일 집계: 하루 × 출처 × 공급자 × 모델 × 용도별 호출 수·오류·토큰·비용·평균/p95 지연·5초 초과
+### 19. 7일 집계: 하루 × 출처 × 공급자 × 모델 × 용도별 호출 수·오류·토큰·비용·평균/p95 지연·마감(llm-budget) 초과
 GET {{lab}}/usages/summary?days=7
 
-### 20. 캐릭터 · 세계관 설정 읽기 (DB가 원본, ADR 0022 결정 15)
-# 정체성 · 화법 · 규칙 · 표정 · 관계 단계 말투 · 세계 지식 · 사건 · 대화 기술 · 상황 대사 · 점수표 · 말버릇 전부
+### 20. 캐릭터 설정 읽기 (DB가 원본, ADR 0022 결정 15)
+# 페르소나 · 규칙 · 표정 · 표정 설명 · 관계 단계 설명 · 말투 샘플 · 로어북 · 상황 대사 · 점수표 · 말버릇 전부
 GET {{lab}}/characters/1/content
 
-### 21. 캐릭터 설정 바꾸기: 20의 JSON을 고쳐서 통째로 보낸다. 바로 서비스 답장에 쓰인다 (되돌리려면 22)
+### 21. 캐릭터 설정 바꾸기: 20의 응답을 이 폴더에 character-1.json으로 저장해 고친 뒤 통째로 보낸다(파일은 커밋하지 않음). 바로 서비스 답장에 쓰인다 (되돌리려면 22)
 PUT {{lab}}/characters/1/content
 Content-Type: application/json
 

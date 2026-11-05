@@ -45,16 +45,25 @@ final class PromptVars {
         return allowed.contains(e) ? e : null;
     }
 
+    /** 뒤에서 n개 (모자라면 전부) */
+    static <T> List<T> tail(List<T> lines, int n) {
+        return lines.subList(Math.max(0, lines.size() - n), lines.size());
+    }
+
     /** 최근 limit개를 LLM 대화 턴으로. 사용자 말로 시작해야 해서 앞쪽 캐릭터 말은 버린다 */
     static List<Llm.ChatTurn> turns(List<ChatLine> history, int limit) {
-        List<ChatLine> recent = history.subList(Math.max(0, history.size() - limit), history.size());
         List<Llm.ChatTurn> turns = new ArrayList<>();
-        for (ChatLine l : recent) {
+        for (ChatLine l : tail(history, limit)) {
             boolean user = ChatMessage.USER.equals(l.sender());
             if (turns.isEmpty() && !user) continue;
             turns.add(new Llm.ChatTurn(user ? "user" : "assistant", l.content()));
         }
         return turns;
+    }
+
+    /** 대사의 {name} 자리를 이름으로 */
+    static String named(String text, String nickname) {
+        return text.replace("{name}", name(nickname));
     }
 
     /** 대사의 {name} 자리에 넣을 이름: 닉네임, 비었으면 "너" */

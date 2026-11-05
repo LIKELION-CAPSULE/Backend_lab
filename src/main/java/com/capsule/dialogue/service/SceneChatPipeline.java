@@ -132,13 +132,10 @@ class SceneChatPipeline implements ChatPipeline {
         vars.put(
                 "samples",
                 c.samplesFor(stage).stream()
-                        .map(s -> "사용자: " + s.user() + "\n" + c.speaker() + ": " + named(s.reply(), nickname))
+                        .map(s ->
+                                "사용자: " + s.user() + "\n" + c.speaker() + ": " + PromptVars.named(s.reply(), nickname))
                         .collect(Collectors.joining("\n\n")));
         return vars;
-    }
-
-    static String named(String text, String nickname) {
-        return text.replace("{name}", PromptVars.name(nickname));
     }
 
     /**
@@ -224,7 +221,6 @@ class SceneChatPipeline implements ChatPipeline {
                 .count();
     }
 
-    /** 말버릇 규칙: 첫마디 금지는 늘, 세션 한 번은 이번 세션 캐릭터 대사에 이미 있으면 */
     /**
      * 첫마디 금지(NO_OPENING) 말로 시작하면 그 말과 뒤의 쉼표 · 공백을 뗀다 ("흥, 왔네" → "왔네").
      * '피할 것' 부탁만으로는 상태 반응(haiku)이 12번 중 5번 "흥,"으로 시작했다 (2026-11-06 품질 테스트).
@@ -239,6 +235,7 @@ class SceneChatPipeline implements ChatPipeline {
         return out.isBlank() ? line : out;
     }
 
+    /** 말버릇 규칙: 첫마디 금지는 늘, 세션 한 번은 이번 세션 캐릭터 대사에 이미 있으면 */
     static List<String> avoid(CharacterContent c, List<ChatLine> history) {
         List<String> out = new ArrayList<>();
         c.habits().forEach((phrase, rule) -> {

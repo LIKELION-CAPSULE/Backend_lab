@@ -30,7 +30,7 @@ class FactPickerTest {
 
     static ChatInput input(List<String> facts) {
         return new ChatInput(
-                new CharacterInfo(1, 1, "말포이", null, List.of(), "", true, null),
+                new CharacterInfo(1, 1, "말포이", null, List.of(), "", true, null, null),
                 "민수",
                 2,
                 null,

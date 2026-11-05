@@ -13,7 +13,6 @@ public record LabMeta(
         List<Key> promptKeys,
         List<Character> characters,
         List<String> triggers,
-        List<String> emotions,
         boolean tokenRequired) {
 
     public record Provider(String name, boolean ready) {}

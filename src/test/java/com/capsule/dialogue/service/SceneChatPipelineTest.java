@@ -26,7 +26,7 @@ class SceneChatPipelineTest {
 
     static ChatInput input(
             String message, List<ChatLine> history, List<String> facts, boolean onBreak, boolean chatty) {
-        CharacterInfo info = new CharacterInfo(1, 1, "말포이", null, List.of(), "", true, null);
+        CharacterInfo info = new CharacterInfo(1, 1, "말포이", null, List.of(), "", true, null, null);
         return new ChatInput(
                 info,
                 "민수",

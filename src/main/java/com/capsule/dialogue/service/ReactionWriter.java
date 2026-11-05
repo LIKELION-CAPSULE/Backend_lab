@@ -154,7 +154,7 @@ public class ReactionWriter {
         if (lines.isEmpty()) lines = c.linesFor(trigger, stage);
         return lines.stream()
                 .limit(2)
-                .map(l -> SceneChatPipeline.named(l.text(), nickname))
+                .map(l -> PromptVars.named(l.text(), nickname))
                 .toList();
     }
 

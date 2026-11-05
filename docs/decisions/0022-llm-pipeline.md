@@ -10,17 +10,17 @@
      - 캐릭터 전용(대화 엔진 파일 등)은 시드가 없고 실험실에서 올린다.
   5. **답장(명세 20) 파이프라인은 두 개.** SCENE(기본): DB 캐릭터 설정 고정 블록 + 상황 카드로 LLM 한 번(결정 15 · 19). SIMPLE: 캐릭터 설정이 없을 때 공통 프롬프트로 LLM 한 번. 서비스는 `capsule.dialogue.chat-pipeline`으로, 실험실은 대화방마다 고른다. 같은 코드를 부르므로 실험실 품질 = 서비스 품질.
   6. **대화 상태 테이블은 따로 두지 않는다.** 이번 세션 대화는 `chat_messages`(세션이 끝나면 세션 카드로 합치고 지움), 기억은 결정 16의 세 겹. (옛 ENGINE의 `dialogue_states`는 2026-11-05 제거)
-  7. **LLM은 DB 트랜잭션 밖에서.** 메시지 전송은 읽기 → LLM(5초) → 저장(한 트랜잭션). 스트리밍(28)은 첫 대사까지 5초, 그 뒤는 끝까지 기다린다(ADR 0025).
+  7. **LLM은 DB 트랜잭션 밖에서.** 메시지 전송은 읽기 → LLM(7초, 2026-11-06까지 5초) → 저장(한 트랜잭션). 스트리밍(28)은 첫 대사까지 7초, 그 뒤는 끝까지 기다린다(ADR 0025).
      - 저장 트랜잭션은 호감도(`applyChat`)부터 부른다. applyChat은 relation 행을 잠그고, 공부 종료도 정산 때 같은 행을 잠근 채 커밋까지 간다. 그래서 답하는 사이 종료가 겹치면 종료가 끝난 뒤 세션을 다시 보고 409 `SESSION_ENDED`, 답장·호감도·엔진 상태·답 못 받은 사용자 말을 남기지 않는다. 잠금 순서가 종료(세션 → relation → 대화)와 같아 교착이 없다.
-     - 같은 requestId가 처리 중이면 끝날 때까지 기다렸다가 같은 답장(명세 20). 사용자 말을 저장한 지 8초가 지나도 답이 없으면(먼저 온 요청이 죽음) 기다리지 않고 이어받는다.
-     - 서비스 호출에는 마감(5초)이 붙는다. 마감이 지나면 게이트웨이가 새 호출(재시도·대체 공급자·엔진의 다음 단계)을 시작하지 않는다(결과가 버려질 호출에 돈을 쓰지 않음). 이미 보낸 호출은 끝까지 받아 실제 지연을 기록한다.
-     - 공부 종료(22)는 두 단계: 요약과 완료 대사 초안(`SessionClosingHandler.draft`)을 트랜잭션 밖에서 동시에 만들어 5초 안에 끝내고, 저장(`close`)만 session의 트랜잭션 안에서. 자동 마감 배치는 초안 없이 트랜잭션 안에서 만든다.
-  8. **실험실 `/internal/llm-lab`** (local에서만 켬): 실험 대화방(연속 대화 + 턴마다 원문·지연·비용·사람 평가), 한 번 실행(같은 입력 N번), 프롬프트 버전 관리, 평가(골든 대본 × 반복, LLM 심사 0~10, 사람 1~5, 실행끼리 비교), 호출 집계(p95 지연, 5초 초과 수).
+     - 같은 requestId가 처리 중이면 끝날 때까지 기다렸다가 같은 답장(명세 20). 사용자 말을 저장한 지 10초(`in-flight-wait`)가 지나도 답이 없으면(먼저 온 요청이 죽음) 기다리지 않고 이어받는다.
+     - 서비스 호출에는 마감(`llm-budget` 7초)이 붙는다. 마감이 지나면 게이트웨이가 새 호출(재시도·대체 공급자·엔진의 다음 단계)을 시작하지 않는다(결과가 버려질 호출에 돈을 쓰지 않음). 이미 보낸 호출은 끝까지 받아 실제 지연을 기록한다.
+     - 공부 종료(22)는 두 단계: 요약과 완료 대사 초안(`SessionClosingHandler.draft`)을 트랜잭션 밖에서 동시에 만들어 마감 안에 끝내고, 저장(`close`)만 session의 트랜잭션 안에서. 자동 마감 배치는 초안 없이 트랜잭션 안에서 만든다.
+  8. **실험실 `/internal/llm-lab`** (local에서만 켬): 실험 대화방(연속 대화 + 턴마다 원문·지연·비용·사람 평가), 한 번 실행(같은 입력 N번), 프롬프트 버전 관리, 평가(골든 대본 × 반복, LLM 심사 0~10, 사람 1~5, 실행끼리 비교), 호출 집계(p95 지연, 마감 초과 수).
      - 보안: 전용 보안 체인, 기본 거부. 화면 주소만 열고, API는 토큰(`capsule.llm.lab.token`)이 비어 있으면 이 컴퓨터(loopback) 요청만, 넣었으면 `X-Lab-Token` 헤더가 같아야 한다.
   9. **원칙: LLM은 고르기만 하고, 숫자는 코드가 정한다.** 대사는 LLM이 쓰고, 감정은 후보 중에서 고르고, 호감도는 사용자 말의 **신호**(`ChatSignal`: NEUTRAL · PRAISE · STUDY_WILL · STRUGGLE · RUDE · ABUSE)만 고른다. 신호 → 점수 · 하루 상한은 relation의 `AffinityPolicy`가 정한다(J-06). 답장 JSON에서 `affinity` 점수를 뺐다.
   10. **결정 입구 `Decider` + 용도 DECIDE.** 상태 글 + 보기가 정해진 질문 → 보기 하나 + 확신도. 게이트웨이를 지나므로 재시도 · 기록 · 마감이 같다. 공급자는 용도별로 고를 수 있다(`routes.DECIDE.provider`): TypeSafe **Jev**(결정 모델, `JevProvider`)로 보내고, Jev가 실패하면 기본 LLM이 같은 질문에 답한다. 기본값은 비워 둬서 LLM(fast 등급)이 결정한다. 신호 읽기는 답장과 **동시에** 나가고(`ChatReplier`), 답장이 끝났을 때 마감이 지났으면 기다리지 않고 NEUTRAL. 확신도가 `signal-min-confidence`(0.6)보다 낮으면 NEUTRAL.
   11. **호감도는 0~100 (%처럼).** 쌓이는 점수가 아니라 끝이 있는 값이다. 범위를 넘는 몫은 잘라 실제로 바뀐 만큼만 `relation_logs`에 남긴다(기록 합 = 지금 점수). DB CHECK 0~100(relation 마이그레이션). 단계 기준도 %로(임시 0 · 30 · 70 · 90). 공부 시간은 호감도가 아니라 레벨(자리 지킴 60분당 1)로 간다(호감도 최종안 2026-11-04). API 필드 이름(`points`)은 그대로, 뜻만 0~100.
-  12. **상태 반응은 두 갈래.** 순간 동작(DROWSY · YAWN · WAVE · HEAD_TURN)은 캐릭터의 미리 쓴 대사 + 그 칸의 표정(LLM 없음, 지금 관계 단계 묶음을 순서대로). 상태 변화(GREETING · AWAY · RETURN · BREAK · BREAK_END)는 LLM이 대사와 표정을 같이 쓴다(구조는 결정 19, 표정 원칙은 18). 5초를 넘기거나 실패하면 그 상황 · 단계의 미리 쓴 대사.
+  12. **상태 반응은 두 갈래.** 순간 동작(DROWSY · YAWN · WAVE · HEAD_TURN)은 캐릭터의 미리 쓴 대사 + 그 칸의 표정(LLM 없음, 지금 관계 단계 묶음을 순서대로). 상태 변화(GREETING · AWAY · RETURN · BREAK · BREAK_END)는 LLM이 대사를 쓰고 표정은 결정 모델이 고른다(구조는 결정 19, 표정은 ADR 0028). 마감을 넘기거나 실패하면 그 상황 · 단계의 미리 쓴 대사.
   13. **호감도 최종안 (2026-11-04 PM 결정 + 승희 조정). 9 · 11을 대신한다.**
       - 호감도(캐릭터가 나를 어떻게 보는가)와 레벨(함께 공부한 시간)을 나눈다. 호감도 0~100 · 50에서 시작, 관계 단계 = 호감도 구간(0 · 30 · 70 · 90, 내려가면 같이 내려감). 레벨 = 자리 지킴 60분당 1(상한 없음).
       - 호감도를 바꾸는 것은 대화 · 자리 비움 · 연속 출석뿐. 공부 시간 점수 · 첫 만남 +5 · 돌아옴 +1 · 동작 이벤트 점수는 없앴다.
@@ -34,9 +34,9 @@
       - ②는 공부 종료 때 **그 세션만** 카드 한 장(코드가 "11/03 55분" 머리말, LLM이 70자 안팎 흐름). 지난 카드를 다시 압축하지 않고, 3장째부터 오래된 것을 지운다. 오래 남길 사실은 ①이 이미 뽑았으므로 흐름은 잊어도 된다. 카드 쓰기에 실패하면 메시지를 남겨 다음 종료 카드에 같이 넣는다.
       - ~~쓸지 말지는 답장 모델이 정한다(매번 다 넣음)~~ → 결정 16으로 바뀜. `conversations.summary`는 더 쓰지 않는다.
   15. **세계관 · 캐릭터 설정은 DB 데이터 (2026-11-04, 승희).** 첫 캐릭터는 말포이(PM 확정). 대사를 어떻게 만드는지는 결정 19.
-      - 테이블(dialogue 모듈): `character_profiles`(공통 페르소나 · 절대 규칙 · 안전 기준 · 표정 · 대체 표정 · 관계 단계별 관계 설명 · 공부 중 / 쉬는 시간 말하는 법 · 관계 단계별 말투 샘플 · 로어북 `lore`) · `character_lines`(상황별 미리 쓴 대사, 관계 단계별 묶음을 순서대로. 공부 포기 GIVE_UP · 오늘 근황 TODAY 포함) · `character_scores`(대화 점수표) · `character_habits`(피할 말버릇). `characters`(content)는 화면용 정보만. `worlds` · `world_lore` · `world_events` · `character_moves`는 결정 19부터 쓰지 않아 뺐다(V20261105_070742).
+      - 테이블(dialogue 모듈): `character_profiles`(공통 페르소나 · 절대 규칙 · 안전 기준 · 표정 · 표정 설명(`expression_guide`, ADR 0028) · 관계 단계별 관계 설명 · 공부 중 / 쉬는 시간 말하는 법 · 관계 단계별 말투 샘플 · 로어북 `lore`) · `character_lines`(상황별 미리 쓴 대사, 관계 단계별 묶음을 순서대로. 공부 포기 GIVE_UP · 오늘 근황 TODAY 포함) · `character_scores`(대화 점수표) · `character_habits`(피할 말버릇). `characters`(content)는 화면용 정보만. `worlds` · `world_lore` · `world_events` · `character_moves`는 결정 19부터 쓰지 않아 뺐다(V20261105_070742).
       - 처음 값은 git의 `classpath:characters/<code>/profile.yml`에서 불러온다(`CharacterContentSeeder`, 앱 시작 때). DB에 그 캐릭터 설정이 없으면 넣고, **profile.yml의 `version`이 DB의 `content_version`보다 높으면 파일로 다시 불러온다**(실험실에서 고친 값은 덮임). 같거나 낮으면 DB가 원본이고 실험실 저장은 버전을 바꾸지 않으므로, git에서 문구를 고쳤으면 version을 올려야 공용 DB · 개발 서버에 들어간다. 평소에는 실험실(API `/internal/llm-lab/api/characters/{id}/content` GET · PUT · reseed, 화면 '캐릭터 설정' 탭)에서 고친다. 운영에도 같은 길로 들어간다.
-      - 5초 대체 대사 · 완료 대사 · 순간 동작 대사는 그 캐릭터의 `character_lines`(지금 관계 단계 묶음을 순서대로, PM 확정). 설정이 없는 캐릭터는 공통 프롬프트(SIMPLE)와 공통 고정 대사(`fixed.lines`). 표정 에셋이 없으면 `expression_fallbacks`로 대신.
+      - 마감 대체 대사 · 완료 대사 · 순간 동작 대사는 그 캐릭터의 `character_lines`(지금 관계 단계 묶음을 순서대로, PM 확정). 설정이 없는 캐릭터는 공통 프롬프트(SIMPLE)와 공통 고정 대사(`fixed.lines`). 표정은 결정 모델이 그 캐릭터 표정 목록에서만 고른다(ADR 0028, 대체 표 `expression_fallbacks`는 지움).
       - 대화 점수표는 `character_scores`가 있으면 그것, 없으면 설정의 기본 표.
   16. **답장 프롬프트를 작게: 아는 사실은 결정 모델이 하나만 고른다 (2026-11-04, 승희).** 프롬프트가 길어질수록 지시를 덜 따르기 때문이다.
       - 답장 전에 결정 모델(Jev 또는 fast LLM)이 사용자 말 + 최근 4줄을 보고 [아는 사실 최대 20개 + 선택 안 함] 중 하나를 고른다(`FactPicker`). 고른 사실 하나만 상황 카드의 `<꺼낼 수 있는 기억>`으로 넣는다. 확신도가 `signal-min-confidence`보다 낮거나 1.5초 안에 못 고르면 선택 안 함.
@@ -109,6 +109,6 @@
   - **계약 변경 (relation api, 확장 단계)**: `applyChatScore(ChatScore)` · `settleStudy(…, presentSeconds)` · `SessionEventRef.awaySeconds` · `RelationView`/`AffinityChange`/`StudySettlement`에 단계 · 레벨 필드를 더했다. 옛 `applyChat(int)` · `settleStudyTime` · 6인자 `SessionEventRef`는 `@Deprecated(forRemoval)`. session(성욱) 호출부는 이 브랜치에서 새 계약으로 옮겼다(자리 비움 시간 계산 · 자리 지킴 시간 전달). 이 브랜치에서 처음 생긴 `ChatSignal` · `applyChatSignal` · `chatPoints`는 develop에 없어 바로 바꿨다.
   - **미리 쓴 대사는 관계 단계별 묶음**: 캐릭터 설정이 있으면 `character_lines`(지금 단계 이하 중 가장 높은 `min_stage` 묶음을 순서대로), 없으면 공통 `fixed.lines`의 `byLevel`(무작위). 반응 서비스가 relation `api`에서 단계를 읽는다. API(18 · 19)는 그대로: AWAY 2 · 3단계와 TTS 때문에 19는 어차피 남는다. 프론트가 대사를 고르는 안은 버림(대사 수정 = 프론트 배포, 캐릭터별 · 버전 · 실험실 · LLM 전환이 서버 밖으로 빠짐). 대사 문구는 초안, 기획이 다듬는다.
   - develop 위로 다시 올리며(#37 · #41 뒤) 지킨 것: 19 · 20 모션 · 표정은 대사 감정으로 고른다(`ReactionQuery.pick(캐릭터, 감정, null)`, 감정 null이면 동작 없음). 20은 사용자 말을 먼저 저장하고 한도를 검사한다(처리 중 재전송은 한도에 안 셈, 429면 저장한 말을 지움). 동작 이벤트 고정 대사 · 감정은 `fixed.lines`로 옮겼다(옛 `FakeLlmClient` 감정 = 칸의 `emotion`). `HEAD_TURN`(#44 · #45 · #47) 칸과 실험실 trigger 목록도 미리 넣었다.
-  - LLM이 5초를 넘긴 19의 감정은 지금 null이다(동작 없음). 판단 백로그 J-12 ② 추천(상황별 감정을 그대로)으로 정하면 `DialogueService.react`의 대체 줄 하나를 바꾼다.
+  - LLM이 마감을 넘긴 19의 감정은 지금 null이다(동작 없음). 판단 백로그 J-12 ② 추천(상황별 감정을 그대로)으로 정하면 `DialogueService.react`의 대체 줄 하나를 바꾼다.
   - `judgment-backlog.md`의 J-04~J-09 '위치' 칸은 지운 `LlmClient`·`FakeLlmClient`를 가리킨다. 새 위치(`ReactionWriter`·`SceneChatPipeline`·`SimpleChatPipeline`·`ClosingWriter`·`fixed.lines`)로 고쳤다(2026-11-05).
   - 하네스 문서(`verify` 스킬, HARNESS.md)의 `capsule.llm.mode`는 `capsule.llm.provider`로 고쳤다(하네스 PR, 2026-11-05).

@@ -166,7 +166,6 @@ public class LabService {
                         .map(c -> new LabMeta.Character(c.id(), c.name()))
                         .toList(),
                 TRIGGERS,
-                dialogueProps.current().emotions(),
                 llmProps.current().lab().token() != null
                         && !llmProps.current().lab().token().isBlank());
     }
@@ -307,12 +306,7 @@ public class LabService {
                             nickname,
                             config.summary(),
                             // 서비스(19)처럼 최근 몇 줄만
-                            history.subList(
-                                    Math.max(
-                                            0,
-                                            history.size()
-                                                    - dialogueProps.current().reactionContextLines()),
-                                    history.size()),
+                            PromptVars.tail(history, dialogueProps.current().reactionContextLines()),
                             pinned,
                             ctx);
                     return map("content", l.content(), "emotion", l.emotion());
@@ -351,11 +345,7 @@ public class LabService {
                 yield ctx -> memoryKeeper.preview(
                         c,
                         config.factsOrEmpty(),
-                        history.subList(
-                                Math.max(
-                                        0,
-                                        history.size() - dialogueProps.current().signalContextLines()),
-                                history.size()),
+                        PromptVars.tail(history, dialogueProps.current().signalContextLines()),
                         message,
                         ctx);
             }

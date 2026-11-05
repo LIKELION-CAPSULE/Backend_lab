@@ -136,8 +136,8 @@ class DialogueTest {
         when(sessionQuery.find(sessionId))
                 .thenReturn(Optional.of(new SessionInfo(sessionId, userId, 1, CHARACTER_ID, Instant.now(), null)));
         when(characterQuery.find(CHARACTER_ID))
-                .thenReturn(
-                        Optional.of(new CharacterInfo(CHARACTER_ID, 1, "채린", null, List.of("츤데레"), "짝꿍", true, null)));
+                .thenReturn(Optional.of(
+                        new CharacterInfo(CHARACTER_ID, 1, "채린", null, List.of("츤데레"), "짝꿍", true, null, null)));
         when(reactionQuery.pick(anyLong(), anyString(), any())).thenReturn(Reaction.NONE);
         when(relationQuery.view(userId, CHARACTER_ID)).thenReturn(view(1, 80));
     }
