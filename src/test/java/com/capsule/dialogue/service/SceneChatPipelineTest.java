@@ -178,6 +178,17 @@ class SceneChatPipelineTest {
     }
 
     @Test
+    void reactionAcceptsPlainTextAndContentKey() {
+        // 스모크: BREAK_END 반응이 JSON 없이 맨 글로 와서 형식 오류 → 고정 대사로 갔다
+        assertThat(ReactionWriter.parse(result("좋아, 다시 하자.", "stop"), e -> e))
+                .isEqualTo(new com.capsule.dialogue.dto.ReactionLine("좋아, 다시 하자.", null));
+        assertThat(ReactionWriter.parse(result("{\"content\":\"왔네.\",\"emotion\":\"웃음\"}", "stop"), e -> e))
+                .isEqualTo(new com.capsule.dialogue.dto.ReactionLine("왔네.", "웃음"));
+        assertThatThrownBy(() -> ReactionWriter.parse(result("{\"reply\":\"좋아, 다시", "length"), e -> e))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
     void todayNotePicksTheWeekday() {
         // 2026-11-05는 목요일 → TODAY 네 번째 줄
         java.time.Clock thursday =
