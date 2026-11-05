@@ -160,12 +160,13 @@ public class ReactionWriter {
     static ReactionLine parse(Llm.Result r, UnaryOperator<String> emotion) {
         JsonNode json = SceneChatPipeline.replyJson(r);
         // reply → content → JSON 앞에 쓴 글 순서 (공통 프롬프트는 content라 앞 글보다 먼저 본다)
-        String content = json == null ? r.text() : LlmJson.str(json.path("reply"));
+        SceneChatPipeline.Plain plain = json == null ? SceneChatPipeline.plain(r.text(), emotion) : null;
+        String content = plain != null ? plain.text() : LlmJson.str(json.path("reply"));
         if (json != null && (content == null || content.isBlank())) content = LlmJson.str(json.path("content"));
         if (json != null && (content == null || content.isBlank()))
             content = SceneChatPipeline.replyText(r.text(), json);
         if (content == null || content.isBlank()) throw new IllegalStateException("반응 대사 형식 오류: " + r.text());
         return new ReactionLine(
-                content.strip(), json == null ? null : emotion.apply(LlmJson.str(json.path("emotion"))));
+                content.strip(), plain != null ? plain.emotion() : emotion.apply(LlmJson.str(json.path("emotion"))));
     }
 }

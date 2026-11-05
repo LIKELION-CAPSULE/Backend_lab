@@ -52,9 +52,13 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -224,6 +228,22 @@ public class DialogueService {
     // --- 20 메시지 ---
 
     public MessageResponse send(long userId, long sessionId, MessageRequest request) {
+        return reply(accept(userId, sessionId, request), null);
+    }
+
+    /**
+     * 받아 둔 메시지 (명세 20 · 28): 검증 · 재전송 확인 · 사용자 말 저장 · 속도 제한까지 끝난 상태.
+     * answered가 있으면 이미 답한 재전송, inFlightSince가 있으면 같은 requestId가 처리 중
+     */
+    public record Accepted(
+            SessionInfo session,
+            Conversation conversation,
+            MessageRequest request,
+            MessageResponse answered,
+            Instant inFlightSince) {}
+
+    /** 20 · 28 앞부분. 여기서 나는 오류는 보통 HTTP 오류다 (28은 스트림을 열기 전) */
+    public Accepted accept(long userId, long sessionId, MessageRequest request) {
         SessionInfo session = openSession(userId, sessionId);
         if (request.characterId() != session.characterId()) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "CHARACTER_NOT_IN_SESSION");
@@ -233,11 +253,12 @@ public class DialogueService {
         // 재전송은 한도 검사 전에 돌려준다: 응답을 못 받아 다시 보낸 요청이 429가 되면 안 됨
         Optional<MessageResponse> answered = answered(conversation, session, request);
         if (answered.isPresent()) {
-            return answered.get();
+            return new Accepted(session, conversation, request, answered.get(), null);
         }
         Optional<ChatMessage> asked = question(conversation, request);
         if (asked.isPresent()) {
-            return awaitAnswer(session, conversation, request, asked.get().createdAt());
+            return new Accepted(
+                    session, conversation, request, null, asked.get().createdAt());
         }
         // 한도 검사보다 먼저 저장한다: 같은 requestId가 동시에 오면 늦은 쪽은 UNIQUE에 막혀 먼저 온 쪽의 답장을 기다린다.
         // 그래서 처리 중 재전송은 횟수에 세지 않는다(명세 20). 저장은 바로 커밋되므로 429면 이 사용자 말을 지운다
@@ -247,13 +268,25 @@ public class DialogueService {
         } catch (DataIntegrityViolationException e) {
             // 다른 쪽이 먼저 저장했으면 그 답을 기다린다. 다른 이유의 무결성 오류면 그대로 던진다
             ChatMessage other = question(conversation, request).orElseThrow(() -> e);
-            return awaitAnswer(session, conversation, request, other.createdAt());
+            return new Accepted(session, conversation, request, null, other.createdAt());
         }
         if (!rateLimiter.tryAcquire("rate:chat:" + userId, props.messageLimit(), props.messageLimitWindow())) {
             messages.deleteQuestion(conversation.id(), request.requestId());
             throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "TOO_MANY_REQUESTS");
         }
-        return answer(session, conversation, request);
+        return new Accepted(session, conversation, request, null, null);
+    }
+
+    /**
+     * 20 · 28 뒷부분: 답장을 만들어 저장한다.
+     *
+     * @param onReply null이 아니면 스트리밍(명세 28): 지금까지의 대사를 넘긴다. 재전송 · 처리 중 대기는 부르지 않는다
+     */
+    public MessageResponse reply(Accepted a, Consumer<String> onReply) {
+        if (a.answered() != null) return a.answered();
+        if (a.inFlightSince() != null)
+            return awaitAnswer(a.session(), a.conversation(), a.request(), a.inFlightSince());
+        return answer(a.session(), a.conversation(), a.request(), onReply);
     }
 
     /**
@@ -262,7 +295,8 @@ public class DialogueService {
      * 커밋까지 간다. 그래서 종료와 겹치면 여기서 종료가 끝나길 기다린 뒤 아래 세션 확인에서 끝난 것을 보고 아무것도 남기지 않는다.
      * 종료보다 먼저 잡으면 이 답장까지 커밋된 뒤에 종료가 정산·요약한다. 잠금 순서가 종료(세션 → relation → 대화)와 같아 교착이 없다.
      */
-    private MessageResponse answer(SessionInfo session, Conversation conversation, MessageRequest request) {
+    private MessageResponse answer(
+            SessionInfo session, Conversation conversation, MessageRequest request, Consumer<String> onReply) {
         long userId = session.userId();
         long sessionId = session.id();
         long characterId = session.characterId();
@@ -288,7 +322,8 @@ public class DialogueService {
                 chatty(earlier),
                 (int) Duration.between(session.startedAt(), Instant.now(clock)).toMinutes());
         LlmContext ctx = LlmContext.app(userId, sessionId, deadline());
-        Optional<ChatOutcome> outcome = withinBudget(() -> replier.reply(chat, input, ctx));
+        Optional<ChatOutcome> outcome =
+                onReply == null ? withinBudget(() -> replier.reply(chat, input, ctx)) : streamed(input, ctx, onReply);
         String reply = outcome.map(ChatOutcome::reply)
                 .orElseGet(() -> characterContents
                         .next(
@@ -379,7 +414,49 @@ public class DialogueService {
                 throw new IllegalStateException(e);
             }
         }
-        return answer(session, conversation, request);
+        return answer(session, conversation, request, null);
+    }
+
+    /**
+     * 명세 28: 답장을 스트리밍으로 만들며 대사를 흘려 보낸다.
+     * 첫 대사를 llm-budget(5초) 안에 못 보내면 대체 대사(20과 같은 시간). 첫 대사를 보낸 뒤에는 끝까지 기다린다:
+     * 이미 보인 글을 대체 대사로 바꾸지 않으려고. 끝까지의 상한은 LLM http-timeout이다
+     */
+    private Optional<ChatOutcome> streamed(ChatInput input, LlmContext ctx, Consumer<String> onReply) {
+        // 0 = 첫 대사 전, 1 = 흘려 보내는 중, 2 = 대체 대사로 넘어감 (넘어간 뒤 온 글은 보내지 않는다)
+        AtomicInteger state = new AtomicInteger();
+        String[] last = {null};
+        Consumer<String> onText = raw -> {
+            String part = ReplyStream.partial(raw);
+            if (part == null || part.isBlank() || part.equals(last[0])) return;
+            if (state.compareAndSet(0, 1) || state.get() == 1) {
+                last[0] = part;
+                try {
+                    onReply.accept(part);
+                } catch (RuntimeException e) {
+                    // 화면 쓰기 실패를 LLM 실패로 바꾸지 않는다 (게이트웨이가 다른 공급자로 다시 부르면 비용 두 번)
+                    log.debug("스트림 대사 보내기 실패: {}", e.toString());
+                }
+            }
+        };
+        CompletableFuture<ChatOutcome> call =
+                CompletableFuture.supplyAsync(() -> replier.reply(chat, input, ctx, onText), LLM_THREADS);
+        try {
+            return Optional.ofNullable(call.get(props.llmBudget().toMillis(), TimeUnit.MILLISECONDS));
+        } catch (TimeoutException e) {
+            if (state.compareAndSet(0, 2)) {
+                // 기다리기만 멈춘다: 진행 중인 LLM 호출은 끝까지 돌고 기록된다(20과 같음). 그 뒤 온 글은 state 2라 안 보낸다
+                log.warn("스트리밍 답장의 첫 대사가 {} 안에 안 옴, 고정 대사로 대체", props.llmBudget());
+                return Optional.empty();
+            }
+            return await(call);
+        } catch (ExecutionException e) {
+            log.warn("LLM 호출 실패, 고정 대사로 대체", e.getCause());
+            return Optional.empty();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return Optional.empty();
+        }
     }
 
     /** 명세 19·20: 감정 이름으로 반응 표에서 모션·표정을 고른다. 감정이 없거나 그 감정 행이 없으면 동작 없음 */

@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 
@@ -46,7 +47,7 @@ class SimpleChatPipeline implements ChatPipeline {
     }
 
     @Override
-    public ChatOutcome reply(ChatInput in, LlmContext ctx) {
+    public ChatOutcome reply(ChatInput in, LlmContext ctx, Consumer<String> onText) {
         long characterId = in.character().id();
         PromptVersion systemPrompt = prompts.resolve(PromptKey.CHAT_SYSTEM, characterId, in.pinnedPrompts());
         PromptVersion contextPrompt = prompts.resolve(PromptKey.CHAT_CONTEXT, characterId, in.pinnedPrompts());
@@ -72,7 +73,7 @@ class SimpleChatPipeline implements ChatPipeline {
         List<Llm.ChatTurn> messages = new ArrayList<>(PromptVars.turns(in.history(), props.historyLines()));
         messages.add(new Llm.ChatTurn("user", in.userMessage()));
         List<PromptVersion> used = List.of(systemPrompt, contextPrompt);
-        Llm.Result r = llm.complete(LlmPurpose.CHAT, system, messages, ctx.withPrompts(PromptVars.ids(used)), null);
+        Llm.Result r = llm.complete(LlmPurpose.CHAT, system, messages, ctx.withPrompts(PromptVars.ids(used)), onText);
 
         // JSON 없이 글만 왔으면 그 글을 답장으로 쓴다 (감정 없음).
         // 단 한도에 걸려 잘린 JSON('{"reply":"…')은 말풍선에 내보내지 않고 실패로 본다 → 대체 대사

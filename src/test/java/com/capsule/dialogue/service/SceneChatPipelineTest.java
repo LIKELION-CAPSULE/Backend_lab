@@ -213,6 +213,22 @@ class SceneChatPipelineTest {
                 .isEqualTo(new com.capsule.dialogue.dto.ReactionLine("왔네.", "웃음"));
         assertThatThrownBy(() -> ReactionWriter.parse(result("{\"reply\":\"좋아, 다시", "length"), e -> e))
                 .isInstanceOf(IllegalStateException.class);
+        // 맨 글 끝에 감정을 붙인 답 (스트리밍 확인 9번 중 1번): 말풍선에서 떼고 감정으로
+        assertThat(ReactionWriter.parse(result("왔네. emotion=웃음", "stop"), e -> e))
+                .isEqualTo(new com.capsule.dialogue.dto.ReactionLine("왔네.", "웃음"));
+    }
+
+    @Test
+    void plainReplyWithATrailingEmotionTag() {
+        assertThat(SceneChatPipeline.plain("수색 훈련 기록 갱신. emotion=웃음", MALFOY::emotion))
+                .isEqualTo(new SceneChatPipeline.Plain("수색 훈련 기록 갱신.", "웃음"));
+        assertThat(SceneChatPipeline.plain("됐어. (emotion: \"경멸\")", MALFOY::emotion))
+                .isEqualTo(new SceneChatPipeline.Plain("됐어.", "경멸"));
+        assertThat(SceneChatPipeline.plain("그냥 대사", MALFOY::emotion))
+                .isEqualTo(new SceneChatPipeline.Plain("그냥 대사", null));
+        // 감정 목록에 없는 말이면 대사의 일부로 둔다 (영어 공부 중 단어 뜻)
+        assertThat(SceneChatPipeline.plain("그 단어? emotion: 감정", MALFOY::emotion))
+                .isEqualTo(new SceneChatPipeline.Plain("그 단어? emotion: 감정", null));
     }
 
     @Test
