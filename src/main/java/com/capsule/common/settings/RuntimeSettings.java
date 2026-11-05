@@ -72,7 +72,10 @@ public final class RuntimeSettings<T> {
         if (jdbc == null) snap = new Snapshot<>(defaults, null, null, 0);
     }
 
-    /** DB(table의 section 행)에 저장하는 설정. check는 덮어쓴 결과 전체를 보고 틀리면 require로 던진다 */
+    /**
+     * DB(table의 section 행)에 저장하는 설정. check는 덮어쓴 결과 전체를 보고 틀리면 require로 던진다.
+     * yml 값도 같은 check를 거친다: 틀리면 앱이 시작하지 않는다 (설정 오타를 첫 요청이 아니라 배포 때 잡게)
+     */
     public static <T> RuntimeSettings<T> stored(
             JdbcTemplate jdbc,
             JsonMapper json,
@@ -82,6 +85,11 @@ public final class RuntimeSettings<T> {
             Class<T> type,
             List<String> paths,
             Consumer<T> check) {
+        try {
+            check.accept(defaults);
+        } catch (ApiException e) {
+            throw new IllegalStateException("application.yml의 " + section + " 설정이 틀림: " + e.detail(), e);
+        }
         return new RuntimeSettings<>(jdbc, json, table, section, defaults, type, paths, check);
     }
 
