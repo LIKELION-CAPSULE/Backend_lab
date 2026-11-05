@@ -26,6 +26,9 @@ class ChatScorerTest {
         assertThat(detect("고마워 근데 꺼져")).isEqualTo(SignalType.RUDE);
         assertThat(detect("힘들어 고마워")).isEqualTo(SignalType.CONFIDE);
         assertThat(detect("ㅇㅇ")).isEqualTo(SignalType.LOW_EFFORT);
+        // 스모크 · 2단계 검증에서 놓친 말
+        assertThat(detect("너 머리 진짜 좋다")).isEqualTo(SignalType.COMPLIMENT);
+        assertThat(detect("너 몸매 야하다")).isEqualTo(SignalType.HATE_OR_SEXUAL);
         assertThat(detect("3단원 다 풀었어")).isEqualTo(SignalType.NEUTRAL);
     }
 }
