@@ -165,6 +165,9 @@ class CharacterContentTest {
         }
         assertThat(reseeded).contains(1L);
         assertThat(repository.find(1).orElseThrow().bible()).isEqualTo(git.bible());
+        // 로어북 카드도 DB를 거쳐 그대로 (jsonb)
+        assertThat(git.lore()).isNotEmpty();
+        assertThat(repository.find(1).orElseThrow().lore()).isEqualTo(git.lore());
     }
 
     @Test
@@ -206,6 +209,7 @@ class CharacterContentTest {
                 c.lines(),
                 c.samples(),
                 c.scores(),
-                c.habits());
+                c.habits(),
+                c.lore());
     }
 }

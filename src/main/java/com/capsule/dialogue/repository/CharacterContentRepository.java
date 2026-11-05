@@ -4,6 +4,7 @@ import com.capsule.dialogue.client.LlmJson;
 import com.capsule.dialogue.config.DialogueProperties.ScoreRule;
 import com.capsule.dialogue.dto.CharacterContent;
 import com.capsule.dialogue.dto.CharacterContent.Line;
+import com.capsule.dialogue.dto.CharacterContent.Lore;
 import com.capsule.dialogue.dto.CharacterContent.Sample;
 import com.capsule.relation.api.RelationTypes.SignalType;
 import java.sql.Array;
@@ -29,6 +30,7 @@ public class CharacterContentRepository {
 
     private static final TypeReference<Map<String, String>> STRING_MAP = new TypeReference<>() {};
     private static final TypeReference<List<Sample>> SAMPLES = new TypeReference<>() {};
+    private static final TypeReference<List<Lore>> LORE = new TypeReference<>() {};
 
     private final JdbcClient jdbc;
 
@@ -66,11 +68,12 @@ public class CharacterContentRepository {
                 String tones,
                 String studyStyle,
                 String breakStyle,
-                String samples) {}
+                String samples,
+                String lore) {}
         Optional<Row> profile = jdbc.sql("""
                         SELECT code, content_version, speaker, bible, rules, safety, expressions,
                                expression_fallbacks::text AS fallbacks, stage_tones::text AS tones, study_style, break_style,
-                               samples::text AS samples
+                               samples::text AS samples, lore::text AS lore
                         FROM character_profiles WHERE character_id = ?""")
                 .param(characterId)
                 .query((rs, n) -> new Row(
@@ -85,7 +88,8 @@ public class CharacterContentRepository {
                         rs.getString("tones"),
                         rs.getString("study_style"),
                         rs.getString("break_style"),
-                        rs.getString("samples")))
+                        rs.getString("samples"),
+                        rs.getString("lore")))
                 .optional();
         if (profile.isEmpty()) return Optional.empty();
         Row p = profile.get();
@@ -137,7 +141,8 @@ public class CharacterContentRepository {
                 lines,
                 LlmJson.JSON.readValue(p.samples(), SAMPLES),
                 scores,
-                habits));
+                habits,
+                LlmJson.JSON.readValue(p.lore(), LORE)));
     }
 
     /** 이 캐릭터의 설정을 통째로 바꾼다 (실험실 저장 · 시드). 버전도 c.version()으로 */
@@ -151,9 +156,9 @@ public class CharacterContentRepository {
         jdbc.sql("""
                         INSERT INTO character_profiles
                             (character_id, code, content_version, speaker, bible, rules, safety, expressions,
-                             expression_fallbacks, stage_tones, study_style, break_style, samples)
+                             expression_fallbacks, stage_tones, study_style, break_style, samples, lore)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ARRAY(SELECT jsonb_array_elements_text(CAST(? AS jsonb))),
-                                CAST(? AS jsonb), CAST(? AS jsonb), ?, ?, CAST(? AS jsonb))""")
+                                CAST(? AS jsonb), CAST(? AS jsonb), ?, ?, CAST(? AS jsonb), CAST(? AS jsonb))""")
                 .params(
                         id,
                         c.code(),
@@ -167,7 +172,8 @@ public class CharacterContentRepository {
                         LlmJson.write(c.stageTones()),
                         c.studyStyle(),
                         c.breakStyle(),
-                        LlmJson.write(c.samples() == null ? List.of() : c.samples()))
+                        LlmJson.write(c.samples() == null ? List.of() : c.samples()),
+                        LlmJson.write(c.lore()))
                 .update();
         for (Line l : c.lines()) {
             jdbc.sql("""

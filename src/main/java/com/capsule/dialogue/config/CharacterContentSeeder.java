@@ -60,7 +60,8 @@ public class CharacterContentSeeder implements ApplicationRunner {
             Map<SignalType, ScoreRule> scores,
             Map<String, String> habits,
             Map<String, List<LineFile>> lines,
-            Map<Integer, List<SampleFile>> samples) {}
+            Map<Integer, List<SampleFile>> samples,
+            List<CharacterContent.Lore> lore) {}
 
     record LineFile(String text, String expression, Integer minStage) {}
 
@@ -178,7 +179,8 @@ public class CharacterContentSeeder implements ApplicationRunner {
                 lines,
                 samples,
                 p.scores() == null ? Map.of() : p.scores(),
-                p.habits() == null ? Map.of() : p.habits());
+                p.habits() == null ? Map.of() : p.habits(),
+                p.lore());
     }
 
     /** classpath:characters/<code>/profile.yml → code */

@@ -76,6 +76,31 @@ class SceneChatPipelineTest {
     }
 
     @Test
+    void loreCardsOnlyWhenTheUserBringsThemUp() {
+        // 띄어쓰기 없이 써도 걸리고, 걸린 카드만 들어간다
+        String card = card(input("해리포터 알아?", List.of(), List.of()), null);
+        assertThat(card).contains("<사용자가 꺼낸 원작 얘기").contains("- 해리 포터: 그리핀도르 학생이자 말포이의 오랜 앙숙");
+        assertThat(card).doesNotContain("헤르미온느").doesNotContain("덤블도어");
+        // 한 말에 여럿을 꺼내도 최대 2장 (파일 순서)
+        assertThat(MALFOY.loreFor("해리랑 헤르미온느랑 위즐리 봤어", SceneChatPipeline.LORE_CARDS))
+                .extracting(CharacterContent.Lore::title)
+                .containsExactly("해리 포터", "헤르미온느 그레인저");
+        assertThat(MALFOY.loreFor("초콜릿개구리 먹을래", 2))
+                .extracting(CharacterContent.Lore::title)
+                .containsExactly("과자 소포");
+        assertThat(MALFOY.loreFor("해리가 또 1등이래", 2))
+                .extracting(CharacterContent.Lore::title)
+                .containsExactly("해리 포터");
+        // 평범한 공부 말에는 안 걸린다 ('론' · '포터' · '해리' 하나만 · '빗자루' · '소포'는 키워드가 아님)
+        assertThat(MALFOY.loreFor("이론 정리하고 결론 쓰는 중", 2)).isEmpty();
+        assertThat(MALFOY.loreFor("오늘 수학 시험 망했어", 2)).isEmpty();
+        assertThat(MALFOY.loreFor("리포터 시험이랑 해리성 장애 단원 공부 중", 2)).isEmpty();
+        assertThat(MALFOY.loreFor("택배 소포 왔어, 빗자루로 청소 좀 하고 올게", 2)).isEmpty();
+        // 실험실에서 keys 없이 저장한 카드도 대화를 깨지 않는다
+        assertThat(new CharacterContent.Lore("빈 카드", null, "x").keys()).isEmpty();
+    }
+
+    @Test
     void cardCarriesOnlyThisTurnsFacts() {
         String card = card(input("오늘 뭐 해", List.of(), List.of("사용자는 토익 800 목표", "사용자는 밤에 공부가 잘 됨")), "사용자는 토익 800 목표");
         // 아는 사실은 결정 모델이 고른 하나만, 고르지 않은 사실은 안 들어감. 세션 카드 · 첫 대화 일정은 들어감
@@ -83,8 +108,9 @@ class SceneChatPipelineTest {
         assertThat(card).contains("11/03 55분, 3단원 하다 일찍 끝냄").contains("시험: 중간고사");
         assertThat(card).contains("\"흥\"로 말을 시작하지 않기"); // 말버릇은 데이터
         assertThat(card).contains("공부한 지: 52분").contains("말포이 오늘: 엄마가 과자 상자를 보냈다");
-        // 매 턴 기술 · 세계 지식 카드 · 무작위 사건은 없다 (결정 19)
+        // 매 턴 기술 · 세계 지식 카드 · 무작위 사건은 없다 (결정 19). 원작 얘기를 안 꺼냈으니 로어북 카드도 없다
         assertThat(card).doesNotContain("대화 기술").doesNotContain("세계 지식").doesNotContain("방금 일어난 일");
+        assertThat(card).doesNotContain("원작 얘기");
         // 길이 · 구성(지금) 줄이 맨 끝
         assertThat(card.lines().toList())
                 .element(card.lines().toList().size() - 2)
@@ -145,7 +171,8 @@ class SceneChatPipelineTest {
                 c.lines(),
                 c.samples(),
                 c.scores(),
-                c.habits());
+                c.habits(),
+                c.lore());
         assertThat(assetFallback.emotion("화남")).isEqualTo("화남");
         assertThat(assetFallback.emotion("분노")).isEqualTo("화남");
     }

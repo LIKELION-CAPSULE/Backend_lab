@@ -1277,7 +1277,7 @@ GET /api/me/memories?date=2026-11-12
 
 > ✅ **200 OK**
 
-> ❌ **400** EMPTY_MESSAGE · INVALID_REQUEST (300자 초과) · CHARACTER_NOT_IN_SESSION · **404** SESSION_NOT_FOUND · **409** SESSION_ENDED · **429** TOO_MANY_REQUESTS (1분에 10번)
+> ❌ **400** EMPTY_MESSAGE · INVALID_REQUEST (300자 초과) · CHARACTER_NOT_IN_SESSION · **404** SESSION_NOT_FOUND · **409** SESSION_ENDED · **429** TOO_MANY_REQUESTS (1분에 30번)
 
 #### 서버가 하는 일
 
@@ -1293,8 +1293,10 @@ GET /api/me/memories?date=2026-11-12
 
 - 답 길이 · 구성: 공부 중 1\~2문장(공부 얘기 중심), 쉬는 시간 2\~4문장(공부 재촉 없이 수다). 지금 상태는 마지막 상태 이벤트(18)로 판단: `BREAK`면 쉬는 시간
 - 공부 중에 수다가 길어지면(최근 10분에 사용자 말 8번 이상, 이번 말 포함, 임시 J-14) 캐릭터가 짧게 받아 주고 공부로 돌려보낸다. 막지는 않는다 (횟수 제한 없음은 그대로). 쉬는 시간에는 하지 않음
-- 같은 `requestId`를 다시 보내면 저장된 답장을 그대로 돌려줌. 속도 제한(1분에 10번) 횟수에 세지 않음. 이때 `affinity.delta`는 0, `emotion` · `motion` · `expression`은 null (처음 응답의 값은 다시 주지 않음). 첫 요청이 아직 처리 중일 때 온 재전송은 첫 요청이 끝날 때까지 기다렸다가 같은 답장을 받음
+- 같은 `requestId`를 다시 보내면 저장된 답장을 그대로 돌려줌. 속도 제한(1분에 30번) 횟수에 세지 않음. 이때 `affinity.delta`는 0, `emotion` · `motion` · `expression`은 null (처음 응답의 값은 다시 주지 않음). 첫 요청이 아직 처리 중일 때 온 재전송은 첫 요청이 끝날 때까지 기다렸다가 같은 답장을 받음
 - 일시정지 중에는 프론트가 입력을 막음
+
+> 2026-11-05: 속도 제한 1분에 10번 → 30번 (승희 요청)
 
 ## 21. POST /api/sessions/{sessionId}/heartbeat — heartbeat
 - 분류: 공부 세션
@@ -1605,6 +1607,7 @@ json
 - 와이어프레임: 마이페이지 '회원 탈퇴' (추가 필요)
 - 백엔드: Not started
 - 프론트: Not started
+- 노션: https://app.notion.com/p/40fb9a07e592813bb828d6221ebd26ca
 
 > 2026-11-05: 회원 탈퇴 추가. DB 최종본의 탈퇴 원칙(소프트 삭제, `users` 행은 남기고 개인정보만 비움)을 API로
 
