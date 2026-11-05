@@ -106,6 +106,13 @@ tr.sub>td{background:var(--bg);padding:8px}
   <input id="tokenInput" type="password" autocomplete="off" placeholder="X-Lab-Token">
   <button id="tokenSave" class="primary">저장하고 다시 불러오기</button>
 </div>
+<form id="loginbar" class="tokenbar" hidden>
+  <span>관리자 로그인</span>
+  <input id="loginUser" autocomplete="username" placeholder="아이디" required>
+  <input id="loginPass" type="password" autocomplete="current-password" placeholder="비밀번호" required>
+  <button class="primary">로그인</button>
+  <span id="loginMsg" class="small"></span>
+</form>
 <nav id="tabs">
   <button data-tab="chat">대화 실험</button>
   <button data-tab="play">한 번 실행</button>
@@ -133,7 +140,8 @@ const BASE = '/internal/llm-lab/api';
 const $ = s => document.querySelector(s);
 const TABS = Object.create(null);
 let META = null, active = 'chat', TOKEN = '';
-try { TOKEN = localStorage.getItem('llmLabToken') || ''; } catch { /* 저장소가 막힘: 메모리에만 둔다 */ }
+let ADMIN = ''; // 관리자로 로그인했으면 아이디 (TOKEN은 그 로그인 토큰, ADR 0027)
+try { TOKEN = localStorage.getItem('llmLabToken') || ''; ADMIN = localStorage.getItem('llmLabAdmin') || ''; } catch { /* 저장소가 막힘: 메모리에만 둔다 */ }
 
 /* ---------- DOM · 형식 도우미 ---------- */
 function h(tag, attrs, ...kids) {
@@ -195,7 +203,10 @@ async function api(method, path, body) {
   } catch (e) {
     throw fail({code: 'NETWORK', message: '서버에 연결하지 못했어요', detail: String(e)});
   }
-  if (res.status === 401) { askToken(); throw Object.assign(new Error('토큰 필요'), {shown: true}); }
+  if (res.status === 401) {  // 서버가 관리자 계정을 쓰면 LAB_LOGIN_REQUIRED (로그인이 끝났을 때도), 아니면 고정 토큰
+    ((await res.text()).includes('LAB_LOGIN_REQUIRED') ? askLogin : askToken)();
+    throw Object.assign(new Error('로그인 필요'), {shown: true});
+  }
   const text = await res.text();
   let data = text;
   try { data = text ? JSON.parse(text) : null; } catch { /* JSON이 아니면 글자 그대로 */ }
@@ -210,6 +221,30 @@ async function busy(btn, fn) {
   try { return await fn(); } catch (e) { if (!e.shown) toast(e.message || String(e)); } finally { if (btn) btn.disabled = false; }
 }
 function askToken() { $('#tokenInput').value = TOKEN; $('#tokenbar').hidden = false; $('#tokenInput').focus(); }
+function askLogin() { $('#tokenbar').hidden = true; $('#loginUser').value = ADMIN; $('#loginbar').hidden = false; (ADMIN ? $('#loginPass') : $('#loginUser')).focus(); }
+function remember() {
+  try { localStorage.setItem('llmLabToken', TOKEN); localStorage.setItem('llmLabAdmin', ADMIN); } catch { /* 저장소가 막힘: 이 창에서만 쓴다 */ }
+}
+async function login(e) {
+  e.preventDefault();
+  const msg = $('#loginMsg');
+  msg.textContent = '';
+  let res;
+  try {
+    res = await fetch(BASE + '/login', {method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({username: $('#loginUser').value.trim(), password: $('#loginPass').value})});
+  } catch { msg.textContent = '서버에 연결하지 못했어요'; return; }
+  if (!res.ok) { msg.textContent = res.status === 429 ? '시도가 너무 많아요. 1분 뒤에 다시' : '아이디나 비밀번호가 틀렸어요'; return; }
+  const s = await res.json();
+  TOKEN = s.token; ADMIN = s.username;
+  remember();
+  $('#loginPass').value = '';
+  $('#loginbar').hidden = true;
+  // 쓰다가 로그인이 끝난 경우: 탭을 다시 만들지 않는다 (고치던 내용이 남게, 막힌 버튼만 다시 누르면 됨)
+  if (META) header(); else init();
+}
+// 서버에 세션이 없어 토큰을 지우면 끝 (바로 끊어야 하면 그 계정 비밀번호를 바꾼다)
+function logout() { TOKEN = ''; ADMIN = ''; remember(); location.reload(); }
 // 지우기 같은 위험한 버튼: 3초 안에 한 번 더 눌러야 실행
 function confirmBtn(label, fn) {
   let timer = null;
@@ -900,7 +935,8 @@ function header() {
     h('span', {class: 'grow'}),
     h('details', {class: 'routes'}, h('summary', null, '모델 설정'), h('div', {class: 'pop'},
       table(['목적', '등급', '최대 토큰', 'temperature', 'anthropic', 'openai'], (m.routes || []).map(r => tr([r.purpose, r.tier, r.maxTokens, r.temperature, r.models?.anthropic, r.models?.openai]))))),
-    m.tokenRequired || TOKEN ? h('button', {class: 'ghost', onclick: askToken}, '토큰') : null));
+    ADMIN ? [h('span', {class: 'chip okc'}, ADMIN + ' 로그인'), h('button', {class: 'ghost', onclick: logout}, '로그아웃')]
+      : m.tokenRequired || TOKEN ? h('button', {class: 'ghost', onclick: askToken}, '토큰') : null));
 }
 function showTab(k) {
   active = k;
@@ -911,7 +947,8 @@ function showTab(k) {
 }
 async function init() {
   try { META = await api('GET', '/meta'); } catch {
-    $('#hdr').replaceChildren(h('b', {class: 'logo'}, '캡슐 LLM 실험실'), muted('메타 정보를 못 불러왔어요'));
+    const locked = !$('#loginbar').hidden || !$('#tokenbar').hidden;
+    $('#hdr').replaceChildren(h('b', {class: 'logo'}, '캡슐 LLM 실험실'), muted(locked ? '로그인하면 열려요' : '메타 정보를 못 불러왔어요'));
     return;
   }
   header();
@@ -923,12 +960,14 @@ async function init() {
 }
 function saveToken() {
   TOKEN = $('#tokenInput').value.trim();
-  try { localStorage.setItem('llmLabToken', TOKEN); } catch { /* 저장소가 막힘: 이 창에서만 쓴다 */ }
+  ADMIN = ''; // 고정 토큰은 누구인지 모른다
+  remember();
   $('#tokenbar').hidden = true;
   init();
 }
 document.querySelectorAll('#tabs button').forEach(b => { b.onclick = () => { if (TABS[b.dataset.tab]) showTab(b.dataset.tab); }; });
 $('#tokenSave').onclick = saveToken;
+$('#loginbar').onsubmit = login;
 $('#tokenInput').onkeydown = e => { if (e.key === 'Enter') saveToken(); };
 console.assert(diffLines(['a', 'b', 'c'], ['a', 'x', 'c']).map(d => d[0]).join('') === ' -+ ', 'diffLines 자체 검사 실패');
 init();
