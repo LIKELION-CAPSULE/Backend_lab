@@ -23,8 +23,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Function;
-import java.util.function.UnaryOperator;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
@@ -54,6 +52,7 @@ class SceneChatPipeline implements ChatPipeline {
     private final CharacterContents contents;
     private final SimpleChatPipeline generic;
     private final FactPicker factPicker;
+    private final ExpressionPicker expressionPicker;
     private final FixedLines fixed;
     private final RuntimeSettings<DialogueProperties> props;
     private final Clock clock;
@@ -64,6 +63,7 @@ class SceneChatPipeline implements ChatPipeline {
             CharacterContents contents,
             SimpleChatPipeline generic,
             FactPicker factPicker,
+            ExpressionPicker expressionPicker,
             FixedLines fixed,
             RuntimeSettings<DialogueProperties> props,
             Clock clock) {
@@ -72,6 +72,7 @@ class SceneChatPipeline implements ChatPipeline {
         this.contents = contents;
         this.generic = generic;
         this.factPicker = factPicker;
+        this.expressionPicker = expressionPicker;
         this.fixed = fixed;
         this.props = props;
         this.clock = clock;
@@ -102,11 +103,8 @@ class SceneChatPipeline implements ChatPipeline {
         messages.add(new Llm.ChatTurn("user", in.userMessage()));
         Llm.Result r = llm.complete(LlmPurpose.CHAT, blocks, messages, ctx.withPrompts(List.of(system.id())), onText);
 
-        JsonNode json = replyJson(r);
-        Plain plain = json == null ? plain(r.text(), c::emotion) : null;
-        String reply = plain != null ? plain.text() : replyText(r.text(), json);
-        if (reply == null || reply.isBlank()) throw new IllegalStateException("빈 답장: " + r.text());
-        String emotion = plain != null ? plain.emotion() : c.emotion(LlmJson.str(json.path("emotion")));
+        String reply = spoken(r);
+        String emotion = expressionPicker.pick(c, in.userMessage(), reply, ctx); // 표정은 다 쓴 대사를 보고 결정 모델이
 
         Map<String, Object> trace = new LinkedHashMap<>();
         trace.put("pipeline", SCENE);
@@ -134,7 +132,6 @@ class SceneChatPipeline implements ChatPipeline {
         vars.put("bible", c.bible());
         vars.put("rules", c.rules());
         vars.put("speaker", c.speaker());
-        vars.put("expressions", String.join(", ", c.expressions()));
         vars.put("relation", PromptVars.orNone(c.toneFor(stage), "보통"));
         vars.put(
                 "samples",
@@ -195,54 +192,23 @@ class SceneChatPipeline implements ChatPipeline {
             L.add("<사용자 일정>\n- " + String.join("\n- ", in.memories()) + "\n</사용자 일정>");
         List<String> avoid = avoid(c, in.history());
         if (!avoid.isEmpty()) L.add("피할 것: " + String.join(" / ", avoid));
-        // 공부 중 · 쉬는 시간에 따라 답 길이와 구성이 다르다 (PM 확정: 1~2문장 / 2~4문장, 구성은 캐릭터 설정). 맨 끝에 둔다
+        // 공부 중 · 쉬는 시간에 따라 말하는 법이 다르다 (명세 20, 캐릭터 설정 studyStyle · breakStyle). 맨 끝에 둔다
         if (!in.onBreak() && in.chatty()) L.add(CHATTY);
         L.add("지금: " + (in.onBreak() ? c.breakStyle() : c.studyStyle()));
         L.add("</상황>");
         return String.join("\n", L);
     }
 
-    /** JSON 없는 맨 글 끝에 붙인 감정: "…갱신. emotion=웃음", "(emotion: 웃음)" (실제 키 스트리밍 확인 9번 중 1번) */
-    private static final Pattern PLAIN_EMOTION = Pattern.compile(
-            "\\s*[(\\[]?\\s*\\bemotion\\s*[=:]\\s*\"?([^\\s\")\\]]+)\"?\\s*[)\\]]?\\s*$", Pattern.CASE_INSENSITIVE);
-
-    /** scene.system이 시키는 태그 [emotion=표정] (값에 공백 · 쉼표가 있어도). 보통 끝이지만 어디에 있든 뗀다 */
-    private static final Pattern EMOTION_TAG =
-            Pattern.compile("\\s*\\[\\s*emotion\\s*[=:]([^\\]\\n]*)\\]", Pattern.CASE_INSENSITIVE);
-
     /** JSON 답의 키 ("reply": · "emotion":) */
     private static final Pattern JSON_KEY = Pattern.compile("\"(reply|emotion)\"\\s*:");
 
-    /** 맨 글을 대사와 감정으로 나눈 것 */
-    record Plain(String text, String emotion) {}
-
-    /** 태그 값을 감정으로: 통째로 맞으면 그것, 아니면 낱말 중 목록에 맞는 마지막 것 ("웃음과 경멸 사이, 결국 웃음" → 웃음) */
-    private static String lastEmotion(String value, UnaryOperator<String> emotion) {
-        String whole = emotion.apply(value.replace("\"", "").strip());
-        if (whole != null) return whole;
-        String found = null;
-        for (String word : value.split("[^\\p{L}]+")) {
-            String e = word.isEmpty() ? null : emotion.apply(word);
-            if (e != null) found = e;
-        }
-        return found;
-    }
-
-    /**
-     * 맨 글(JSON 없는 답): 끝의 감정 표시를 떼어 감정으로 (말풍선에 "emotion=웃음"이 나가지 않게).
-     * 그 이름이 이 캐릭터의 감정일 때만 뗀다: 영어 공부 중 "emotion: 감정" 같은 대사를 자르지 않게
-     */
-    static Plain plain(String text, UnaryOperator<String> emotion) {
-        // 프롬프트가 시키는 태그는 값이 목록 밖이거나 풀어 쓴 말이어도, 끝이 아니어도 태그째 뗀다 (말풍선에 새지 않게). 감정은 마지막 태그
-        Matcher tag = EMOTION_TAG.matcher(text);
-        String value = null;
-        while (tag.find()) value = tag.group(1);
-        if (value != null)
-            return new Plain(EMOTION_TAG.matcher(text).replaceAll("").strip(), lastEmotion(value, emotion));
-        Matcher m = PLAIN_EMOTION.matcher(text);
-        if (!m.find()) return new Plain(text, null);
-        String e = emotion.apply(m.group(1));
-        return e == null ? new Plain(text, null) : new Plain(text.substring(0, m.start()), e);
+    /** 답장 대사: 글 그대로 (scene.system은 대사만 쓰게 한다, 표정은 ExpressionPicker). 옛 형식 · 가짜 AI의 JSON이면 그 reply */
+    static String spoken(Llm.Result r) {
+        JsonNode json = replyJson(r);
+        String reply = replyText(r.text(), json);
+        if ((reply == null || reply.isBlank()) && json != null) reply = LlmJson.str(json.path("content")); // 공통 반응 형식
+        if (reply == null || reply.isBlank()) throw new IllegalStateException("빈 답장: " + r.text());
+        return reply.strip();
     }
 
     /** 답장 글: JSON의 reply. 대사를 글로 쓰고 뒤에 {"emotion": …}만 붙인 답(실제 키 평가 76번 중 1번)은 앞의 글 */

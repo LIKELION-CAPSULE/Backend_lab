@@ -472,14 +472,7 @@ public class DialogueService {
     // TODO(judgment): J-07 ②·J-12 ② 감정이 없을 때(LLM 5초 초과 등) 기본 감정을 쓸지. 지금은 동작 없음
     private Reaction emotionReaction(long characterId, String emotion) {
         if (emotion == null) return Reaction.NONE;
-        Reaction r = reactions.pick(characterId, emotion, null);
-        if (!Reaction.NONE.equals(r)) return r;
-        // 아직 에셋이 없는 표정이면 캐릭터 설정의 대체 표정으로 (말포이는 8개 모두 에셋이 있어 대체 없음)
-        String substitute = characterContents
-                .find(characterId)
-                .map(c -> c.fallbackExpression(emotion))
-                .orElse(emotion);
-        return substitute.equals(emotion) ? r : reactions.pick(characterId, substitute, null);
+        return reactions.pick(characterId, emotion, null);
     }
 
     /** 이미 답한 requestId면 저장된 답장 */

@@ -39,6 +39,7 @@ public class ReactionWriter {
     static final List<String> TODAY_TRIGGERS = List.of("GREETING");
 
     private final CharacterContents contents;
+    private final ExpressionPicker expressionPicker;
     private final Clock clock;
 
     ReactionWriter(
@@ -47,12 +48,14 @@ public class ReactionWriter {
             FixedLines fixed,
             RuntimeSettings<DialogueProperties> props,
             CharacterContents contents,
+            ExpressionPicker expressionPicker,
             Clock clock) {
         this.llm = llm;
         this.prompts = prompts;
         this.fixed = fixed;
         this.props = props;
         this.contents = contents;
+        this.expressionPicker = expressionPicker;
         this.clock = clock;
     }
 
@@ -137,7 +140,9 @@ public class ReactionWriter {
                 messages,
                 ctx.withPrompts(List.of(system.id())),
                 null);
-        return parse(r, c::emotion);
+        String line = SceneChatPipeline.spoken(r);
+        // 표정은 다 쓴 대사를 보고 결정 모델이 그 캐릭터 표정 목록에서 (ADR 0028)
+        return new ReactionLine(line, expressionPicker.pick(c, "(방금 일어난 일: " + situation + ")", line, ctx));
     }
 
     /** 상태 반응의 상황 카드. 지난 세션 흐름 · 오늘 근황이 있으면 다시 만난 사이처럼 (공부 시작 인사) */
@@ -155,20 +160,21 @@ public class ReactionWriter {
     }
 
     /**
-     * 장면 블록(scene.system)은 "대사 [emotion=감정]"(옛 형식 {reply, emotion}도 받음), 공통 프롬프트는 {content, emotion}.
-     * JSON 없는 맨 글은 그 글을 대사로(태그가 있으면 감정),
+     * 공통 프롬프트(reaction.system, 캐릭터 설정이 없을 때)의 답 {content, emotion}. 감정은 공통 후보로 맞춘다.
+     * JSON 없는 맨 글은 그 글을 대사로(감정 없음),
      * 깨진 JSON은 IllegalStateException (스모크에서 맨 글 한 줄을 형식 오류로 버려 고정 대사로 갔다)
      */
     static ReactionLine parse(Llm.Result r, UnaryOperator<String> emotion) {
         JsonNode json = SceneChatPipeline.replyJson(r);
+        if (json == null) {
+            if (r.text().isBlank()) throw new IllegalStateException("반응 대사 형식 오류: " + r.text());
+            return new ReactionLine(r.text().strip(), null);
+        }
         // reply → content → JSON 앞에 쓴 글 순서 (공통 프롬프트는 content라 앞 글보다 먼저 본다)
-        SceneChatPipeline.Plain plain = json == null ? SceneChatPipeline.plain(r.text(), emotion) : null;
-        String content = plain != null ? plain.text() : LlmJson.str(json.path("reply"));
-        if (json != null && (content == null || content.isBlank())) content = LlmJson.str(json.path("content"));
-        if (json != null && (content == null || content.isBlank()))
-            content = SceneChatPipeline.replyText(r.text(), json);
+        String content = LlmJson.str(json.path("reply"));
+        if (content == null || content.isBlank()) content = LlmJson.str(json.path("content"));
+        if (content == null || content.isBlank()) content = SceneChatPipeline.replyText(r.text(), json);
         if (content == null || content.isBlank()) throw new IllegalStateException("반응 대사 형식 오류: " + r.text());
-        return new ReactionLine(
-                content.strip(), plain != null ? plain.emotion() : emotion.apply(LlmJson.str(json.path("emotion"))));
+        return new ReactionLine(content.strip(), emotion.apply(LlmJson.str(json.path("emotion"))));
     }
 }

@@ -148,35 +148,13 @@ class SceneChatPipelineTest {
     }
 
     @Test
-    void offListEmotionMapsToTheNearestExpression() {
-        // 최종 검토에서 모델이 쓴 '걱정' · '질투'는 표정이 비었다 → 가까운 표정으로, 모르는 말은 null
-        assertThat(MALFOY.emotion("삐짐")).isEqualTo("삐짐");
-        assertThat(MALFOY.emotion(" 걱정 ")).isEqualTo("집중");
-        assertThat(MALFOY.emotion("질투")).isEqualTo("삐짐");
-        assertThat(MALFOY.emotion("SAD")).isNull();
-        assertThat(MALFOY.emotion(null)).isNull();
-        // 대체 표의 목록 안 키(에셋 없는 표정의 대체)는 감정 이름을 바꾸지 않는다: 목록 안 이름이 먼저
-        CharacterContent c = MALFOY;
-        CharacterContent assetFallback = new CharacterContent(
-                c.characterId(),
-                c.code(),
-                c.version(),
-                c.speaker(),
-                c.bible(),
-                c.rules(),
-                c.safety(),
-                c.expressions(),
-                Map.of("화남", "경멸", "분노", "화남"),
-                c.stageTones(),
-                c.studyStyle(),
-                c.breakStyle(),
-                c.lines(),
-                c.samples(),
-                c.scores(),
-                c.habits(),
-                c.lore());
-        assertThat(assetFallback.emotion("화남")).isEqualTo("화남");
-        assertThat(assetFallback.emotion("분노")).isEqualTo("화남");
+    void expressionChoicesFollowTheListWithTheGuide() {
+        // 결정 모델 보기: 표정 목록 순서 그대로, 설명이 없으면 이름
+        assertThat(MALFOY.expressionChoices().keySet()).containsExactlyElementsOf(MALFOY.expressions());
+        assertThat(MALFOY.expressionChoices().get("하품")).contains("졸리");
+        assertThat(MALFOY.withVersion(1).expressionGuide()).isEqualTo(MALFOY.expressionGuide());
+        // 대사에 표정을 쓰게 하지 않는다
+        assertThat(SceneChatPipeline.systemVars(MALFOY, 2, "민수", SITUATION)).doesNotContainKey("expressions");
     }
 
     @Test
@@ -192,11 +170,16 @@ class SceneChatPipelineTest {
                 .isInstanceOf(IllegalStateException.class);
         assertThatThrownBy(() -> SceneChatPipeline.replyJson(result("{\"reply\":\"흥, 그 정도는", "max_tokens")))
                 .isInstanceOf(IllegalStateException.class);
-        // 맨 글(기본 형식) 속 낱말 "emotion"이나 { 로 시작하는 수식은 깨진 JSON이 아니다
-        assertThat(SceneChatPipeline.replyJson(result("\"emotion\"은 감정이야. 외워. [emotion=집중]", "end_turn")))
-                .isNull();
-        assertThat(SceneChatPipeline.replyJson(result("{1, 2}부터 봐. 그게 집합이야. [emotion=집중]", "end_turn")))
-                .isNull();
+        // 맨 글(기본 형식) 속 낱말 "emotion"이나 { 로 시작하는 수식은 깨진 JSON이 아니다: 그대로 대사
+        assertThat(SceneChatPipeline.spoken(result("\"emotion\"은 감정이야. 외워.", "end_turn")))
+                .isEqualTo("\"emotion\"은 감정이야. 외워.");
+        assertThat(SceneChatPipeline.spoken(result("{1, 2}부터 봐. 그게 집합이야.", "end_turn")))
+                .isEqualTo("{1, 2}부터 봐. 그게 집합이야.");
+        // 옛 형식 · 가짜 AI의 JSON이면 그 reply
+        assertThat(SceneChatPipeline.spoken(result("{\"reply\":\"흥.\",\"emotion\":\"경멸\"}", "end_turn")))
+                .isEqualTo("흥.");
+        assertThatThrownBy(() -> SceneChatPipeline.spoken(result("  ", "end_turn")))
+                .isInstanceOf(IllegalStateException.class);
     }
 
     static Llm.Result result(String text, String stopReason) {
@@ -220,37 +203,6 @@ class SceneChatPipelineTest {
                 .isEqualTo(new com.capsule.dialogue.dto.ReactionLine("왔네.", "웃음"));
         assertThatThrownBy(() -> ReactionWriter.parse(result("{\"reply\":\"좋아, 다시", "length"), e -> e))
                 .isInstanceOf(IllegalStateException.class);
-        // 맨 글 끝에 감정을 붙인 답 (스트리밍 확인 9번 중 1번): 말풍선에서 떼고 감정으로
-        assertThat(ReactionWriter.parse(result("왔네. emotion=웃음", "stop"), e -> e))
-                .isEqualTo(new com.capsule.dialogue.dto.ReactionLine("왔네.", "웃음"));
-        // scene.system 기본 형식: 대사 + [emotion=…]
-        assertThat(ReactionWriter.parse(result("왔네, 오늘은 버텨 봐. [emotion=경멸]", "stop"), MALFOY::emotion))
-                .isEqualTo(new com.capsule.dialogue.dto.ReactionLine("왔네, 오늘은 버텨 봐.", "경멸"));
-    }
-
-    @Test
-    void plainReplyWithATrailingEmotionTag() {
-        assertThat(SceneChatPipeline.plain("수색 훈련 기록 갱신. emotion=웃음", MALFOY::emotion))
-                .isEqualTo(new SceneChatPipeline.Plain("수색 훈련 기록 갱신.", "웃음"));
-        assertThat(SceneChatPipeline.plain("됐어. (emotion: \"경멸\")", MALFOY::emotion))
-                .isEqualTo(new SceneChatPipeline.Plain("됐어.", "경멸"));
-        assertThat(SceneChatPipeline.plain("그냥 대사", MALFOY::emotion))
-                .isEqualTo(new SceneChatPipeline.Plain("그냥 대사", null));
-        // 감정 목록에 없는 말이면 대사의 일부로 둔다 (영어 공부 중 단어 뜻)
-        assertThat(SceneChatPipeline.plain("그 단어? emotion: 감정", MALFOY::emotion))
-                .isEqualTo(new SceneChatPipeline.Plain("그 단어? emotion: 감정", null));
-        // 프롬프트의 끝 태그는 목록 밖 · 풀어 쓴 값이어도 뗀다 (실제로 말풍선에 샌 답)
-        assertThat(SceneChatPipeline.plain("난 세 줄 더 썼다. [emotion=자랑처럼 웃음과 경멸 사이, 결국 웃음]", MALFOY::emotion))
-                .isEqualTo(new SceneChatPipeline.Plain("난 세 줄 더 썼다.", "웃음"));
-        assertThat(SceneChatPipeline.plain("다음. [emotion=뿌듯함]", MALFOY::emotion))
-                .isEqualTo(new SceneChatPipeline.Plain("다음.", null));
-        assertThat(SceneChatPipeline.plain("걱정은 무슨. [emotion=걱정]", MALFOY::emotion))
-                .isEqualTo(new SceneChatPipeline.Plain("걱정은 무슨.", "집중"));
-        // 태그가 끝이 아니어도 (맨 앞, 뒤에 문장부호)
-        assertThat(SceneChatPipeline.plain("[emotion=경멸] 됐어, 다음.", MALFOY::emotion))
-                .isEqualTo(new SceneChatPipeline.Plain("됐어, 다음.", "경멸"));
-        assertThat(SceneChatPipeline.plain("됐어 [emotion=웃음]!", MALFOY::emotion))
-                .isEqualTo(new SceneChatPipeline.Plain("됐어!", "웃음"));
     }
 
     @Test

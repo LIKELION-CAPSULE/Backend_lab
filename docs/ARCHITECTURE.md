@@ -74,7 +74,7 @@ flowchart LR
 | `http/` | IntelliJ HTTP 요청 예시: `flow.http`(전체 흐름), `llm-lab.http`, `eval-malfoy.http`(평가 대본) |
 | `scripts/` | `verify.sh`, `new-migration.sh`, `run-local.sh`, `setup.sh`, `smoke-flow.sh` |
 | `docs/specs/` | 명세 원본 `api.md`, `schema.sql`, `flow.md`, `judgment-backlog.md`(TODO(judgment) 목록), `skeleton-plan.md` |
-| `docs/decisions/` | ADR 0001~0027 |
+| `docs/decisions/` | ADR 0001~0028 |
 | `.harness/` | `phase`(지금 `domain`), `zones.conf`(구역·담당표), `zones.py` |
 | `.claude/` | `skills/`, `agents/reviewer.md`, `hooks/`, `settings.json` |
 | `.github/` | PR 템플릿, 이슈 템플릿, `workflows/dev-db-migrate.yml`(공용 개발 DB 마이그레이션) |
@@ -166,7 +166,8 @@ flowchart LR
 | `ChatScorer` | 말 패턴(정규식)으로 종류 고르기(`detect`), 점수표·세션 반복 규칙으로 점수(`score`) |
 | `FactPicker` | 아는 사실 중 이번 말에 꺼낼 것 하나를 결정 모델로 고름 (1.5초 안) |
 | `MemoryKeeper` | 매 턴 뒤 기억 정리: 무시·추가·고치기·지우기 결정 + 한 줄 쓰기, 20개 넘으면 하나 버림 |
-| `ReplyStream` | 스트리밍 중 덜 온 JSON에서 지금까지의 대사만 꺼냄 (`partial`) |
+| `ReplyStream` | 스트리밍 중 지금까지의 대사 (`partial`). 대사 글 그대로, 옛 형식 JSON이면 `"reply"` 값 |
+| `ExpressionPicker` | 대사를 다 쓴 뒤 결정 모델(Jev)이 캐릭터 표정 목록에서 표정 하나를 고름 (ADR 0028, 1.5초 안, 실패하면 null) |
 | `ReactionWriter` | 상태 반응 대사를 LLM으로 (`usesLlm`, `generate`) |
 | `ClosingWriter` | 종료 때 세션 흐름 카드(`recap`)와 완료 대사(`closingLine`) |
 | `FixedLines` | `fixed.lines.yml`의 공통 고정 대사·상황 설명·대체 대사 |
@@ -232,7 +233,7 @@ flowchart LR
 | `prompts/eval.judge.md` | `EVAL_JUDGE` | 실험실 평가 심사관 |
 | `prompts/fixed.lines.yml` | `FIXED_LINES` | 공통 고정 대사(`reactions`), 대체 대사(`fallbacks.reply`, `fallbacks.closing`) |
 
-`characters/malfoy/profile.yml`(약 390줄)의 키: `version`, `characterName`, `speaker`, `safety`, `expressions`, `expressionFallbacks`, `bible`, `rules`, `stageTones`, `samples`, `studyStyle`, `breakStyle`, `scores`, `habits`, `lore`, `lines`.
+`characters/malfoy/profile.yml`(약 390줄)의 키: `version`, `characterName`, `speaker`, `safety`, `expressions`, `expressionGuide`(표정마다 언제 쓰는지, 결정 모델 보기 설명), `bible`, `rules`, `stageTones`, `samples`, `studyStyle`, `breakStyle`, `scores`, `habits`, `lore`, `lines`.
 문구를 git에서 고치면 `version`을 올려야 공용 DB·개발 서버에 들어간다. 실험실 저장은 버전을 바꾸지 않는다.
 
 ---
@@ -248,7 +249,7 @@ flowchart LR
 | SUMMARY | fast | 〃 | 〃 | 600 | `ClosingWriter.recap` |
 | CLOSING | fast | 〃 | 〃 | 400 | `ClosingWriter.closingLine` |
 | MEMORY | fast | 〃 | 〃 | 300 | `MemoryKeeper` 한 줄 쓰기 |
-| DECIDE | fast (또는 Jev `jev-1.13.0`) | 〃 | 〃 | 200 | `Decider` ← `FactPicker`, `ChatReplier`, `MemoryKeeper` |
+| DECIDE | fast (또는 Jev `jev-1.13.0`) | 〃 | 〃 | 200 | `Decider` ← `FactPicker`, `ExpressionPicker`, `ChatReplier`, `MemoryKeeper` |
 | EVAL_JUDGE | judge | claude-opus-5-5 | gpt-5 | 600 | `EvalService` |
 
 `LlmGateway.complete` 순서:
@@ -274,8 +275,9 @@ sequenceDiagram
   S->>R: reply (5초 안, 가상 스레드)
   R->>P: reply
   P->>G: DECIDE (FactPicker, 1.5초 안)
-  P->>G: CHAT [고정 블록 + 상황 카드] + 최근 15줄 + 이번 말
-  R-->>S: ChatOutcome (대사, 감정, signal)
+  P->>G: CHAT [고정 블록 + 상황 카드] + 최근 15줄 + 이번 말 → 대사만
+  P->>G: DECIDE (ExpressionPicker: 대사 → 표정 목록 중 하나, 1.5초 안)
+  R-->>S: ChatOutcome (대사, 표정, signal)
   S->>S: ChatScorer.score
   S->>Rel: applyChatScore (트랜잭션, relation 행 잠금)
   S->>S: 답장 저장, 감정 → 모션·표정
@@ -298,18 +300,18 @@ sequenceDiagram
 3. `SceneChatPipeline.reply` (캐릭터 설정이 없으면 `SimpleChatPipeline`):
    - 프롬프트 `SCENE_SYSTEM`을 `PromptService.resolve`로 고른다.
    - `FactPicker.pick`: 아는 사실이 있으면 결정 모델에게 [NONE + 사실 f1..fN] 중 하나를 고르게 한다. `fact-pick-wait`(1.5초) 넘거나 확신도 0.6 미만이면 안 넣는다.
-   - 시스템 블록 1 (캐시 O): `scene.system`에 `systemVars` — 페르소나(`bible`), 규칙, 표정 목록, 지금 단계의 관계 설명, 단계별 말투 샘플, 상태 변화 예시 대사(상황마다 2줄).
+   - 시스템 블록 1 (캐시 O): `scene.system`에 `systemVars` — 페르소나(`bible`, 원작 말투 산문), 규칙, 지금 단계의 관계 설명, 단계별 말투 샘플, 상태 변화 예시 대사(상황마다 2줄).
    - 시스템 블록 2 (캐시 X, `card`): 닉네임·시각·공부한 분 / 첫 대화면 캐릭터의 오늘 근황(TODAY 대사, 요일로) / 고른 사실 하나 / 로어북 카드(이번 말에 키워드가 걸린 것 최대 2장) / 지난 세션 흐름 / 첫 대화면 사용자 일정 / 피할 말버릇 / 공부 중 수다가 길면 공부로 돌려보내기 지시 / 공부 중·쉬는 시간 말하는 법.
    - 메시지: 이번 세션 최근 `history-lines`(15)줄 + 이번 말. `LlmPurpose.CHAT`.
-   - 결과 해석: JSON `{"reply", "emotion"}`. JSON이 아닌 맨 글이면 그 글이 대사이고 끝의 `emotion=…`은 떼어 감정으로. 잘린 JSON(`max_tokens`/`length`)이나 깨진 JSON은 예외 → 대체 대사.
-   - 감정은 `CharacterContent.emotion`으로 캐릭터 표정 목록에 맞춘다(목록 밖이면 `expressionFallbacks`, 그래도 없으면 null).
+   - 결과 해석(`spoken`): LLM은 대사만 쓴다(말포이 v3, 3~6문장). 그 글이 대사다. 옛 형식 · 가짜 AI의 JSON이면 `reply`. 토큰 한도로 잘렸거나 JSON 모양인데 깨졌으면 예외 → 대체 대사.
+   - 표정(`ExpressionPicker`): 대사가 끝나면 결정 모델(Jev)에 [사용자 말 + 대사]를 주고 보기 = 캐릭터 표정 목록(`expressions`), 보기 설명 = `expressionGuide`로 하나를 고르게 한다. 보기 밖은 나오지 않는다. 답장 5초 마감과 따로 `fact-pick-wait`(1.5초), 실패하면 null(표정 안 바꿈).
 4. 5초 초과·실패면 대체 대사: 캐릭터 설정의 `REPLY_FALLBACK` 대사(순서대로) → 없으면 `fixed.lines.yml`의 `fallbacks.reply`. 이때 signal은 없고 호감도는 바뀌지 않는다.
 5. 점수: `ChatScorer.score` — 캐릭터 `scores` 표(없으면 `capsule.dialogue.chat-scores`). 세션당 한 번(`once-per-session`), 반복 점수(`repeat-points`), 최근 10턴에 같은 종류가 이미 2번이면 오르는 점수는 0.
 6. 저장 트랜잭션 하나:
    - `RelationCommands.applyChatScore`부터 부른다(0점이어도). relation 행을 잠가서 공부 종료와 잠금 순서를 맞춘다.
    - 그사이 세션이 끝났으면 롤백하고 사용자 말을 지운 뒤 409 `SESSION_ENDED`.
    - 사용자 말에 `signal` 표시, 캐릭터 답장을 `chat_messages`에 저장.
-   - 감정 → 모션·표정: `ReactionQuery.pick(characterId, 감정)`(`live2d_reaction_maps`). 행이 없으면 캐릭터의 대체 표정으로 한 번 더.
+   - 감정 → 모션·표정: `ReactionQuery.pick(characterId, 감정)`(`live2d_reaction_maps`). 행이 없으면 동작 없음.
 7. 응답 뒤 기억 정리(`MemoryKeeper.afterTurn`)를 별도 가상 스레드에서 돈다(`memory-async`, `memory-enabled`).
 
 같은 `requestId`가 처리 중이면(`awaitAnswer`): 먼저 온 요청이 사용자 말을 저장한 시각부터 `in-flight-wait`(8초)까지 `in-flight-poll`(200ms)마다 답장이 저장됐는지 본다. 지나도 없으면 이 요청이 이어서 답한다. 둘 다 답하면 먼저 저장된 답장 하나만 남는다(UNIQUE). 재전송 응답에는 감정·모션·delta를 다시 싣지 않는다.
@@ -323,7 +325,7 @@ sequenceDiagram
 4. 사용자가 연결을 끊어도 답장은 끝까지 만들어 저장한다. 같은 `requestId`로 다시 보내면 받는다.
 
 `DialogueService.streamed`의 상태 규칙 (`state`: 0 = 첫 대사 전, 1 = 흘려 보내는 중, 2 = 대체 대사로 넘어감):
-- 공급자가 스트리밍으로 원문을 넘길 때마다 `ReplyStream.partial`로 `"reply"` 값만 꺼낸다(덜 온 JSON, 코드 울타리, 맨 글 모두 처리). 비었거나 직전과 같으면 보내지 않는다.
+- 공급자가 스트리밍으로 원문을 넘길 때마다 `ReplyStream.partial`로 지금까지의 대사를 꺼낸다(대사 글 그대로, 옛 형식 JSON이면 `"reply"` 값). 표정은 `done`에서(대사가 끝난 뒤 결정 모델). 비었거나 직전과 같으면 보내지 않는다.
 - 첫 대사가 오면 0 → 1. 1이면 계속 보낸다.
 - `llm-budget`(5초)이 지났는데 아직 0이면 0 → 2로 바꾸고 대체 대사로 답한다. LLM 호출은 끝까지 돌고 기록되지만 그 뒤 온 글은 보내지 않는다.
 - 5초 안에 첫 대사가 왔으면(1) 끝까지 기다린다. 이미 보인 글을 대체 대사로 바꾸지 않기 위해서다. 상한은 LLM `http-timeout`(30초).
@@ -345,7 +347,7 @@ sequenceDiagram
 - trigger 규칙은 18과 같다. `intensity`는 `AWAY`에만(없으면 1, 1~`away-intensity-max` 3, 넘으면 400). 강도 2·3은 상황 칸 `AWAY_2`·`AWAY_3`.
 - 관계 단계만 읽어 말투를 고른다. 호감도는 18이 이미 반영했다.
 - AI 대사: `reaction-llm-triggers` = `GREETING`, `AWAY`, `RETURN`, `BREAK`, `BREAK_END`. `ReactionWriter.generate`를 5초 안에(`LlmPurpose.REACTION`).
-  - 캐릭터 설정이 있으면 답장과 같은 고정 블록(`scene.system` + `systemVars`, 캐시) + 반응 카드(`ReactionWriter.card`: 닉네임, GREETING이면 오늘 근황, 지난 세션 흐름, 피할 말버릇, "한 문장, 다그치지 않기"). 메시지는 이번 세션 최근 `reaction-context-lines`(6)줄 + `(방금 일어난 일: …)`.
+  - 캐릭터 설정이 있으면 답장과 같은 고정 블록(`scene.system` + `systemVars`, 캐시) + 반응 카드(`ReactionWriter.card`: 닉네임, GREETING이면 오늘 근황, 지난 세션 흐름, 피할 말버릇, "한 문장, 다그치지 않기"). 메시지는 이번 세션 최근 `reaction-context-lines`(6)줄 + `(방금 일어난 일: …)`. LLM은 대사만 쓰고 표정은 답장과 같이 `ExpressionPicker`가.
   - 설정이 없으면 `reaction.system` 공통 프롬프트, 감정 후보는 `capsule.dialogue.emotions`.
 - 미리 쓴 대사: 동작 이벤트(`DROWSY`·`YAWN`·`WAVE`·`HEAD_TURN`)와 LLM이 5초를 넘기거나 실패한 경우. `CharacterContents.next`(그 상황·단계 대사를 세션 단위로 순서대로) → 없으면 `FixedLines.reaction`(공통 `fixed.lines.yml`).
 - LLM이 실패해서 미리 쓴 대사로 간 경우 감정은 비우고(`fallback: true`) 동작도 없다(TODO J-12). 처음부터 미리 쓴 대사인 동작 이벤트는 그 대사 칸의 감정을 쓴다.
@@ -478,7 +480,7 @@ sequenceDiagram
 | 원작 키워드 카드(로어북) | `profile.yml`의 `lore` (카드 수 상한은 `SceneChatPipeline.LORE_CARDS`) |
 | 캐릭터별 점수표 | `profile.yml`의 `scores` (없으면 `capsule.dialogue.chat-scores`) |
 | 피할 말버릇 | `profile.yml`의 `habits` |
-| 표정 이름·대체 표정 | `profile.yml`의 `expressions`, `expressionFallbacks` |
+| 표정 이름 · 표정 고르는 기준 | `profile.yml`의 `expressions`, `expressionGuide` (결정 모델 질문 문구는 `ExpressionPicker`) |
 | 표정 → Live2D 모션 매핑 | `live2d_reaction_maps` (content, 예시 데이터는 `db/seed/R__demo_content.sql`) |
 | 답장·반응 공통 틀 | `prompts/scene.system.md` (설정 없는 캐릭터는 `chat.system.md`·`chat.context.md`·`reaction.system.md`) |
 | 세션 카드·완료 대사 프롬프트 | `prompts/summary.system.md`, `prompts/closing.system.md` |

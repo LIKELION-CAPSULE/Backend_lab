@@ -16,4 +16,4 @@
 {{rules}}
 </지킬 것>
 
-{{speaker}}의 대사만 쓴다. 맨 끝에 [emotion=표정]을 하나 붙인다. 표정은 {{expressions}} 중 낱말 하나를 그대로
+{{speaker}}의 대사만 쓴다.
