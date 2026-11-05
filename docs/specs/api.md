@@ -598,6 +598,9 @@ H02에서 아바타를 저장하면 `onboardingRequired`가 false가 되고 H03 
 | rooms[] | Array | 들어갈 수 있는 룸 (지금은 1개) |
 | rooms[].id · name · thumbnailUrl |  | 포스터 카드 |
 | rooms[].characters[] | Array | 포스터 아래 캐릭터 이름 · 프로필 |
+| rooms[].characters[].homeImageUrl | String | 홈 포스터 카드에서 `thumbnailUrl`(배경) 위에 겹치는 캐릭터 전신 그림(투명 배경). 홈에서만 씀. 없으면 null |
+
+> 2026-11-06: `homeImageUrl` 추가. 홈 카드는 배경 + 캐릭터 전신을 겹쳐 보여주고, 룸 상세 · 공부 화면의 캐릭터 그림(`profileImageUrl`)은 그대로 둔다
 
 ```json
 {
@@ -605,7 +608,8 @@ H02에서 아바타를 저장하면 `onboardingRequired`가 false가 되고 H03 
   "activeSession": null,
   "rooms": [
     { "id": 1, "name": "밤의 호그와트 도서관", "thumbnailUrl": "https://cdn.../room1.png",
-      "characters": [ { "id": 1, "name": "말포이", "profileImageUrl": "https://cdn.../chaerin.png" } ] }
+      "characters": [ { "id": 1, "name": "말포이", "profileImageUrl": "https://cdn.../chaerin.png",
+                        "homeImageUrl": "https://cdn.../malfoy-fullbody.webp" } ] }
   ]
 }
 ```

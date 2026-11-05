@@ -228,6 +228,7 @@ CREATE TABLE characters (
     personality       text[]      NOT NULL DEFAULT '{}',   -- 성격 태그 (예: {츤데레, 슬리데린 5학년, 라이벌}), 순서대로 표시
     intro             text,
     profile_image_url text,                                -- CDN 상대 경로 또는 전체 URL (avatars.thumbnail_url과 같은 규칙)
+    home_image_url    text,                                -- 홈 포스터 카드에 겹치는 캐릭터 전신(투명 배경). 홈(api.md 11)에서만 씀 (2026-11-06)
     sort_order        int         NOT NULL DEFAULT 0,      -- 룸 안 표시 순서
     is_active         boolean     NOT NULL DEFAULT true,
     created_at        timestamptz NOT NULL DEFAULT now(),
