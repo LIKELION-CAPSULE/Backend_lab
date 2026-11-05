@@ -8,6 +8,7 @@
 # 끝에 단계별 표(대사 · 감정 · 표정 · 동작 · 호감도 · 단계 · 레벨 · 걸린 시간)를 찍고, 실패한 요청이 있으면 1로 끝난다.
 # JSON은 python3로 읽는다 (jq 없이)
 set -euo pipefail
+export PYTHONIOENCODING=utf-8 # Windows python 기본 출력(cp949)은 '—' 같은 글자를 못 쓴다
 cd "$(git rev-parse --show-toplevel)"
 
 HOST="${1:-http://localhost:$(scripts/run-local.sh --info | sed 's/.*SERVER_PORT=//')}"
@@ -27,13 +28,16 @@ call() {
   local name="$1" method="$2" path="$3" body="${4:-}"
   N=$((N + 1))
   RES="$OUT/$(printf '%02d' "$N")-$name.json"
-  local args=(-s -o "$RES" -w '%{http_code} %{time_total}' -X "$method" "$HOST$path" -H 'Content-Type: application/json')
+  local args=(-s -o "$RES" -w '%{http_code} %{time_total}\n' -X "$method" "$HOST$path" -H 'Content-Type: application/json')
   [ -n "$TOKEN" ] && args+=(-H "Authorization: Bearer $TOKEN")
-  [ -n "$body" ] && args+=(--data-binary "$body")
+  # 본문은 파일로 보낸다: Windows curl은 인자의 한글을 UTF-8로 보내지 않는다
+  if [ -n "$body" ]; then
+    printf '%s' "$body" > "${RES%.json}.request.json"
+    args+=(--data-binary "@${RES%.json}.request.json")
+  fi
   read -r CODE SECS < <(curl "${args[@]}")
-  [ -n "$body" ] && printf '%s' "$body" > "${RES%.json}.request.json"
   case "$CODE" in 2*) ;; *) FAILED=1; echo "✖ $name $method $path → $CODE $(head -c 300 "$RES")" >&2 ;; esac
-  MS=$(python3 -c "print(int(float('$SECS')*1000))")
+  MS=$(python3 -c 'import sys; print(int(float(sys.argv[1].strip()) * 1000))' "$SECS") # Windows curl은 끝에 \r
 }
 
 # 표 한 줄: 응답에서 캐릭터 반응 · 호감도를 꺼낸다 (18 · 19 · 20 · 22 응답 모양이 달라서 있는 칸만)
@@ -54,7 +58,7 @@ points = a.get("points", a.get("pointsAfter", ""))
 level = a.get("level", a.get("levelAfter", ""))
 cells = [step, code, text.replace("|", "/").replace("\n", " "), c.get("emotion") or "", name(c.get("expression")),
          name(c.get("motion")), str(delta), str(points), str(a.get("stage", "")), str(level), str(c.get("fallback", "")), ms]
-print("\t".join(cells))
+print("\t".join(x or "-" for x in cells))  # 빈 칸은 '-': read -a가 이어진 탭을 하나로 합친다
 PY
 }
 
