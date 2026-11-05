@@ -137,6 +137,24 @@ class RelationServiceTest {
     }
 
     @Test
+    void severeWordsAtZeroStillFreezeGainsForTheDay() {
+        // 0점이면 깎인 값이 0이라 기록이 남지 않는다(delta <> 0). 그래도 그날은 오르지 않아야 한다
+        long session = newSession();
+        commands.meet(userId, CHARACTER);
+        jdbc.update("UPDATE user_character_relations SET relation_points = 0 WHERE user_id = ?", userId);
+        jdbc.update(
+                "INSERT INTO relation_logs (relation_id, delta, reason) SELECT id, -50, 'STREAK' FROM"
+                        + " user_character_relations WHERE user_id = ?",
+                userId); // 합을 맞춰 둔다 (0 = 50 − 50)
+        assertThat(chat(session, new ChatScore(SignalType.HATE_OR_SEXUAL, -5, 30))
+                        .delta())
+                .isZero();
+        assertThat(chat(session, PLUS_ONE).delta()).isZero();
+        assertThat(query.view(userId, CHARACTER).points()).isZero();
+        assertThat(logSum() + 50).isZero(); // 기록의 합 + 50 = 지금 점수
+    }
+
+    @Test
     void awayCostsOnlyWhenLongerThanAMinuteAndAtMost3ADay() {
         long session = newSession();
         assertThat(commands.applySessionEvent(event(session, "AWAY", false, null))

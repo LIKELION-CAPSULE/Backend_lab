@@ -37,9 +37,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 class RelationService implements RelationQuery, RelationCommands {
 
-    /** 심한 말 뒤 그날은 오르지 않는다 */
-    private static final String SEVERE = SignalType.HATE_OR_SEXUAL.name();
-
     private final RelationRepository relations;
     private final RelationLogRepository logs;
     private final RelationSettlementRepository settlements;
@@ -166,21 +163,21 @@ class RelationService implements RelationQuery, RelationCommands {
         if (delta > 0) {
             Instant today = todayStart();
             // TODO(judgment): J-06 오르는 쪽 하루 상한 (임시 +15), 심한 말 뒤 그날 오름 멈춤
-            delta = logs.existsByRelationIdAndSignalAndCreatedAtGreaterThanEqual(rel.id(), SEVERE, today)
+            boolean severeToday =
+                    rel.lastSevereAt() != null && !rel.lastSevereAt().isBefore(today);
+            delta = severeToday
                     ? 0
                     : Math.min(
                             delta, Math.max(0, policy.props.chatDailyGainCap() - logs.chatGainSince(rel.id(), today)));
         }
-        return change(
-                rel,
-                record(
-                        rel,
-                        "CHAT",
-                        delta,
-                        sessionId,
-                        null,
-                        requestId,
-                        score.signal().name()));
+        List<RelationLog> changed = record(
+                rel, "CHAT", delta, sessionId, null, requestId, score.signal().name());
+        // 0점이라 기록이 남지 않아도 그날 오름 멈춤이 걸리게 따로 남긴다
+        if (score.signal() == SignalType.HATE_OR_SEXUAL) {
+            relations.markSevere(rel.id(), Instant.now(clock));
+            entityManager.refresh(rel);
+        }
+        return change(rel, changed);
     }
 
     @Override

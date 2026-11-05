@@ -66,6 +66,16 @@ class SceneChatPipelineTest {
     }
 
     @Test
+    void blankNicknameIsCalledYouLikeTheFixedLines() {
+        // 상황 대사(CharacterContents)와 같이 닉네임이 비면 "너"로. 전에는 ", 왔구나."처럼 이름 자리가 비었다
+        for (String blank : new String[] {"", " ", null}) {
+            Map<String, String> four = SceneChatPipeline.systemVars(MALFOY, 4, blank, SITUATION);
+            assertThat(four.get("samples")).contains("너, 왔구나. 기다렸어.").doesNotContain("{name}");
+            assertThat(four.get("events")).doesNotContain("{name}");
+        }
+    }
+
+    @Test
     void cardCarriesOnlyThisTurnsFacts() {
         String card = card(input("오늘 뭐 해", List.of(), List.of("사용자는 토익 800 목표", "사용자는 밤에 공부가 잘 됨")), "사용자는 토익 800 목표");
         // 아는 사실은 결정 모델이 고른 하나만, 고르지 않은 사실은 안 들어감. 세션 카드 · 첫 대화 일정은 들어감

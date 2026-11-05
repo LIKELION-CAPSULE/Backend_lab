@@ -27,6 +27,7 @@ public class Relation {
     private LocalDate lastStudyDate;
     private Instant firstMetAt;
     private Instant lastMetAt;
+    private Instant lastSevereAt;
 
     protected Relation() {}
 
@@ -52,5 +53,10 @@ public class Relation {
 
     public LocalDate lastStudyDate() {
         return lastStudyDate;
+    }
+
+    /** 심한 말을 받은 마지막 시각. 없으면 null */
+    public Instant lastSevereAt() {
+        return lastSevereAt;
     }
 }
