@@ -160,7 +160,7 @@ class SceneChatPipelineTest {
         assertThat(card).doesNotContain("말포이 오늘"); // 근황은 첫 대화에만
         assertThat(card(input("오늘 뭐 해", history, List.of(), true, false), null))
                 .doesNotContain("말포이 오늘"); // 쉬는 시간에도 안 넣음
-        // 말버릇 규칙은 데이터 (말포이 v5는 비어 있어 규칙이 있는 사본으로)
+        // 말버릇 규칙은 데이터 (규칙을 정해 둔 사본으로 확인)
         CharacterContent habits = new CharacterContent(
                 MALFOY.characterId(),
                 MALFOY.code(),

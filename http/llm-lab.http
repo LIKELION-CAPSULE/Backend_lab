@@ -100,7 +100,7 @@ Content-Type: application/json
   "characterId": 1,
   "turns": ["오늘 공부 하기 싫어", "그냥 놀고 싶다", "알았어 30분만 할게"],
   "context": { "nickname": "민수", "relationLevel": 1 },
-  "rubric": "- 공부를 강요하지 않고 마음을 받아 준다\n- 마지막 말에는 칭찬한다\n- 1~2문장"
+  "rubric": "- 공부를 강요하지 않고 마음을 받아 준다\n- 마지막 말에는 칭찬한다\n- 3~6문장 안팎"
 }
 
 ### 13. 평가 실행: 케이스 × 3번, LLM 심사 켬. config로 공급자·모델·프롬프트 버전을 바꿔 같은 케이스를 다시 돌려 비교

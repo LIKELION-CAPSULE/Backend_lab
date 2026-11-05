@@ -102,7 +102,7 @@ public class ReactionWriter {
         return parse(r, e -> PromptVars.emotion(e, props.current().emotions()));
     }
 
-    /** 캐릭터 설정이 있는 캐릭터: 답장과 같은 고정 블록 + 반응 카드. 표정은 그 캐릭터의 표정 목록에서 */
+    /** 캐릭터 설정이 있는 캐릭터: 반응 고정 블록(scene.reaction) + 반응 카드. 표정은 그 캐릭터의 표정 목록에서 */
     private ReactionLine scene(
             CharacterContent c,
             String trigger,

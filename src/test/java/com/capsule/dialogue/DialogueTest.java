@@ -400,14 +400,14 @@ class DialogueTest {
 
     @Test
     void streamKeepsWaitingOnceTheFirstWordIsOut() throws Exception {
-        // 첫 대사는 바로 나왔는데 끝나는 데 6초: 이미 보인 글을 대체 대사로 바꾸지 않고 끝까지 기다린다
+        // 첫 대사는 바로 나왔는데 끝나는 데 8초(마감 7초를 넘김): 이미 보인 글을 대체 대사로 바꾸지 않고 끝까지 기다린다
         doAnswer(invocation -> {
                     java.util.function.Consumer<String> onText = invocation.getArgument(4);
                     if (invocation.getArgument(0) != LlmPurpose.CHAT || onText == null)
                         return invocation.callRealMethod();
                     onText.accept("{\"reply\":\"잠깐만");
                     Object result = invocation.callRealMethod(); // 게이트웨이는 시작할 때만 마감을 본다
-                    Thread.sleep(6_000); // 스트림이 늦게 끝남
+                    Thread.sleep(8_000); // 스트림이 늦게 끝남
                     return result;
                 })
                 .when(llm)
