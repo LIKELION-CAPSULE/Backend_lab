@@ -3,19 +3,19 @@
 뼈대 단계에서 "자리만 만든" 판단 영역의 목록이다. 지금은 결정적인 Fake가 돌고, 코드에는 `// TODO(judgment): J-xx` 주석이 있다.
 도메인 단계에서 담당자가 자기 항목을 가져가 기획과 함께 정한다. 항목마다 GitHub 이슈가 있다(상태 칸의 번호, 전체 보드는 #21). 구현하는 PR은 본문 '연관된 이슈'에 ID와 이슈 번호를 적고(이슈의 마지막 항목이면 `Closes #번호`, 아니면 `#번호`만. 이슈 하나가 항목 여러 개를 묶고 있음), 머지되면 이 표의 상태를 '완료'로 바꾼다.
 코드 위치는 `src/main/java/com/capsule/` 기준이다.
-2026-11-05: 대화 엔진(감독 · 배우, `DialogueState`), `character.yml`, `settleStudyTime`은 지웠다. 아래 항목 설명의 그 이름들은 당시 기록이다 (지금 캐릭터 설정은 `characters/<code>/profile.yml`).
+2026-11-05: 대화 엔진(감독 · 배우, `DialogueState`), `character.yml`, `settleStudyTime`, `LlmClient` · `FakeLlmClient`(→ `LlmGateway`, 고정 대사는 `fixed.lines` · `character_lines`)은 지웠다. 아래 항목 설명의 그 이름들은 당시 기록이다 (지금 캐릭터 설정은 `characters/<code>/profile.yml`).
 
 | ID | 모듈 | 담당 | 무엇이 미정인가 | 코드 위치 | 지금 Fake 동작 | 근거 명세 | 상태 |
 |---|---|---|---|---|---|---|---|
 | J-01 | relation | seunghee | 상태 이벤트별 호감도 변화량 (동작 이벤트 DROWSY · YAWN · WAVE · HEAD_TURN 포함, 2026-11-04 추가) | `relation/service/RelationService.java`, 값은 `application.yml` `capsule.relation` | **방향 확정 (PM 2026-11-04)**: 동작 이벤트 0, 돌아옴 0, 첫 만남 삭제 → 연속 출석. 임시값: 1분 넘게 비우면 −1 · 하루 −3, 연속 출석 2일째부터 하루 +1 | api.md 18 (호감도 최종안) | 임시값 구현, 숫자는 PM 확인 필요 (#14) |
 | J-02 | relation | seunghee | 공부 시간 → STUDY_TIME 점수 공식 | — | **확정 (PM 2026-11-04)**: 공부 시간은 호감도를 올리지 않음 (레벨에만, J-03) | api.md 22 | 완료 (#14) |
 | J-03 | relation | seunghee | 레벨 공식 · 관계 단계 기준과 이름 | `relation/service/AffinityPolicy.java`, 값은 `capsule.relation` | 레벨 = 자리 지킴 60분당 1(상한 없음, PM 임시). 관계 단계 = 호감도 0 · 30 · 70 · 90 구간, 이름 '아는 사이 · 친한 사이 · Lv.3 · Lv.4'(임시). 단계 이름을 화면에 보일지 미정 (PM은 숨김) | api.md 12, 22 | 임시값 구현, PM 확인 필요 (#14) |
-| J-04 | dialogue | seunghee | 이벤트 반응 대사(LLM)와 trigger별 고정 대사(5초 초과) | `dialogue/client/FakeLlmClient.java`, `LlmClient.java`(고정 대사 표) | trigger별 고정 문장 1개. 동작 이벤트 4종(DROWSY · YAWN · WAVE · HEAD_TURN)은 임시 문구(#41, HEAD_TURN은 2026-11-04 추가) | api.md 19 | **① 정함 (승희 2026-11-05, ADR 0022 결정 18)**: 상태 변화 5종은 LLM(대사 + 표정, 미리 쓴 대사는 예시 · 5초 대체), 동작 4종은 미리 쓴 대사(`ReactionWriter`, `character_lines`). 대사 문구는 PM (#11, 동작 이벤트 #27) |
-| J-05 | dialogue | seunghee | 대화 답장 생성 (캐릭터 설정·요약·대화·일정, 답 길이) | `dialogue/client/FakeLlmClient.java`, `LlmClient.java`(대체 대사) | 고정 문장 + 입력 일부 | api.md 20 | 미정 (#11, 휴식 여부 계약 #8) |
+| J-04 | dialogue | seunghee | 이벤트 반응 대사(LLM)와 trigger별 고정 대사(5초 초과) | `dialogue/service/ReactionWriter.java`, 미리 쓴 대사는 캐릭터 설정 `character_lines`(설정 없으면 `prompts/fixed.lines.yml`) | 상태 변화 5종은 LLM(대사 + 표정, `reaction-llm-triggers`), 동작 4종(DROWSY · YAWN · WAVE · HEAD_TURN)과 5초 초과는 지금 관계 단계의 미리 쓴 대사를 순서대로 | api.md 19 | **① 정함 (승희 2026-11-05, ADR 0022 결정 18)**: 상태 변화 5종은 LLM(대사 + 표정, 미리 쓴 대사는 예시 · 5초 대체), 동작 4종은 미리 쓴 대사(`ReactionWriter`, `character_lines`). 대사 문구는 PM (#11, 동작 이벤트 #27) |
+| J-05 | dialogue | seunghee | 대화 답장 생성 (캐릭터 설정·요약·대화·일정, 답 길이) | `dialogue/service/SceneChatPipeline.java`(기본) · `SimpleChatPipeline.java`, `ChatReplier.java`, 값은 `capsule.dialogue.history-lines` · `signal-context-lines` · `fact-pick-wait` | SCENE: 캐릭터 설정 고정 블록 + 상황 카드(로어북 카드 포함)로 LLM 한 번(설정 없으면 SIMPLE). 5초 넘으면 미리 쓴 대체 대사. 28은 첫 대사 기준 5초 | api.md 20 · 28 | 방식 정함 (ADR 0022 결정 17 · 19): 답 길이 공부 중 1~2문장 · 쉬는 시간 2~4문장, 이번 세션 대화 15줄 · 결정 모델 앞 대화 4줄(임시). 휴식 여부는 `SessionQuery.onBreak`. 문구 · 숫자는 PM 확인 필요 (#11) |
 | J-06 | dialogue | seunghee | 대화 호감도 판정 | `dialogue/service/ChatScorer.java`(종류 · 점수표), `relation/service/RelationService.java`(하루 상한 · 비율 감점), 값은 `capsule.dialogue.chat-scores` | **방식 확정 (PM 2026-11-04)**: A안 말 패턴, AI 판정 점수 없음, 기본 대사 턴 0. 임시값: 칭찬 · 고마움 +1, 고민 +2(세션 1번), 무례 −2(반복 −3), 혐오 · 성적 −30%(최소 −5, 그날 오름 멈춤), 오르는 쪽 하루 +15, 같은 종류 10턴 안 세 번째 0 | api.md 20 (호감도 최종안) | 임시값 구현, 숫자는 PM 확인 필요 (#11, #7) |
-| J-07 | dialogue | seunghee | 답장 감정 → 모션·표정 고르는 규칙 (엔진 표정 태그 ↔ 반응 표 감정 이름) | `dialogue/service/DialogueService.java` | 감정이 있으면 반응 표에서 그 감정으로 고름(#41). Fake 답장은 감정을 안 정해서 모션·표정 없음 | api.md 19·20 (9차: 감정 목록은 데이터) | 미정 (#11·#33, 데이터 #9) |
-| J-08 | dialogue | seunghee | 세션 종료 때 지난 대화 정리 | `dialogue/service/ClosingWriter.java` `recap`, 프롬프트 `summary.system` | **방식 정함 (승희 2026-11-04, ADR 0022 14)**: 합치는 요약 대신 세션마다 카드 한 장, 최근 5장. 카드 길이 · 내용(70자 안팎 흐름)은 임시 | api.md 22 | 임시값 구현 (#12) |
-| J-09 | dialogue | seunghee | 완료 대사 `closingLine` 생성, 못 만들 때 대체 문구 | `dialogue/client/FakeLlmClient.java`, `LlmClient.java`(대체 문구) | 캐릭터 이름을 넣은 고정 문구. 실패·5초 초과면 명세 22 예시 문장 | api.md 22·23 | 미정 (#12) |
+| J-07 | dialogue | seunghee | 답장 감정 → 모션·표정 고르는 규칙 (엔진 표정 태그 ↔ 반응 표 감정 이름) | `dialogue/service/DialogueService.java` | 감정이 있으면 반응 표에서 그 감정으로 고름(#41). LLM 답장은 캐릭터 표정 목록에서 감정을 고름. 5초 초과 대체 대사 · 가짜 AI는 감정이 없어 모션 · 표정 없음 | api.md 19·20 (9차: 감정 목록은 데이터) | 미정 (#11·#33, 데이터 #9) |
+| J-08 | dialogue | seunghee | 세션 종료 때 지난 대화 정리 | `dialogue/service/ClosingWriter.java` `recap`, 프롬프트 `summary.system` | **방식 정함 (승희 2026-11-04, ADR 0022 14)**: 합치는 요약 대신 세션마다 카드 한 장, 최근 2장(`recap-max`, ADR 0022 결정 16). 카드 길이 · 내용(70자 안팎 흐름)은 임시 | api.md 22 | 임시값 구현 (#12) |
+| J-09 | dialogue | seunghee | 완료 대사 `closingLine` 생성, 못 만들 때 대체 문구 | `dialogue/service/DialogueService.java` `draft`(캐릭터 설정의 완료 · 포기 대사), `ClosingWriter.java` `closingLine`(설정 없는 캐릭터의 LLM), 대체 문구 `prompts/fixed.lines.yml` | 캐릭터 설정이 있으면 지금 관계 단계의 미리 쓴 완료 대사(`character_lines` CLOSING, 목표 절반 미만이면 GIVE_UP)를 사용자 단위로 순서대로, 없으면 LLM(CLOSING). 실패 · 5초 초과면 고정 대체 문구 | api.md 22·23 | 미정 (#12) |
 | J-10 | dialogue | seunghee | TTS `audioBase64` | `dialogue/service/DialogueService.java` | 항상 null | api.md 19·20 | 미정 (#13) |
 | J-11 | session | seonguk | 종료 시 프론트 값과 서버 계산값이 "크게" 다를 때의 기준 | `session/service/SessionService.java` `end()` | 명세의 부등식 검증만 하고 프론트 값 사용 | api.md 22 "같이 챙길 것" | 미정 (#20) |
 | J-12 | dialogue | seunghee | 이벤트 반응 감정 `emotion` 값 목록과 정하는 기준 (LLM 출력) | `dialogue/service/DialogueService.java` `react` | **① 정함 (승희 2026-11-05)**: 상태 변화는 LLM이 캐릭터 표정 목록에서, 동작 4종은 미리 쓴 대사 칸의 표정. ② LLM 실패 대체 대사면 null (추천: 그 대사 칸의 표정) | api.md 19 (2026-11-04) | ② 미정 (#33) |
@@ -24,10 +24,10 @@
 | J-15 | dialogue | seunghee | '공부 포기'의 기준 (2026-11-05 추가) | `application.yml` `capsule.dialogue.give-up-ratio` (`DialogueService.gaveUp`) | 직접 끝냈는데(NORMAL) 목표 시간의 절반 미만이면 완료 대사 대신 공부 포기 대사(`character_lines` GIVE_UP). 자동 종료 · 목표 시간 없는 세션은 포기로 보지 않음. 기준 시간은 공부 시간 `studySeconds`(자리 지킴 + 자리 비움, 쉬는 시간 제외)로 확정(승희 2026-11-05). 절반 · 직접 끝냄(NORMAL)만이라는 조건은 확정 필요 | api.md 22 | 임시값 구현, PM 확인 필요 |
 
 ## 판단 항목을 가져갈 때 같이 볼 것
-- **J-05 답 길이 규칙**(공부 중 1~2문장, 쉬는 시간 2~4문장)을 적용하려면 dialogue가 "지금 휴식 중인지"를 알아야 한다. 지금 `session.api.SessionQuery`에는 없어서 계약 확장이 필요하다(contract-change 스킬).
+- **J-05 답 길이 규칙**(공부 중 1~2문장, 쉬는 시간 2~4문장)을 적용하려면 dialogue가 "지금 휴식 중인지"를 알아야 한다. `session.api.SessionQuery.onBreak(sessionId)`로 더했다(2026-11-05, 확장만, ADR 0022 결정 17).
 - **J-01**: 정할 것 네 가지(점수 크기, RETURN 연타, 첫 만남 기준, 동작 이벤트 점수)는 아래 '결정 노트'에 있다.
 - **명세와 다른 계획·추천이 있는 곳**: J-04(반응 대사를 LLM으로 만들지, 엔진 고정 대사로 할지), J-06(점수를 LLM이 줄지, 엔진의 사용자 신호로 코드가 줄지), J-07·J-12(감정을 LLM이 반응 표 목록에서 고를지, 대응표·상황별 고정으로 할지). 정하면 `api.md`나 이슈 #11 중 한쪽을 고친다. 자세한 내용은 '결정 노트'에 있다.
-- **실제 LLM을 붙일 때**: 메시지 전송과 공부 종료는 각각 한 트랜잭션이라 LLM을 기다리는 동안(호출마다 최대 5초) DB 커넥션을 잡고 있다. 공부 종료의 요약이 실패하면 기존 요약을 두고 그 세션 메시지를 지우지 않는다(다시 합치는 배치는 없음).
+- **실제 LLM (붙임, ADR 0022 결정 7)**: 메시지 전송은 읽기 → LLM → 저장(한 트랜잭션)으로 LLM을 트랜잭션 밖에서 기다린다. 공부 종료도 요약 · 완료 대사 초안(`draft`)을 트랜잭션 밖에서 만들고 저장만 안에서 한다(자동 마감 배치만 안에서 기다림). 공부 종료의 요약이 실패하면 기존 요약을 두고 그 세션 메시지를 지우지 않는다(다시 합치는 배치는 없음).
 
 ## 판단은 아니지만 남은 일
 이슈: 실제 시드 #19, 카카오 #17, 메일 #18, LLM 어댑터 #11
@@ -35,10 +35,10 @@
 | 할 일 | 담당 | 언제까지 |
 |---|---|---|
 | 실제 시드: 이미지·Live2D 파일과 모션 목록, CDN 주소, 약관 문구를 정식 마이그레이션으로 (A6) | seonguk(content) + 에셋 제공자 | 시연 서버 배포 전 |
-| 실제 카카오 로그인 어댑터 (`KakaoClient`, 카카오 앱 키·리다이렉트 URI, 동의 항목 '닉네임' 필수). 없으면 운영 프로필에서 앱이 뜨지 않음 | seonguk(user) | 카카오 앱 등록 후 |
+| 실제 카카오 로그인 어댑터 (`KakaoClient`, 카카오 앱 키·리다이렉트 URI, 동의 항목 '닉네임' 필수). 없으면 운영 프로필에서 앱이 뜨지 않음 | seonguk(user) | 완료 (`HttpKakaoClient`, ADR 0018) |
 | 카카오 가입 약관 고지 방식. 지금은 화면 없이 가입하면 최신 필수 약관 동의로 기록 (api.md 6). 정식 출시 전 안내 문구 · 체크 등으로 고지 필요 | seonguk(user) + 기획 | 정식 출시 전 |
-| 실제 인증 메일 어댑터 (`EmailSender`, 발송 서비스 선택). 없으면 운영 프로필에서 앱이 뜨지 않음 | seonguk(user) | 발송 서비스 정한 뒤 |
-| 실제 LLM 어댑터 (`LlmClient`, `capsule.llm.mode=real`) + `llm_usages` 기록 | seunghee(dialogue) | Phase B |
+| 실제 인증 메일 어댑터 (`EmailSender`, 발송 서비스 선택). 없으면 운영 프로필에서 앱이 뜨지 않음 | seonguk(user) | 완료 (Brevo `BrevoEmailSender`, ADR 0020) |
+| 실제 LLM 어댑터 (`LlmGateway` + Anthropic · OpenAI · Jev, `capsule.llm.provider`) + `llm_usages` 기록 | seunghee(dialogue) | 완료 (ADR 0022) |
 
 ## 결정 노트
 
@@ -313,7 +313,7 @@
 
 #### 배경
 - 사용자가 공부 중(H20)이나 쉬는 시간(H08)에 캐릭터에게 메시지를 보낸다(API 20). 직접 입력(1~300자)과 빠른 답장('파이팅', '졸려', '이거 어려워')이 있다. 요청에 대화할 캐릭터(`characterId`)를 넣고, 답도 그 캐릭터 하나만 온다(PR #35).
-- 답장과 함께 감정 동작(J-07)과 호감도 변화(J-06)가 온다. 1분에 10번까지 보낼 수 있다.
+- 답장과 함께 감정 동작(J-07)과 호감도 변화(J-06)가 온다. 1분에 30번까지 보낼 수 있다(2026-11-05 10번 → 30번, 명세 20).
 - LLM에 넘기는 정보는 명세에 정해져 있다: 캐릭터 설정, 지난 대화 요약(J-08), 이번 세션 대화, 일정. LLM은 한 번에 답장, 감정, 호감도 점수를 낸다.
 - 답 길이도 정해져 있다: 공부 중 1~2문장, 쉬는 시간 2~4문장.
 - 5초 안에 답을 못 만들면 대체 대사를 쓰고 호감도는 바뀌지 않는다.
@@ -390,7 +390,7 @@
 - 추천: 섞기. 평범한 대화는 0으로 둬야 ②의 남용이 줄어든다.
 
 #### ② 대화로 점수를 쌓는 걸 막을까
-- 1분에 10번 보낼 수 있다. 메시지마다 최대 +5면 1분에 50점이다. 공부 1분(1점)의 50배다.
+- (당시) 1분에 10번 보낼 수 있었다(2026-11-05부터 30번). 메시지마다 최대 +5면 1분에 50점이다. 공부 1분(1점)의 50배다.
 - 지금 Fake(+1)만으로도 1분에 10점이라 공부보다 대화가 10배 빠르다.
 
 | 안 | 동작 | 기획 의미 |

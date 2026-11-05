@@ -22,8 +22,8 @@
 │   └── client/              KakaoClient, FakeKakaoClient, EmailSender, FakeEmailSender ┘
 ├── content/ ...  session/ ...  relation/ ...
 └── dialogue/
-    ├── client/LlmClient.java       (포트. 입출력 record는 dto/ChatLine·ReplyContext·LlmReply)
-    ├── client/FakeLlmClient.java   (@ConditionalOnProperty capsule.llm.mode=fake)
+    ├── client/LlmGateway.java      (LLM 입구. 공급자는 LlmProvider: Anthropic · OpenAi · Jev · Fake, capsule.llm.provider)
+    ├── adapter/SessionClosingAdapter.java (session 계약 구현. dialogue는 api 패키지가 없음)
     └── ...
 ```
 
@@ -32,7 +32,7 @@
 |---|---|
 | `controller` | `@RestController` |
 | `service` | `@Service`, 업무 규칙·계산 클래스(정책, 시간 계산), 스케줄러 |
-| `dto` | 계층 사이를 오가는 record와 요청 값 enum. 예외 없이 여기, 파일 하나에 하나: 요청·응답, 서비스 결과, 외부 연동 입출력(`KakaoProfile`, `LlmReply`), 조회 조건(`MemoryStatus`) |
+| `dto` | 계층 사이를 오가는 record와 요청 값 enum. 예외 없이 여기, 파일 하나에 하나: 요청·응답, 서비스 결과, 외부 연동 입출력(`KakaoProfile`, `ProviderRequest`), 조회 조건(`MemoryStatus`) |
 | `repository` | Spring Data 리포지토리, JdbcClient 리포지토리 |
 | `domain` | JPA 엔티티, 엔티티에 저장되는 enum(`UserMemory.Type`), JPA 매핑용 record(`@Embeddable`) |
 | `adapter` | 계약 구현: 자기 모듈 `api`나 다른 모듈의 SPI를 구현하는 클래스. 이름은 `*Adapter`. 보통 서비스에 넘기는 얇은 클래스지만, 조회만 하는 모듈(content)은 구현 자체가 여기 있어도 된다 |

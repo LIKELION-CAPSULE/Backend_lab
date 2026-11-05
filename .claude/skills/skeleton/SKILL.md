@@ -5,6 +5,8 @@ description: docs/specs의 API 명세·DB 스키마(와 기획 흐름)로 캡슐
 
 # 얇은 뼈대 만들기
 
+> 2026-11-05: 이 스킬은 뼈대 단계 기록이다(지금 단계는 domain). 지금 구조와 다른 이름이 있다: LLM은 `capsule.llm.provider` · `LlmGateway`(ADR 0022)이고 dialogue에는 `api` 패키지가 없다. 지금 구조는 `docs/ARCHITECTURE.md`
+
 목표: 전체 플로우가 처음부터 끝까지 실제로 도는 가장 얇은 서버. 이후 둘이 도메인을 나눠 "칸을 채우는" 작업만 하면 되게 만든다.
 
 ## 왜 이렇게 하나

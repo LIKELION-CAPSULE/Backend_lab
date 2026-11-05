@@ -27,4 +27,4 @@ description: 캡슐 백엔드를 검증하고 실패를 해석한다. 구현을 
 ## 로컬에서 눈으로 확인
 1. `scripts/run-local.sh` (worktree별 DB·포트 자동, 출력된 주소 확인)
 2. `http/flow.http`를 IDE에서 위에서부터 실행
-3. LLM은 기본 Fake(`capsule.llm.mode=fake`). 실제 LLM은 dialogue 담당자가 붙인 뒤 `real`로.
+3. LLM은 기본 Fake(`capsule.llm.provider=fake`). 실제 LLM은 `.env.local`에 `CAPSULE_LLM_PROVIDER`(시연: openai)와 그 공급자 키를 넣으면 `run-local.sh`가 넘긴다 (ADR 0022)

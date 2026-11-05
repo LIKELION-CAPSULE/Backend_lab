@@ -15,11 +15,11 @@
 8. 룸 상세 (H04) → `GET /api/rooms/1` → 말포이, Lv.1 · 0초
 9. 시험 일정 (H06) → `POST /api/me/memories` (EXAM) → 201, `dDay`
 10. 공부 시작 (H06 → H07) → `POST /api/sessions` → 201, `sessionId`
-11. 시작 직후 → `FOCUS` 전송 → `eventId`, `characters[].affinity` +5 (FIRST_MEET, J-01 Fake) → 반응(19) → 인사 대사
+11. 시작 직후 → `FOCUS` 전송 → `eventId`, `characters[].affinity` 50(시작값) · 변화 0 (연속 출석 1일째, J-01) → 반응(19) → 인사 대사 (상태 변화는 LLM, 테스트는 가짜 AI)
 12. 1분마다 → heartbeat (지금까지의 `studySeconds` · `presentSeconds`) → 204
-13. 자리 비움 (H07) → `AWAY` 전송 → `characters[].affinity` −1 → 반응(`intensity: 1`) → 대사
-14. 같은 `AWAY`를 다시 보냄 → 200 + 기존 응답 (같은 `eventId`, `delta`도 처음과 같은 −1. 점수는 다시 깎이지 않음)
-15. 복귀 → `RETURN` 전송 → `characters[].affinity` +1 → 반응
+13. 자리 비움 (H07) → `AWAY` 전송 → `characters[].affinity` 변화 0 (감점은 자리 비움을 끝낸 이벤트에서 1분 넘게 비웠을 때 −1) → 반응(`intensity: 1`) → 대사
+14. 같은 `AWAY`를 다시 보냄 → 200 + 기존 응답 (같은 `eventId`, `delta`도 처음과 같은 0. 다시 반영하지 않음)
+15. 복귀 → `RETURN` 전송 → 1분 안에 돌아와 변화 0 (돌아옴 점수 없음) → 반응
 16. 채팅 (H20) → 메시지 전송 → Fake 답장. 같은 `requestId`로 다시 보내면 한 번만 처리
 17. 새로고침 → `GET /api/me` → `activeSession` 있음 (H18 근거)
 18. 공부 끝내기 (H17) → `POST .../end` → `returnCount: 1`, `pointsAfter > pointsBefore`, `closingLine`
