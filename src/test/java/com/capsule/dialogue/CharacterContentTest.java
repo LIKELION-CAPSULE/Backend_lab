@@ -53,7 +53,8 @@ class CharacterContentTest {
         assertThat(c.safety()).isEqualTo(CharacterContent.MINOR);
         assertThat(c.expressions()).containsExactly("삐짐", "행복", "경멸", "하품", "화남", "웃음", "수줍음", "집중");
         assertThat(c.habits()).containsEntry("흥", CharacterContent.NO_OPENING);
-        assertThat(c.rules()).contains("정답을 물으면 정답"); // PM: 답 대신 힌트만 → 정답은 정답, 힌트는 힌트
+        assertThat(c.rules()).contains("정확한 답을"); // PM: 답 대신 힌트만 준다는 지적 → 답을 알려 준다
+        assertThat(c.rules()).contains("사람이라고는 하지 않는다"); // 고지와 어긋나게 AI임을 부인하지 않는다 (2026-11-07)
         assertThat(c.expressionGuide()).containsKeys("수줍음", "하품"); // 결정 모델 보기 설명이 DB까지 간다
     }
 
