@@ -1285,7 +1285,7 @@ GET /api/me/memories?date=2026-11-12
   "emotion": "수줍음",
   "motion": null,
   "expression": { "name": "수줍음", "file": "exp/expression7.exp3.json" },
-  "affinity": { "delta": 1, "points": 51, "stage": 2, "stageName": "친한 사이", "level": 1, "levelUp": false },
+  "affinity": { "delta": 2, "points": 52, "stage": 2, "stageName": "친한 사이", "level": 1, "levelUp": false },
   "fallback": false,
   "audioBase64": null
 }
