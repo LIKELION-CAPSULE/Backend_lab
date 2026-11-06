@@ -18,7 +18,7 @@ public final class RelationTypes {
 
     /**
      * 사용자가 캐릭터에게 보낸 말의 종류 (명세 20). 종류는 코드, 점수는 캐릭터 콘텐츠가 정한다.
-     * 기본은 dialogue가 말 패턴으로 고른다(A안). meaning은 결정 모델(B안 · 심한 말 확인)에 보여 줄 설명이라 바꾸면 분류가 바뀐다.
+     * dialogue의 결정 모델이 문장 뜻을 보고 고른다(명세 20). meaning은 결정 모델에 보여 줄 보기 설명이라 바꾸면 분류가 바뀐다.
      */
     public enum SignalType {
         NEUTRAL("평범한 대화, 질문, 잡담, 공부 내용 이야기"),

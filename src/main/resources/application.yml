@@ -74,10 +74,9 @@ capsule:
     reaction-context-lines: 6 # 상태 반응 LLM에 같이 넣을 이번 세션 최근 대화 수
     # 답장 감정 후보 (명세 19·20). TODO: #9 반응 매핑(live2d_reaction_maps)에서 캐릭터별로 읽기
     emotions: [HAPPY, SHY, ANGRY, SAD, SURPRISED, NEUTRAL]
-    # 사용자 말의 종류(SignalType) 고르기: PATTERN(A안, 말 패턴. PM 확정) | DECIDER(B안, 결정 모델이 고름. 다음 주 재검토)
-    signal-detector: PATTERN
-    signal-min-confidence: 0.6 # DECIDER일 때 확신도가 이보다 낮으면 NEUTRAL(0점). 실험실 평가로 조정
-    severe-min-confidence: 0.8 # 패턴이 혐오 · 성적이라고 하면 결정 모델이 한 번 더 확인. 이보다 낮으면 RUDE로
+    # 사용자 말의 종류(SignalType)는 결정 모델이 문장 뜻을 보고 고른다 (2026-11-07 승희: 말 패턴 폐기, 명세 20)
+    signal-min-confidence: 0.6 # 확신도가 이보다 낮거나 결정 모델이 실패 · 늦으면 NEUTRAL(0점). 실험실 평가로 조정
+    severe-min-confidence: 0.8 # 혐오 · 성적은 이 확신도 이상일 때만 (비율 감점이라). 낮으면 RUDE로
     # 대화 한 번의 점수표 (임시: 말포이 PM 표). 없는 종류는 0. 캐릭터 설정(profile.yml scores)이 있으면 그 표를 쓴다
     #   once-per-session: 세션당 1번만 점수, repeat-points: 같은 세션에서 또 나오면 이 점수, loss-percent: 지금 값의 %를 깎음(points는 최소 감점)
     chat-scores:
@@ -108,7 +107,6 @@ capsule:
     fact-pick-wait: 1500ms # J-05: 아는 사실 고르기를 기다리는 한도. 답장이 llm-budget 안에 나가야 해서 짧게, 늦으면 선택 안 함
     content-cache-ttl: 30s # DB 캐릭터 설정을 메모리에 들고 있는 시간 (실험실에서 고치면 바로 비움)
     content-max-cursors: 10000 # 순서대로 돌려 쓰는 상황 대사의 다음 자리를 몇 개까지 들고 있을지 (넘으면 오래된 것부터 버림)
-    low-effort-max-chars: 3 # 말 패턴(A안): 공백을 빼고 3자 이하면 성의 없는 단답(LOW_EFFORT)
   # 호감도 · 레벨 (호감도 최종안 2026-11-04, ADR 0022). PM 답이 오면 값만 바꾼다. 날짜는 한국 날짜
   #   호감도 0~100, 50에서 시작(DB 기본값). 대화 한 번의 점수표는 캐릭터마다 달라서 dialogue 쪽(chat-scores)
   relation:
