@@ -3,104 +3,205 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>캡슐 LLM 실험실</title>
+<title>캡슐 운영실</title>
 <style>
-:root{--bg:#f5f5f3;--fg:#1c1c1e;--mut:#6e6e73;--card:#fff;--line:#deded9;--acc:#3563e9;--ok:#1d9a5b;--warn:#b7791f;--bad:#d64545;--user:#e3ebfd;--bot:#efefec;--code:#f4f4f1;color-scheme:light dark}
-@media (prefers-color-scheme:dark){:root{--bg:#141518;--fg:#e4e4e6;--mut:#9b9ba3;--card:#1d1e22;--line:#34363c;--acc:#7c9dff;--ok:#4cc38a;--warn:#e3b341;--bad:#ff6b6b;--user:#26345a;--bot:#2a2b30;--code:#17181b}}
+:root{--bg:#f4f5f7;--fg:#16181d;--mut:#667085;--card:#fff;--line:#e3e6ea;--soft:#f0f2f5;--acc:#4f5bd5;--accs:#eef0fc;--ok:#16835a;--oks:#e6f5ee;--warn:#a15c00;--warns:#fff4e0;--bad:#c93636;--bads:#fdecec;--me:#4f5bd5;--mefg:#fff;--bot:#fff;--code:#f6f7f9;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#121317;--fg:#e7e8ec;--mut:#9aa0ad;--card:#1b1d22;--line:#30333b;--soft:#23262d;--acc:#8b95ff;--accs:#262a45;--ok:#4cc38a;--oks:#173226;--warn:#e3b341;--warns:#33290f;--bad:#ff7070;--bads:#3a1c1c;--me:#5d68e0;--mefg:#fff;--bot:#23262d;--code:#16181c}}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
-body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,-apple-system,"Segoe UI","Malgun Gothic","Apple SD Gothic Neo",sans-serif}
+html,body{height:100%}
+body{margin:0;display:flex;flex-direction:column;background:var(--bg);color:var(--fg);font:14px/1.55 system-ui,-apple-system,"Segoe UI","Malgun Gothic","Apple SD Gothic Neo",sans-serif}
 pre,.mono{font-family:ui-monospace,"D2Coding",Consolas,"SF Mono",Menlo,monospace;font-size:12.5px}
-pre{white-space:pre-wrap;word-break:break-word;background:var(--code);border:1px solid var(--line);border-radius:6px;padding:8px;margin:4px 0;max-height:480px;overflow:auto}
-h2,h3,h4{margin:0 0 6px}h2{font-size:18px}h3{font-size:15px}h4{font-size:13px;margin-top:12px;color:var(--mut)}
-hr{border:0;border-top:1px solid var(--line);margin:14px 0}
-header{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:10px 16px;background:var(--card);border-bottom:1px solid var(--line)}
-.logo{font-size:15px;margin-right:8px}
-nav{display:flex;gap:2px;padding:0 16px;background:var(--card);border-bottom:1px solid var(--line);overflow-x:auto}
-nav button{border:0;border-bottom:2px solid transparent;border-radius:0;background:none;padding:10px 14px;white-space:nowrap}
-nav button.on{border-bottom-color:var(--acc);color:var(--acc);font-weight:600}
-main{padding:16px;max-width:1600px;margin:0 auto}
-input,select,textarea,button{font:inherit;color:inherit;background:var(--card);border:1px solid var(--line);border-radius:6px;padding:5px 8px;min-width:0}
-textarea{width:100%;resize:vertical}
-textarea.big{min-height:55vh;line-height:1.45}
-button{cursor:pointer;background:var(--bot)}
+pre{white-space:pre-wrap;word-break:break-word;background:var(--code);border:1px solid var(--line);border-radius:8px;padding:10px;margin:6px 0;max-height:420px;overflow:auto}
+h2,h3,h4{margin:0 0 6px;line-height:1.3}h2{font-size:18px}h3{font-size:15px}h4{font-size:13px;margin-top:14px}
+a{color:var(--acc)}
+input,select,textarea,button{font:inherit;color:inherit;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 9px;min-width:0}
+input:focus,select:focus,textarea:focus{outline:2px solid color-mix(in srgb,var(--acc) 45%,transparent);outline-offset:0;border-color:var(--acc)}
+textarea{width:100%;resize:vertical;line-height:1.5}
+input[type=checkbox]{width:16px;height:16px;accent-color:var(--acc);margin:0}
+input[type=number]{width:7em}
+button{cursor:pointer;background:var(--soft);border-color:var(--line);white-space:nowrap}
+button:hover:not(:disabled){filter:brightness(.97)}
 button:disabled{opacity:.5;cursor:default}
-button.primary{background:var(--acc);border-color:var(--acc);color:#fff}
+button.primary{background:var(--acc);border-color:var(--acc);color:#fff;font-weight:600}
 button.danger{color:var(--bad)}
-button.ghost{background:none}
-summary{cursor:pointer;color:var(--mut);margin:4px 0}
-.card>summary{color:var(--fg);font-weight:600}
-.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:12px;min-width:0}
-.cols{display:grid;grid-template-columns:340px minmax(0,1fr);gap:12px;align-items:start}
-.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:12px;align-items:start}
-.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:12px;align-items:start}
-.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:10px;align-items:start}
-.cmp{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:start}
-@media (max-width:900px){.cols,.split,.cmp,.grid2{grid-template-columns:minmax(0,1fr)}}
-.row{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}
+button.danger.solid{background:var(--bad);border-color:var(--bad);color:#fff;font-weight:600}
+button.ghost{background:none;border-color:transparent}
+button.ghost:hover:not(:disabled){background:var(--soft)}
+button.small{padding:3px 8px;font-size:12.5px}
+summary{cursor:pointer}
+header{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 18px;background:var(--card);border-bottom:1px solid var(--line)}
+.logo{font-size:16px;margin-right:6px}
+nav{display:flex;gap:2px;padding:0 12px;background:var(--card);border-bottom:1px solid var(--line);overflow-x:auto}
+nav button{border:0;border-bottom:2px solid transparent;border-radius:0;background:none;padding:11px 14px;font-weight:500;color:var(--mut)}
+nav button.on{border-bottom-color:var(--acc);color:var(--fg);font-weight:700}
+main{flex:1;min-height:0;overflow:auto}
+.tab{max-width:1180px;margin:0 auto;padding:18px}
+.tab.full{max-width:none;padding:0;height:100%}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px;min-width:0}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .grow{flex:1}
-.f{display:flex;flex-direction:column;gap:2px;margin-bottom:8px;min-width:0}
-.f>span{font-size:12px;color:var(--mut)}
-.f>button{align-self:flex-start}
-.chk{display:inline-flex;gap:4px;align-items:center;margin:0 12px 8px 0;white-space:nowrap}
-.chk input[type=number]{width:6em}
-.cfg{border:1px dashed var(--line);border-radius:8px;padding:2px 10px;margin:6px 0 10px}
-.cfggrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:0 10px}
-.wide{grid-column:1/-1}
-.muted{color:var(--mut)}.small{font-size:12px}.strong{font-weight:600}
-.empty{color:var(--mut);padding:48px;text-align:center}
-.item{padding:6px 8px;border-radius:8px;cursor:pointer}
-.li{padding:4px 0;border-bottom:1px solid var(--line);align-items:center}
-.item:hover,.item.on,tr.click:hover,tr.on{background:color-mix(in srgb,var(--acc) 10%,transparent)}
-.tall{max-height:70vh;overflow:auto}
-.turn{display:flex;flex-direction:column;padding:10px 0;border-bottom:1px dashed var(--line)}
-.tx{display:flex;flex-direction:column}
-.bubble{padding:8px 12px;border-radius:14px;width:fit-content;max-width:85%;white-space:pre-wrap;word-break:break-word;margin:3px 0}
-.bubble.user{align-self:flex-end;background:var(--user);border-bottom-right-radius:4px}
-.bubble.bot{background:var(--bot);border-bottom-left-radius:4px}
-.pre{white-space:pre-wrap}
-.thinking{color:var(--mut);font-style:italic;padding:4px 0}
-.errbox{border:1px solid var(--bad);color:var(--bad);background:color-mix(in srgb,var(--bad) 8%,transparent);border-radius:8px;padding:8px;margin:4px 0;white-space:pre-wrap;word-break:break-word}
-.chips{display:flex;flex-wrap:wrap;gap:4px;margin:4px 0}
-.chip{font-size:12px;padding:1px 8px;border:1px solid var(--line);border-radius:999px;color:var(--mut);white-space:nowrap}
-.chip.over{color:var(--bad);border-color:var(--bad);font-weight:600}
-.chip.okc{color:var(--ok);border-color:var(--ok)}
+.muted{color:var(--mut)}.small{font-size:12.5px}.strong{font-weight:600}.mono.small{font-size:11.5px}
+.empty{color:var(--mut);padding:60px 20px;text-align:center}
+.f{display:flex;flex-direction:column;gap:4px;margin-bottom:12px;min-width:0}
+.f>.lbl{font-size:12.5px;font-weight:600}
+.hint{font-size:12px;color:var(--mut)}
+.chk{display:inline-flex;gap:6px;align-items:center;cursor:pointer}
+.chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.chip{font-size:12px;padding:1px 9px;border:1px solid var(--line);border-radius:999px;color:var(--mut);white-space:nowrap;background:var(--card)}
+.chip.ok{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 40%,transparent)}
 .chip.off{opacity:.6}
-.warn{font-size:12px;color:var(--warn);border:1px solid var(--warn);border-radius:6px;padding:2px 8px}
-.acts{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.rate{display:flex;align-items:center;gap:2px;flex:1;min-width:260px}
-.rate input{flex:1;margin-left:6px}
-.star{border:0;background:none;padding:0 1px;font-size:18px;line-height:1;color:var(--line)}
-.star.on{color:#f5b301}
-.badge{display:inline-block;font-size:11px;font-weight:600;padding:0 6px;border-radius:4px;background:var(--line);color:var(--mut)}
-.badge.active,.badge.done,.badge.ok{background:color-mix(in srgb,var(--ok) 20%,transparent);color:var(--ok)}
-.badge.draft{background:color-mix(in srgb,var(--warn) 22%,transparent);color:var(--warn)}
-.badge.running,.badge.cache{background:color-mix(in srgb,var(--acc) 20%,transparent);color:var(--acc)}
-.badge.failed,.badge.error{background:color-mix(in srgb,var(--bad) 20%,transparent);color:var(--bad)}
-.scroll{overflow-x:auto}
-.tbl{border-collapse:collapse;width:100%;font-size:12.5px}
-.tbl th,.tbl td{border-bottom:1px solid var(--line);padding:4px 6px;text-align:left;vertical-align:top}
-.tbl th{color:var(--mut);font-weight:500;white-space:nowrap}
-tr.click{cursor:pointer}
-tr.sub>td{background:var(--bg);padding:8px}
-.role{font-size:12px;color:var(--mut);display:flex;gap:6px;align-items:center;margin-top:6px}
-.chathead{display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap;margin-bottom:8px}
-.composer{position:sticky;bottom:0;display:flex;gap:8px;align-items:flex-end;padding:10px 0;background:var(--bg)}
-.routes{position:relative}
-.routes .pop{position:absolute;right:0;top:30px;z-index:20;width:min(760px,92vw);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px;box-shadow:0 8px 24px rgba(0,0,0,.2)}
-.tokenbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 16px;background:color-mix(in srgb,var(--warn) 15%,var(--card));border-bottom:1px solid var(--line)}
-.toasts{position:fixed;right:16px;bottom:16px;z-index:50;display:flex;flex-direction:column;gap:8px;max-width:min(520px,92vw)}
-.toast{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--bad);border-radius:8px;padding:8px 12px;box-shadow:0 6px 20px rgba(0,0,0,.25);word-break:break-word}
+.chip.bad{color:var(--bad);border-color:color-mix(in srgb,var(--bad) 45%,transparent);background:var(--bads)}
+.chip.warn{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 45%,transparent);background:var(--warns)}
+.badge{display:inline-block;font-size:11px;font-weight:700;padding:1px 7px;border-radius:6px;background:var(--soft);color:var(--mut);vertical-align:middle}
+.badge.on{background:var(--oks);color:var(--ok)}
+.badge.draft,.badge.changed{background:var(--warns);color:var(--warn)}
+.scope{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;font-weight:700;padding:2px 9px;border-radius:999px;vertical-align:middle;white-space:nowrap}
+.scope.live{background:var(--bads);color:var(--bad)}
+.scope.lab{background:var(--accs);color:var(--acc)}
+.notice{border-radius:10px;padding:10px 12px;margin:0 0 14px;font-size:13px;background:var(--warns);color:var(--warn);border:1px solid color-mix(in srgb,var(--warn) 30%,transparent)}
+.notice.info{background:var(--accs);color:var(--fg);border-color:color-mix(in srgb,var(--acc) 25%,transparent)}
+.errtxt{color:var(--bad);font-size:12.5px;margin-top:4px}
+.tokenbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 18px;background:var(--warns);border-bottom:1px solid var(--line)}
+.toasts{position:fixed;right:16px;bottom:16px;z-index:60;display:flex;flex-direction:column;gap:8px;max-width:min(480px,92vw)}
+.toast{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--bad);border-radius:10px;padding:10px 12px;box-shadow:0 8px 28px rgba(0,0,0,.18);word-break:break-word}
 .toast.ok{border-left-color:var(--ok)}.toast.info{border-left-color:var(--acc)}
-.toast .x{float:right;border:0;padding:0 4px;margin-left:8px}
-.toast pre{max-height:220px}
+.toast .x{float:right;padding:0 6px;margin-left:8px}
+.toast pre{max-height:200px}
+dialog{border:1px solid var(--line);border-radius:14px;padding:0;background:var(--card);color:var(--fg);width:min(560px,92vw);box-shadow:0 20px 60px rgba(0,0,0,.3)}
+dialog::backdrop{background:rgba(15,17,22,.45)}
+.modal{padding:18px 20px}
+.modal .body{margin:10px 0 16px;max-height:60vh;overflow:auto}
+.modal ul{margin:6px 0;padding-left:20px}
+.acts{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.acts.end{justify-content:flex-end}
+.tbl{border-collapse:collapse;width:100%;font-size:13px}
+.tbl th,.tbl td{border-bottom:1px solid var(--line);padding:7px 8px;text-align:left;vertical-align:middle}
+.tbl th{color:var(--mut);font-weight:600;font-size:12px;white-space:nowrap}
+.tbl td.num,.tbl th.num{text-align:right;font-variant-numeric:tabular-nums}
+.tbl tr.click{cursor:pointer}
+.tbl tr.click:hover,.tbl tr.on{background:var(--accs)}
+.scroll{overflow-x:auto}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.seg button{border:0;border-radius:0;background:var(--card);padding:5px 12px}
+.seg button.on{background:var(--acc);color:#fff;font-weight:600}
+/* 대화 테스트 */
+.chat{display:grid;grid-template-columns:250px minmax(0,1fr) 330px;height:100%;min-height:0}
+.chat.nopanel{grid-template-columns:250px minmax(0,1fr)}
+.chat.nopanel .panel,.chat.noroom .panel{display:none}
+.chat.noroom{grid-template-columns:250px minmax(0,1fr)}
+.rooms{border-right:1px solid var(--line);background:var(--card);display:flex;flex-direction:column;min-height:0}
+.rooms .top{display:flex;align-items:center;gap:8px;padding:12px 12px 8px}
+.roomlist{overflow:auto;flex:1;padding:0 8px 12px}
+.room{padding:8px 10px;border-radius:9px;cursor:pointer;margin-bottom:2px}
+.room:hover{background:var(--soft)}
+.room.on{background:var(--accs)}
+.room .t{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.conv{display:flex;flex-direction:column;min-height:0;min-width:0}
+.convhead{display:flex;align-items:center;gap:6px;padding:10px 16px;border-bottom:1px solid var(--line);background:var(--card);flex-wrap:wrap}
+.msgs{flex:1;overflow:auto;padding:18px 22px;display:flex;flex-direction:column;gap:12px}
+.msg{display:flex;flex-direction:column;max-width:min(680px,82%)}
+.msg.me{align-self:flex-end;align-items:flex-end}
+.msg.bot{align-self:flex-start;align-items:flex-start}
+.msg.sys{align-self:center;align-items:center;max-width:90%}
+.bubble{padding:9px 13px;border-radius:16px;white-space:pre-wrap;word-break:break-word}
+.me .bubble{background:var(--me);color:var(--mefg);border-bottom-right-radius:5px}
+.bot .bubble{background:var(--bot);border:1px solid var(--line);border-bottom-left-radius:5px;cursor:pointer}
+.bot .bubble:hover{border-color:var(--acc)}
+.bot .bubble.err{background:var(--bads);border-color:color-mix(in srgb,var(--bad) 40%,transparent);color:var(--bad)}
+.sys .bubble{background:var(--soft);border:1px dashed var(--line);font-size:13px;cursor:pointer}
+.msg .who{font-size:11.5px;color:var(--mut);margin:0 4px 3px}
+.msg .meta{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:11.5px;color:var(--mut);margin:4px 4px 0}
+.expr{font-size:11px;font-weight:600;padding:0 7px;border-radius:999px;background:var(--accs);color:var(--acc)}
+.typing span{display:inline-block;width:6px;height:6px;margin:0 2px;border-radius:50%;background:var(--mut);animation:blink 1.2s infinite}
+.typing span:nth-child(2){animation-delay:.2s}.typing span:nth-child(3){animation-delay:.4s}
+@keyframes blink{0%,80%,100%{opacity:.25}40%{opacity:1}}
+.quick{display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:8px 16px 0;border-top:1px solid var(--line);background:var(--card)}
+.quick button{font-size:12.5px;padding:4px 10px;border-radius:999px;background:var(--card)}
+.quick .lab{font-size:12px;color:var(--mut);margin-right:2px}
+.menu{position:relative}
+.menu>summary{list-style:none;font-size:12.5px;padding:4px 10px;border:1px solid var(--line);border-radius:999px}
+.menu>summary::-webkit-details-marker{display:none}
+.menu .pop{position:absolute;bottom:34px;left:0;z-index:20;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:6px;box-shadow:0 10px 30px rgba(0,0,0,.15);display:flex;flex-direction:column;min-width:220px}
+.menu .pop button{border:0;background:none;text-align:left;border-radius:7px;padding:7px 10px}
+.menu .pop button:hover{background:var(--soft)}
+.composer{display:flex;gap:8px;align-items:flex-end;padding:10px 16px 14px;background:var(--card)}
+.composer textarea{resize:none;max-height:160px}
+.panel{border-left:1px solid var(--line);background:var(--card);overflow:auto;padding:14px 16px}
+.panel .f{margin-bottom:14px}
+.panel details.adv{border-top:1px solid var(--line);padding-top:10px;margin-top:6px}
+.panel details.adv>summary{font-weight:600;margin-bottom:10px}
+.pinrow{display:grid;grid-template-columns:1fr 120px;gap:6px;align-items:center;margin-bottom:6px;font-size:12.5px}
+/* 서랍 */
+.drawer{position:fixed;top:0;right:0;height:100%;width:min(680px,96vw);background:var(--card);border-left:1px solid var(--line);box-shadow:-12px 0 40px rgba(0,0,0,.18);z-index:40;display:flex;flex-direction:column}
+.drawer .dh{display:flex;align-items:center;gap:8px;padding:14px 18px;border-bottom:1px solid var(--line)}
+.drawer .db{overflow:auto;padding:14px 18px 40px}
+.sec{margin:0 0 16px}
+.sec>h4{margin:0 0 6px;font-size:13px}
+.kv{display:grid;grid-template-columns:120px 1fr;gap:6px 12px;font-size:13px}
+.kv>div:nth-child(odd){color:var(--mut)}
+.fold{border:1px solid var(--line);border-radius:9px;margin:6px 0;background:var(--card)}
+.fold>summary{padding:7px 10px;font-size:13px;font-weight:600}
+.fold>pre{margin:0 8px 8px}
+.sent{display:flex;flex-direction:column;gap:4px}
+.sent>div{font-size:13px;padding:6px 9px;border-radius:8px;background:var(--code);white-space:pre-wrap;word-break:break-word}
+.sent>div b{font-size:11.5px;color:var(--mut);margin-right:4px}
+.stars{display:inline-flex;gap:1px}
+.star{border:0;background:none;padding:0 2px;font-size:20px;line-height:1;color:var(--line)}
+.star.on{color:#f5b301}
+/* 폼 줄 */
+.rowsed{display:flex;flex-direction:column;gap:6px}
+.rowline,.rowhead{display:grid;gap:6px;align-items:start}
+.rowhead{font-size:11.5px;color:var(--mut);font-weight:600}
+.rowline input:not([type=checkbox]),.rowline select,.rowline textarea{width:100%}
+.rowline .x{padding:4px 8px;color:var(--mut)}
+.rowsed>.add{align-self:flex-start;font-size:12.5px;color:var(--acc)}
+.cell-check{display:flex;justify-content:center;padding-top:8px}
+/* 설정 · 캐릭터 */
+.section-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+.group{font-size:12px;font-weight:700;color:var(--mut);letter-spacing:.02em;margin:18px 0 4px;padding-bottom:4px;border-bottom:1px solid var(--line)}
+.set{display:grid;grid-template-columns:minmax(200px,300px) minmax(0,1fr);gap:4px 20px;padding:12px 0;border-bottom:1px solid var(--line)}
+.set:last-child{border-bottom:0}
+.set .name{font-weight:600}
+.set .path{font-size:11px;color:var(--mut);font-family:ui-monospace,Consolas,monospace}
+.set .desc{font-size:12.5px;color:var(--mut);margin-top:2px}
+.set .ctl{display:flex;flex-direction:column;gap:4px;min-width:0}
+.set .ctl .line{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.set .def{font-size:12px;color:var(--mut)}
+.set.dirty{background:linear-gradient(90deg,color-mix(in srgb,var(--acc) 7%,transparent),transparent 60%)}
+.checks{display:flex;flex-wrap:wrap;gap:6px 14px}
+.savebar{position:sticky;bottom:0;display:flex;gap:10px;align-items:center;padding:12px 16px;margin:0 -16px -16px;background:var(--card);border-top:1px solid var(--line);border-radius:0 0 12px 12px}
+.cfield{padding:14px 0;border-bottom:1px solid var(--line)}
+.cfield:last-child{border-bottom:0}
+.cfield .name{font-weight:600}
+.cfield .desc{font-size:12.5px;color:var(--mut);margin:2px 0 8px}
+.where{display:inline-block;font-size:11px;padding:0 7px;border-radius:6px;background:var(--soft);color:var(--mut);margin-left:6px;font-weight:600}
+.sit{border:1px solid var(--line);border-radius:10px;margin:8px 0}
+.sit>summary{padding:9px 12px;font-weight:600}
+.sit>div{padding:0 12px 12px}
+.toc{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+.toc a{font-size:12.5px;text-decoration:none;padding:3px 10px;border-radius:999px;background:var(--card);border:1px solid var(--line);color:var(--fg)}
+/* 프롬프트 */
+.pgrid{display:grid;grid-template-columns:320px minmax(0,1fr);gap:14px;align-items:start}
+.pkey{padding:10px 12px;border-radius:10px;cursor:pointer;border:1px solid transparent}
+.pkey:hover{background:var(--soft)}
+.pkey.on{background:var(--accs);border-color:color-mix(in srgb,var(--acc) 30%,transparent)}
+textarea.big{min-height:52vh;font-family:ui-monospace,"D2Coding",Consolas,monospace;font-size:12.5px}
 .diff div{min-height:1.4em}
 .diff .add{background:color-mix(in srgb,var(--ok) 20%,transparent)}
 .diff .del{background:color-mix(in srgb,var(--bad) 20%,transparent)}
+/* 비용 */
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:14px}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.tile .v{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums}
+.tile .l{font-size:12px;color:var(--mut)}
+.bar{height:8px;background:var(--soft);border-radius:4px;overflow:hidden;min-width:60px}
+.bar>i{display:block;height:100%;background:var(--acc)}
+@media (max-width:1000px){.chat{grid-template-columns:200px minmax(0,1fr)}.panel{display:none}.chat.showpanel .panel{display:block;position:fixed;right:0;top:0;height:100%;width:min(360px,92vw);z-index:30;box-shadow:-8px 0 30px rgba(0,0,0,.15)}.set{grid-template-columns:minmax(0,1fr)}.pgrid{grid-template-columns:minmax(0,1fr)}}
 </style>
 </head>
 <body>
-<header id="hdr"><b class="logo">캡슐 LLM 실험실</b><span class="muted small">불러오는 중…</span></header>
+<header id="hdr"><b class="logo">캡슐 운영실</b><span class="muted small">불러오는 중…</span></header>
 <div id="tokenbar" class="tokenbar" hidden>
   <span>실험실 토큰이 필요해요.</span>
   <input id="tokenInput" type="password" autocomplete="off" placeholder="X-Lab-Token">
@@ -114,32 +215,30 @@ tr.sub>td{background:var(--bg);padding:8px}
   <span id="loginMsg" class="small"></span>
 </form>
 <nav id="tabs">
-  <button data-tab="chat">대화 실험</button>
-  <button data-tab="play">한 번 실행</button>
-  <button data-tab="prompts">프롬프트</button>
-  <button data-tab="eval">평가</button>
-  <button data-tab="usage">호출 기록</button>
-  <button data-tab="character">캐릭터 설정</button>
-  <button data-tab="settings">운영 설정</button>
+  <button data-tab="chat">💬 대화 테스트</button>
+  <button data-tab="character">🎭 캐릭터</button>
+  <button data-tab="settings">⚙️ 운영 설정</button>
+  <button data-tab="prompts">📝 공통 프롬프트</button>
+  <button data-tab="usage">💰 비용 · 상태</button>
 </nav>
 <main>
-  <section class="tab" id="tab-chat"></section>
-  <section class="tab" id="tab-play" hidden></section>
-  <section class="tab" id="tab-prompts" hidden></section>
-  <section class="tab" id="tab-eval" hidden></section>
-  <section class="tab" id="tab-usage" hidden></section>
+  <section class="tab full" id="tab-chat"></section>
   <section class="tab" id="tab-character" hidden></section>
   <section class="tab" id="tab-settings" hidden></section>
+  <section class="tab" id="tab-prompts" hidden></section>
+  <section class="tab" id="tab-usage" hidden></section>
 </main>
+<div id="drawer" class="drawer" hidden></div>
+<dialog id="modal"></dialog>
 <div id="toasts" class="toasts"></div>
 <script>
 'use strict';
-// 캡슐 LLM 실험실 (내부 도구). 빌드·외부 스크립트 없음. 서버: GET /internal/llm-lab, API: /internal/llm-lab/api/*
+// 캡슐 운영실 (내부 도구, 실험실). 빌드 · 외부 스크립트 없음. 서버: GET /internal/llm-lab, API: /internal/llm-lab/api/*
 // 화면에 넣는 글자는 전부 h()가 텍스트 노드로 넣는다. innerHTML은 쓰지 않는다.
 const BASE = '/internal/llm-lab/api';
 const $ = s => document.querySelector(s);
 const TABS = Object.create(null);
-let META = null, active = 'chat', TOKEN = '';
+let META = null, SETTINGS = null, active = 'chat', TOKEN = '';
 let ADMIN = ''; // 관리자로 로그인했으면 아이디 (TOKEN은 그 로그인 토큰, ADR 0027)
 try { TOKEN = localStorage.getItem('llmLabToken') || ''; ADMIN = localStorage.getItem('llmLabAdmin') || ''; } catch { /* 저장소가 막힘: 메모리에만 둔다 */ }
 
@@ -156,44 +255,61 @@ function h(tag, attrs, ...kids) {
   }
   return el;
 }
-const sel = (items, value, attrs) => h('select', {...attrs, value}, items.map(it => {
+const sel = (items, value, attrs) => h('select', {...attrs, value: value ?? ''}, items.map(it => {
   const [v, t] = Array.isArray(it) ? it : [it, it];
   return h('option', {value: v}, t);
 }));
-const field = (label, el, cls = '') => h('label', {class: 'f ' + cls}, h('span', null, label), el);
-const chk = (el, label) => h('label', {class: 'chk'}, el, label);
+const field = (label, el, hint) => h('label', {class: 'f'}, h('span', {class: 'lbl'}, label), el, hint && h('span', {class: 'hint'}, hint));
 const muted = t => h('div', {class: 'muted small'}, t);
-const badge = s => h('span', {class: 'badge ' + String(s).toLowerCase()}, s);
-const jsonPre = o => h('pre', null, o == null ? '—' : JSON.stringify(o, null, 2));
-const tr = (cells, attrs) => h('tr', attrs, cells.map(c => h('td', null, c ?? '—')));
-const table = (head, rows) => h('div', {class: 'scroll'}, h('table', {class: 'tbl'},
-  h('thead', null, h('tr', null, head.map(x => h('th', null, x)))), h('tbody', null, rows)));
-const mark = (box, id) => box.querySelectorAll('[data-id]').forEach(e => e.classList.toggle('on', e.dataset.id === String(id)));
-const fmtCost = v => v == null ? '—' : '$' + Number(v).toFixed(6);
-const fmtMs = v => v == null ? '—' : Math.round(v) + 'ms';
-const fmtNum = v => v == null ? '—' : Number(v).toFixed(2);
-const fmtTime = s => s ? new Date(s).toLocaleString('ko-KR', {month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false}) : '—';
-const signed = v => (v > 0 ? '+' : '') + v;
-const lines = s => s.split('\n').map(x => x.trim()).filter(Boolean);
-const clampInt = (v, lo, hi) => Math.min(hi, Math.max(lo, Math.round(Number(v)) || lo));
+const scope = live => h('span', {class: 'scope ' + (live ? 'live' : 'lab'), title: live ? '저장하면 실제 서비스가 바로 이 값으로 움직여요' : '이 화면의 실험에만 쓰이고 서비스는 바뀌지 않아요'},
+  live ? '● 서비스에 바로 반영' : '○ 실험에서만');
+const table = (head, rows, numCols = []) => h('div', {class: 'scroll'}, h('table', {class: 'tbl'},
+  h('thead', null, h('tr', null, head.map((x, i) => h('th', {class: numCols.includes(i) ? 'num' : ''}, x)))),
+  h('tbody', null, rows.map(r => r instanceof Node ? r : h('tr', null, r.map((c, i) => h('td', {class: numCols.includes(i) ? 'num' : ''}, c ?? '—')))))));
+const KRW_PER_USD = 1400;
+const fmtUsd = v => v == null ? '—' : '$' + (Math.abs(Number(v)) < 1 ? Number(v).toFixed(4) : Number(v).toFixed(2));
+const fmtKrw = v => { if (v == null) return '—'; const w = Number(v) * KRW_PER_USD; return '약 ₩' + (w < 10 ? w.toFixed(1) : Math.round(w).toLocaleString('ko-KR')); };
+const fmtSec = ms => ms == null ? '—' : (Number(ms) / 1000).toFixed(1) + '초';
+const fmtInt = v => v == null ? '—' : Math.round(Number(v)).toLocaleString('ko-KR');
+const fmtTime = s => s ? new Date(s).toLocaleString('ko-KR', {month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false}) : '—';
+const lines = s => (s || '').split('\n').map(x => x.trim()).filter(Boolean);
 const sum = (xs, f) => xs.reduce((a, x) => a + (Number(f(x)) || 0), 0);
-const avg = xs => { const v = xs.filter(x => x != null); return v.length ? sum(v, x => x) / v.length : null; };
 function groupBy(xs, f) { const m = new Map(); for (const x of xs || []) { const k = f(x); m.has(k) ? m.get(k).push(x) : m.set(k, [x]); } return m; }
 const charName = id => id == null ? '공통' : META.characters.find(c => String(c.id) === String(id))?.name ?? '#' + id;
-const charSel = (value, common) => sel([...(common ? [['', '공통']] : []), ...META.characters.map(c => [c.id, c.name])], value);
+const charSel = (value, common) => sel([...(common ? [['', '공통 (모든 캐릭터)']] : []), ...META.characters.map(c => [c.id, c.name])], value);
+const todayKst = () => new Intl.DateTimeFormat('en-CA', {timeZone: 'Asia/Seoul'}).format(new Date());
+
+// ISO-8601 시간(PT7S · PT0.3S · PT1M) ↔ 초. 서버(Jackson)는 Duration을 ISO 글자로 주고받는다
+function isoToSec(v) {
+  if (typeof v === 'number') return v;
+  const m = /^PT(?:(\d+(?:\.\d+)?)H)?(?:(\d+(?:\.\d+)?)M)?(?:(\d+(?:\.\d+)?)S)?$/.exec(String(v ?? ''));
+  if (!m || String(v) === 'PT') return null;
+  return Math.round(((+m[1] || 0) * 3600 + (+m[2] || 0) * 60 + (+m[3] || 0)) * 1000) / 1000;
+}
+const secToIso = n => 'PT' + String(Math.round(Number(n) * 1000) / 1000) + 'S';
+// 비교용 정규형: 키 정렬, ''·null 같게, null 칸 빼기, 시간은 초로 (PT1M = PT60S)
+function canon(x) {
+  const walk = v => {
+    if (v === '' || v == null) return null;
+    if (typeof v === 'string') { const s = /^PT[\d.HMS]+$/.test(v) ? isoToSec(v) : null; return s != null ? 'dur:' + s : v; }
+    if (Array.isArray(v)) return v.map(walk);
+    if (typeof v === 'object') { const o = {}; for (const k of Object.keys(v).sort()) { const w = walk(v[k]); if (w != null) o[k] = w; } return o; }
+    return v;
+  };
+  return JSON.stringify(walk(x));
+}
+const same = (a, b) => canon(a) === canon(b);
 
 /* ---------- 알림 · API ---------- */
 function toast(msg, kind = 'err', detail = null) {
   const box = h('div', {class: 'toast ' + kind}, h('button', {class: 'x ghost', title: '닫기', onclick: () => box.remove()}, '×'),
     h('div', null, msg), detail && h('pre', null, detail));
   $('#toasts').append(box);
-  setTimeout(() => box.remove(), kind === 'err' ? 20000 : 3500);
+  setTimeout(() => box.remove(), kind === 'err' ? 15000 : 3500);
 }
-function fail(err) {
-  toast(`${err.code} · ${err.message || ''}`, 'err', err.detail == null ? null : JSON.stringify(err.detail, null, 2));
-  return Object.assign(new Error(err.message || err.code), {shown: true});
-}
-async function api(method, path, body) {
+const ERR_KO = {NETWORK: '서버에 연결하지 못했어요', INVALID_SETTING: '값이 맞지 않아요', SETTINGS_READ_ONLY: '이 서버에서는 운영 설정을 바꿀 수 없어요',
+  CHARACTER_ID_MISMATCH: '캐릭터가 맞지 않아요', CHARACTER_NOT_FOUND: '캐릭터를 찾지 못했어요', CONTENT_NOT_FOUND: '이 캐릭터는 아직 설정이 없어요', INVALID_REQUEST: '요청 값이 비었어요'};
+async function api(method, path, body, {quiet = false} = {}) {
   const headers = {};
   if (TOKEN) headers['X-Lab-Token'] = TOKEN;
   if (body !== undefined) headers['Content-Type'] = 'application/json';
@@ -201,24 +317,41 @@ async function api(method, path, body) {
   try {
     res = await fetch(BASE + path, {method, headers, body: body === undefined ? undefined : JSON.stringify(body)});
   } catch (e) {
-    throw fail({code: 'NETWORK', message: '서버에 연결하지 못했어요', detail: String(e)});
+    toast(ERR_KO.NETWORK, 'err', String(e));
+    throw Object.assign(new Error(ERR_KO.NETWORK), {shown: true, code: 'NETWORK'});
   }
-  if (res.status === 401) {  // 서버가 관리자 계정을 쓰면 LAB_LOGIN_REQUIRED (로그인이 끝났을 때도), 아니면 고정 토큰
+  if (res.status === 401) {  // 서버가 관리자 계정을 쓰면 LAB_LOGIN_REQUIRED (로그인이 끝났을 때도), 아니면 고정 토큰 LAB_TOKEN_REQUIRED
     ((await res.text()).includes('LAB_LOGIN_REQUIRED') ? askLogin : askToken)();
-    throw Object.assign(new Error('로그인 필요'), {shown: true});
+    throw Object.assign(new Error('로그인이 필요해요'), {shown: true, code: 'LOGIN'});
   }
   const text = await res.text();
   let data = text;
   try { data = text ? JSON.parse(text) : null; } catch { /* JSON이 아니면 글자 그대로 */ }
   if (!res.ok) {
     const e = data && typeof data === 'object' ? data : {};
-    throw fail({code: e.code || 'HTTP_' + res.status, message: e.message || e.error || (typeof data === 'string' ? data.slice(0, 300) : ''), detail: e.detail});
+    const code = e.code || 'HTTP_' + res.status;
+    const message = ERR_KO[code] || e.message || e.error || (typeof data === 'string' ? data.slice(0, 300) : '');
+    if (!quiet) toast(`${message} (${code})`, 'err', e.detail == null ? null : JSON.stringify(e.detail, null, 2));
+    throw Object.assign(new Error(message), {shown: !quiet, code, detail: e.detail});
   }
   return data;
 }
 async function busy(btn, fn) {
   if (btn) btn.disabled = true;
   try { return await fn(); } catch (e) { if (!e.shown) toast(e.message || String(e)); } finally { if (btn) btn.disabled = false; }
+}
+// 페이지 안 확인 창 (window.confirm 대신). 확인을 누르면 true
+function modal(title, body, {ok = '확인', danger = false, cancel = '취소'} = {}) {
+  const dlg = $('#modal');
+  return new Promise(resolve => {
+    const okBtn = h('button', {class: danger ? 'danger solid' : 'primary', type: 'submit', value: 'ok'}, ok);
+    dlg.replaceChildren(h('form', {method: 'dialog', class: 'modal'}, h('h3', null, title), h('div', {class: 'body'}, body),
+      h('div', {class: 'acts end'}, cancel && h('button', {type: 'button', onclick: () => dlg.close('')}, cancel), okBtn)));
+    dlg.returnValue = '';
+    dlg.onclose = () => resolve(dlg.returnValue === 'ok');
+    dlg.showModal();
+    (dlg.querySelector('input,textarea,select') || okBtn).focus();
+  });
 }
 function askToken() { $('#tokenInput').value = TOKEN; $('#tokenbar').hidden = false; $('#tokenInput').focus(); }
 function askLogin() { $('#tokenbar').hidden = true; $('#loginUser').value = ADMIN; $('#loginbar').hidden = false; (ADMIN ? $('#loginPass') : $('#loginUser')).focus(); }
@@ -234,7 +367,7 @@ async function login(e) {
     res = await fetch(BASE + '/login', {method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({username: $('#loginUser').value.trim(), password: $('#loginPass').value})});
   } catch { msg.textContent = '서버에 연결하지 못했어요'; return; }
-  if (!res.ok) { msg.textContent = res.status === 429 ? '시도가 너무 많아요. 1분 뒤에 다시' : '아이디나 비밀번호가 틀렸어요'; return; }
+  if (!res.ok) { msg.textContent = res.status === 429 ? '시도가 너무 많아요. 1분 뒤에 다시' : res.status >= 500 ? '로그인하지 못했어요 (서버 오류)' : '아이디나 비밀번호가 틀렸어요'; return; }
   const s = await res.json();
   TOKEN = s.token; ADMIN = s.username;
   remember();
@@ -245,153 +378,938 @@ async function login(e) {
 }
 // 서버에 세션이 없어 토큰을 지우면 끝 (바로 끊어야 하면 그 계정 비밀번호를 바꾼다)
 function logout() { TOKEN = ''; ADMIN = ''; remember(); location.reload(); }
-// 지우기 같은 위험한 버튼: 3초 안에 한 번 더 눌러야 실행
-function confirmBtn(label, fn) {
-  let timer = null;
-  const reset = () => { clearTimeout(timer); timer = null; b.textContent = label; };
-  const b = h('button', {class: 'danger', onclick: () => {
-    if (!timer) { b.textContent = `한 번 더 누르면 ${label}`; timer = setTimeout(reset, 3000); return; }
-    reset();
-    busy(b, fn);
-  }}, label);
-  return b;
-}
 
-/* ---------- 공용 부품 ---------- */
-const USER_F = ['nickname', 'relationLevel', 'onBreak', 'chatty', 'summary', 'facts', 'memories'];
-const MODEL_F = ['provider', 'model', 'temperature', 'maxTokens', 'pinnedPrompts'];
-// 실험 조건(LabConfig) 편집기. 빈 칸 = null = 서버 기본값
-function configEditor(cfg, fields = [...USER_F, ...MODEL_F], title = '실험 조건', open = false) {
-  const c = cfg || {}, has = f => fields.includes(f);
-  const num = (v, a) => h('input', {type: 'number', value: v ?? '', placeholder: '기본', ...a});
-  const i = {
-    nickname: h('input', {value: c.nickname ?? '', placeholder: '기본'}),
-    relationLevel: num(c.relationLevel),
-    onBreak: h('input', {type: 'checkbox', checked: c.onBreak === true}),
-    chatty: h('input', {type: 'checkbox', checked: c.chatty === true}),
-    summary: h('textarea', {rows: 2, value: c.summary ?? '', placeholder: '11/03 55분, 3단원 하다 지쳐서 일찍 끝냄 (한 줄에 한 장, 최근 2장)'}),
-    facts: h('textarea', {rows: 3, value: (c.facts || []).join('\n'), placeholder: '사용자는 이번 달 토익 800 목표 (한 줄에 하나, 최대 20개)'}),
-    memories: h('textarea', {rows: 2, value: (c.memories || []).join('\n'), placeholder: '시험: 중간고사 (2026-11-20)'}),
-    provider: sel([['', '(기본)'], ...META.providers.map(p => p.name)], c.provider ?? ''),
-    model: h('input', {value: c.model ?? '', placeholder: '기본'}),
-    temperature: num(c.temperature, {step: 0.1, min: 0}),
-    maxTokens: num(c.maxTokens, {min: 1}),
-    pinnedPrompts: h('textarea', {rows: 2, class: 'mono', spellcheck: false, value: c.pinnedPrompts ? JSON.stringify(c.pinnedPrompts) : '', placeholder: '{"chat.system": 12}'}),
+/* ---------- 이름표 (코드 값 → 한국어) ---------- */
+const TRIGGERS = {GREETING: '공부 시작 인사', AWAY: '자리 비움', RETURN: '돌아옴', BREAK: '쉬기 시작', BREAK_END: '쉬기 끝',
+  DROWSY: '졸음', YAWN: '하품', WAVE: '손 흔들기', HEAD_TURN: '고개 돌림'};
+const AWAY_LEVELS = {1: '막 떠남', 2: '1분째', 3: '5분째'}; // 명세 19 intensity 1~3 = 미리 쓴 대사 AWAY · AWAY_2 · AWAY_3
+const SITUATIONS = {
+  GREETING: ['공부 시작 인사', '공부를 시작하면 (명세 19). AI 반응의 말투 예시, AI가 마감을 넘기면 이 대사'],
+  AWAY: ['자리 비움 · 바로', '자리를 비우자마자 (AWAY 강도 1)'],
+  AWAY_2: ['자리 비움 · 1분째', '1분째 안 돌아올 때 (AWAY 강도 2). 없으면 “바로” 대사'],
+  AWAY_3: ['자리 비움 · 5분째', '5분째 안 돌아올 때 (AWAY 강도 3). 없으면 “바로” 대사'],
+  RETURN: ['돌아옴', '자리로 돌아오면'],
+  BREAK: ['쉬기 시작', '쉬는 시간을 시작하면'],
+  BREAK_END: ['쉬기 끝', '쉬는 시간이 끝나고 다시 공부하면'],
+  DROWSY: ['졸음', '졸음 동작이 잡히면. AI 없이 이 대사를 그대로 (운영 설정에서 AI로 바꾸지 않았다면)'],
+  YAWN: ['하품', '하품 동작. AI 없이 이 대사를 그대로'],
+  WAVE: ['손 흔들기', '손 흔들기 동작. AI 없이 이 대사를 그대로'],
+  HEAD_TURN: ['고개 돌림', '고개를 돌리면. AI 없이 이 대사를 그대로'],
+  REPLY_FALLBACK: ['답장 대체 대사', '채팅 답장(명세 20)을 AI가 마감 안에 못 만들면 대신 나가는 말'],
+  CLOSING: ['완료 대사', '공부를 끝낼 때(명세 22) AI가 못 만들면 나가는 마무리 한마디'],
+  GIVE_UP: ['공부 포기', '목표 시간을 한참 못 채우고 직접 끝냈을 때의 완료 대사 (운영 설정 “공부 포기 기준”)'],
+  TODAY: ['오늘 근황 (요일)', '캐릭터의 오늘 근황. 월요일부터 한 줄씩, 그날 첫 대화와 공부 시작 인사에 넣어요'],
+};
+const SIGNALS = {NEUTRAL: '보통', COMPLIMENT: '칭찬', THANKS: '고마움', CONFIDE: '고민 털어놓기', LOW_EFFORT: '단답', COMPLAINT: '불평', RUDE: '무례', HATE_OR_SEXUAL: '혐오 · 성적'};
+const PURPOSES = {CHAT: '채팅 답장', REACTION: '상태 반응', DECIDE: '결정 (표정 · 기억 · 말 종류 고르기)', MEMORY: '기억 한 줄', SUMMARY: '세션 카드', CLOSING: '완료 대사', EVAL_JUDGE: '평가 심사'};
+const SOURCES = {APP: '서비스', LAB: '실험실', EVAL: '평가'};
+const PROMPTS = {
+  'scene.system': ['채팅 답장 틀 (캐릭터 설정 사용)', '캐릭터 탭의 성격 · 말투, 꼭 지킬 것, 관계 단계별 사이, 말투 예시를 끼워 넣는 채팅 답장(명세 20 · 28)의 고정 블록. 답장 방식이 SCENE(기본)이면 서비스 답장이 전부 이 틀을 써요.'],
+  'scene.reaction': ['상태 반응 틀 (캐릭터 설정 사용)', '캐릭터 설정이 있는 캐릭터의 상태 반응(명세 19) 고정 블록. 성격 · 꼭 지킬 것을 끼우고, 그 상황의 예시 대사는 반응 카드에 들어가요.'],
+  'chat.system': ['공통 답장 틀 (SIMPLE)', '답장 방식이 SIMPLE이거나, 캐릭터 설정이 아직 없는 캐릭터의 채팅 답장 시스템 프롬프트.'],
+  'chat.context': ['공통 답장 상황 (SIMPLE)', 'SIMPLE 답장의 상황 부분: 시각 · 닉네임 · 관계 단계 · 지난 세션 · 일정. 매번 바뀌어 캐시되지 않아요.'],
+  'reaction.system': ['공통 상태 반응 틀', '캐릭터 설정이 없는 캐릭터의 상태 반응을 AI로 만들 때 쓰는 틀.'],
+  'fixed.lines': ['상황 설명 · 공통 대사 (yml)', '반응 카드의 “방금 일어난 일” 설명, 그리고 캐릭터 설정이 없는 캐릭터가 쓰는 미리 쓴 대사 · 대체 대사.'],
+  'summary.system': ['세션 카드 만들기', '공부를 끝낼 때(명세 22) 이번 대화를 “지난 세션 흐름” 카드 한 장으로 요약하는 프롬프트.'],
+  'closing.system': ['완료 대사', '공부를 끝낼 때(명세 22) 캐릭터가 하는 마무리 한마디를 AI로 만드는 프롬프트.'],
+  'eval.judge': ['평가 심사관', '실험실 평가에서 AI가 답을 채점할 때만 써요. 서비스와 무관해요.'],
+};
+
+/* ---------- 운영 설정 사전: 칸 이름 → 한국어 이름 · 설명 · 단위 · 입력 종류 ---------- */
+// kind: int · num · ratio · dur(ISO 시간, unit 초/분) · bool · enum · triggers · csv · scores · stages · routes · map · thinking · prices · json(모르는 칸)
+const SET = {
+  relation: {
+    _groups: ['호감도 · 레벨'],
+    chatDailyGainCap: {g: 0, name: '대화로 하루에 오르는 호감도 최대', kind: 'int', unit: '점', min: 0, desc: '대화(명세 20)로 하루에 올라갈 수 있는 호감도 상한. 내려가는 쪽은 상한이 없어요.'},
+    awayMinSeconds: {g: 0, name: '자리 비움 감점 기준', kind: 'int', unit: '초', min: 0, desc: '자리 비움(명세 18)이 이보다 길어야 감점해요.'},
+    awayPenalty: {g: 0, name: '자리 비움 한 번 감점', kind: 'int', unit: '점', max: 0, desc: '0 이하로 넣어요. 예: -1'},
+    awayDailyCap: {g: 0, name: '자리 비움으로 하루에 깎이는 최대', kind: 'int', unit: '점', min: 0, desc: '자리 비움 감점은 하루에 이만큼까지만 쌓여요.'},
+    streakPoints: {g: 0, name: '연속 출석 보너스', kind: 'int', unit: '점', min: 0, desc: '연속 출석 2일째부터, 그날 처음 공부를 시작하면(명세 16) 한 번 더해요.'},
+    levelSeconds: {g: 0, name: '레벨 1 오르는 데 필요한 공부 시간', kind: 'int', unit: '분', factor: 60, min: 1, desc: '자리를 지킨 시간 기준. 레벨 상한은 없어요.'},
+    stages: {g: 0, name: '관계 단계 (호감도 구간)', kind: 'stages', desc: '호감도가 “부터” 값 이상이면 그 단계예요. 첫 단계는 0부터, 오름차순, 100 이하. 단계에 따라 캐릭터 탭의 관계 단계별 사이 · 말투 예시 · 미리 쓴 대사가 바뀌어요.'},
+  },
+  dialogue: {
+    _groups: ['답장', '상태 반응 · 공부 끝', '말 종류 · 호감도 점수', '기억', '시간 · 제한'],
+    chatPipeline: {g: 0, name: '답장 방식', kind: 'enum', options: [['SCENE', '캐릭터 설정 사용 (SCENE, 기본)'], ['SIMPLE', '공통 프롬프트 (SIMPLE)']], desc: '채팅 답장(명세 20 · 28)을 만드는 방식. SCENE = 캐릭터 탭 설정 + 상황 카드, SIMPLE = 공통 프롬프트 chat.system · chat.context.'},
+    replyMinSentences: {g: 0, name: '답 길이', item: '답 길이 (최소 문장 수)', kind: 'int', unit: '문장', min: 1, max: 10, pair: 'replyMaxSentences', desc: '채팅 답장(명세 20 · 28)이 몇 문장 안팎일지. 상황 카드 “지금:” 줄에 “N~M문장 안팎으로”로 들어가요. 공부 중 · 쉬는 시간 같아요.'},
+    replyMaxSentences: {g: 0, name: '답 길이 (최대 문장 수)', kind: 'int', unit: '문장', min: 1, max: 10, desc: '채팅 답장이 최대 몇 문장 안팎일지.'},
+    historyLines: {g: 0, name: '답장에 넣는 대화 수', kind: 'int', unit: '줄', min: 1, desc: 'J-05: 이번 세션 최근 대화 몇 줄을 답장 AI에 넘길지. 길수록 지시를 덜 따라요.'},
+    chattyMessages: {g: 0, name: '수다가 길어짐 · 말 수', kind: 'int', unit: '번', min: 1, desc: 'J-14: 공부 중 아래 시간 안에 이번 말까지 N번째부터 수다가 길어진 것으로 봐요. 캐릭터가 짧게 받고 공부로 돌려보내요.'},
+    chattyWindow: {g: 0, name: '수다가 길어짐 · 살펴볼 시간', kind: 'dur', unit: '분', factor: 60, desc: 'J-14: 위 말 수를 세는 최근 시간.'},
+    emotions: {g: 0, name: '감정 후보 (설정 없는 캐릭터용)', kind: 'csv', desc: '캐릭터 설정이 없는 캐릭터나 SIMPLE 답장 · 공통 상태 반응이 고르는 감정 이름. 말포이는 캐릭터 탭의 표정 목록을 써요. 쉼표로 구분.'},
+    reactionLlmTriggers: {g: 1, name: 'AI가 만드는 상태 반응', kind: 'triggers', desc: '고른 상황은 AI가 대사 · 표정을 만들고(명세 19), 나머지는 캐릭터 탭의 미리 쓴 대사를 그대로 써요. AI가 마감을 넘기면 미리 쓴 대사로.'},
+    reactionContextLines: {g: 1, name: '상태 반응에 넣는 최근 대화 수', kind: 'int', unit: '줄', min: 0, desc: '상태 반응 AI가 이번 세션 최근 대화 몇 줄을 같이 볼지.'},
+    giveUpRatio: {g: 1, name: '공부 포기 기준 (목표 시간 비율)', kind: 'ratio', desc: 'J-15: 직접 끝냈는데 목표 시간의 이 비율 미만이면 완료 대사 대신 “공부 포기” 대사(명세 22). 0.5 = 절반.'},
+    signalDetector: {g: 2, name: '말 종류 고르는 방식', kind: 'enum', options: [['PATTERN', '말 패턴 (A안, 기본)'], ['DECIDER', '결정 모델 (B안)']], desc: '사용자 말이 칭찬 · 무례 같은 어떤 종류인지 고르는 쪽. 종류에 따라 호감도 점수가 정해져요(명세 20).'},
+    signalMinConfidence: {g: 2, name: '결정 모델 최소 확신도', kind: 'ratio', desc: '결정 모델(B안)일 때 확신도가 이보다 낮으면 “보통”(0점).'},
+    severeMinConfidence: {g: 2, name: '심한 말 확인 최소 확신도', kind: 'ratio', desc: '말 패턴이 혐오 · 성적이라고 하면 결정 모델이 한 번 더 확인해요. 확신도가 이보다 낮으면 “무례”로.'},
+    lowEffortMaxChars: {g: 2, name: '단답 기준 글자 수', kind: 'int', unit: '자', min: 0, desc: '말 패턴(A안): 공백을 빼고 이 글자 수 이하면 성의 없는 단답.'},
+    chatScores: {g: 2, name: '기본 대화 점수표', kind: 'scores', desc: '캐릭터에 점수표가 없을 때만 쓰는 말 종류별 점수. 말포이는 캐릭터 탭의 대화 점수표를 써요.'},
+    chatRepeatWindow: {g: 2, name: '칭찬 연타 막기 · 살펴볼 턴 수', kind: 'int', unit: '턴', min: 1, desc: '최근 이 턴 수 안에 같은 종류가 아래 횟수만큼 이미 있으면, 오르는 점수는 0.'},
+    chatRepeatLimit: {g: 2, name: '칭찬 연타 막기 · 같은 종류 허용 횟수', kind: 'int', unit: '번', min: 0, desc: '예: 2면 세 번째부터 0점 (오르는 쪽만).'},
+    memoryEnabled: {g: 3, name: '새 기억 만들기', kind: 'bool', desc: '끄면 캐릭터가 아는 사실을 새로 만들지 않아요 (턴마다 결정 1번 + 한 줄 쓰기 0~1번 비용이 빠짐).'},
+    memoryAsync: {g: 3, name: '기억 정리를 답장 뒤에 따로', kind: 'bool', desc: '끄면 요청 안에서 바로 정리해서 답이 늦어져요. 보통 켜 둬요.'},
+    memoryMax: {g: 3, name: '캐릭터가 아는 사실 최대 개수', kind: 'int', unit: '개', min: 1, desc: '넘치면 결정 모델이 가장 덜 중요한 하나를 버려요.'},
+    recapMax: {g: 3, name: '지난 세션 흐름 카드 최대 장수', kind: 'int', unit: '장', min: 1, desc: '답장 상황 카드에 다 들어가요. 넘치면 오래된 카드부터 지워요.'},
+    factPickWait: {g: 3, name: '아는 사실 고르기 대기', kind: 'dur', unit: '초', desc: 'J-05: 답장 전에 결정 모델이 기억 하나를 고르는 걸 기다리는 한도. 늦으면 기억 없이 답해요. AI 답 마감보다 짧게.'},
+    signalContextLines: {g: 3, name: '결정 모델에 보여 줄 앞 대화 수', kind: 'int', unit: '줄', min: 0, desc: 'J-05: 말 종류 고르기 · 기억 정리에 같이 보여 줄 앞 대화 수.'},
+    llmBudget: {g: 4, name: 'AI 답 마감 시간', kind: 'dur', unit: '초', desc: '명세 19 · 20 · 22: 이 안에 AI가 못 만들면 미리 쓴 대사(대체 대사)가 나가요. 재전송 대기보다 짧고, 아는 사실 고르기 대기보다 길어야 해요.'},
+    inFlightWait: {g: 4, name: '같은 요청 재전송 대기', kind: 'dur', unit: '초', desc: '명세 20: 같은 requestId가 처리 중이면 이만큼 기다려요. AI 답 마감보다 길게.'},
+    inFlightPoll: {g: 4, name: '재전송 대기 확인 간격', kind: 'dur', unit: '초', desc: '기다리는 동안 답장이 저장됐는지 보는 간격.'},
+    messageLimit: {g: 4, name: '메시지 속도 제한 · 개수', kind: 'int', unit: '개', min: 1, desc: '명세 20: 한 사용자가 아래 시간 안에 보낼 수 있는 메시지 수. 넘으면 429 (재전송은 안 셈).'},
+    messageLimitWindow: {g: 4, name: '메시지 속도 제한 · 시간', kind: 'dur', unit: '초', desc: '위 개수를 세는 시간.'},
+  },
+  llm: {
+    _groups: ['공급자', '용도별 모델', '모델 표', '가격'],
+    provider: {g: 0, name: '기본 AI 공급자', kind: 'provider', desc: '모든 용도의 기본 공급자. 용도별 표에서 공급자를 따로 정한 용도(예: 결정 → jev)만 예외예요. 키가 없는 공급자는 서버가 받지 않아요.'},
+    fallbackProvider: {g: 0, name: '실패하면 다시 보낼 공급자', kind: 'provider', blank: '없음', desc: '기본 공급자가 실패하면 같은 요청을 이 공급자로 한 번 더 보내요.'},
+    maxRetries: {g: 0, name: '같은 공급자 재시도', kind: 'int', unit: '번', min: 0, max: 3, desc: '429 · 5xx · 연결 오류일 때만 같은 공급자로 다시 보내요.'},
+    retryBackoff: {g: 0, name: '재시도 전 쉬는 시간', kind: 'dur', unit: '초', max: 2, desc: '0~2초.'},
+    routes: {g: 1, name: '용도별 모델 등급 · 출력 한도', kind: 'routes', desc: '용도마다 모델 등급(아래 모델 표의 이름)과 출력 토큰 한도. 공급자를 비우면 기본 공급자. 출력 한도는 상한일 뿐 쓴 만큼만 내요 (Claude 5.5는 숨은 생각 토큰도 여기서 빠져요).'},
+    'anthropic.models': {g: 2, name: 'Claude 등급별 모델', kind: 'map', cols: ['등급', '모델 이름'], desc: '등급 이름 → 실제 모델. 모델 이름은 공식 문서로 확인하고 바꿔요.'},
+    'anthropic.thinking': {g: 2, name: 'Claude 생각 설정', kind: 'thinking', desc: '모델마다 생각(thinking) 방식과 강도. 표에 없는 모델에는 보내지 않아요 (#92: 설정이 없으면 5.5는 스스로 생각해서 짧은 한도에서 빈 답이 날 수 있어요).'},
+    'openai.models': {g: 2, name: 'OpenAI 등급별 모델', kind: 'map', cols: ['등급', '모델 이름'], desc: '등급 이름 → 실제 모델.'},
+    'openai.reasoningEffort': {g: 2, name: 'OpenAI 추론 강도', kind: 'enum', options: [['', '(보내지 않음)'], 'none', 'minimal', 'low', 'medium', 'high', 'xhigh'], desc: '추론 토큰도 출력 한도에 들어가서 짧은 대사는 최소로. 5.1 이후 모델은 minimal 대신 none.'},
+    'jev.models': {g: 2, name: 'Jev 결정 모델 버전', kind: 'map', cols: ['등급', '모델 이름'], desc: '결정(DECIDE) 전용. fast = 고정해서 쓸 버전.'},
+    prices: {g: 3, name: '모델 가격 ($ / 백만 토큰)', kind: 'prices', desc: '비용 계산에만 써요. 표에 없는 Claude 모델은 코드에 든 기본 가격.'},
+  },
+};
+// 모르는 칸(새로 생긴 칸)은 칸 이름 그대로, JSON으로
+const settingInfo = (section, path) => SET[section]?.[path] || {name: path, kind: 'json', desc: '아직 이 화면에 설명이 없는 칸이에요.', unknown: true};
+const settingValue = (section, path) => SETTINGS?.find(s => s.section === section)?.fields.find(f => f.path === path)?.value;
+const budgetMs = () => (isoToSec(settingValue('dialogue', 'llmBudget')) ?? 7) * 1000;
+function stageList() {
+  const st = settingValue('relation', 'stages');
+  return Array.isArray(st) && st.length ? st : [{min: 0, name: '1단계'}, {min: 30, name: '2단계'}, {min: 70, name: '3단계'}, {min: 90, name: '4단계'}];
+}
+function stageLabel(n) {
+  const st = stageList(), s = st[n - 1];
+  if (!s) return n + '단계';
+  return `${n}단계 · ${s.name} (호감도 ${s.min}~${st[n] ? st[n].min - 1 : 100})`;
+}
+const stageOptions = () => stageList().map((_, i) => [String(i + 1), stageLabel(i + 1)]);
+async function loadSettings() { SETTINGS = await api('GET', '/settings', undefined, {quiet: true}); return SETTINGS; }
+
+/* ---------- 줄 편집기: 표 모양 입력 (추가 · 삭제) ---------- */
+// cols: [{k, label, type: text|area|num|check|select|list, options, w, ph}]. 줄의 다른 값(_extra)은 그대로 돌려준다
+function cellEditor(c, v, row) {
+  // 긴 글은 그대로 (앞뒤 공백 · 줄바꿈을 지우면 고치지 않은 칸도 바뀐 것으로 보인다)
+  if (c.type === 'area') { const el = h('textarea', {rows: c.rows || 2, value: v ?? '', placeholder: c.ph || ''}); return {el, get: () => el.value.trim() ? el.value : ''}; }
+  if (c.type === 'num') { const el = h('input', {type: 'number', step: 'any', value: v ?? '', placeholder: c.ph || ''}); return {el, get: () => el.value === '' ? null : Number(el.value)}; }
+  if (c.type === 'check') { const el = h('input', {type: 'checkbox', checked: !!v}); return {el: h('div', {class: 'cell-check'}, el), get: () => el.checked}; }
+  if (c.type === 'select') {
+    const opts = typeof c.options === 'function' ? c.options(row) : c.options;
+    const known = opts.some(o => String(Array.isArray(o) ? o[0] : o) === String(v ?? ''));
+    const el = sel(known || v == null ? opts : [...opts, [v, v + ' (목록에 없음)']], v == null ? '' : String(v));
+    return {el, get: () => el.value};
+  }
+  if (c.type === 'list') { const el = h('input', {value: (v || []).join(', '), placeholder: c.ph || '쉼표로 구분'}); return {el, get: () => el.value.split(',').map(x => x.trim()).filter(Boolean)}; }
+  if (c.type === 'label') return {el: h('div', {class: 'strong', style: 'padding-top:6px'}, c.text ? c.text(v) : v), get: () => v};
+  const el = h('input', {value: v ?? '', placeholder: c.ph || ''});
+  return {el, get: () => el.value.trim()};
+}
+function rowsEditor(cols, rows, {add = '+ 줄 추가', fixed = false, blank = () => ({})} = {}) {
+  const tpl = `grid-template-columns:${cols.map(c => c.w || '1fr').join(' ')}${fixed ? '' : ' 32px'}`;
+  const body = h('div', {class: 'rowsed'});
+  const addRow = (r, focus) => {
+    const cells = cols.map(c => cellEditor(c, r?.[c.k], r));
+    const line = h('div', {class: 'rowline', style: tpl}, cells.map(x => x.el),
+      !fixed && h('button', {type: 'button', class: 'ghost x', title: '이 줄 지우기', onclick: () => { line.remove(); body.dispatchEvent(new Event('input', {bubbles: true})); }}, '×'));
+    line._get = () => ({...r, ...Object.fromEntries(cols.map((c, i) => [c.k, cells[i].get()]))});
+    body.append(line);
+    if (focus) line.querySelector('input,textarea')?.focus();
   };
-  const el = h('details', {class: 'cfg', open}, h('summary', null, title), h('div', {class: 'cfggrid'},
-    has('nickname') && field('닉네임', i.nickname),
-    has('relationLevel') && field('관계 단계 (1~4, 호감도 0 · 30 · 70 · 90)', i.relationLevel),
-    has('onBreak') && field('쉬는 시간 (공부 재촉 없이 수다 · 끄면 공부 중)',chk(i.onBreak, '쉬는 중')),
-    has('chatty') && field('수다가 길어짐 (공부 중 최근 10분에 8번 이상 → 공부로 돌려보냄)', chk(i.chatty, '수다 많음')),
-    has('provider') && field('공급자', i.provider),
-    has('model') && field('모델', i.model),
-    has('temperature') && field('temperature', i.temperature),
-    has('maxTokens') && field('최대 토큰', i.maxTokens),
-    has('summary') && field('지난 세션 카드', i.summary, 'wide'),
-    has('facts') && field('캐릭터가 아는 사실 (답장 전에 결정 모델이 하나를 고름)', i.facts, 'wide'),
-    has('memories') && field('일정 (한 줄에 하나)', i.memories, 'wide'),
-    has('pinnedPrompts') && field('프롬프트 버전 고정 (키 → 버전 id, JSON)', i.pinnedPrompts, 'wide')));
-  const txt = x => x.value.trim() || null, nv = x => x.value === '' ? null : Number(x.value);
-  return {el, get() {
-    const o = {};
-    if (has('nickname')) o.nickname = txt(i.nickname);
-    if (has('relationLevel')) o.relationLevel = nv(i.relationLevel);
-    if (has('onBreak')) o.onBreak = i.onBreak.checked || null;
-    if (has('chatty')) o.chatty = i.chatty.checked || null;
-    if (has('summary')) o.summary = txt(i.summary);
-    if (has('facts')) { const f = lines(i.facts.value); o.facts = f.length ? f : null; }
-    if (has('memories')) { const m = lines(i.memories.value); o.memories = m.length ? m : null; }
-    if (has('provider')) o.provider = i.provider.value || null;
-    if (has('model')) o.model = txt(i.model);
-    if (has('temperature')) o.temperature = nv(i.temperature);
-    if (has('maxTokens')) o.maxTokens = nv(i.maxTokens);
-    if (has('pinnedPrompts')) o.pinnedPrompts = parsePinned(i.pinnedPrompts.value);
-    return o;
+  (rows || []).forEach(r => addRow(r));
+  const el = h('div', {class: 'rowsed'}, h('div', {class: 'rowhead', style: tpl}, cols.map(c => h('span', null, c.label)), !fixed && h('span')), body,
+    !fixed && h('button', {type: 'button', class: 'ghost add', onclick: () => { addRow(blank(), true); body.dispatchEvent(new Event('input', {bubbles: true})); }}, add));
+  return {el, get: () => [...body.children].map(l => l._get())};
+}
+// 대화 점수표 (운영 설정 chatScores · 캐릭터 scores 같은 모양: 종류 → {points, lossPercent, oncePerSession, repeatPoints})
+function scoresEditor(map) {
+  const m = map || {};
+  const rows = Object.keys(SIGNALS).concat(Object.keys(m).filter(k => !SIGNALS[k])).map(k => ({sig: k, ...(m[k] || {}), _had: k in m}));
+  const ed = rowsEditor([
+    {k: 'sig', label: '말 종류', type: 'label', text: k => `${SIGNALS[k] || k}`, w: '150px'},
+    {k: 'points', label: '점수 (감점이면 최소 감점)', type: 'num', ph: '0', w: '1fr'},
+    {k: 'lossPercent', label: '지금 값의 % 깎기', type: 'num', ph: '0', w: '1fr'},
+    {k: 'oncePerSession', label: '세션에 한 번만', type: 'check', w: '100px'},
+    {k: 'repeatPoints', label: '같은 세션에 또 나오면', type: 'num', ph: '같은 점수', w: '1fr'},
+  ], rows, {fixed: true});
+  const err = h('div', {class: 'errtxt', hidden: true}); // 틀린 칸은 표 바로 밑에
+  const fail = msg => { err.textContent = msg; err.hidden = false; throw new Error(msg); };
+  const isInt = n => n == null || Number.isInteger(n);
+  return {el: h('div', null, ed.el, err), get() {
+    err.hidden = true;
+    const out = {};
+    for (const r of ed.get()) {
+      const name = SIGNALS[r.sig] || r.sig;
+      const empty = r.points == null && !r.lossPercent && !r.oncePerSession && r.repeatPoints == null;
+      if (empty && !r._had) continue;
+      if (r.points == null) {
+        if (empty) continue; // 원래 있던 줄을 다 비우면 뺀다 (= 0점)
+        fail(`${name}: 점수를 넣어 주세요`);
+      }
+      if (!isInt(r.points) || !isInt(r.repeatPoints)) fail(`${name}: 점수는 정수로 넣어 주세요`);
+      if (!isInt(r.lossPercent) || (r.lossPercent ?? 0) < 0 || r.lossPercent > 100) fail(`${name}: % 깎기는 0~100 정수로 넣어 주세요`);
+      out[r.sig] = {points: r.points, lossPercent: r.lossPercent ?? 0, oncePerSession: !!r.oncePerSession, repeatPoints: r.repeatPoints};
+    }
+    return out;
   }};
 }
-function parsePinned(s) {
-  if (!s.trim()) return null;
-  let o;
-  try { o = JSON.parse(s); } catch { throw new Error('프롬프트 버전 고정 JSON을 확인해 주세요. 예: {"chat.system": 12}'); }
-  if (!o || typeof o !== 'object' || Array.isArray(o)) throw new Error('프롬프트 버전 고정은 {"키": 버전 id} 모양이어야 해요');
-  return o;
-}
-function historyEditor(label) {
-  const rows = h('div');
-  const add = () => {
-    const prev = rows.lastElementChild?.querySelector('select').value;
-    const r = h('div', {class: 'row'}, sel(['USER', 'CHARACTER'], prev === 'USER' ? 'CHARACTER' : 'USER'),
-      h('input', {class: 'grow', placeholder: '내용'}), h('button', {class: 'ghost', title: '이 줄 빼기', onclick: () => r.remove()}, '×'));
-    rows.append(r);
-    r.querySelector('input').focus();
-  };
+
+/* ---------- 1. 대화 테스트 ---------- */
+function chatTab() {
+  let rooms = [], current = null, sending = false, saveTimer = null, savePromise = null;
+  const extras = new Map(); // 대화방 id → 상태 반응 · 미리보기 말풍선 (서버 기록에는 안 남음, 새로고침하면 사라짐)
+  const roomList = h('div', {class: 'roomlist'});
+  const head = h('div', {class: 'convhead'}), msgs = h('div', {class: 'msgs'}), panel = h('aside', {class: 'panel'});
+  const input = h('textarea', {rows: 1, class: 'grow', placeholder: '말 걸기 · Enter 보내기, Shift+Enter 줄바꿈', oninput: () => grow(), onkeydown: e => {
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); send(); }
+  }});
+  const grow = () => { input.style.height = 'auto'; input.style.height = Math.min(160, input.scrollHeight + 2) + 'px'; };
+  const sendBtn = h('button', {class: 'primary', onclick: () => send()}, '보내기');
+  const quick = h('div', {class: 'quick'});
+  const root = h('div', {class: 'chat'},
+    h('aside', {class: 'rooms'}, h('div', {class: 'top'}, h('b', {class: 'grow'}, '실험 대화방'), h('button', {class: 'small', onclick: () => newRoom()}, '+ 새 방')), roomList),
+    h('section', {class: 'conv'}, head, msgs, quick, h('div', {class: 'composer'}, input, sendBtn)),
+    panel);
+
+  const historyOf = s => s.turns.filter(t => t.reply != null).flatMap(t => [{sender: 'USER', content: t.userText}, {sender: 'CHARACTER', content: t.reply}]);
+  const scrollDown = () => { msgs.scrollTop = msgs.scrollHeight; };
+
+  async function loadRooms() {
+    rooms = await api('GET', '/sessions') || [];
+    roomList.replaceChildren(...rooms.map(s => h('div', {class: 'room' + (s.id === current?.id ? ' on' : ''), onclick: () => busy(null, () => open(s.id))},
+      h('div', {class: 't'}, s.title), muted(`${charName(s.characterId)} · ${s.turnCount}턴 · ${fmtTime(s.updatedAt)}`))));
+    if (!rooms.length) roomList.append(muted('아직 대화방이 없어요. “+ 새 방”으로 시작하세요.'));
+    return rooms;
+  }
+  async function open(id) {
+    await flushSave();
+    current = await api('GET', '/sessions/' + id);
+    current.turns ||= [];
+    current.config ||= {};
+    render();
+    loadRooms().catch(() => {});
+  }
+  function render() {
+    root.classList.toggle('noroom', !current);
+    if (!current) {
+      head.replaceChildren(h('b', null, '대화방을 고르세요'));
+      msgs.replaceChildren(h('div', {class: 'empty'}, '왼쪽에서 대화방을 고르거나 “+ 새 방”을 누르세요.'));
+      panel.replaceChildren(); quick.replaceChildren(); input.disabled = sendBtn.disabled = true;
+      return;
+    }
+    input.disabled = sendBtn.disabled = false;
+    renderHead(); renderMsgs(); renderQuick(); renderPanel();
+  }
+  function renderHead() {
+    const c = current.config;
+    head.replaceChildren(
+      h('div', {class: 'grow'}, h('b', null, current.title),
+        muted(`${charName(current.characterId)} · ${stageLabel(c.relationLevel || 1)} · ${c.onBreak ? '쉬는 시간' : '공부 중'}${c.chatty && !c.onBreak ? ' · 수다가 길어짐' : ''}`)),
+      h('button', {class: 'ghost small', onclick: rename}, '이름 바꾸기'),
+      h('button', {class: 'ghost small', onclick: reset}, '대화 비우기'),
+      h('button', {class: 'ghost small danger', onclick: remove}, '삭제'),
+      h('button', {class: 'small', title: '상황 패널 열고 닫기', onclick: () => { root.classList.toggle('nopanel'); root.classList.toggle('showpanel'); }}, '상황 ⚙'));
+  }
+  function renderMsgs() {
+    const items = [...current.turns.map(t => ({at: t.createdAt, t})), ...(extras.get(current.id) || [])].sort((a, b) => String(a.at).localeCompare(String(b.at)));
+    msgs.replaceChildren(...(items.length ? items.flatMap(it => it.t ? turnBubbles(it.t) : extraBubble(it))
+      : [h('div', {class: 'empty'}, '첫마디를 보내 보세요. 오른쪽 “상황”을 바꾸면 다음 말부터 들어가요.')]));
+    scrollDown();
+  }
+  function metaLine(x) {
+    return h('div', {class: 'meta'},
+      x.emotion && h('span', {class: 'expr', title: '고른 표정'}, x.emotion),
+      x.latencyMs != null && h('span', null, fmtSec(x.latencyMs)),
+      x.costUsd != null && h('span', {title: fmtUsd(x.costUsd)}, fmtKrw(x.costUsd)),
+      x.affinity != null && h('span', {title: '서비스였다면 이 말의 호감도 점수'}, '호감도 ' + (x.affinity > 0 ? '+' : '') + x.affinity),
+      x.overBudget && h('span', {class: 'chip warn', title: '서비스였다면 마감을 넘겨 미리 쓴 대체 대사가 나갔어요'}, `마감 ${budgetMs() / 1000}초 넘음 → 서비스는 대체 대사`),
+      x.rating && h('span', {title: '내가 준 점수'}, '★' + x.rating),
+      h('span', {class: 'muted'}, '· 눌러서 자세히'));
+  }
+  function turnBubbles(t) {
+    const open = () => drawer(t, {kind: 'chat'});
+    return [
+      h('div', {class: 'msg me'}, h('div', {class: 'bubble'}, t.userText)),
+      t.error
+        ? h('div', {class: 'msg bot'}, h('div', {class: 'bubble err', onclick: open}, '답을 못 만들었어요. 서비스였다면 “답장 대체 대사”가 나갔어요.'), metaLine({...t, emotion: null}))
+        : h('div', {class: 'msg bot'}, h('div', {class: 'who'}, charName(current.characterId)), h('div', {class: 'bubble', onclick: open, title: '이 답장은 어떻게 만들어졌나'}, t.reply ?? ''), metaLine(t)),
+    ];
+  }
+  function extraBubble(x) {
+    const r = x.result, o = r.output || {}, text = o.content ?? o.summary ?? o.closingLine;
+    const open = () => drawer({...r, emotion: o.emotion, reply: text}, {kind: x.kind, label: x.label});
+    return [h('div', {class: 'msg ' + (x.kind === 'reaction' ? 'bot' : 'sys')},
+      h('div', {class: 'who'}, `(${x.label})`),
+      r.error ? h('div', {class: 'bubble err', onclick: open}, '못 만들었어요. 서비스였다면 미리 쓴 대사가 나가요.')
+        : h('div', {class: 'bubble', onclick: open}, text ?? ''),
+      metaLine({...r, emotion: o.emotion}))];
+  }
+  async function send() {
+    const text = input.value.trim();
+    if (!text || sending || !current) return;
+    sending = sendBtn.disabled = true;
+    input.value = ''; grow();
+    await flushSave();
+    const s = current;
+    const pending = [h('div', {class: 'msg me'}, h('div', {class: 'bubble'}, text)), typing()];
+    if (!s.turns.length && !(extras.get(s.id) || []).length) msgs.replaceChildren();
+    msgs.append(...pending); scrollDown();
+    try {
+      const t = await api('POST', `/sessions/${s.id}/turns`, {text});
+      s.turns.push(t);
+      if (current === s) renderMsgs();
+      loadRooms().catch(() => {});
+    } catch (e) {
+      pending.forEach(p => p.remove());
+      if (!input.value) input.value = text;
+      if (!e.shown) toast(e.message);
+    } finally {
+      sending = sendBtn.disabled = false;
+      input.focus();
+    }
+  }
+  const typing = () => h('div', {class: 'msg bot'}, h('div', {class: 'bubble typing', title: '생각 중'}, h('span'), h('span'), h('span')));
+  // 상태 반응 · 세션 카드 · 완료 대사: playground로 한 번. 결과는 이 화면에만 (다음 답장의 대화 기록에는 안 들어감)
+  async function play(kind, label, extra) {
+    if (!current || sending) return;
+    sending = true;
+    await flushSave();
+    const s = current, c = s.config;
+    const wait = typing();
+    msgs.append(wait); scrollDown();
+    try {
+      const body = {kind, characterId: s.characterId, repeat: 1, config: c, history: historyOf(s), ...extra};
+      const [r] = await api('POST', '/playground', body) || [];
+      const list = extras.get(s.id) || [];
+      list.push({at: new Date().toISOString(), kind, label, result: r});
+      extras.set(s.id, list);
+      if (current === s) renderMsgs();
+    } catch (e) { wait.remove(); if (!e.shown) toast(e.message); } finally { sending = false; }
+  }
+  function renderQuick() {
+    const llm = settingValue('dialogue', 'reactionLlmTriggers') || [];
+    const note = t => llm.includes(t) ? '' : ' · 서비스는 미리 쓴 대사';
+    const react = (t, intensity) => play('reaction', `${TRIGGERS[t] || t}${intensity ? ' · ' + AWAY_LEVELS[intensity] : ''}에 대한 반응${note(t)}`, {trigger: t, intensity: intensity ?? null});
+    const btns = (META.triggers || []).flatMap(t => t === 'AWAY'
+      ? [1, 2, 3].map(n => h('button', {title: `자리 비움 강도 ${n}`, onclick: () => react(t, n)}, `자리 비움 · ${AWAY_LEVELS[n]}`))
+      : [h('button', {title: llm.includes(t) ? '서비스에서도 AI가 만드는 반응' : '서비스에서는 AI 대신 미리 쓴 대사가 나가요. 여기서는 AI로 만들어 봐요', onclick: () => react(t)}, TRIGGERS[t] || t)]);
+    const menu = h('details', {class: 'menu'}, h('summary', null, '더보기 ▾'), h('div', {class: 'pop'},
+      h('button', {onclick: () => { menu.open = false; play('summary', '세션 카드 미리보기', {previousSummary: (current.config.facts || []).join('\n') || null, studySeconds: (current.config.sessionMinutes || 55) * 60}); }}, '세션 카드 미리보기'),
+      h('button', {onclick: () => { menu.open = false; play('closing', '완료 대사 미리보기 · 직접 끝냄', {studySeconds: (current.config.sessionMinutes || 55) * 60, endType: 'NORMAL'}); }}, '완료 대사 미리보기 · 직접 끝냄'),
+      h('button', {onclick: () => { menu.open = false; play('closing', '완료 대사 미리보기 · 자동 종료', {studySeconds: (current.config.sessionMinutes || 55) * 60, endType: 'AUTO_CLOSED'}); }}, '완료 대사 미리보기 · 자동 종료')));
+    quick.replaceChildren(h('span', {class: 'lab'}, '상황 반응:'), ...btns, menu);
+  }
+  // 상황 패널: 실험 조건(LabConfig). 바꾸면 이 방에 저장하고 다음 말부터 들어간다
+  function renderPanel() {
+    const c = current.config;
+    const status = h('span', {class: 'hint'}, '');
+    const set = (k, v) => { c[k] = v; scheduleSave(status); renderHead(); };
+    const txt = (k, attrs) => h('input', {value: c[k] ?? '', ...attrs, onchange: e => set(k, e.target.value.trim() || null)});
+    const area = (k, ph, isList) => h('textarea', {rows: 3, placeholder: ph, value: isList ? (c[k] || []).join('\n') : c[k] ?? '',
+      onchange: e => { const v = isList ? lines(e.target.value) : e.target.value.trim(); set(k, isList ? (v.length ? v : null) : v || null); }});
+    const num = (k, attrs) => h('input', {type: 'number', value: c[k] ?? '', placeholder: '기본', ...attrs, onchange: e => set(k, e.target.value === '' ? null : Number(e.target.value))});
+    const seg = h('div', {class: 'seg'});
+    const chatty = h('input', {type: 'checkbox', checked: c.chatty === true, disabled: !!c.onBreak, onchange: e => set('chatty', e.target.checked || null)});
+    const paintSeg = () => seg.replaceChildren(...[[false, '공부 중'], [true, '쉬는 시간']].map(([v, t]) =>
+      h('button', {type: 'button', class: !!c.onBreak === v ? 'on' : '', onclick: () => { set('onBreak', v || null); chatty.disabled = v; paintSeg(); }}, t)));
+    paintSeg();
+    const chattyHint = `서비스는 공부 중 최근 ${(isoToSec(settingValue('dialogue', 'chattyWindow')) ?? 600) / 60}분 안에 이번 말까지 ${settingValue('dialogue', 'chattyMessages') ?? 8}번째부터 수다가 길어진 것으로 봐요. 짧게 받고 공부로 돌려보내요.`;
+    const pins = h('div');
+    const adv = h('details', {class: 'adv', ontoggle: () => { if (adv.open) busy(null, () => fillPins(pins, c, status)); }}, h('summary', null, '고급 (모델 · 프롬프트 버전)'),
+      field('답장 방식', sel(META.pipelines.map(p => [p, p === 'SCENE' ? 'SCENE · 캐릭터 설정 사용' : p === 'SIMPLE' ? 'SIMPLE · 공통 프롬프트' : p]), current.pipeline,
+        {onchange: e => { current.pipeline = e.target.value; scheduleSave(status, true); }})),
+      field('공급자', sel([['', `기본 (${META.defaultProvider})`], ...META.providers.filter(p => p.name !== 'jev').map(p => [p.name, p.ready ? p.name : p.name + ' (키 없음)'])], c.provider ?? '',
+        {onchange: e => set('provider', e.target.value || null)})),
+      field('모델', txt('model', {placeholder: '기본 (용도별 등급의 모델)'}), '비우면 운영 설정의 모델 표대로'),
+      h('div', {class: 'row'}, field('temperature', num('temperature', {step: 0.1, min: 0})), field('최대 출력 토큰', num('maxTokens', {min: 1}))),
+      h('div', {class: 'f'}, h('span', {class: 'lbl'}, '프롬프트 버전 고정'), h('span', {class: 'hint'}, '켜기 전의 새 버전을 먼저 시험할 때. 비우면 서비스가 쓰는 버전'), pins));
+    panel.replaceChildren(
+      h('div', {class: 'section-head'}, h('h3', {class: 'grow', style: 'margin:0'}, '상황'), scope(false)),
+      muted('여기 값은 이 실험 방에만 쓰여요. 실제 사용자 데이터 · 서비스 설정은 바뀌지 않아요.'), h('div', {style: 'height:10px'}),
+      field('캐릭터', h('div', null, charName(current.characterId)), '방마다 고정. 다른 캐릭터는 새 방에서'),
+      field('닉네임', txt('nickname', {placeholder: '테스터'})),
+      field('관계 단계', sel(stageOptions(), String(c.relationLevel || 1), {onchange: e => set('relationLevel', Number(e.target.value))}), '서비스에서는 호감도 구간으로 정해져요 (운영 설정 “관계 단계”)'),
+      h('div', {class: 'f'}, h('span', {class: 'lbl'}, '지금'), seg),
+      h('div', {class: 'f'}, h('span', {class: 'lbl'}, '수다가 길어짐'), h('label', {class: 'chk'}, chatty, '켜기'), h('span', {class: 'hint'}, chattyHint)),
+      field('공부한 시간 (분)', num('sessionMinutes', {min: 0, placeholder: '안 넣음'}), '상황 카드에 “공부한 지 N분”으로 들어가요'),
+      field('지난 세션 흐름', area('summary', '11/05 55분, 3단원 하다 지쳐서 일찍 끝냄'), '지난 공부의 세션 카드 (최근 것이 아래, 서비스는 최근 2장)'),
+      field('캐릭터가 아는 사실', area('facts', '이번 달 토익 800 목표', true), '한 줄에 하나. 답장 전에 결정 모델이 이번 말에 맞는 하나만 골라 넣어요'),
+      field('사용자 일정', area('memories', '시험: 중간고사 (2026-11-20)', true), '한 줄에 하나. 이 세션 첫 대화에만 들어가요'),
+      adv, status);
+  }
+  async function fillPins(box, c, status) {
+    const pinVersions = await api('GET', '/prompts') || []; // 매번 새로: 공통 프롬프트 탭에서 방금 만든 초안도 보이게
+    const pinned = c.pinnedPrompts || {};
+    box.replaceChildren(...META.promptKeys.map(k => {
+      const vs = pinVersions.filter(v => v.key === k.key && (v.characterId == null || v.characterId === current.characterId));
+      return h('div', {class: 'pinrow'}, h('span', {title: k.key}, PROMPTS[k.key]?.[0] || k.key),
+        sel([['', '서비스 버전'], ...vs.map(v => [String(v.id), `v${v.version}${v.characterId ? ' (전용)' : ''} · ${v.status === 'ACTIVE' ? '켜짐' : v.status === 'DRAFT' ? '초안' : '예전'}`])], pinned[k.key] != null ? String(pinned[k.key]) : '',
+          {onchange: e => { const p = {...(c.pinnedPrompts || {})}; if (e.target.value) p[k.key] = Number(e.target.value); else delete p[k.key]; c.pinnedPrompts = Object.keys(p).length ? p : null; scheduleSave(status); }}));
+    }));
+  }
+  function scheduleSave(status, withPipeline) {
+    status.textContent = '저장 중…';
+    clearTimeout(saveTimer);
+    const s = current;
+    saveTimer = setTimeout(() => {
+      saveTimer = null;
+      savePromise = api('PATCH', '/sessions/' + s.id, {config: s.config, pipeline: withPipeline ? s.pipeline : null})
+        .then(() => { status.textContent = '저장했어요 · 다음 말부터 들어가요'; })
+        .catch(() => { status.textContent = '저장 못 함'; })
+        .finally(() => { savePromise = null; });
+    }, 400);
+  }
+  async function flushSave() {
+    if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; await api('PATCH', '/sessions/' + current.id, {config: current.config, pipeline: current.pipeline}).catch(() => {}); }
+    if (savePromise) await savePromise;
+  }
+  async function newRoom() {
+    const title = h('input', {placeholder: '예: 시험 전날 불안', style: 'width:100%'});
+    const ch = charSel(current?.characterId ?? META.characters[0]?.id);
+    const copy = h('input', {type: 'checkbox', checked: !!current});
+    const ok = await modal('새 실험 대화방', [field('방 이름', title, '비우면 캐릭터 · 시각으로'), field('캐릭터', ch),
+      current && h('label', {class: 'chk'}, copy, '지금 방의 상황 그대로 가져오기')], {ok: '만들기'});
+    if (!ok) return;
+    await busy(null, async () => {
+      const name = title.value.trim() || `${charName(ch.value)} · ${fmtTime(new Date())}`;
+      const s = await api('POST', '/sessions', {title: name, characterId: Number(ch.value), pipeline: copy.checked && current ? current.pipeline : null,
+        config: copy.checked && current ? current.config : {}});
+      await open(s.id);
+    });
+  }
+  async function rename() {
+    const title = h('input', {value: current.title, style: 'width:100%'});
+    if (!await modal('방 이름 바꾸기', field('방 이름', title), {ok: '바꾸기'})) return;
+    await busy(null, async () => { await api('PATCH', '/sessions/' + current.id, {title: title.value.trim() || null}); await open(current.id); });
+  }
+  async function reset() {
+    if (!await modal('대화 비우기', muted(`“${current.title}”의 대화 ${current.turns.length}턴을 지워요. 상황 설정은 그대로예요. 실험 기록이라 서비스와는 무관해요.`), {ok: '비우기', danger: true})) return;
+    await busy(null, async () => { await api('POST', `/sessions/${current.id}/reset`); extras.delete(current.id); await open(current.id); });
+  }
+  async function remove() {
+    if (!await modal('대화방 삭제', muted(`“${current.title}”을 지워요. 되돌릴 수 없어요.`), {ok: '삭제', danger: true})) return;
+    await busy(null, async () => { await api('DELETE', '/sessions/' + current.id); extras.delete(current.id); current = null; render(); const rs = await loadRooms(); if (rs.length) await open(rs[0].id); });
+  }
+  // 말풍선을 누르면: 이 답장은 어떻게 만들어졌나 (트레이스 · 호출 원문)
+  function drawer(x, {kind, label}) {
+    const d = $('#drawer'), us = x.usages || [], trace = x.trace || {};
+    const mainKinds = {chat: 'CHAT', reaction: 'REACTION', summary: 'SUMMARY', closing: 'CLOSING'};
+    const main = us.find(u => u.purpose === mainKinds[kind]) || us.find(u => u.purpose !== 'DECIDE') || us[0];
+    const others = us.filter(u => u !== main);
+    const tok = k => sum(us, u => u[k]);
+    const sec = (title, ...body) => h('div', {class: 'sec'}, h('h4', null, title), body);
+    const fold = (title, text, open) => h('details', {class: 'fold', open}, h('summary', null, title), h('pre', null, text ?? '—'));
+    const req = u => u?.request;
+    const lore = loreFromScene(trace.scene);
+    const close = () => { d.hidden = true; document.removeEventListener('keydown', esc); };
+    const esc = e => { if (e.key === 'Escape') close(); };
+    document.addEventListener('keydown', esc);
+    const promptsUsed = Object.entries(trace.prompts || {}).map(([k, v]) => `${PROMPTS[k]?.[0] || k} v${v.version}${v.status === 'ACTIVE' ? '' : ' (' + v.status + ')'}`).join(', ');
+    d.replaceChildren(
+      h('div', {class: 'dh'}, h('b', {class: 'grow'}, kind === 'chat' ? '이 답장은 어떻게 만들어졌나' : `이 ${label || '결과'}는 어떻게 만들어졌나`), h('button', {class: 'ghost', onclick: close, title: '닫기 (Esc)'}, '✕')),
+      h('div', {class: 'db'},
+        x.userText && sec('사용자 말', h('div', {class: 'sent'}, h('div', null, x.userText))),
+        sec('답', x.error ? h('div', {class: 'errtxt'}, x.error) : h('div', {class: 'sent'}, h('div', null, x.reply ?? '—'))),
+        kind === 'chat' && x.id != null && sec('평가 (1~5점)', rating(x)),
+        sec('고른 것', h('div', {class: 'kv'},
+          h('div', null, '고른 표정'), h('div', null, x.emotion || '—'),
+          kind === 'chat' && [h('div', null, '고른 기억'), h('div', null, trace.fact || '없음 (아는 사실이 없거나 이번 말에 맞는 게 없음)'),
+            h('div', null, '말 종류'), h('div', null, trace.signal ? `${SIGNALS[trace.signal] || trace.signal}${trace.signalConfidence != null ? ` (확신 ${Number(trace.signalConfidence).toFixed(2)})` : ' (말 패턴)'}` : '—'),
+            h('div', null, '호감도 점수'), h('div', null, x.affinity == null ? '—' : (x.affinity > 0 ? '+' : '') + x.affinity + ' (서비스였다면, 하루 상한 전)'),
+            h('div', null, '걸린 로어북 카드'), h('div', null, lore.length ? lore.join('\n') : '없음 (이번 말에 원작 키워드가 없음)'),
+            h('div', null, '관계 단계'), h('div', null, trace.stage ? stageLabel(trace.stage) : '—'),
+            h('div', null, '답장 방식'), h('div', null, trace.pipeline || '—')],
+          promptsUsed && [h('div', null, '프롬프트'), h('div', null, promptsUsed)])),
+        sec('시간 · 토큰 · 비용', h('div', {class: 'kv'},
+          h('div', null, '걸린 시간'), h('div', null, fmtSec(x.latencyMs), x.overBudget ? ` · 마감 ${budgetMs() / 1000}초를 넘겨서 서비스였다면 대체 대사` : ''),
+          h('div', null, '비용'), h('div', null, `${fmtUsd(x.costUsd)} · ${fmtKrw(x.costUsd)}`),
+          h('div', null, '토큰'), h('div', null, `입력 ${fmtInt(tok('inputTokens'))} · 캐시 읽기 ${fmtInt(tok('cacheReadTokens'))} · 캐시 쓰기 ${fmtInt(tok('cacheWriteTokens'))} · 출력 ${fmtInt(tok('outputTokens'))}`),
+          h('div', null, 'AI 호출'), h('div', null, us.length ? us.map(u => `${PURPOSES[u.purpose] || u.purpose} ${fmtSec(u.latencyMs)}`).join(' · ') : '없음'))),
+        main && sec(`시스템 블록 (고정 · 상황 카드) · ${main.provider} ${main.model}`, req(main)
+          ? (req(main).system || []).map((s, i) => fold(s.cache ? `고정 블록 ${i + 1} · 캐시됨 (캐릭터 · 단계가 같으면 그대로)` : `상황 카드 ${i + 1} · 이번 차례만`, s.text, !s.cache))
+          : muted('이 호출은 원문을 저장하지 않았어요.')),
+        main && req(main) && sec('보낸 대화', (req(main).messages || []).length ? h('div', {class: 'sent'}, req(main).messages.map(m =>
+          h('div', null, h('b', null, m.role === 'user' ? '사용자' : m.role === 'assistant' ? '캐릭터' : m.role), m.text))) : muted('없음')),
+        main && sec('모델 원문', h('pre', null, main.response ?? trace.raw ?? '—'), main.error && h('div', {class: 'errtxt'}, main.error)),
+        others.length > 0 && sec('다른 AI 호출', others.map(u => h('details', {class: 'fold'},
+          h('summary', null, `${PURPOSES[u.purpose] || u.purpose} · ${u.model} · ${fmtSec(u.latencyMs)} · ${fmtKrw(u.costUsd)}${u.status === 'ERROR' ? ' · 실패' : ''}`),
+          h('div', {style: 'padding:0 8px 8px'}, u.error && h('div', {class: 'errtxt'}, u.error),
+            req(u) && (req(u).system || []).map((s, i) => fold(`시스템 ${i + 1}`, s.text)),
+            req(u) && (req(u).messages || []).map(m => fold(m.role === 'user' ? '보낸 말' : m.role, m.text)),
+            fold('응답', u.response, true))))),
+      ));
+    d.hidden = false;
+  }
+  function rating(t) {
+    let cur = t.rating || 0;
+    const note = h('input', {value: t.ratingNote ?? '', placeholder: '메모 (Enter로 저장)', class: 'grow', onkeydown: e => { if (e.key === 'Enter') store(); }});
+    const stars = [1, 2, 3, 4, 5].map(n => h('button', {class: 'star', title: `${n}점`, onclick: () => { cur = n; paint(); store(); }}, '★'));
+    const paint = () => stars.forEach((s, k) => s.classList.toggle('on', k < cur));
+    const store = () => busy(null, async () => {
+      if (!cur) return toast('별점을 먼저 골라 주세요', 'info');
+      const v = await api('PATCH', `/turns/${t.id}`, {score: cur, note: note.value.trim() || null});
+      t.rating = v.rating; t.ratingNote = v.ratingNote;
+      toast(`${cur}점 저장했어요`, 'ok');
+      renderMsgs();
+    });
+    paint();
+    return h('div', {class: 'row'}, h('span', {class: 'stars'}, stars), note);
+  }
   return {
-    el: h('div', {class: 'f wide'}, h('span', null, label), rows, h('button', {class: 'ghost', onclick: add}, '+ 줄 추가')),
-    get: () => [...rows.children].map(r => ({sender: r.querySelector('select').value, content: r.querySelector('input').value.trim()})).filter(x => x.content),
+    el: root,
+    show: () => busy(null, async () => {
+      const rs = await loadRooms();
+      if (!current && rs.length) await open(rs[0].id); else render();
+    }),
   };
 }
-// LLM 호출 표. 줄을 누르면 실제로 보낸 system·messages와 받은 응답을 펼친다
-function usageTable(us, withTime) {
-  if (!us?.length) return muted('LLM 호출 없음');
-  const head = ['목적', '공급자', '모델', '상태', '입력', '캐시 읽기', '캐시 쓰기', '출력', '비용', '지연', 'TTFT'];
-  return table(withTime ? ['시각', ...head] : head, us.map(u => {
-    let det = null;
-    const cells = [u.purpose, u.provider, u.model, badge(u.status), u.inputTokens, u.cacheReadTokens, u.cacheWriteTokens, u.outputTokens, fmtCost(u.costUsd), fmtMs(u.latencyMs), fmtMs(u.ttftMs)];
-    const row = tr(withTime ? [fmtTime(u.createdAt), ...cells] : cells, {class: 'click', title: '눌러서 요청·응답 보기', onclick: () => {
-      if (det) det.hidden = !det.hidden;
-      else row.after(det = h('tr', {class: 'sub'}, h('td', {colspan: row.children.length}, usageDetail(u))));
-    }});
-    return row;
-  }));
+// 상황 카드에서 걸린 로어북 카드 줄 (SceneChatPipeline.card의 <사용자가 꺼낸 원작 얘기 …> 블록)
+function loreFromScene(scene) {
+  const m = /<사용자가 꺼낸 원작 얘기[^>]*>\n([\s\S]*?)\n<\/사용자가 꺼낸 원작 얘기>/.exec(scene || '');
+  return m ? m[1].split('\n').map(s => s.replace(/^- /, '')) : [];
 }
-function usageDetail(u) {
-  const r = u.request;
-  const block = (role, text, cache) => h('div', null, h('div', {class: 'role'}, role, cache && h('span', {class: 'badge cache'}, '캐시')), h('pre', null, text ?? ''));
-  return h('div', null,
-    u.error && h('div', {class: 'errbox'}, u.error),
-    muted([`id ${u.id}`, `stop ${u.stopReason ?? '—'}`, `프롬프트 버전 ${(u.promptVersionIds || []).join(', ') || '—'}`,
-      r && `maxTokens ${r.maxTokens ?? '—'}`, r && `temperature ${r.temperature ?? '—'}`, r?.reasoningEffort && `reasoning ${r.reasoningEffort}`].filter(Boolean).join(' · ')),
-    r ? [h('h4', null, `system (${(r.system || []).length})`), (r.system || []).map((s, k) => block('#' + (k + 1), s.text, s.cache)),
-      h('h4', null, `messages (${(r.messages || []).length})`), (r.messages || []).map(m => block(m.role, m.text))]
-      : muted('요청 내용은 기록하지 않았어요 (capsule.llm.log-content=false)'),
-    h('h4', null, 'response'), u.response == null ? muted('—') : h('pre', null, u.response));
+
+/* ---------- 2. 캐릭터 ---------- */
+const CHAR_FIELDS = [
+  ['speaker', '말하는 이름'], ['safety', '안전 기준'], ['bible', '성격 · 말투'], ['rules', '꼭 지킬 것'], ['stageTones', '관계 단계별 사이'],
+  ['samples', '말투 예시'], ['studyStyle', '공부 중 말하는 법'], ['breakStyle', '쉬는 시간 말하는 법'], ['expressions', '표정 목록'],
+  ['expressionGuide', '표정 고르는 기준'], ['lines', '미리 쓴 대사'], ['lore', '원작 키워드 카드'], ['scores', '대화 점수표'], ['habits', '피할 말버릇'],
+];
+const sortedJson = xs => (xs || []).map(x => canon(x)).sort();
+function characterTab() {
+  let orig = null, form = null;
+  const ch = charSel(META.characters[0]?.id, false, {});
+  ch.onchange = () => busy(null, async () => {
+    if (dirty() && !await modal('저장하지 않은 수정이 있어요', muted(`${charName(orig.characterId)} 설정에서 고친 내용을 버리고 다른 캐릭터를 열까요?`), {ok: '버리고 열기', danger: true})) {
+      ch.value = String(orig.characterId);
+      return;
+    }
+    await load();
+  });
+  const dirty = () => { if (!form) return false; try { return changes(orig, form.get()).length > 0; } catch { return true; } };
+  const box = h('div', null, muted('불러오는 중…'));
+  const stale = h('div', {class: 'notice', hidden: true});
+  const saveBtn = h('button', {class: 'primary', onclick: () => busy(saveBtn, save)}, '저장');
+  const reseedBtn = h('button', {class: 'danger', onclick: () => busy(reseedBtn, reseed)}, '파일 값으로 되돌리기');
+  const where = (...ws) => ws.map(w => h('span', {class: 'where'}, w));
+  const cf = (name, desc, ws, el) => h('div', {class: 'cfield'}, h('div', null, h('span', {class: 'name'}, name), where(...ws)), h('div', {class: 'desc'}, desc), el);
+  const card = (id, title, ...body) => h('div', {class: 'card', id}, h('h3', null, title), body);
+  function build(c) {
+    const speaker = h('input', {value: c.speaker ?? ''});
+    const safetyOpts = [['MINOR', '미성년 · 연애 / 성적 대화 금지']];
+    const safety = sel(safetyOpts.some(o => o[0] === c.safety) ? safetyOpts : [...safetyOpts, [c.safety ?? '', c.safety || '(없음)']], c.safety ?? '');
+    const bible = h('textarea', {rows: 14, value: c.bible ?? ''});
+    const rules = h('textarea', {rows: 10, value: c.rules ?? ''});
+    const study = h('textarea', {rows: 3, value: c.studyStyle ?? ''}), brk = h('textarea', {rows: 3, value: c.breakStyle ?? ''});
+    const nStages = Math.max(stageList().length, ...Object.keys(c.stageTones || {}).map(Number));
+    const tones = Array.from({length: nStages}, (_, i) => [i + 1, h('textarea', {rows: 3, value: c.stageTones?.[i + 1] ?? c.stageTones?.[String(i + 1)] ?? ''})]);
+    const samples = Array.from({length: nStages}, (_, i) => [i + 1, rowsEditor([
+      {k: 'user', label: '사용자 말', ph: '같이 공부할래?'}, {k: 'reply', label: `${c.speaker || '캐릭터'} 답 ({name} = 닉네임)`, type: 'area', w: '2fr'}],
+    (c.samples || []).filter(s => s.minStage === i + 1), {add: '+ 예시 추가'})]);
+    const exprRows = [...(c.expressions || []), ...Object.keys(c.expressionGuide || {}).filter(k => !(c.expressions || []).includes(k))]
+      .map(name => ({name, guide: c.expressionGuide?.[name] ?? ''}));
+    const exprs = rowsEditor([{k: 'name', label: '표정 이름', w: '160px'}, {k: 'guide', label: '언제 고르나 (결정 모델이 보는 설명)', type: 'area'}], exprRows, {add: '+ 표정 추가'});
+    const exprOpts = () => [['', '(없음)'], ...exprs.get().map(r => r.name).filter(Boolean)];
+    const bySit = groupBy(c.lines || [], l => l.situation);
+    const sits = [...Object.keys(SITUATIONS), ...[...bySit.keys()].filter(k => !SITUATIONS[k])];
+    const lineEds = sits.map(s => {
+      const rows = (bySit.get(s) || []).slice().sort((a, b) => a.minStage - b.minStage || a.sort - b.sort).map(l => ({...l, minStage: String(l.minStage), expression: l.expression ?? ''}));
+      const ed = rowsEditor([
+        {k: 'minStage', label: '단계부터', type: 'select', options: stageOptions().map(([v, t]) => [v, t.split(' (')[0]]), w: '150px'},
+        {k: 'text', label: '대사 ({name} = 닉네임)', type: 'area', w: '3fr'},
+        {k: 'expression', label: '표정', type: 'select', options: exprOpts, w: '120px'}], rows, {add: '+ 대사 추가', blank: () => ({situation: s, minStage: '1', expression: ''})});
+      const [name, desc] = SITUATIONS[s] || [s, '이 화면이 모르는 상황 이름이에요'];
+      return [s, ed, h('details', {class: 'sit'}, h('summary', null, `${name} `, h('span', {class: 'muted small'}, `${s} · ${rows.length}줄`)), h('div', null, muted(desc), h('div', {style: 'height:8px'}), ed.el))];
+    });
+    const lore = rowsEditor([{k: 'title', label: '제목', w: '140px'}, {k: 'keys', label: '키워드 (쉼표로)', type: 'list', w: '1fr'}, {k: 'text', label: '내용 (캐릭터 입장에서)', type: 'area', w: '2fr', rows: 3}],
+      c.lore || [], {add: '+ 카드 추가'});
+    const scores = scoresEditor(c.scores);
+    const habits = rowsEditor([{k: 'word', label: '말'}, {k: 'rule', label: '규칙', type: 'select', options: [['NO_OPENING', '첫마디로 쓰지 않기'], ['ONCE_PER_SESSION', '세션에 한 번만']]}],
+      Object.entries(c.habits || {}).map(([word, rule]) => ({word, rule})), {add: '+ 말버릇 추가', blank: () => ({rule: 'NO_OPENING'})});
+    const toc = [['c-basic', '기본'], ['c-persona', '성격 · 규칙'], ['c-stage', '관계 단계'], ['c-style', '공부 · 쉬는 시간'], ['c-expr', '표정'], ['c-lines', '미리 쓴 대사'], ['c-lore', '원작 카드'], ['c-score', '점수 · 말버릇']];
+    const el = h('div', null,
+      h('div', {class: 'toc'}, toc.map(([id, t]) => h('a', {href: '#' + id, onclick: e => { e.preventDefault(); document.getElementById(id)?.scrollIntoView({behavior: 'smooth'}); }}, t))),
+      card('c-basic', '기본',
+        cf('말하는 이름', '프롬프트와 말투 예시에서 캐릭터를 부르는 이름.', ['채팅', '반응'], speaker),
+        cf('안전 기준', 'MINOR = 미성년 기준: 연애 · 성적 대화는 하지 않아요.', ['채팅', '반응'], safety),
+        cf('버전', '', [], h('div', null, h('b', null, `DB에 든 버전: v${c.version}`), muted(`git 파일(characters/${c.code}/profile.yml)의 version이 이보다 높으면 서버를 시작할 때 파일 값이 DB를 덮어써요. 여기서 저장해도 버전은 그대로라, git 파일을 고쳐 version을 올리고 배포하면 여기서 바꾼 내용은 사라져요. 오래 둘 내용은 git 파일에도 옮겨 주세요.`)))),
+      card('c-persona', '성격 · 규칙',
+        cf('성격 · 말투', '누구인지, 지금 상황, 성격, 말하는 법. 관계가 발전해도 바뀌지 않는 정체성이에요.', ['채팅 고정 블록', '반응 고정 블록'], bible),
+        cf('꼭 지킬 것', '어떤 상황에서도 지킬 규칙.', ['채팅 고정 블록', '반응 고정 블록'], rules)),
+      card('c-stage', '관계 단계',
+        cf('관계 단계별 사이', '그 단계에서 사용자와의 거리감 · 호칭 · 챙김 수위. 지금 단계 것 한 줄만 들어가요. 단계 이름 · 호감도 구간은 운영 설정에서.', ['채팅 고정 블록', '반응 카드'],
+          h('div', null, tones.map(([n, ta]) => h('div', {class: 'f'}, h('span', {class: 'lbl'}, stageLabel(n)), ta)))),
+        cf('말투 예시', '사용자 말 → 캐릭터 답 한 쌍씩. 지금 단계 이하 중 가장 높은 단계 묶음만 들어가요. 흔한 말(안녕 · 고마워)은 빼야 그대로 베끼지 않아요.', ['채팅 고정 블록'],
+          h('div', null, samples.map(([n, ed]) => h('div', {class: 'f'}, h('span', {class: 'lbl'}, stageLabel(n)), ed.el))))),
+      card('c-style', '공부 · 쉬는 시간',
+        cf('공부 중 말하는 법', '공부 중일 때 상황 카드 맨 끝 “지금:” 줄.', ['채팅 상황 카드'], study),
+        cf('쉬는 시간 말하는 법', '쉬는 시간일 때 상황 카드 맨 끝 “지금:” 줄.', ['채팅 상황 카드'], brk)),
+      card('c-expr', '표정',
+        cf('표정 목록 · 표정 고르는 기준', '대사를 다 만든 뒤 결정 모델이 이 중 하나를 골라요 (명세 19 · 20의 emotion 값). 이름은 프론트 Live2D 표정과 맞아야 해요. 설명이 없으면 이름만 보여 줘요.', ['결정 모델 보기'], exprs.el)),
+      card('c-lines', '미리 쓴 대사',
+        muted('상태 변화(공부 시작 · 자리 비움 · 돌아옴 · 쉬기 시작 · 쉬기 끝)는 AI 반응의 말투 예시로 그 단계 두 줄이 들어가고, AI가 마감을 넘기면 이 대사가 나가요. 동작(졸음 · 하품 · 손 흔들기 · 고개 돌림)은 이 대사를 그대로 써요. 지금 단계 이하 중 가장 높은 단계 묶음에서 순서대로 돌려 써요.'),
+        lineEds.map(x => x[2])),
+      card('c-lore', '원작 키워드 카드',
+        cf('원작 키워드 카드 (로어북)', '사용자 말에 키워드가 하나라도 있으면(띄어쓰기 무시) 그 카드 내용을 넣어요. 한 말에 위에서부터 최대 2장. 평범한 말에 걸리지 않게 키워드는 좁게.', ['채팅 상황 카드'], lore.el)),
+      card('c-score', '점수 · 말버릇',
+        cf('대화 점수표', '사용자 말의 종류마다 호감도 점수 (명세 20). 비운 종류는 0점이고, 표를 다 비우면 운영 설정의 기본 점수표를 써요. “% 깎기”가 있으면 지금 호감도의 그 %를 깎되 “점수”만큼은 꼭 깎아요.', ['호감도'], scores.el),
+        cf('피할 말버릇', '첫마디로 쓰지 않기 = 그 말로 시작하면 떼어 내요. 세션에 한 번만 = 이미 쓴 세션에서는 피하라고 알려요.', ['채팅 상황 카드', '반응 카드'], habits.el)));
+    const get = () => {
+      const exprList = exprs.get().filter(r => r.name);
+      const lines = lineEds.flatMap(([s, ed]) => {
+        const rows = ed.get().filter(r => r.text);
+        let next = Math.max(-1, ...rows.map(r => r.sort ?? -1)) + 1;
+        return rows.map(r => ({situation: s, minStage: Number(r.minStage) || 1, sort: r.sort ?? next++, text: r.text, expression: r.expression || null}));
+      });
+      return {...c, speaker: speaker.value.trim(), safety: safety.value || null, bible: bible.value, rules: rules.value,
+        stageTones: Object.fromEntries(tones.map(([n, ta]) => [String(n), ta.value]).filter(([, v]) => v.trim())),
+        samples: samples.flatMap(([n, ed]) => ed.get().filter(r => r.user && r.reply).map(r => ({minStage: n, user: r.user, reply: r.reply}))),
+        studyStyle: study.value, breakStyle: brk.value,
+        expressions: exprList.map(r => r.name), expressionGuide: Object.fromEntries(exprList.filter(r => r.guide).map(r => [r.name, r.guide])),
+        lines, lore: lore.get().filter(r => r.title || r.text).map(r => ({title: r.title, keys: r.keys, text: r.text})),
+        scores: scores.get(), habits: Object.fromEntries(habits.get().filter(r => r.word).map(r => [r.word, r.rule]))};
+    };
+    return {el, get};
+  }
+  function changes(a, b) {
+    const out = [];
+    for (const [k, name] of CHAR_FIELDS) {
+      if (k === 'lines') {
+        const ga = groupBy(a.lines, l => l.situation), gb = groupBy(b.lines, l => l.situation);
+        for (const s of new Set([...ga.keys(), ...gb.keys()])) {
+          const x = ga.get(s) || [], y = gb.get(s) || [];
+          if (canon(sortedJson(x)) !== canon(sortedJson(y))) out.push(`미리 쓴 대사 · ${SITUATIONS[s]?.[0] || s}: ${x.length}줄 → ${y.length}줄${x.length === y.length ? ' (내용 바뀜)' : ''}`);
+        }
+        continue;
+      }
+      const x = a[k], y = b[k];
+      const eq = k === 'samples' ? canon(sortedJson(x)) === canon(sortedJson(y)) : same(x, y);
+      if (eq) continue;
+      const count = v => Array.isArray(v) ? v.length : v && typeof v === 'object' ? Object.keys(v).length : null;
+      out.push(count(x) != null && count(x) !== count(y) ? `${name}: ${count(x)}개 → ${count(y)}개` : `${name} 바뀜`);
+    }
+    return out;
+  }
+  async function load() {
+    orig = await api('GET', `/characters/${ch.value}/content`);
+    if (!SETTINGS) await loadSettings().catch(() => {});
+    form = build(orig);
+    stale.hidden = true;
+    box.replaceChildren(form.el);
+  }
+  async function save() {
+    if (!form) return;
+    let next;
+    try { next = form.get(); } catch (e) { return toast(e.message); }
+    const list = changes(orig, next);
+    if (!list.length) return toast('바뀐 곳이 없어요', 'info');
+    const ok = await modal(`${charName(ch.value)} 설정 저장`, [h('p', null, scope(true), ' 저장하면 다음 대화 · 반응부터 실제 서비스에 바로 들어가요.'),
+      h('b', null, '바뀐 곳'), h('ul', null, list.map(x => h('li', null, x))),
+      muted(`git 파일 version이 DB(v${orig.version})보다 높아지면 서버 시작 때 파일 값으로 덮여요.`)], {ok: '저장하기'});
+    if (!ok) return;
+    // PUT은 설정 전체를 바꾼다: 불러온 뒤 다른 곳(새 파일 버전 배포, 다른 관리자)에서 바뀌었으면 덮어쓰지 않고 멈춘다
+    const latest = await api('GET', `/characters/${orig.characterId}/content`);
+    if (!same(latest, orig)) {
+      stale.replaceChildren(`다른 곳에서 바뀌었어요 (예: 새 파일 버전 v${latest.version} 배포, 다른 관리자). 덮어쓰지 않았어요. `,
+        h('button', {class: 'small', onclick: () => busy(null, load)}, '다시 불러오기'), ' 여기서 고치던 내용은 사라져요.');
+      stale.hidden = false;
+      stale.scrollIntoView({behavior: 'smooth', block: 'center'});
+      return;
+    }
+    await api('PUT', `/characters/${orig.characterId}/content`, next);
+    toast('저장했어요. 다음 대화부터 서비스에 들어가요', 'ok');
+    await load();
+  }
+  async function reseed() {
+    if (!orig) return;
+    const ok = await modal('파일 값으로 되돌리기', [h('p', null, scope(true)),
+      h('p', null, `DB에 저장한 ${charName(ch.value)} 설정을 전부 git 파일(characters/${orig.code}/profile.yml) 값으로 바꿔요. 여기서 고친 내용은 사라지고, 서비스에도 바로 들어가요.`)],
+    {ok: '되돌리기', danger: true});
+    if (!ok) return;
+    await api('POST', `/characters/reseed/${orig.code}`);
+    toast('파일 값으로 되돌렸어요', 'ok');
+    await load();
+  }
+  return {
+    el: h('div', null,
+      h('div', {class: 'card'}, h('div', {class: 'section-head'}, h('h2', {class: 'grow', style: 'margin:0'}, '캐릭터 설정'), scope(true)),
+        muted('캐릭터의 성격 · 말투 · 대사 · 점수표. 저장하면 다음 대화부터 서비스 답장 · 상태 반응에 바로 쓰여요. 각 칸 옆의 회색 표는 프롬프트의 어디에 들어가는지예요.'),
+        h('div', {class: 'row', style: 'margin-top:10px'}, field('캐릭터', ch))),
+      stale, box,
+      h('div', {class: 'card savebar', style: 'margin:0;border-radius:12px'}, saveBtn, h('span', {class: 'hint grow'}, '저장 전에 바뀐 곳을 보여 줘요'), reseedBtn)),
+    show: () => { if (!orig) busy(null, load); },
+  };
 }
-function rating(score, note, save) {
-  let cur = score || 0;
-  const noteEl = h('input', {value: note ?? '', placeholder: '메모 (Enter로 저장)', onchange: () => cur ? store() : toast('별점을 먼저 골라 주세요', 'info')});
-  const stars = [1, 2, 3, 4, 5].map(n => h('button', {class: 'star', title: `${n}점`, onclick: () => { cur = n; paint(); store(); }}, '★'));
-  const paint = () => stars.forEach((s, k) => s.classList.toggle('on', k < cur));
-  const store = () => busy(null, async () => { await save(cur, noteEl.value.trim() || null); toast(`${cur}점 저장했어요`, 'ok'); });
-  paint();
-  return h('div', {class: 'rate'}, stars, noteEl);
+
+/* ---------- 3. 운영 설정 (ADR 0026) ---------- */
+// yml 값 위에 바꾼 칸만 DB에 저장한다. 저장하면 다음 요청부터 서비스에 들어간다 (이 서버는 바로, 서버가 여럿이면 30초 안)
+const SECTIONS = [['relation', '호감도 · 레벨'], ['dialogue', '대화'], ['llm', 'AI 모델']];
+const overridesOf = sec => Object.fromEntries(sec.fields.filter(f => f.overridden).map(f => [f.path, f.value]));
+function fmtSetting(info, v) {
+  if (v == null || v === '') return '(비움)';
+  const unit = info.unit ? ' ' + info.unit : '';
+  if (info.kind === 'dur') return (isoToSec(v) / (info.factor || 1)) + unit;
+  if (info.kind === 'int' || info.kind === 'num') return (Number(v) / (info.factor || 1)) + unit;
+  if (info.kind === 'ratio') return String(v);
+  if (info.kind === 'bool') return v ? '켬' : '끔';
+  if (info.kind === 'enum') { const o = info.options.find(x => (Array.isArray(x) ? x[0] : x) === v); return Array.isArray(o) ? o[1] : String(v); }
+  if (info.kind === 'triggers') return v.length ? v.map(t => TRIGGERS[t] || t).join(', ') : '없음';
+  if (info.kind === 'csv') return v.join(', ');
+  if (info.kind === 'provider') return String(v);
+  if (info.kind === 'stages') return v.map(s => `${s.min}~ ${s.name}`).join(' / ');
+  const s = JSON.stringify(v);
+  return s.length > 80 ? s.slice(0, 80) + '…' : s;
 }
-function metaChips(x, calls) {
-  return h('div', {class: 'chips'},
-    x.emotion != null && h('span', {class: 'chip'}, '감정 ' + x.emotion),
-    x.affinity != null && h('span', {class: 'chip'}, '호감도 ' + signed(x.affinity)),
-    h('span', {class: 'chip' + (x.overBudget ? ' over' : '')}, fmtMs(x.latencyMs) + (x.overBudget ? ' · 마감(7초) 초과: 서비스였다면 대체 대사' : '')),
-    'costUsd' in x && h('span', {class: 'chip'}, fmtCost(x.costUsd)),
-    calls != null && h('span', {class: 'chip'}, `LLM 호출 ${calls}회`));
+// 칸 하나의 입력. read()는 서버에 보낼 JSON 값, 틀리면 Error(이유)
+function settingEditor(section, f, info) {
+  const v = f.value, factor = info.factor || 1;
+  const withUnit = el => h('span', {class: 'line'}, el, info.unit && h('span', {class: 'muted'}, info.unit));
+  const range = n => { // min · max는 화면 단위
+    if (info.min != null && n < info.min) throw new Error(`${info.min} 이상이어야 해요`);
+    if (info.max != null && n > info.max) throw new Error(`${info.max} 이하여야 해요`);
+  };
+  switch (info.kind) {
+    case 'int': case 'num': case 'ratio': {
+      const el = h('input', {type: 'number', step: info.kind === 'int' && factor === 1 ? 1 : 'any', value: v == null ? '' : Number(v) / factor, min: info.kind === 'ratio' ? 0 : null, max: info.kind === 'ratio' ? 1 : null});
+      return {el: withUnit(el), set: x => { el.value = x == null ? '' : Number(x) / factor; }, read() {
+        if (el.value.trim() === '') throw new Error('비어 있어요. 기본값으로 돌리려면 ↺');
+        const n = Number(el.value);
+        if (!Number.isFinite(n)) throw new Error('숫자를 넣어 주세요');
+        if (info.kind === 'ratio' && (n < 0 || n > 1)) throw new Error('0~1 사이로 넣어 주세요');
+        if (info.kind === 'int' && factor === 1 && !Number.isInteger(n)) throw new Error('정수로 넣어 주세요');
+        range(n);
+        return info.kind === 'int' ? Math.round(n * factor) : n;
+      }};
+    }
+    case 'dur': {
+      const el = h('input', {type: 'number', step: 'any', min: 0, value: v == null ? '' : isoToSec(v) / factor});
+      return {el: withUnit(el), set: x => { el.value = x == null ? '' : isoToSec(x) / factor; }, read() {
+        if (el.value.trim() === '') throw new Error('비어 있어요. 기본값으로 돌리려면 ↺');
+        const n = Number(el.value);
+        if (!Number.isFinite(n) || n < 0) throw new Error('0 이상 숫자를 넣어 주세요');
+        if (info.max != null && n > info.max) throw new Error(`${info.max}${info.unit || ''} 이하여야 해요`);
+        return secToIso(n * factor);
+      }};
+    }
+    case 'bool': {
+      const el = h('input', {type: 'checkbox', checked: !!v});
+      const t = h('span', null, v ? '켬' : '끔');
+      el.onchange = () => { t.textContent = el.checked ? '켬' : '끔'; };
+      return {el: h('label', {class: 'chk'}, el, t), set: x => { el.checked = !!x; t.textContent = x ? '켬' : '끔'; }, read: () => el.checked};
+    }
+    case 'enum': case 'provider': {
+      const opts = info.kind === 'enum' ? info.options
+        : [...(info.blank ? [['', info.blank]] : []), ...META.providers.filter(p => p.name !== 'jev').map(p => [p.name, p.ready ? p.name : p.name + ' (키 없음)'])];
+      const known = opts.some(o => (Array.isArray(o) ? o[0] : o) === (v ?? ''));
+      const el = sel(known ? opts : [...opts, [v ?? '', String(v ?? '')]], v ?? '');
+      return {el, set: x => { el.value = x ?? ''; }, read: () => el.value === '' ? (f.defaultValue === '' ? '' : null) : el.value};
+    }
+    case 'triggers': {
+      const all = [...new Set([...(META.triggers || []), ...(v || [])])];
+      const boxes = all.map(t => [t, h('input', {type: 'checkbox', checked: (v || []).includes(t)})]);
+      return {el: h('div', {class: 'checks'}, boxes.map(([t, b]) => h('label', {class: 'chk'}, b, TRIGGERS[t] || t))),
+        set: x => boxes.forEach(([t, b]) => { b.checked = (x || []).includes(t); }), read: () => boxes.filter(([, b]) => b.checked).map(([t]) => t)};
+    }
+    case 'csv': {
+      const el = h('input', {value: (v || []).join(', '), style: 'width:100%'});
+      return {el, set: x => { el.value = (x || []).join(', '); }, read: () => el.value.split(',').map(s => s.trim()).filter(Boolean)};
+    }
+    default: break;
+  }
+  // 표 모양 칸: ↺는 표를 새로 그린다
+  const holder = h('div');
+  let ed;
+  const make = x => {
+    if (info.kind === 'scores') ed = scoresEditor(x);
+    else if (info.kind === 'stages') {
+      const r = rowsEditor([{k: 'min', label: '호감도 부터', type: 'num', w: '120px'}, {k: 'name', label: '단계 이름'}], x || [], {add: '+ 단계 추가'});
+      ed = {el: r.el, get: () => r.get().map(s => { if (s.min == null) throw new Error('“호감도 부터”가 빈 줄이 있어요'); return {min: s.min, name: s.name}; })};
+    } else if (info.kind === 'routes') {
+      const tiers = [...new Set(['anthropic.models', 'openai.models', 'jev.models'].flatMap(p => Object.keys(settingValue('llm', p) || {})))];
+      const r = rowsEditor([
+        {k: 'purpose', label: '용도', type: 'label', text: p => PURPOSES[p] || p, w: '1.4fr'},
+        {k: 'tier', label: '등급', type: 'select', options: tiers, w: '100px'},
+        {k: 'maxTokens', label: '최대 출력 토큰', type: 'num', w: '110px'},
+        {k: 'temperature', label: 'temperature', type: 'num', ph: '기본', w: '100px'},
+        // jev는 결정 전용 (글을 쓰지 않음)
+        {k: 'provider', label: '공급자', type: 'select', options: r => [['', '기본'], 'anthropic', 'openai', ...(r?.purpose === 'DECIDE' ? ['jev'] : [])], w: '110px'}],
+      Object.entries(x || {}).map(([purpose, rt]) => ({purpose, ...rt})), {fixed: true});
+      ed = {el: r.el, get: () => Object.fromEntries(r.get().map(rt => {
+        if (rt.maxTokens == null) throw new Error(`${PURPOSES[rt.purpose] || rt.purpose}: 최대 출력 토큰이 비었어요`);
+        return [rt.purpose, {tier: rt.tier, maxTokens: rt.maxTokens, temperature: rt.temperature, provider: rt.provider || null}];
+      }))};
+    } else if (info.kind === 'map') {
+      const r = rowsEditor([{k: 'k', label: info.cols[0], w: '140px'}, {k: 'v', label: info.cols[1]}], Object.entries(x || {}).map(([k, val]) => ({k, v: val})), {add: '+ 줄 추가'});
+      ed = {el: r.el, get: () => Object.fromEntries(r.get().filter(e => e.k || e.v).map(e => {
+        if (!e.k || !e.v) throw new Error(`${e.k || '(이름 없는 줄)'}: ${info.cols[e.k ? 1 : 0]}이 비었어요`);
+        return [e.k, e.v];
+      }))};
+    } else if (info.kind === 'thinking') {
+      const r = rowsEditor([{k: 'model', label: '모델'}, {k: 'type', label: '방식', type: 'select', options: [['', '(보내지 않음)'], 'disabled', 'between_tools', 'adaptive'], w: '150px'},
+        {k: 'effort', label: '강도', type: 'select', options: [['', '(보내지 않음)'], 'low', 'medium', 'high', 'xhigh', 'max'], w: '130px'}],
+      Object.entries(x || {}).map(([model, t]) => ({model, ...t})), {add: '+ 모델 추가'});
+      ed = {el: r.el, get: () => Object.fromEntries(r.get().filter(e => e.model).map(e => [e.model, {type: e.type || null, effort: e.effort || null}]))};
+    } else if (info.kind === 'prices') {
+      const r = rowsEditor([{k: 'model', label: '모델', w: '1.5fr'}, {k: 'in', label: '입력', type: 'num'}, {k: 'cacheWrite', label: '캐시 쓰기', type: 'num'},
+        {k: 'cacheRead', label: '캐시 읽기', type: 'num'}, {k: 'out', label: '출력', type: 'num'}], Object.entries(x || {}).map(([model, p]) => ({model, ...p})), {add: '+ 모델 추가'});
+      ed = {el: r.el, get: () => Object.fromEntries(r.get().filter(e => e.model).map(e => {
+        for (const k of ['in', 'cacheWrite', 'cacheRead', 'out']) if (e[k] == null) throw new Error(`${e.model}: 가격 칸이 비었어요 (없으면 0)`);
+        return [e.model, {in: e.in, cacheWrite: e.cacheWrite, cacheRead: e.cacheRead, out: e.out}];
+      }))};
+    } else {
+      const show = y => JSON.stringify(y, null, 2);
+      const el = h('textarea', {class: 'mono', spellcheck: false, rows: Math.min(12, show(x).split('\n').length + 1), value: show(x)});
+      ed = {el, get() { try { return JSON.parse(el.value); } catch { throw new Error('JSON 형식이 틀렸어요'); } }};
+    }
+    holder.replaceChildren(ed.el);
+  };
+  make(v);
+  return {el: holder, set: x => make(x), read: () => ed.get()};
 }
-// ponytail: 평가 대본은 턴별 overBudget이 없어 마감(llm-budget 7초)을 여기서 잰다. 서버가 주게 되면 그 값으로
-const transcript = ts => h('div', {class: 'tx'}, (ts || []).map(t => [
-  h('div', {class: 'bubble user'}, t.user),
-  t.error ? h('div', {class: 'errbox'}, t.error) : h('div', {class: 'bubble bot'}, t.reply ?? ''),
-  metaChips({emotion: t.emotion, affinity: t.affinity, latencyMs: t.latencyMs, overBudget: t.latencyMs > 7000})]));
-function turnView(t) {
-  const det = h('div', {hidden: true});
-  return h('div', {class: 'turn'},
-    h('div', {class: 'bubble user'}, t.userText),
-    t.error ? h('div', {class: 'errbox'}, t.error) : h('div', {class: 'bubble bot'}, t.reply ?? ''),
-    metaChips(t, (t.usages || []).length),
-    h('div', {class: 'acts'},
-      rating(t.rating, t.ratingNote, (score, note) => api('PATCH', `/turns/${t.id}`, {score, note})),
-      h('button', {class: 'ghost', onclick: () => {
-        if (!det.firstChild) det.append(muted(`traceId ${t.traceId} · ${fmtTime(t.createdAt)}`), h('h4', null, 'trace'), jsonPre(t.trace), h('h4', null, 'LLM 호출'), usageTable(t.usages));
-        det.hidden = !det.hidden;
-      }}, '자세히')),
-    det);
+function settingsTab() {
+  const box = h('div', null, muted('불러오는 중…'));
+  let readOnly = false;
+  const intro = () => h('div', {class: 'card'},
+    h('div', {class: 'section-head'}, h('h2', {class: 'grow', style: 'margin:0'}, '운영 설정'), scope(true)),
+    muted('배포 없이 서비스 동작을 바꿔요. 저장하면 다음 요청부터 실제 서비스(공부 · 대화 · 호감도)에 들어가요 (이 서버는 바로, 서버가 여럿이면 30초 안). 바꾼 칸만 DB에 남고 나머지는 기본값(application.yml)이에요.'),
+    muted('말투 · 대사 · 점수표는 🎭 캐릭터 탭, 프롬프트 틀은 📝 공통 프롬프트 탭에서 바꿔요.'),
+    readOnly && h('div', {class: 'notice', style: 'margin-top:10px'}, '이 서버는 공용 개발 DB에 인증 없이 붙어 있어서 운영 설정을 저장할 수 없어요 (SETTINGS_READ_ONLY). 보기만 돼요.'));
+  function sectionCard(s) {
+    const dict = SET[s.section] || {_groups: []};
+    const title = SECTIONS.find(x => x[0] === s.section)?.[1] || s.section;
+    const rows = []; // {f, info, ed, el(줄), err}
+    const byPath = Object.fromEntries(s.fields.map(f => [f.path, f]));
+    const pairedSecond = new Set(s.fields.map(f => settingInfo(s.section, f.path).pair).filter(p => p && byPath[p]));
+    const saveBtn = h('button', {class: 'primary', onclick: () => busy(saveBtn, save)}, '저장');
+    const status = h('span', {class: 'hint grow'});
+    const top = h('div');
+    const refresh = () => {
+      let n = 0;
+      for (const r of rows) { let d = false; try { d = !same(r.ed.read(), r.f.value); } catch { d = true; } r.el.classList.toggle('dirty', d); if (d) n++; }
+      status.textContent = n ? `바꾸는 중 ${n}칸 · 저장해야 반영돼요` : '';
+    };
+    const fieldRow = fs => {
+      const infos = fs.map(f => settingInfo(s.section, f.path));
+      const eds = fs.map((f, i) => settingEditor(s.section, f, infos[i]));
+      const err = h('div', {class: 'errtxt', hidden: true});
+      const over = fs.some(f => f.overridden);
+      const info = infos[0];
+      const ctl = fs.length === 2
+        ? h('span', {class: 'line'}, eds[0].el.firstChild, '~', eds[1].el.firstChild, h('span', {class: 'muted'}, info.unit))
+        : eds[0].el;
+      const el = h('div', {class: 'set', oninput: refresh, onchange: refresh},
+        h('div', null, h('div', null, h('span', {class: 'name'}, info.name), ' ', over && h('span', {class: 'badge changed', title: '기본값과 다르게 저장된 칸'}, '바꿈')),
+          h('div', {class: 'path'}, fs.map(f => f.path).join(' · ')), h('div', {class: 'desc'}, info.desc)),
+        h('div', {class: 'ctl'}, ctl,
+          h('div', {class: 'line'}, h('span', {class: 'def'}, '기본값: ' + fs.map((f, i) => fmtSetting(infos[i], f.defaultValue)).join(' ~ ')),
+            h('button', {class: 'ghost small', title: '기본값으로 (저장해야 반영)', onclick: () => { fs.forEach((f, i) => eds[i].set(f.defaultValue)); refresh(); }}, '↺ 기본값')),
+          err));
+      fs.forEach((f, i) => rows.push({f, info: infos[i], ed: eds[i], el, err}));
+      return el;
+    };
+    const groups = dict._groups.map(() => []), rest = [];
+    for (const f of s.fields) {
+      if (pairedSecond.has(f.path)) continue;
+      const info = settingInfo(s.section, f.path);
+      const fs = info.pair && byPath[info.pair] ? [f, byPath[info.pair]] : [f];
+      (info.g != null && groups[info.g] ? groups[info.g] : rest).push({fs, order: Object.keys(dict).indexOf(f.path)});
+    }
+    const body = [];
+    groups.forEach((g, i) => { if (g.length) body.push(dict._groups.length > 1 && h('div', {class: 'group'}, dict._groups[i]), ...g.sort((a, b) => a.order - b.order).map(x => fieldRow(x.fs))); });
+    if (rest.length) body.push(h('div', {class: 'group'}, '기타 (아직 설명이 없는 칸)'), ...rest.map(x => fieldRow(x.fs)));
+    function readAll() {
+      const vals = {}, bad = [];
+      for (const r of rows) {
+        r.err.hidden = true;
+        try { vals[r.f.path] = r.ed.read(); } catch (e) { bad.push([r, e.message]); }
+      }
+      // 짝 칸: 최소 ≤ 최대
+      for (const r of rows) if (r.info.pair && vals[r.f.path] != null && vals[r.info.pair] != null && vals[r.f.path] > vals[r.info.pair]) bad.push([r, '최소가 최대보다 클 수 없어요']);
+      for (const [r, msg] of bad) { r.err.textContent = msg; r.err.hidden = false; }
+      if (bad.length) { bad[0][0].el.scrollIntoView({behavior: 'smooth', block: 'center'}); throw new Error(`고칠 칸이 ${bad.length}개 있어요`); }
+      return vals;
+    }
+    // 이 묶음만 다시 그린다: 다른 묶음에서 고치던 칸은 그대로
+    async function reloadSelf() {
+      await loadSettings();
+      const ns = SETTINGS.find(x => x.section === s.section);
+      if (ns) card.replaceWith(sectionCard(ns));
+      if (s.section === 'llm') { META = await api('GET', '/meta'); header(); } // 머리줄의 기본 공급자도 새 값으로
+    }
+    // PUT은 묶음의 덮어쓴 칸 전체를 바꾼다: 이 화면을 연 뒤 다른 관리자 · 다른 창이 저장했으면 덮어쓰지 않고 멈춘다
+    async function unchanged() {
+      const latest = (await api('GET', '/settings') || []).find(x => x.section === s.section);
+      if (latest && Date.parse(latest.updatedAt ?? 0) === Date.parse(s.updatedAt ?? 0) && same(overridesOf(latest), overridesOf(s))) return true;
+      top.replaceChildren('다른 곳에서 바뀌었어요 (다른 관리자, 다른 창). 덮어쓰지 않았어요. ',
+        h('button', {class: 'small', onclick: () => busy(null, reloadSelf)}, '다시 불러오기'), ' 이 묶음에서 고치던 칸은 사라져요.');
+      top.hidden = false;
+      top.scrollIntoView({behavior: 'smooth', block: 'center'});
+      return false;
+    }
+    async function put(body, changed) {
+      if (!await unchanged()) return;
+      try {
+        await api('PUT', '/settings/' + s.section, body, {quiet: true});
+      } catch (e) {
+        if (e.code === 'SETTINGS_READ_ONLY') { readOnly = true; await render(); }
+        else if (e.code === 'INVALID_SETTING' && e.detail) {
+          const r = rows.find(x => x.f.path === e.detail.path);
+          const target = r ? r.err : top;
+          target.textContent = `서버가 받지 않았어요: ${e.detail.reason}`;
+          target.hidden = false;
+          (r ? r.el : top).scrollIntoView({behavior: 'smooth', block: 'center'});
+        } else toast(`${e.message} (${e.code})`, 'err', e.detail == null ? null : JSON.stringify(e.detail, null, 2));
+        return;
+      }
+      toast(`${title} ${changed}칸을 저장했어요. 다음 요청부터 서비스에 들어가요`, 'ok');
+      await reloadSelf();
+    }
+    async function save() {
+      top.hidden = true;
+      let vals;
+      try { vals = readAll(); } catch (e) { return toast(e.message); }
+      const body = {}, changed = [];
+      for (const r of rows) {
+        const v = vals[r.f.path];
+        if (!same(v, r.f.value)) changed.push(r);
+        if (same(v, r.f.defaultValue)) continue; // 기본값과 같으면 보내지 않는다 (= 기본값으로)
+        body[r.f.path] = r.f.overridden && same(v, r.f.value) ? r.f.value : v;
+      }
+      if (!changed.length) return toast('바뀐 칸이 없어요', 'info');
+      const ok = await modal(`${title} 저장`, [h('p', null, scope(true), ' 저장하면 다음 요청부터 실제 서비스에 들어가요.'),
+        h('ul', null, changed.map(r => h('li', null, h('b', null, r.info.item || r.info.name), `: ${fmtSetting(r.info, r.f.value)} → ${fmtSetting(r.info, vals[r.f.path])}`)))], {ok: '서비스에 반영'});
+      if (ok) await put(body, changed.length);
+    }
+    const resetAll = h('button', {class: 'danger', onclick: () => busy(resetAll, async () => {
+      const n = s.fields.filter(f => f.overridden).length;
+      if (!n) return toast('이미 전부 기본값이에요', 'info');
+      if (await modal(`${title} 전부 기본값으로`, [h('p', null, scope(true)), h('p', null, `바꿔 둔 ${n}칸을 모두 기본값(application.yml)으로 돌려요. 서비스에 바로 들어가요.`),
+        h('ul', null, s.fields.filter(f => f.overridden).map(f => { const i = settingInfo(s.section, f.path); return h('li', null, `${i.item || i.name}: ${fmtSetting(i, f.value)} → ${fmtSetting(i, f.defaultValue)}`); }))], {ok: '기본값으로', danger: true})) await put({}, n);
+    })}, '전부 기본값으로');
+    saveBtn.disabled = resetAll.disabled = readOnly;
+    top.className = 'notice'; top.hidden = true;
+    const card = h('div', {class: 'card'},
+      h('div', {class: 'section-head'}, h('h3', {class: 'grow', style: 'margin:0'}, title), h('span', {class: 'muted small'}, `바꾼 칸 ${s.fields.filter(f => f.overridden).length}개 · ${s.updatedAt ? '마지막 저장 ' + fmtTime(s.updatedAt) : '저장한 적 없음'}`)),
+      top, body, h('div', {class: 'savebar'}, saveBtn, status, resetAll));
+    return card;
+  }
+  async function render() {
+    await loadSettings();
+    const order = SECTIONS.map(x => x[0]);
+    const all = SETTINGS.slice().sort((a, b) => order.indexOf(a.section) - order.indexOf(b.section));
+    box.replaceChildren(intro(), ...all.map(sectionCard));
+    META = await api('GET', '/meta'); // 머리줄의 기본 공급자도 새 값으로
+    header();
+  }
+  // 탭을 오갈 때 고치던 칸이 지워지지 않게 처음 한 번만 (저장하면 그 묶음만 다시 읽음). 실패(401 등)하면 다음에 다시
+  let loaded = false;
+  return {el: box, show: () => { if (!loaded) busy(null, async () => { await render(); loaded = true; }); }};
 }
+
+/* ---------- 4. 공통 프롬프트 ---------- */
 // ponytail: O(n·m) LCS 줄 비교. 프롬프트 크기(수백 줄)면 충분, 수천 줄이 되면 Myers diff로
 function diffLines(a, b) {
   const n = a.length, m = b.length, L = Array.from({length: n + 1}, () => new Uint32Array(m + 1));
@@ -407,205 +1325,86 @@ function diffLines(a, b) {
   while (j < m) out.push(['+', b[j++]]);
   return out;
 }
-
-/* ---------- 1. 대화 실험 ---------- */
-function chatTab() {
-  let current = null;
-  const list = h('div'), main = h('div');
-  const title = h('input', {placeholder: '예: 시험 전날 불안'}), ch = charSel(), pipe = sel(META.pipelines, META.defaultPipeline), cfg = configEditor();
-  const createBtn = h('button', {class: 'primary', onclick: () => busy(createBtn, async () => {
-    const s = await api('POST', '/sessions', {title: title.value.trim() || `${charName(ch.value)} · ${pipe.value}`,
-      characterId: Number(ch.value), pipeline: pipe.value, config: cfg.get()});
-    title.value = '';
-    await loadList();
-    await open(s.id);
-  })}, '만들기');
-  async function loadList() {
-    const ss = await api('GET', '/sessions') || [];
-    list.replaceChildren(...ss.map(s => h('div', {class: 'item', 'data-id': s.id, onclick: () => busy(null, () => open(s.id))},
-      h('div', {class: 'strong'}, s.title), muted(`${charName(s.characterId)} · ${s.pipeline} · ${s.turnCount}턴 · ${fmtTime(s.updatedAt)}`))));
-    if (!ss.length) list.append(muted('아직 대화방이 없어요'));
-    mark(list, current?.id);
-    return ss;
-  }
-  async function open(id) {
-    current = await api('GET', '/sessions/' + id);
-    current.turns ||= [];
-    renderMain();
-    mark(list, id);
-  }
-  function renderMain() {
-    if (!current) { main.replaceChildren(h('div', {class: 'empty'}, '왼쪽에서 대화방을 고르거나 새로 만드세요.')); return; }
-    const s = current, c = s.config || {};
-    let lastText = null, sending = false;
-    const turns = h('div');
-    const again = h('button', {class: 'ghost', title: '마지막 말을 그대로 다시 보내 답이 얼마나 달라지는지 봐요', onclick: () => send(lastText)}, '같은 말 다시');
-    const input = h('textarea', {rows: 2, placeholder: '캐릭터에게 말 걸기 (Enter 보내기 · Shift+Enter 줄바꿈)', onkeydown: e => {
-      if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); send(input.value, true); }
-    }});
-    const sendBtn = h('button', {class: 'primary', onclick: () => send(input.value, true)}, '보내기');
-    const add = t => { const v = turnView(t); turns.append(v); v.querySelector('.acts').append(again); lastText = t.userText; };
-    s.turns.forEach(t => add(t));
-    async function send(text, fromInput) {
-      text = (text || '').trim();
-      if (!text || sending) return;
-      sending = sendBtn.disabled = again.disabled = true;
-      if (fromInput) input.value = '';
-      const pending = h('div', {class: 'turn'}, h('div', {class: 'bubble user'}, text), h('div', {class: 'thinking'}, '생각 중…'));
-      turns.append(pending);
-      scrollTo(0, document.body.scrollHeight);
-      try {
-        const t = await api('POST', `/sessions/${s.id}/turns`, {text});
-        pending.remove();
-        s.turns.push(t);
-        add(t);
-        scrollTo(0, document.body.scrollHeight);
-        loadList().catch(() => {});
-      } catch (e) {
-        pending.remove();
-        if (!e.shown) toast(e.message);
-        if (fromInput && !input.value) input.value = text;
-      } finally {
-        sending = sendBtn.disabled = again.disabled = false;
-        input.focus();
-      }
-    }
-    const et = h('input', {value: s.title}), ep = sel(META.pipelines, s.pipeline), ec = configEditor(c, undefined, '실험 조건', true);
-    const saveBtn = h('button', {class: 'primary', onclick: () => busy(saveBtn, async () => {
-      await api('PATCH', '/sessions/' + s.id, {title: et.value.trim() || null, pipeline: ep.value, config: ec.get()});
-      toast('조건을 바꿨어요', 'ok');
-      await open(s.id);
-      loadList().catch(() => {});
-    })}, '저장');
-    const editBox = h('div', {class: 'card', hidden: true}, h('div', {class: 'row'}, field('제목', et, 'grow'), field('파이프라인', ep)), ec.el, saveBtn);
-    main.replaceChildren(
-      h('div', {class: 'chathead'},
-        h('div', {class: 'grow'}, h('h2', null, s.title),
-          muted(`${charName(s.characterId)} · ${s.pipeline} · 공급자 ${c.provider || '기본'} · 모델 ${c.model || '기본'}`)),
-        h('button', {onclick: () => { editBox.hidden = !editBox.hidden; }}, '조건 수정'),
-        confirmBtn('초기화', async () => { await api('POST', `/sessions/${s.id}/reset`); toast('대화를 초기화했어요', 'ok'); await open(s.id); loadList().catch(() => {}); }),
-        confirmBtn('삭제', async () => { await api('DELETE', '/sessions/' + s.id); current = null; renderMain(); await loadList(); })),
-      editBox, turns, h('div', {class: 'composer'}, input, sendBtn));
-  }
-  return {
-    el: h('div', {class: 'cols'},
-      h('aside', null,
-        h('details', {class: 'card', open: true}, h('summary', null, '새 대화방'), field('제목', title), field('캐릭터', ch), field('파이프라인', pipe), cfg.el, createBtn),
-        h('div', {class: 'card'}, h('h3', null, '대화방'), list)),
-      main),
-    show: () => busy(null, async () => {
-      const ss = await loadList();
-      if (!current && ss.length) await open(ss[0].id);
-      else if (!current) renderMain();
-    }),
-  };
-}
-
-/* ---------- 2. 한 번 실행 ---------- */
-function playTab() {
-  const kinds = [['chat', '답장 (chat)'], ['memory', '기억 만들기 미리보기 (memory)'], ['reaction', '상태 반응 AI (reaction, 서비스는 상태 변화 5종만 AI)'], ['summary', '세션 카드 (summary)'], ['closing', '완료 대사 AI (closing)']];
-  const kind = sel(kinds, 'chat', {onchange: sync}), ch = charSel(), repeat = h('input', {type: 'number', min: 1, max: 10, value: 1}), cfg = configEditor();
-  const pipe = sel(META.pipelines, META.defaultPipeline), msg = h('textarea', {rows: 2, placeholder: '사용자 말'});
-  const hist = historyEditor('대화 기록 (chat: 앞선 대화 · reaction: 이번 공부에서 방금 나눈 대화, 최근 몇 줄만 들어감 · summary: 요약에 합칠 대화)');
-  const trig = sel(META.triggers, undefined, {onchange: sync}), inten = sel(['1', '2', '3'], '1');
-  const prev = h('textarea', {rows: 3, placeholder: '비우면 첫 요약'}), secs = h('input', {type: 'number', min: 0, value: 3300}), endT = sel(['NORMAL', 'AUTO_CLOSED'], 'NORMAL');
-  const parts = {pipe: field('파이프라인', pipe), msg: field('메시지', msg, 'wide'), hist: hist.el, trig: field('트리거', trig), inten: field('강도 (AWAY만)', inten),
-    prev: field('지난 요약', prev, 'wide'), secs: field('공부한 시간 (초)', secs), endT: field('종료 방식', endT)};
-  // memory: 실험 조건의 '캐릭터가 아는 사실'을 이미 아는 기억으로 보고 결정 · 한 줄을 보여 준다 (저장 안 함)
-  const shown = {chat: ['pipe', 'msg', 'hist'], memory: ['msg', 'hist'], reaction: ['trig', 'inten', 'hist'], summary: ['prev', 'hist'], closing: ['secs', 'endT']};
-  function sync() {
-    for (const [k, el] of Object.entries(parts)) el.hidden = !shown[kind.value].includes(k) || (k === 'inten' && trig.value !== 'AWAY');
-  }
-  sync();
-  const out = h('div', {class: 'cards'});
-  const runBtn = h('button', {class: 'primary', onclick: () => busy(runBtn, async () => {
-    const k = kind.value, is = (...ks) => ks.includes(k);
-    const body = {kind: k, characterId: Number(ch.value), repeat: clampInt(repeat.value, 1, 10), config: cfg.get(),
-      pipeline: is('chat') ? pipe.value : null, message: is('chat', 'memory') ? msg.value.trim() : null, history: is('chat', 'memory', 'reaction', 'summary') ? hist.get() : null,
-      trigger: is('reaction') ? trig.value : null, intensity: is('reaction') && trig.value === 'AWAY' ? Number(inten.value) : null,
-      previousSummary: is('summary') ? prev.value.trim() || null : null, studySeconds: is('closing') ? Number(secs.value) : null, endType: is('closing') ? endT.value : null};
-    out.replaceChildren(muted(`${body.repeat}번 실행 중…`));
-    try { render(k, await api('POST', '/playground', body) || []); } catch (e) { out.replaceChildren(); throw e; }
-  })}, '실행');
-  function render(k, rs) {
-    const head = muted(`${rs.length}번 · 평균 ${fmtMs(avg(rs.map(r => r.latencyMs)))} · 합계 ${fmtCost(sum(rs, r => r.costUsd))}`
-      + ` · 마감 초과 ${rs.filter(r => r.overBudget).length}번 · 실패 ${rs.filter(r => r.error).length}번`);
-    head.classList.add('wide');
-    out.replaceChildren(head, ...rs.map(r => {
-      const o = r.output || {}, text = {chat: o.reply, reaction: o.content, summary: o.summary, closing: o.closingLine,
-        memory: `${o.choice ?? '-'}${o.confidence != null ? ` (확신 ${o.confidence})` : ''}${o.line ? ` → ${o.line}` : ''}${o.overflow ? ' · 20개 넘음: 하나 버림' : ''}`}[k];
-      return h('div', {class: 'card'},
-        h('div', {class: 'strong'}, '#' + r.n),
-        r.error && h('div', {class: 'errbox'}, r.error),
-        r.output && h('div', {class: k === 'summary' ? 'pre' : 'bubble bot'}, text ?? ''),
-        metaChips({...r, emotion: o.emotion, affinity: o.affinity}, (r.usages || []).length),
-        o.trace && h('details', null, h('summary', null, 'trace'), jsonPre(o.trace)),
-        h('details', null, h('summary', null, 'LLM 호출'), usageTable(r.usages)));
-    }));
-  }
-  return {el: h('div', null,
-    h('div', {class: 'card'}, h('div', {class: 'cfggrid'}, field('종류', kind), field('캐릭터', ch), field('반복 (1~10)', repeat), Object.values(parts)), cfg.el, runBtn),
-    out)};
-}
-
-/* ---------- 3. 프롬프트 ---------- */
 function promptsTab() {
-  let versions = [], cur = null;
-  const fChar = charSel('', true), fKey = sel([['', '(모든 키)'], ...META.promptKeys.map(p => p.key)], '');
-  const keyInfo = muted(''), listBox = h('div', {class: 'tall'});
-  fChar.onchange = fKey.onchange = () => busy(null, loadVersions);
-  async function loadVersions() {
-    const p = META.promptKeys.find(k => k.key === fKey.value);
-    keyInfo.textContent = p ? `${p.description} · .${p.format}` : '키를 고르면 설명이 나와요';
-    const q = new URLSearchParams();
-    if (fKey.value) q.set('key', fKey.value);
-    if (fChar.value) q.set('characterId', fChar.value);
-    const qs = q.toString();
-    versions = await api('GET', '/prompts' + (qs ? '?' + qs : '')) || [];
-    listBox.replaceChildren(versions.length
-      ? table(['키', '버전', '상태', '메모', '캐릭터', '만든 때', '켠 때'], versions.map(v => tr([v.key, 'v' + v.version, badge(v.status), v.note,
-        charName(v.characterId), fmtTime(v.createdAt), fmtTime(v.activatedAt)], {class: 'click', 'data-id': v.id, onclick: () => edit(v)})))
-      : muted('버전이 없어요'));
-    mark(listBox, cur?.id);
+  let all = [], activeSet = {}, key = null, cur = null;
+  const keyBox = h('div'), side = h('div');
+  const STATUS = {ACTIVE: ['켜짐', 'on'], DRAFT: ['초안', 'draft'], ARCHIVED: ['예전', '']};
+  const stBadge = s => h('span', {class: 'badge ' + (STATUS[s]?.[1] ?? '')}, STATUS[s]?.[0] ?? s);
+  const target = v => v.characterId == null ? '공통' : charName(v.characterId) + ' 전용';
+  async function load() {
+    const cid = META.characters[0]?.id;
+    [all, activeSet] = await Promise.all([api('GET', '/prompts'), cid != null ? api('GET', '/prompts/active?characterId=' + cid) : {}]);
+    all ||= []; activeSet ||= {};
+    keyBox.replaceChildren(...META.promptKeys.map(k => {
+      const a = activeSet[k.key];
+      return h('div', {class: 'pkey' + (k.key === key ? ' on' : ''), onclick: () => busy(null, async () => { if (k.key !== key && await leave()) pick(k.key); })},
+        h('div', {class: 'row'}, h('b', {class: 'grow'}, PROMPTS[k.key]?.[0] || k.key), a && h('span', {class: 'badge on'}, `v${a.version} 켜짐`)),
+        h('div', {class: 'mono small muted'}, k.key));
+    }));
+    if (key) pick(key, cur?.id);
   }
-  const head = h('div', {class: 'strong'}), pinHint = muted(''), body = h('textarea', {class: 'mono big', spellcheck: false});
-  const note = h('input', {class: 'grow', placeholder: '이번 버전 메모 (무엇을 바꿨나)'}), diffBox = h('div', {hidden: true});
-  const saveBtn = activate => {
-    const b = h('button', {class: activate ? 'primary' : '', onclick: () => busy(b, async () => {
-      const v = await api('POST', '/prompts', {key: cur.key, characterId: cur.characterId ?? null, body: body.value, note: note.value.trim() || null, activate});
-      toast(`${v.key} v${v.version} ${activate ? '저장하고 켰어요' : '저장했어요 (DRAFT)'}`, 'ok');
-      await reload(v);
-    })}, activate ? '저장하고 켜기' : '새 버전으로 저장');
-    return b;
-  };
-  const actBtn = h('button', {title: '예전 버전을 켜면 되돌리기', onclick: () => busy(actBtn, async () => {
-    const v = await api('POST', `/prompts/${cur.id}/activate`);
-    toast(`켰어요: ${v.key} v${v.version}`, 'ok');
-    await reload(v);
-  })}, '이 버전 켜기');
+  function pick(k, keepId) {
+    key = k;
+    keyBox.querySelectorAll('.pkey').forEach((el, i) => el.classList.toggle('on', META.promptKeys[i].key === k));
+    const vs = all.filter(v => v.key === k).sort((a, b) => b.id - a.id);
+    const meta = META.promptKeys.find(x => x.key === k);
+    const view = v => busy(null, async () => { if (v.id !== cur?.id && await leave()) edit(v); });
+    side.replaceChildren(h('div', {class: 'card'},
+      h('div', {class: 'section-head'}, h('h3', {class: 'grow', style: 'margin:0'}, PROMPTS[k]?.[0] || k), scope(true)),
+      muted(PROMPTS[k]?.[1] || meta?.description || ''), muted(`키 ${k} · 형식 .${meta?.format ?? 'md'} · 버전을 켜면 서비스가 바로 그 버전을 써요. 켜기 전에 💬 대화 테스트의 “고급 → 프롬프트 버전 고정”으로 먼저 시험할 수 있어요.`),
+      h('div', {style: 'height:10px'}),
+      vs.length ? table(['버전', '상태', '대상', '메모', '만든 때'], vs.map(v => h('tr', {class: 'click', 'data-id': v.id, onclick: () => view(v)},
+        h('td', null, 'v' + v.version), h('td', null, stBadge(v.status)), h('td', null, target(v)), h('td', null, v.note || '—'), h('td', null, fmtTime(v.createdAt))))) : muted('버전이 없어요')),
+    edBox);
+    const first = vs.find(v => v.id === keepId) || vs.find(v => v.status === 'ACTIVE') || vs[0];
+    if (!first) edBox.hidden = true;
+    else if (first.id === cur?.id && dirty()) markRows(); // 탭에 돌아왔을 때: 고치던 편집기는 그대로
+    else edit(first);
+  }
+  // 편집기에서 고친 게 있으면 다른 버전을 열기 전에 묻는다
+  const dirty = () => !!cur && !edBox.hidden && (body.value !== (cur.body ?? '') || note.value.trim() !== '' || tgt.value !== (cur.characterId == null ? '' : String(cur.characterId)));
+  const leave = async () => !dirty() || await modal('저장하지 않은 수정이 있어요', muted('편집기에서 고친 내용을 버리고 다른 버전을 열까요?'), {ok: '버리고 열기', danger: true});
+  const markRows = () => side.querySelectorAll('tr.click').forEach(tr => tr.classList.toggle('on', tr.dataset.id === String(cur?.id)));
+  const title = h('div', {class: 'row'}), body = h('textarea', {class: 'big', spellcheck: false});
+  const note = h('input', {class: 'grow', placeholder: '이번 버전 메모 (무엇을 바꿨나)'});
+  const tgt = h('select'), diffBox = h('div', {hidden: true});
+  const actBtn = h('button', {onclick: () => busy(actBtn, () => activate(cur))}, '이 버전 켜기');
+  const draftBtn = h('button', {onclick: () => busy(draftBtn, () => create(false))}, '새 버전 저장 (초안)');
+  const liveBtn = h('button', {class: 'primary', onclick: () => busy(liveBtn, () => create(true))}, '새 버전 저장하고 켜기');
   const diffBtn = h('button', {class: 'ghost', onclick: () => busy(diffBtn, showDiff)}, '켜진 버전과 비교');
-  const edEmpty = muted('목록에서 버전을 고르세요. 예전 버전을 다시 켜면 되돌리기예요.');
-  const edBox = h('div', {hidden: true}, head, pinHint, body, h('div', {class: 'row'}, note, saveBtn(false), saveBtn(true), actBtn, diffBtn), diffBox);
-  async function reload(v) { await loadVersions(); edit(v); loadActive().catch(() => {}); }
+  const edBox = h('div', {class: 'card', hidden: true}, title, body, h('div', {class: 'row', style: 'margin-top:8px'}, field('대상', tgt), note),
+    h('div', {class: 'acts'}, draftBtn, liveBtn, h('span', {class: 'grow'}), diffBtn, actBtn), diffBox);
+  const activeOf = v => all.find(x => x.status === 'ACTIVE' && x.key === v.key && (x.characterId ?? null) === (v.characterId ?? null));
   function edit(v) {
-    cur = v; body.value = v.body ?? ''; note.value = ''; diffBox.hidden = true;
-    head.replaceChildren(...(v.id
-      ? [`${v.key} v${v.version} `, badge(v.status), ` · ${charName(v.characterId)} · id ${v.id}`, v.note ? ` · ${v.note}` : '']
-      : [`새 프롬프트: ${v.key} · ${charName(v.characterId)}`]));
-    pinHint.textContent = v.id ? `켜기 전에 시험하려면 실험 조건의 버전 고정에 {"${v.key}": ${v.id}}` : '';
-    actBtn.hidden = !v.id || v.status === 'ACTIVE';
+    cur = v;
+    body.value = v.body ?? ''; note.value = ''; diffBox.hidden = true;
+    tgt.replaceChildren(...[['', '공통 (모든 캐릭터)'], ...META.characters.map(c => [String(c.id), c.name + ' 전용'])].map(([val, t]) => h('option', {value: val}, t)));
+    tgt.value = v.characterId == null ? '' : String(v.characterId);
+    title.replaceChildren(h('b', null, `v${v.version}`), stBadge(v.status), h('span', {class: 'muted small'}, `${target(v)} · id ${v.id} · ${fmtTime(v.createdAt)}${v.note ? ' · ' + v.note : ''}`));
+    actBtn.hidden = v.status === 'ACTIVE';
     edBox.hidden = false;
-    edEmpty.hidden = true;
-    mark(listBox, v.id);
+    markRows();
   }
-  async function showDiff() {
-    const same = v => v.status === 'ACTIVE' && v.key === cur.key && (v.characterId ?? null) === (cur.characterId ?? null);
-    let act = versions.find(same);
-    if (!act) {
-      const q = new URLSearchParams({key: cur.key});
-      if (cur.characterId != null) q.set('characterId', cur.characterId);
-      act = (await api('GET', '/prompts?' + q) || []).find(same);
+  async function activate(v) {
+    const was = activeOf(v);
+    if (!await modal('이 버전 켜기', [h('p', null, scope(true)), h('p', null, `${PROMPTS[v.key]?.[0] || v.key} (${target(v)}): ${was ? 'v' + was.version : '없음'} → v${v.version}. 다음 호출부터 서비스가 이 버전을 써요. 예전 버전을 다시 켜면 되돌릴 수 있어요.`)], {ok: '켜기'})) return;
+    const r = await api('POST', `/prompts/${v.id}/activate`);
+    toast(`켰어요: v${r.version}`, 'ok');
+    edit(r); await load();
+  }
+  async function create(activate) {
+    if (!body.value.trim()) return toast('내용이 비었어요');
+    const cid = tgt.value ? Number(tgt.value) : null;
+    if (activate) {
+      const was = all.find(x => x.status === 'ACTIVE' && x.key === cur.key && (x.characterId ?? null) === cid);
+      if (!await modal('새 버전 저장하고 켜기', [h('p', null, scope(true)), h('p', null, `${PROMPTS[cur.key]?.[0] || cur.key} (${cid == null ? '공통' : charName(cid) + ' 전용'}): ${was ? 'v' + was.version : '없음'} → 새 버전. 다음 호출부터 서비스가 이 내용을 써요.`)], {ok: '저장하고 켜기'})) return;
     }
+    const v = await api('POST', '/prompts', {key: cur.key, characterId: cid, body: body.value, note: note.value.trim() || null, activate});
+    toast(`v${v.version} ${activate ? '저장하고 켰어요' : '초안으로 저장했어요'}`, 'ok');
+    edit(v); await load();
+  }
+  function showDiff() {
+    const act = activeOf({...cur, characterId: tgt.value ? Number(tgt.value) : null});
     diffBox.hidden = false;
     if (!act) { diffBox.replaceChildren(muted('켜진 버전이 없어요')); return; }
     const d = diffLines((act.body ?? '').split('\n'), body.value.split('\n'));
@@ -613,347 +1412,98 @@ function promptsTab() {
       muted(`켜진 v${act.version} → 편집기 내용 · 추가 ${d.filter(x => x[0] === '+').length}줄 · 삭제 ${d.filter(x => x[0] === '-').length}줄`),
       h('pre', {class: 'diff'}, d.map(([op, t]) => h('div', {class: op === '+' ? 'add' : op === '-' ? 'del' : ''}, op + ' ' + t))));
   }
-  const newBtn = h('button', {class: 'ghost', onclick: () => {
-    const p = META.promptKeys.find(k => k.key === fKey.value);
-    if (!p) return toast('키를 먼저 고르세요', 'info');
-    edit({key: p.key, characterId: fChar.value ? Number(fChar.value) : null, body: ''});
-  }}, '빈 버전 쓰기');
-  const aChar = charSel('', true), aBox = h('div');
-  aChar.onchange = () => busy(null, loadActive);
-  async function loadActive() {
-    const rows = Object.entries(await api('GET', '/prompts/active' + (aChar.value ? '?characterId=' + aChar.value : '')) || {});
-    aBox.replaceChildren(rows.length
-      ? table(['키', '버전', '캐릭터', '메모', '켠 때'], rows.map(([k, v]) => tr([k, `v${v.version} · id ${v.id}`, charName(v.characterId), v.note, fmtTime(v.activatedAt)],
-        {class: 'click', title: '편집기에서 열기', onclick: () => edit(v)})))
-      : muted('없음'));
-  }
   return {
-    el: h('div', null,
-      h('div', {class: 'split'},
-        h('div', {class: 'card'}, h('div', {class: 'row'}, field('캐릭터', fChar), field('키', fKey), newBtn), keyInfo, listBox),
-        h('div', {class: 'card'}, edEmpty, edBox)),
-      h('div', {class: 'card'}, h('h3', null, '지금 쓰는 프롬프트'), field('캐릭터', aChar), aBox)),
-    show: () => busy(null, () => Promise.all([loadVersions(), loadActive()])),
+    el: h('div', {class: 'pgrid'}, h('div', {class: 'card'}, h('h3', null, '프롬프트'), muted('AI에게 보내는 틀이에요. 캐릭터의 말투 · 대사는 🎭 캐릭터 탭에서.'), h('div', {style: 'height:8px'}), keyBox), h('div', null, side)),
+    show: () => busy(null, async () => { await load(); if (!key) pick(META.promptKeys.find(k => k.key === 'scene.system')?.key || META.promptKeys[0]?.key); }),
   };
 }
 
-/* ---------- 4. 평가 ---------- */
-function evalTab() {
-  let editing = null, detailId = null, detailStatus = null, poll = null, cCtx = null;
-  const picked = new Set();
-  const cName = h('input', {placeholder: '예: 시험 불안 3턴'}), cChar = charSel();
-  const cTurns = h('textarea', {rows: 4, placeholder: '사용자 말을 한 줄에 하나씩 (한 줄 = 한 턴)'});
-  const cRubric = h('textarea', {rows: 3, placeholder: '심사 기준 (LLM 심사관에게 그대로 들어가요)'});
-  const ctxSlot = h('div'), formTitle = h('h4'), caseList = h('div'), caseChecks = h('div');
-  function fillCase(c) {
-    editing = c?.id ?? null;
-    formTitle.textContent = c ? `케이스 수정: ${c.name}` : '새 케이스';
-    cName.value = c?.name ?? '';
-    cTurns.value = (c?.turns || []).join('\n');
-    cRubric.value = c?.rubric ?? '';
-    if (c) cChar.value = c.characterId;
-    cCtx = configEditor(c?.context, USER_F, '가상 사용자 정보', true);
-    ctxSlot.replaceChildren(cCtx.el);
-  }
-  fillCase(null);
-  const saveCase = h('button', {class: 'primary', onclick: () => busy(saveCase, async () => {
-    const body = {name: cName.value.trim(), characterId: Number(cChar.value), turns: lines(cTurns.value), context: cCtx.get(), rubric: cRubric.value.trim() || null};
-    await api(editing ? 'PUT' : 'POST', '/eval/cases' + (editing ? '/' + editing : ''), body);
-    toast('케이스를 저장했어요', 'ok');
-    fillCase(null);
-    await loadCases();
-  })}, '저장');
-  async function loadCases() {
-    const keep = new Set([...caseChecks.querySelectorAll('input:checked')].map(x => x.value));
-    const cases = await api('GET', '/eval/cases') || [];
-    caseList.replaceChildren(...cases.map(c => h('div', {class: 'row li'},
-      h('div', {class: 'grow'}, h('div', {class: 'strong'}, c.name), muted(`${charName(c.characterId)} · ${(c.turns || []).length}턴${c.rubric ? ' · 기준 있음' : ''}`)),
-      h('button', {class: 'ghost', onclick: () => fillCase(c)}, '수정'),
-      confirmBtn('삭제', async () => { await api('DELETE', '/eval/cases/' + c.id); if (editing === c.id) fillCase(null); await loadCases(); }))));
-    if (!cases.length) caseList.append(muted('케이스가 없어요. 아래에서 만드세요.'));
-    caseChecks.replaceChildren(...cases.map(c => chk(h('input', {type: 'checkbox', value: c.id, checked: keep.has(String(c.id))}), c.name)));
-  }
-  const rLabel = h('input', {placeholder: '예: chat.system v4 · sonnet'}), rRepeats = h('input', {type: 'number', min: 1, max: 20, value: 3});
-  const rPipe = sel(META.pipelines, META.defaultPipeline), rCfg = configEditor(null, MODEL_F), rJudge = h('input', {type: 'checkbox', checked: true});
-  const startBtn = h('button', {class: 'primary', onclick: () => busy(startBtn, async () => {
-    const caseIds = [...caseChecks.querySelectorAll('input:checked')].map(x => Number(x.value));
-    if (!caseIds.length) throw new Error('케이스를 하나 이상 고르세요');
-    const r = await api('POST', '/eval/runs', {label: rLabel.value.trim() || `${rPipe.value} ${fmtTime(new Date())}`, caseIds,
-      repeats: clampInt(rRepeats.value, 1, 20), pipeline: rPipe.value, config: rCfg.get(), judge: rJudge.checked});
-    toast('평가를 시작했어요', 'ok');
-    await loadRuns();
-    await openRun(r.id);
-  })}, '실행');
-  const runsBox = h('div'), detail = h('div');
-  const cmpBtn = h('button', {disabled: true, onclick: () => busy(cmpBtn, compare)}, '고른 두 실행 비교');
-  async function loadRuns() {
-    clearTimeout(poll);
-    const runs = await api('GET', '/eval/runs') || [];
-    for (const id of picked) if (!runs.some(r => r.id === id)) picked.delete(id);
-    runsBox.replaceChildren(runs.length ? table(['비교', '이름표', '상태', '진행', '오류', '심사 평균', '사람 평균', '평균 지연', '비용', '시작'], runs.map(r => tr([
-      h('input', {type: 'checkbox', checked: picked.has(r.id), onclick: e => e.stopPropagation(), onchange: e => {
-        if (e.target.checked) picked.add(r.id); else picked.delete(r.id);
-        cmpBtn.disabled = picked.size !== 2;
-      }}),
-      r.label, badge(r.status), `${r.done}/${r.expected}`, r.errors, fmtNum(r.avgJudge), fmtNum(r.avgHuman), fmtMs(r.avgLatencyMs), fmtCost(r.costUsd), fmtTime(r.createdAt)],
-    {class: 'click', 'data-id': r.id, onclick: () => busy(null, () => openRun(r.id))}))) : muted('아직 실행이 없어요'));
-    mark(runsBox, detailId);
-    cmpBtn.disabled = picked.size !== 2;
-    // ponytail: 3초마다 목록 전체를 다시 받는다. 실행이 많아지면 진행 중인 것만 주는 API로
-    if ((runs.some(r => r.status === 'RUNNING') || detailStatus === 'RUNNING') && active === 'eval') poll = setTimeout(() => tick().catch(() => {}), 3000);
-  }
-  async function tick() {
-    await loadRuns();
-    if (detailId && detailStatus === 'RUNNING' && !detail.contains(document.activeElement)) await openRun(detailId);
-  }
-  const byRepeat = (a, b) => a.repeatNo - b.repeatNo;
-  function resultCard(x, rate) {
-    return h('div', {class: 'card'},
-      h('div', {class: 'strong'}, `#${x.repeatNo}`, x.judgeScore != null ? ` · 심사 ${x.judgeScore}점` : ''),
-      x.judgeNote && muted(x.judgeNote),
-      x.error && h('div', {class: 'errbox'}, x.error),
-      transcript(x.transcript),
-      h('div', {class: 'chips'}, h('span', {class: 'chip'}, '전체 ' + fmtMs(x.latencyMs)), h('span', {class: 'chip'}, fmtCost(x.costUsd))),
-      rate && rating(x.humanScore, x.humanNote, async (score, note) => { await api('PATCH', `/eval/results/${x.id}`, {score, note}); loadRuns().catch(() => {}); }));
-  }
-  async function openRun(id) {
-    const r = await api('GET', '/eval/runs/' + id);
-    detailId = id;
-    detailStatus = r.status;
-    mark(runsBox, id);
-    detail.replaceChildren(h('div', {class: 'card'},
-      h('h3', null, r.label, ' ', badge(r.status)),
-      muted(`${r.pipeline} · 케이스 ${(r.caseIds || []).length}개 × ${r.repeats}번 · LLM 심사 ${r.judge ? '켬' : '끔'} · 진행 ${r.done}/${r.expected} · 오류 ${r.errors}`
-        + ` · 심사 평균 ${fmtNum(r.avgJudge)} · 사람 평균 ${fmtNum(r.avgHuman)} · 평균 지연 ${fmtMs(r.avgLatencyMs)} · ${fmtCost(r.costUsd)}`),
-      h('details', null, h('summary', null, '실험 조건'), jsonPre(r.config)),
-      [...groupBy(r.results, x => x.caseId).values()].map(rs => h('div', null,
-        h('h4', null, `${rs[0].caseName} · 심사 평균 ${fmtNum(avg(rs.map(x => x.judgeScore)))}`),
-        h('div', {class: 'cards'}, rs.sort(byRepeat).map(x => resultCard(x, true)))))));
-  }
-  async function compare() {
-    const [a, b] = await Promise.all([...picked].map(id => api('GET', '/eval/runs/' + id)));
-    const ga = groupBy(a.results, x => x.caseId), gb = groupBy(b.results, x => x.caseId);
-    detailId = detailStatus = null;
-    mark(runsBox, null);
-    const col = (r, rs = []) => h('div', null, h('div', {class: 'strong'}, `${r.label} · 심사 평균 ${fmtNum(avg(rs.map(x => x.judgeScore)))}`),
-      rs.sort(byRepeat).map(x => resultCard(x, false)));
-    detail.replaceChildren(h('div', {class: 'card'}, h('h3', null, '두 실행 비교'),
-      h('div', {class: 'cmp'}, [a, b].map(r => h('div', null, h('div', {class: 'strong'}, r.label, ' ', badge(r.status)),
-        muted(`${r.pipeline} · 심사 ${fmtNum(r.avgJudge)} · 사람 ${fmtNum(r.avgHuman)} · 평균 지연 ${fmtMs(r.avgLatencyMs)} · ${fmtCost(r.costUsd)}`),
-        h('details', null, h('summary', null, '실험 조건'), jsonPre(r.config))))),
-      [...new Set([...ga.keys(), ...gb.keys()])].map(id => h('div', null, h('h4', null, (ga.get(id) || gb.get(id))[0].caseName),
-        h('div', {class: 'cmp'}, col(a, ga.get(id)), col(b, gb.get(id)))))));
-  }
-  return {
-    el: h('div', null,
-      h('div', {class: 'grid2'},
-        h('div', {class: 'card'}, h('h3', null, '평가 케이스'), caseList, h('hr'), formTitle, field('이름', cName), field('캐릭터', cChar),
-          field('사용자 말', cTurns), ctxSlot, field('심사 기준', cRubric), h('div', {class: 'row'}, saveCase, h('button', {class: 'ghost', onclick: () => fillCase(null)}, '비우기'))),
-        h('div', {class: 'card'}, h('h3', null, '새 실행'), field('이름표', rLabel), h('div', {class: 'f'}, h('span', null, '케이스'), caseChecks),
-          h('div', {class: 'row'}, field('반복 (1~20)', rRepeats), field('파이프라인', rPipe), chk(rJudge, 'LLM 심사')), rCfg.el, startBtn)),
-      h('div', {class: 'card'}, h('div', {class: 'row'}, h('h3', {class: 'grow'}, '실행 목록'), cmpBtn), runsBox),
-      detail),
-    show: () => busy(null, () => Promise.all([loadCases(), loadRuns()])),
-  };
-}
-
-/* ---------- 5. 호출 기록 ---------- */
+/* ---------- 5. 비용 · 상태 ---------- */
 function usageTab() {
-  const days = h('input', {type: 'number', min: 1, value: 7, onchange: () => busy(null, load)});
-  const sumBox = h('div'), recentBox = h('div');
-  const cols = ['day', 'source', 'provider', 'model', 'purpose', 'calls', 'errors', 'inputTokens', 'outputTokens', 'cacheReadTokens', 'cacheWriteTokens', 'costUsd', 'avgLatencyMs', 'p95LatencyMs', 'overBudget'];
-  const head = ['날짜', '출처', '공급자', '모델', '목적', '호출', '오류', '입력', '출력', '캐시 읽기', '캐시 쓰기', '비용', '평균 지연', 'p95 지연', '마감 초과'];
+  let days = 1, source = '';
+  const box = h('div', null, muted('불러오는 중…'));
+  const periods = h('div', {class: 'seg'}), sources = h('div', {class: 'seg'});
+  const paint = () => {
+    periods.replaceChildren(...[[1, '오늘'], [7, '7일'], [30, '30일']].map(([d, t]) => h('button', {class: d === days ? 'on' : '', onclick: () => { days = d; paint(); busy(null, load); }}, t)));
+    sources.replaceChildren(...[['', '전체'], ['APP', '서비스'], ['LAB', '실험실 · 평가']].map(([s, t]) => h('button', {class: s === source ? 'on' : '', onclick: () => { source = s; paint(); busy(null, load); }}, t)));
+  };
+  paint();
+  const tile = (v, l, sub) => h('div', {class: 'tile'}, h('div', {class: 'l'}, l), h('div', {class: 'v'}, v), sub && h('div', {class: 'l'}, sub));
+  const bar = (v, max) => h('div', {class: 'bar'}, h('i', {style: `width:${max ? Math.max(2, v / max * 100) : 0}%`}));
   async function load() {
-    const [rows, recent] = await Promise.all([api('GET', '/usages/summary?days=' + clampInt(days.value, 1, 365)), api('GET', '/usages')]);
-    sumBox.replaceChildren(h('div', {class: 'strong'}, `합계 ${fmtCost(sum(rows || [], r => r.costUsd))} · 호출 ${sum(rows || [], r => r.calls)}번 · 오류 ${sum(rows || [], r => r.errors)}번`),
-      table(head, (rows || []).map(r => tr(cols.map(c => c === 'costUsd' ? fmtCost(r[c]) : c.endsWith('LatencyMs') ? fmtMs(r[c]) : r[c])))));
-    recentBox.replaceChildren(usageTable(recent, true));
+    let rows = await api('GET', '/usages/summary?days=' + days) || [];
+    if (days === 1) rows = rows.filter(r => String(r.day) === todayKst()); // days=1은 지난 24시간이라 오늘(한국 날짜)만
+    if (source === 'APP') rows = rows.filter(r => r.source === 'APP');
+    if (source === 'LAB') rows = rows.filter(r => r.source !== 'APP');
+    const calls = sum(rows, r => r.calls), errors = sum(rows, r => r.errors), cost = sum(rows, r => r.costUsd), over = sum(rows, r => r.overBudget);
+    const avgMs = calls ? sum(rows, r => r.avgLatencyMs * r.calls) / calls : null;
+    const agg = key => [...groupBy(rows, key).entries()].map(([k, rs]) => {
+      const c = sum(rs, r => r.calls);
+      return {k, calls: c, errors: sum(rs, r => r.errors), cost: sum(rs, r => r.costUsd), over: sum(rs, r => r.overBudget),
+        avg: c ? sum(rs, r => r.avgLatencyMs * r.calls) / c : null, p95: Math.max(...rs.map(r => r.p95LatencyMs || 0)),
+        inT: sum(rs, r => r.inputTokens), outT: sum(rs, r => r.outputTokens), cacheT: sum(rs, r => r.cacheReadTokens)};
+    }).sort((a, b) => b.cost - a.cost);
+    const byPurpose = agg(r => r.purpose), byModel = agg(r => `${r.provider} · ${r.model}`), byDay = agg(r => String(r.day)).sort((a, b) => b.k.localeCompare(a.k));
+    const maxP = Math.max(0, ...byPurpose.map(x => x.cost)), maxD = Math.max(0, ...byDay.map(x => x.cost));
+    box.replaceChildren(h('div', null, // h()로 감싸야 배열 · false 자식이 정리된다 (replaceChildren은 글자로 바꿈)
+      h('div', {class: 'tiles'},
+        tile(fmtUsd(cost), '총비용', fmtKrw(cost)),
+        tile(fmtInt(calls), 'AI 호출'),
+        tile(fmtInt(errors), '실패', calls ? `${(errors / calls * 100).toFixed(1)}%` : null),
+        tile(fmtInt(over), `마감 ${budgetMs() / 1000}초 넘김`, '채팅 · 반응이면 대체 대사가 나간 호출'),
+        tile(fmtSec(avgMs), '평균 응답 시간')),
+      !rows.length ? h('div', {class: 'card empty'}, '이 기간에 AI 호출이 없어요.') : [
+        h('div', {class: 'card'}, h('h3', null, '용도별'),
+          table(['용도', '호출', '실패', '평균', '느린 5% (p95)', '마감 넘김', '비용', '원화', ''], byPurpose.map(x => [PURPOSES[x.k] || x.k, fmtInt(x.calls), fmtInt(x.errors),
+            fmtSec(x.avg), fmtSec(x.p95), fmtInt(x.over), fmtUsd(x.cost), fmtKrw(x.cost), bar(x.cost, maxP)]), [1, 2, 3, 4, 5, 6, 7]),
+          muted('p95는 모델 · 날짜 묶음별 값 중 가장 느린 것이라 실제보다 조금 높게 보일 수 있어요.')),
+        h('div', {class: 'card'}, h('h3', null, '모델별'),
+          table(['공급자 · 모델', '호출', '입력 토큰', '캐시 읽기', '출력 토큰', '비용', '원화'], byModel.map(x => [x.k, fmtInt(x.calls), fmtInt(x.inT), fmtInt(x.cacheT), fmtInt(x.outT), fmtUsd(x.cost), fmtKrw(x.cost)]), [1, 2, 3, 4, 5, 6])),
+        days > 1 && h('div', {class: 'card'}, h('h3', null, '날짜별'),
+          table(['날짜', '호출', '실패', '비용', '원화', ''], byDay.map(x => [x.k, fmtInt(x.calls), fmtInt(x.errors), fmtUsd(x.cost), fmtKrw(x.cost), bar(x.cost, maxD)]), [1, 2, 3, 4]))],
+      muted(`원화는 1달러 = ${KRW_PER_USD.toLocaleString('ko-KR')}원으로 어림한 값이에요. 비용은 운영 설정의 모델 가격으로 계산해요.`)));
   }
-  const refresh = h('button', {onclick: () => busy(refresh, load)}, '새로고침');
   return {
     el: h('div', null,
-      h('div', {class: 'card'}, h('div', {class: 'row'}, h('h3', {class: 'grow'}, '날짜별 요약'), h('label', {class: 'chk'}, '최근', days, '일'), refresh), sumBox),
-      h('div', {class: 'card'}, h('h3', null, '최근 호출 100개 (줄을 누르면 요청·응답)'), recentBox)),
+      h('div', {class: 'card'}, h('div', {class: 'section-head'}, h('h2', {class: 'grow', style: 'margin:0'}, '비용 · 상태'), periods, sources,
+        h('button', {class: 'ghost small', onclick: () => busy(null, load)}, '새로고침')),
+      muted('AI 호출이 얼마나 들었고, 얼마나 느리고, 얼마나 실패했는지. 서비스 = 실제 사용자, 실험실 · 평가 = 이 화면에서 돌린 것.')),
+      box),
     show: () => busy(null, load),
   };
-}
-
-/* ---------- 6. 캐릭터 설정 (DB의 캐릭터 설정, ADR 0022 결정 15) ---------- */
-function characterTab() {
-  const ch = charSel(), view = h('div', null, muted('캐릭터를 고르고 불러오기')), json = h('textarea', {class: 'mono big', spellcheck: false});
-  let current = null;
-  const join = xs => (xs || []).join(', ');
-  const text = t => h('div', {class: 'pre'}, t || '—');
-  const sec = (title, ...body) => h('details', {class: 'card', open: true}, h('summary', null, title), body);
-  function render(c) {
-    view.replaceChildren(
-      sec('기본',
-        table(['항목', '값'], [
-          tr(['말하는 이름', c.speaker]), tr(['코드', c.code]), tr(['버전 (profile.yml version, 저장해도 그대로)', c.version]), tr(['안전 기준', c.safety]),
-          tr(['표정', join(c.expressions)]),
-          tr(['표정 고르는 기준 (결정 모델 보기 설명)', Object.entries(c.expressionGuide || {}).map(([k, v]) => `${k}: ${v}`).join(' / ')])])),
-      sec('관계 단계별 관계 설명 (고정 블록, 지금 단계 것만)',
-        table(['단계부터', '관계'], Object.entries(c.stageTones || {}).map(([k, v]) => tr([k, v])))),
-      sec(`관계 단계별 말투 샘플 ${(c.samples || []).length}쌍 (고정 블록, 지금 단계 묶음만)`,
-        table(['단계부터', '사용자', '말포이'], (c.samples || []).map(s => tr([s.minStage, s.user, s.reply])))),
-      sec('공부 중 · 쉬는 시간 (상황 카드 맨 끝 \'지금:\' 줄)',
-        h('h4', null, '공부 중 (study_style)'), text(c.studyStyle), h('h4', null, '쉬는 시간 (break_style)'), text(c.breakStyle)),
-      sec('공통 페르소나 (고정 블록)', text(c.bible)),
-      sec('절대 규칙 (고정 블록)', text(c.rules)),
-      sec(`미리 쓴 대사 ${(c.lines || []).length}줄 (순간 동작은 그대로, 상태 변화는 단계별 AI 예시 · 마감 초과 대체)`,
-        table(['상황', '단계부터', '순서', '대사', '표정'], (c.lines || []).map(l => tr([l.situation, l.minStage, l.sort, l.text, l.expression])))),
-      sec('대화 점수표',
-        table(['말의 종류', '점수', '감점 %', '세션 1번', '반복 시'], Object.entries(c.scores || {}).map(([k, s]) => tr([k, s.points, s.lossPercent || '', s.oncePerSession ? '예' : '', s.repeatPoints])))),
-      sec('피할 말버릇',
-        table(['말', '규칙'], Object.entries(c.habits || {}).map(([k, v]) => tr([k, v === 'NO_OPENING' ? '첫마디 금지' : v === 'ONCE_PER_SESSION' ? '세션에 한 번' : v])))));
-  }
-  async function load() {
-    current = await api('GET', `/characters/${ch.value}/content`);
-    render(current);
-    json.value = JSON.stringify(current, null, 2);
-  }
-  const loadBtn = h('button', {class: 'primary', onclick: () => busy(loadBtn, load)}, '불러오기');
-  const saveBtn = h('button', {class: 'primary', onclick: () => busy(saveBtn, async () => {
-    let body;
-    try { body = JSON.parse(json.value); } catch (e) { throw fail({code: 'JSON', message: 'JSON 형식이 틀렸어요', detail: String(e)}); }
-    await api('PUT', `/characters/${ch.value}/content`, body);
-    toast('저장했어요. 다음 대화부터 반영 (캐시 30초)', 'ok');
-    await load();
-  })}, '저장');
-  const reseed = confirmBtn('git 처음 값으로 되돌리기', async () => {
-    if (!current) throw fail({code: 'EMPTY', message: '먼저 불러오기'});
-    await api('POST', `/characters/reseed/${current.code}`);
-    toast('처음 값(characters/' + current.code + ')으로 되돌렸어요', 'ok');
-    await load();
-  });
-  return {
-    el: h('div', null,
-      h('div', {class: 'card'}, h('div', {class: 'row'}, field('캐릭터', ch), loadBtn, h('span', {class: 'grow'}),
-        muted('DB가 원본. 처음 값은 git의 characters/<코드>/profile.yml'))),
-      view,
-      h('details', {class: 'card'}, h('summary', null, '고치기 (JSON 전체, 저장하면 DB에 바로)'), json,
-        h('div', {class: 'acts'}, saveBtn, reseed))),
-    show: () => { if (!current) busy(null, load); },
-  };
-}
-
-/* ---------- 운영 설정 (ADR 0026) ---------- */
-// yml 값 위에 바꾼 칸만 DB에 저장한다. 저장하면 다음 요청부터 서비스에 들어간다 (이 서버는 바로, 서버가 여럿이면 30초 안)
-const SECTIONS = [
-  ['llm', 'AI 공급자 · 모델', 'provider = 기본 공급자, fallback-provider = 실패하면 한 번 더 (같은 요청을 다른 공급자로). routes = 용도별 등급 · 출력 한도 · 그 용도만 쓸 공급자(DECIDE → jev). API 키 · 주소는 Railway 변수로만'],
-  ['relation', '호감도 · 레벨', '하루 오름 상한, 자리 비움 감점, 연속 출석, 레벨 1당 자리 지킴 초, 관계 단계(호감도 구간). 대화 한 번의 점수표는 캐릭터 설정의 scores (없으면 아래 대화의 chat-scores)'],
-  ['dialogue', '대화', '답장 파이프라인, 상태 반응을 AI로 만들 trigger, 말 종류 판정, 기본 점수표, 기억 크기, 대체 대사 마감(llm-budget, 7초), 메시지 속도 제한. 시간은 PT5S · PT0.3S 형식'],
-];
-const kebab = s => s.replace(/[A-Z]/g, c => '-' + c.toLowerCase());
-const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-const brief = x => { const s = typeof x === 'object' && x !== null ? JSON.stringify(x) : String(x); return s.length > 60 ? s.slice(0, 60) + '…' : s; };
-
-function settingEditor(section, f) {
-  const v = f.value, d = f.defaultValue;
-  if (section === 'llm' && (f.path === 'provider' || f.path === 'fallbackProvider')) {
-    const names = META.providers.filter(p => p.name !== 'jev' && (f.path === 'provider' || p.name !== 'fake'))
-      .map(p => [p.name, p.ready ? p.name : p.name + ' (키 없음)']);
-    const el = sel(f.path === 'fallbackProvider' ? [['', '없음'], ...names] : names, v ?? '');
-    return {el, read: () => el.value === '' && d == null ? null : el.value, set: x => { el.value = x ?? ''; }};
-  }
-  if (typeof d === 'boolean') {
-    const el = h('input', {type: 'checkbox', checked: !!v});
-    return {el, read: () => el.checked, set: x => { el.checked = !!x; }};
-  }
-  if (typeof d === 'number') {
-    const el = h('input', {type: 'number', step: 'any', value: v});
-    return {el, read: () => Number(el.value), set: x => { el.value = x; }};
-  }
-  if (typeof d === 'string' && (v == null || typeof v === 'string')) {
-    const el = h('input', {value: v ?? ''});
-    return {el, read: () => el.value, set: x => { el.value = x ?? ''; }};
-  }
-  const show = x => JSON.stringify(x, null, 2);
-  const el = h('textarea', {class: 'mono', spellcheck: false, rows: Math.min(14, show(v).split('\n').length), value: show(v)});
-  return {el, read: () => JSON.parse(el.value), set: x => { el.value = show(x); }};
-}
-
-function settingsTab() {
-  const box = h('div', null, muted('불러오는 중…'));
-  let loaded = false;
-  const intro = h('div', {class: 'card'},
-    h('h3', null, '운영 설정: 배포 없이 서비스 동작 바꾸기'),
-    muted('저장하면 다음 요청부터 실제 서비스(공부 · 대화 · 호감도)에 들어갑니다. 바꾼 칸만 DB에 남고, 나머지는 application.yml 값입니다. ↺ 또는 \'전부 yml 값으로\'로 되돌립니다.'),
-    muted('프롬프트(답장 틀 scene.system · 반응 틀 scene.reaction 등)는 \'프롬프트\' 탭에서 새 버전을 켜면, 말투 · 미리 쓴 대사 · 점수표 · 로어북은 \'캐릭터 설정\' 탭에서 저장하면 바로 들어갑니다 (캐릭터 설정은 git에서 profile.yml version을 올려 배포하면 git 값으로 덮어씀).'));
-  function card(s) {
-    const [, title, hint] = SECTIONS.find(x => x[0] === s.section) || [s.section, s.section, ''];
-    const rows = s.fields.map(f => {
-      const ed = settingEditor(s.section, f);
-      return {f, ed, el: h('tr', null,
-        h('td', {class: 'mono'}, kebab(f.path)),
-        h('td', null, f.overridden ? h('span', {class: 'badge draft'}, '바꿈') : h('span', {class: 'muted small'}, 'yml')),
-        h('td', null, h('div', {class: 'row'}, h('div', {class: 'grow'}, ed.el),
-          h('button', {class: 'ghost', title: 'yml 값으로 (저장해야 반영)', onclick: () => ed.set(f.defaultValue)}, '↺'))),
-        h('td', {class: 'muted small mono', title: JSON.stringify(f.defaultValue)}, brief(f.defaultValue)))};
-    });
-    const put = async body => {
-      await api('PUT', '/settings/' + s.section, body);
-      toast(title + ' 저장했어요. 다음 요청부터 서비스에 들어가요', 'ok');
-      await load();
-    };
-    const saveBtn = h('button', {class: 'primary', onclick: () => busy(saveBtn, async () => {
-      const body = {};
-      for (const r of rows) {
-        let v;
-        try { v = r.ed.read(); } catch (e) { throw fail({code: 'JSON', message: kebab(r.f.path) + ': JSON 형식이 틀렸어요', detail: String(e)}); }
-        if (!same(v, r.f.defaultValue)) body[r.f.path] = v;
-      }
-      await put(body);
-    })}, '저장');
-    return h('details', {class: 'card', open: true},
-      h('summary', null, `${title} (${s.section}) · 바꾼 칸 ${s.fields.filter(f => f.overridden).length}개`),
-      muted(hint),
-      table(['칸 (yml 키)', '', '지금 값', 'yml 값'], rows.map(r => r.el)),
-      h('div', {class: 'acts'}, saveBtn, confirmBtn('전부 yml 값으로', () => put({})),
-        muted(s.updatedAt ? '마지막 저장 ' + fmtTime(s.updatedAt) : '저장한 적 없음 (전부 yml 값)')));
-  }
-  async function load() {
-    const all = await api('GET', '/settings');
-    const order = SECTIONS.map(x => x[0]);
-    all.sort((a, b) => order.indexOf(a.section) - order.indexOf(b.section));
-    box.replaceChildren(intro, ...all.map(card));
-    loaded = true;
-    META = await api('GET', '/meta'); // 기본 공급자 · 모델 표(머리줄)도 새 값으로
-    header();
-  }
-  return {el: box, show: () => { if (!loaded) busy(null, load); }};
 }
 
 /* ---------- 머리줄 · 시작 ---------- */
 function header() {
   const m = META;
-  $('#hdr').replaceWith(h('header', {id: 'hdr'},  // h()로 감싸야 배열·null 자식이 정리된다 (replaceChildren은 글자로 바꿈)
-    h('b', {class: 'logo'}, '캡슐 LLM 실험실'),
-    h('span', {class: 'chip'}, '기본 공급자 ' + m.defaultProvider),
-    m.providers.map(p => h('span', {class: 'chip ' + (p.ready ? 'okc' : 'off')}, p.ready ? p.name : `${p.name} · 키 없음`)),
-    m.defaultProvider === 'fake' && h('span', {class: 'warn'}, '가짜 LLM: 형식만 확인. 실제 품질은 CAPSULE_LLM_PROVIDER=anthropic 또는 openai로'),
+  $('#hdr').replaceWith(h('header', {id: 'hdr'},  // h()로 감싸야 배열·null 자식이 정리된다
+    h('b', {class: 'logo'}, '캡슐 운영실'),
+    h('span', {class: 'chip'}, '기본 AI ' + m.defaultProvider),
+    m.providers.filter(p => !p.ready).map(p => h('span', {class: 'chip off'}, `${p.name} 키 없음`)),
+    m.defaultProvider === 'fake' && h('span', {class: 'chip warn'}, '가짜 AI: 형식만 확인. 실제 품질은 CAPSULE_LLM_PROVIDER=anthropic 또는 openai로'),
     h('span', {class: 'grow'}),
-    h('details', {class: 'routes'}, h('summary', null, '모델 설정'), h('div', {class: 'pop'},
-      table(['목적', '등급', '최대 토큰', 'temperature', 'anthropic', 'openai'], (m.routes || []).map(r => tr([r.purpose, r.tier, r.maxTokens, r.temperature, r.models?.anthropic, r.models?.openai]))))),
-    ADMIN ? [h('span', {class: 'chip okc'}, ADMIN + ' 로그인'), h('button', {class: 'ghost', onclick: logout}, '로그아웃')]
-      : m.tokenRequired || TOKEN ? h('button', {class: 'ghost', onclick: askToken}, '토큰') : null));
+    h('a', {href: '/internal/llm-lab/flow', target: '_blank', rel: 'noopener', class: 'small'}, '전체 흐름 테스트 ↗'),
+    ADMIN ? [h('span', {class: 'chip ok'}, ADMIN + ' 로그인'), h('button', {class: 'ghost small', onclick: logout}, '로그아웃')]
+      : m.tokenRequired || TOKEN ? h('button', {class: 'ghost small', onclick: askToken}, '토큰') : null));
 }
 function showTab(k) {
   active = k;
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === k));
   document.querySelectorAll('.tab').forEach(s => { s.hidden = s.id !== 'tab-' + k; });
+  $('#drawer').hidden = true;
   history.replaceState(null, '', '#' + k);
   TABS[k].show?.();
 }
 async function init() {
   try { META = await api('GET', '/meta'); } catch {
     const locked = !$('#loginbar').hidden || !$('#tokenbar').hidden;
-    $('#hdr').replaceChildren(h('b', {class: 'logo'}, '캡슐 LLM 실험실'), muted(locked ? '로그인하면 열려요' : '메타 정보를 못 불러왔어요'));
+    $('#hdr').replaceChildren(h('b', {class: 'logo'}, '캡슐 운영실'), muted(locked ? '로그인하면 열려요' : '기본 정보를 못 불러왔어요'));
     return;
   }
   header();
   if (META.tokenRequired && !TOKEN) askToken();
-  const makers = {chat: chatTab, play: playTab, prompts: promptsTab, eval: evalTab, usage: usageTab, character: characterTab, settings: settingsTab};
+  await loadSettings().catch(() => {}); // 단계 이름 · 마감 시간 · AI 반응 목록. 못 읽어도 화면은 연다
+  const makers = {chat: chatTab, character: characterTab, settings: settingsTab, prompts: promptsTab, usage: usageTab};
   for (const k in makers) { TABS[k] = makers[k](); $('#tab-' + k).replaceChildren(TABS[k].el); }
   const k = location.hash.slice(1);
   showTab(TABS[k] ? k : 'chat');
@@ -969,7 +1519,13 @@ document.querySelectorAll('#tabs button').forEach(b => { b.onclick = () => { if 
 $('#tokenSave').onclick = saveToken;
 $('#loginbar').onsubmit = login;
 $('#tokenInput').onkeydown = e => { if (e.key === 'Enter') saveToken(); };
+// 자체 검사 (콘솔에 실패만 보임)
 console.assert(diffLines(['a', 'b', 'c'], ['a', 'x', 'c']).map(d => d[0]).join('') === ' -+ ', 'diffLines 자체 검사 실패');
+console.assert(isoToSec('PT7S') === 7 && isoToSec('PT0.3S') === 0.3 && isoToSec('PT1M') === 60 && isoToSec('PT1M30S') === 90 && isoToSec('abc') === null, 'isoToSec 자체 검사 실패');
+console.assert(secToIso(1.5) === 'PT1.5S' && isoToSec(secToIso(600)) === 600 && same('PT1M', 'PT60S') && !same('PT1M', 'PT61S'), '시간 변환 자체 검사 실패');
+console.assert(settingInfo('dialogue', 'llmBudget').name === 'AI 답 마감 시간' && settingInfo('dialogue', 'newThing').name === 'newThing' && settingInfo('dialogue', 'newThing').kind === 'json', '설정 이름표 자체 검사 실패');
+console.assert(same({a: '', b: 1}, {b: 1, a: null}) && !same({a: 1}, {a: 2}), 'canon 자체 검사 실패');
+console.assert(loreFromScene('x\n<사용자가 꺼낸 원작 얘기 (네 입장)>\n- 해리: 라이벌\n</사용자가 꺼낸 원작 얘기>').join() === '해리: 라이벌', '로어북 찾기 자체 검사 실패');
 init();
 </script>
 </body>
