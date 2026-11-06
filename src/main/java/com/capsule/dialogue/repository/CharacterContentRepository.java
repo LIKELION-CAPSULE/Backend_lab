@@ -10,6 +10,7 @@ import com.capsule.relation.api.RelationTypes.SignalType;
 import java.sql.Array;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -51,6 +52,14 @@ public class CharacterContentRepository {
         return jdbc.sql("SELECT content_version FROM character_profiles WHERE code = ?")
                 .param(code)
                 .query(Integer.class)
+                .optional();
+    }
+
+    /** 실험실에서 마지막으로 고친 때. 파일 값 그대로면 빈 값 */
+    public Optional<Instant> labEditedAt(String code) {
+        return jdbc.sql("SELECT lab_edited_at FROM character_profiles WHERE code = ? AND lab_edited_at IS NOT NULL")
+                .param(code)
+                .query((rs, n) -> rs.getTimestamp(1).toInstant())
                 .optional();
     }
 
@@ -145,9 +154,13 @@ public class CharacterContentRepository {
                 LlmJson.JSON.readValue(p.lore(), LORE)));
     }
 
-    /** 이 캐릭터의 설정을 통째로 바꾼다 (실험실 저장 · 시드). 버전도 c.version()으로 */
+    /**
+     * 이 캐릭터의 설정을 통째로 바꾼다 (실험실 저장 · 시드). 버전도 c.version()으로
+     *
+     * @param labEditedAt 실험실 저장이면 그때, 파일에서 불러오면 null
+     */
     @Transactional
-    public void replace(CharacterContent c) {
+    public void replace(CharacterContent c, Instant labEditedAt) {
         long id = c.characterId();
         // 같은 폴더(code)가 다른 캐릭터에 붙어 있었으면 그것도 지운다 (reseed가 다른 캐릭터로 옮길 때 code UNIQUE 위반 방지)
         jdbc.sql("DELETE FROM character_profiles WHERE character_id = ? OR code = ?")
@@ -156,9 +169,9 @@ public class CharacterContentRepository {
         jdbc.sql("""
                         INSERT INTO character_profiles
                             (character_id, code, content_version, speaker, bible, rules, safety, expressions,
-                             expression_guide, stage_tones, study_style, break_style, samples, lore)
+                             expression_guide, stage_tones, study_style, break_style, samples, lore, lab_edited_at)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ARRAY(SELECT jsonb_array_elements_text(CAST(? AS jsonb))),
-                                CAST(? AS jsonb), CAST(? AS jsonb), ?, ?, CAST(? AS jsonb), CAST(? AS jsonb))""")
+                                CAST(? AS jsonb), CAST(? AS jsonb), ?, ?, CAST(? AS jsonb), CAST(? AS jsonb), ?)""")
                 .params(
                         id,
                         c.code(),
@@ -173,7 +186,8 @@ public class CharacterContentRepository {
                         c.studyStyle(),
                         c.breakStyle(),
                         LlmJson.write(c.samples() == null ? List.of() : c.samples()),
-                        LlmJson.write(c.lore()))
+                        LlmJson.write(c.lore()),
+                        labEditedAt == null ? null : java.sql.Timestamp.from(labEditedAt))
                 .update();
         for (Line l : c.lines()) {
             jdbc.sql("""

@@ -880,7 +880,7 @@ const CHAR_FIELDS = [
 ];
 const sortedJson = xs => (xs || []).map(x => canon(x)).sort();
 function characterTab() {
-  let orig = null, form = null;
+  let orig = null, form = null, src = null;
   const ch = charSel(META.characters[0]?.id, false, {});
   ch.onchange = () => busy(null, async () => {
     if (dirty() && !await modal('저장하지 않은 수정이 있어요', muted(`${charName(orig.characterId)} 설정에서 고친 내용을 버리고 다른 캐릭터를 열까요?`), {ok: '버리고 열기', danger: true})) {
@@ -892,11 +892,13 @@ function characterTab() {
   const dirty = () => { if (!form) return false; try { return changes(orig, form.get()).length > 0; } catch { return true; } };
   const box = h('div', null, muted('불러오는 중…'));
   const stale = h('div', {class: 'notice', hidden: true});
+  const fileNote = h('div', {class: 'notice', hidden: true});
   const saveBtn = h('button', {class: 'primary', onclick: () => busy(saveBtn, save)}, '저장');
-  const reseedBtn = h('button', {class: 'danger', onclick: () => busy(reseedBtn, reseed)}, '파일 값으로 되돌리기');
+  const reseedBtn = h('button', {class: 'danger', onclick: () => busy(reseedBtn, reseed)}, '파일 값으로 바꾸기');
   const where = (...ws) => ws.map(w => h('span', {class: 'where'}, w));
   const cf = (name, desc, ws, el) => h('div', {class: 'cfield'}, h('div', null, h('span', {class: 'name'}, name), where(...ws)), h('div', {class: 'desc'}, desc), el);
   const card = (id, title, ...body) => h('div', {class: 'card', id}, h('h3', null, title), body);
+  const edited = () => src?.labEditedAt ? `실험실에서 고침 (${fmtTime(src.labEditedAt)})` : '파일 값 그대로';
   function build(c) {
     const speaker = h('input', {value: c.speaker ?? ''});
     const safetyOpts = [['MINOR', '미성년 · 연애 / 성적 대화 금지']];
@@ -935,7 +937,8 @@ function characterTab() {
       card('c-basic', '기본',
         cf('말하는 이름', '프롬프트와 말투 예시에서 캐릭터를 부르는 이름.', ['채팅', '반응'], speaker),
         cf('안전 기준', 'MINOR = 미성년 기준: 연애 · 성적 대화는 하지 않아요.', ['채팅', '반응'], safety),
-        cf('버전', '', [], h('div', null, h('b', null, `DB에 든 버전: v${c.version}`), muted(`git 파일(characters/${c.code}/profile.yml)의 version이 이보다 높으면 서버를 시작할 때 파일 값이 DB를 덮어써요. 여기서 저장해도 버전은 그대로라, git 파일을 고쳐 version을 올리고 배포하면 여기서 바꾼 내용은 사라져요. 오래 둘 내용은 git 파일에도 옮겨 주세요.`)))),
+        cf('버전', '', [], h('div', null, h('b', null, `지금 v${c.version} · git 파일 ${src?.fileVersion != null ? 'v' + src.fileVersion : '없음'} · ${edited()}`),
+          muted(`git 파일(characters/${c.code}/profile.yml)의 version이 더 높으면 서버를 시작할 때 파일 값으로 바꿔요. 단 여기서 한 번이라도 저장했으면 바꾸지 않고 위에 “파일에 새 버전”을 띄워요: 파일 값을 쓰려면 [파일 값으로 바꾸기]를 누르세요. 여기서 고친 것을 git에도 남기려면 파일에 옮기고 version을 올려 주세요.`)))),
       card('c-persona', '성격 · 규칙',
         cf('성격 · 말투', '누구인지, 지금 상황, 성격, 말하는 법. 관계가 발전해도 바뀌지 않는 정체성이에요.', ['채팅 고정 블록', '반응 고정 블록'], bible),
         cf('꼭 지킬 것', '어떤 상황에서도 지킬 규칙.', ['채팅 고정 블록', '반응 고정 블록'], rules)),
@@ -994,7 +997,11 @@ function characterTab() {
     return out;
   }
   async function load() {
-    orig = await api('GET', `/characters/${ch.value}/content`);
+    [orig, src] = await Promise.all([api('GET', `/characters/${ch.value}/content`), api('GET', `/characters/${ch.value}/content/source`).catch(() => null)]);
+    const newer = src?.fileVersion != null && src.fileVersion > orig.version;
+    fileNote.hidden = !newer;
+    if (newer) fileNote.replaceChildren(`git 파일에 새 버전 v${src.fileVersion}이 있어요 (지금 v${orig.version} · ${edited()}). 여기서 고친 내용을 지키려고 자동으로 바꾸지 않았어요. `,
+      h('button', {class: 'small', onclick: () => busy(null, reseed)}, '파일 값으로 바꾸기'));
     if (!SETTINGS) await loadSettings().catch(() => {});
     form = build(orig);
     stale.hidden = true;
@@ -1008,12 +1015,12 @@ function characterTab() {
     if (!list.length) return toast('바뀐 곳이 없어요', 'info');
     const ok = await modal(`${charName(ch.value)} 설정 저장`, [h('p', null, scope(true), ' 저장하면 다음 대화 · 반응부터 실제 서비스에 바로 들어가요.'),
       h('b', null, '바뀐 곳'), h('ul', null, list.map(x => h('li', null, x))),
-      muted(`git 파일 version이 DB(v${orig.version})보다 높아지면 서버 시작 때 파일 값으로 덮여요.`)], {ok: '저장하기'});
+      muted('저장하면 git 파일 버전이 올라가도 자동으로 덮이지 않아요. 파일 값은 [파일 값으로 바꾸기]로만 들어가요.')], {ok: '저장하기'});
     if (!ok) return;
     // PUT은 설정 전체를 바꾼다: 불러온 뒤 다른 곳(새 파일 버전 배포, 다른 관리자)에서 바뀌었으면 덮어쓰지 않고 멈춘다
     const latest = await api('GET', `/characters/${orig.characterId}/content`);
     if (!same(latest, orig)) {
-      stale.replaceChildren(`다른 곳에서 바뀌었어요 (예: 새 파일 버전 v${latest.version} 배포, 다른 관리자). 덮어쓰지 않았어요. `,
+      stale.replaceChildren(`다른 곳에서 바뀌었어요 (다른 관리자 · 다른 창, 또는 새 파일 버전 v${latest.version}). 덮어쓰지 않았어요. `,
         h('button', {class: 'small', onclick: () => busy(null, load)}, '다시 불러오기'), ' 여기서 고치던 내용은 사라져요.');
       stale.hidden = false;
       stale.scrollIntoView({behavior: 'smooth', block: 'center'});
@@ -1025,12 +1032,12 @@ function characterTab() {
   }
   async function reseed() {
     if (!orig) return;
-    const ok = await modal('파일 값으로 되돌리기', [h('p', null, scope(true)),
-      h('p', null, `DB에 저장한 ${charName(ch.value)} 설정을 전부 git 파일(characters/${orig.code}/profile.yml) 값으로 바꿔요. 여기서 고친 내용은 사라지고, 서비스에도 바로 들어가요.`)],
-    {ok: '되돌리기', danger: true});
+    const ok = await modal('파일 값으로 바꾸기', [h('p', null, scope(true)),
+      h('p', null, `${charName(ch.value)} 설정 전체를 git 파일(characters/${orig.code}/profile.yml${src?.fileVersion != null ? ' v' + src.fileVersion : ''}) 값으로 바꿔요. 여기서 고친 내용(${edited()})은 사라지고, 서비스에도 바로 들어가요.`)],
+    {ok: '바꾸기', danger: true});
     if (!ok) return;
     await api('POST', `/characters/reseed/${orig.code}`);
-    toast('파일 값으로 되돌렸어요', 'ok');
+    toast('파일 값으로 바꿨어요', 'ok');
     await load();
   }
   return {
@@ -1038,7 +1045,7 @@ function characterTab() {
       h('div', {class: 'card'}, h('div', {class: 'section-head'}, h('h2', {class: 'grow', style: 'margin:0'}, '캐릭터 설정'), scope(true)),
         muted('캐릭터의 성격 · 말투 · 대사 · 점수표. 저장하면 다음 대화부터 서비스 답장 · 상태 반응에 바로 쓰여요. 각 칸 옆의 회색 표는 프롬프트의 어디에 들어가는지예요.'),
         h('div', {class: 'row', style: 'margin-top:10px'}, field('캐릭터', ch))),
-      stale, box,
+      fileNote, stale, box,
       h('div', {class: 'card savebar', style: 'margin:0;border-radius:12px'}, saveBtn, h('span', {class: 'hint grow'}, '저장 전에 바뀐 곳을 보여 줘요'), reseedBtn)),
     show: () => { if (!orig) busy(null, load); },
   };

@@ -27,6 +27,7 @@ import com.capsule.dialogue.service.LabService;
 import com.capsule.dialogue.service.PromptService;
 import io.swagger.v3.oas.annotations.Hidden;
 import jakarta.validation.Valid;
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -84,6 +85,25 @@ class LlmLabController {
     @GetMapping("/api/characters/{id}/content")
     CharacterContent content(@PathVariable long id) {
         return contents.find(id).orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "CONTENT_NOT_FOUND"));
+    }
+
+    /**
+     * 이 설정이 파일(profile.yml)과 어떤 관계인지: 실험실에서 고친 설정은 파일 버전이 올라가도 시작할 때 덮지 않으므로,
+     * fileVersion &gt; version이면 실험실이 "파일에 새 버전"과 [파일 값으로 바꾸기](reseed)를 띄운다
+     *
+     * @param fileVersion 그 폴더의 profile.yml이 없으면 null
+     * @param labEditedAt 파일 값 그대로면 null
+     */
+    record ContentSource(String code, int version, Integer fileVersion, Instant labEditedAt) {}
+
+    @GetMapping("/api/characters/{id}/content/source")
+    ContentSource contentSource(@PathVariable long id) {
+        CharacterContent c = content(id);
+        return new ContentSource(
+                c.code(),
+                c.version(),
+                seeder.fileVersion(c.code()).orElse(null),
+                contents.labEditedAt(c.code()).orElse(null));
     }
 
     /** 설정 전체를 이 내용으로 바꾼다 (GET으로 받은 JSON을 고쳐서 보낸다). 바로 서비스 답장에 쓰인다 */
