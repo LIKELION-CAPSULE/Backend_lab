@@ -9,7 +9,7 @@ import java.util.Map;
  *
  * @param emotion 캐릭터 감정 이름. 못 정했으면 null
  * @param signal 사용자 말의 종류 (점수는 ChatScorer · relation이 정함). 파이프라인은 null로 내고 ChatReplier가 채운다
- * @param signalConfidence 결정 모델이 고르거나 확인했으면 그 확신도 0~1, 패턴만 썼으면 null
+ * @param signalConfidence 결정 모델이 고른 말의 종류의 확신도 0~1. 결정 실패 · 늦으면 null
  * @param trace 실험실에 보여 줄 중간 결과 (쓴 프롬프트 버전 등). 서비스 응답에는 넣지 않는다
  */
 public record ChatOutcome(

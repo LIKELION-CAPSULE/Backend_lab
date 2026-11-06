@@ -162,8 +162,8 @@ flowchart LR
 | `ChatPipeline` | 답장 만드는 방법 인터페이스. 구현은 `SceneChatPipeline`(기본), `SimpleChatPipeline` |
 | `SceneChatPipeline` | DB 캐릭터 설정으로 시스템 블록 2개(캐시되는 페르소나 블록 + 매번 바뀌는 상황 카드)를 만들어 LLM 한 번 |
 | `SimpleChatPipeline` | 캐릭터 설정이 없을 때: `chat.system`(캐시) + `chat.context`로 LLM 한 번 |
-| `ChatReplier` | 파이프라인 답장 + 사용자 말의 종류(SignalType) 판정을 묶음. 필요할 때만 결정 모델을 같이 부름 |
-| `ChatScorer` | 말 패턴(정규식)으로 종류 고르기(`detect`), 점수표·세션 반복 규칙으로 점수(`score`) |
+| `ChatReplier` | 파이프라인 답장 + 사용자 말의 종류(SignalType) 판정을 묶음. 매 턴 결정 모델을 답장과 동시에 부름 |
+| `ChatScorer` | 결정 모델이 고른 종류에 점수표·세션 반복 규칙으로 점수(`score`) |
 | `FactPicker` | 아는 사실 중 이번 말에 꺼낼 것 하나를 결정 모델로 고름 (1.5초 안) |
 | `MemoryKeeper` | 매 턴 뒤 기억 정리: 무시·추가·고치기·지우기 결정 + 한 줄 쓰기, 20개 넘으면 하나 버림 |
 | `ReplyStream` | 스트리밍 중 지금까지의 대사 (`partial`). 대사 글 그대로, 옛 형식 JSON이면 `"reply"` 값 |
@@ -296,8 +296,7 @@ sequenceDiagram
 **② 답하기 — `DialogueService.reply` → `answer`**
 1. 입력(`ChatInput`) 모으기: 캐릭터, 닉네임, 관계 단계, 지난 세션 카드(최근 2장, 오래된 것부터), 아는 사실(`MemoryKeeper.facts`), 사용자 일정(`MemoryQuery`), 이번 세션 대화, 이번 말, 쉬는 중인지(`SessionQuery.onBreak`), 수다가 길어졌는지(최근 10분 사용자 말 8번 이상), 공부한 분.
 2. `ChatReplier.reply`를 `llm-budget`(7초) 안에서 부른다. 이때 DB 트랜잭션은 열지 않는다.
-   - 말 종류 1차 판정: `ChatScorer.detect`(정규식, 앞에 걸린 것이 이김: 심한 말 > 무례 > 고민 > 고마움 > 칭찬 > 불평 > 단답).
-   - 결정 모델은 두 경우만 답장과 동시에 부른다: 패턴이 `HATE_OR_SEXUAL`이면 확인(확신도 0.8 미만이면 `RUDE`), `signal-detector: DECIDER`면 전체 판정(0.6 미만이면 `NEUTRAL`). 답장이 끝났을 때 마감이 지났으면 기다리지 않는다.
+   - 말 종류: 결정 모델이 답장과 동시에 `SignalType` 보기 중 하나를 고른다(`ChatReplier`, 2026-11-07 말 패턴 폐기). 확신도 0.6 미만 · 실패 · 답장이 끝났을 때 마감이 지났으면 `NEUTRAL`(0점), `HATE_OR_SEXUAL`은 0.8 미만이면 `RUDE`.
 3. `SceneChatPipeline.reply` (캐릭터 설정이 없으면 `SimpleChatPipeline`):
    - 프롬프트 `SCENE_SYSTEM`을 `PromptService.resolve`로 고른다.
    - `FactPicker.pick`: 아는 사실이 있으면 결정 모델에게 [NONE + 사실 f1..fN] 중 하나를 고르게 한다. `fact-pick-wait`(1.5초) 넘거나 확신도 0.6 미만이면 안 넣는다.
@@ -447,7 +446,6 @@ sequenceDiagram
 | `capsule.llm.lab.enabled` | false (local true) | 실험실 `/internal/llm-lab` |
 | `capsule.dialogue.chat-pipeline` | SCENE | 답장 파이프라인 |
 | `capsule.dialogue.reaction-llm-triggers` | GREETING, AWAY, RETURN, BREAK, BREAK_END | 19에서 LLM으로 만들 trigger |
-| `capsule.dialogue.signal-detector` | PATTERN | 말 종류: 정규식(A안) / DECIDER(B안) |
 | `signal-min-confidence` / `severe-min-confidence` | 0.6 / 0.8 | 결정 확신도 기준 |
 | `chat-scores` | 위 호감도 표 | 캐릭터 `scores`가 없을 때 쓰는 기본 점수표 |
 | `chat-repeat-window` / `chat-repeat-limit` | 10 / 2 | 칭찬 연타 방지 |
@@ -463,7 +461,6 @@ sequenceDiagram
 | `history-lines` / `signal-context-lines` / `reaction-context-lines` | 15 / 4 / 6 | LLM에 넣는 대화 줄 수 |
 | `fact-pick-wait` | 1500ms | 사실 고르기 대기 한도 |
 | `content-cache-ttl` | 30s | DB 캐릭터 설정 메모리 캐시 |
-| `low-effort-max-chars` | 3 | 공백 빼고 3자 이하면 단답 |
 | `capsule.relation.*` | 위 호감도 표 | 하루 상한, 자리 비움, 출석, 레벨, 단계 |
 | `capsule.session.auto-close-after` / `auto-close-interval` | 6h / PT10M | 자동 종료 |
 | `capsule.session.target-minutes-*` | 5~180, 5분 단위, 3 허용 | 목표 시간 검증 (16) |
@@ -488,7 +485,7 @@ sequenceDiagram
 | 세션 카드·완료 대사 프롬프트 | `prompts/summary.system.md`, `prompts/closing.system.md` |
 | 공통 고정 대사·대체 대사 | `prompts/fixed.lines.yml` |
 | 상황 카드에 넣는 내용 | `SceneChatPipeline.card`, 반응은 `ReactionWriter.card` |
-| 말 종류 정규식 | `ChatScorer` (패턴 상수) |
+| 말의 종류 보기 설명 (결정 모델이 보는 기준) | `RelationTypes.SignalType.meaning` |
 | 기억할 가치 기준·한 줄 쓰기 지시 | `MemoryKeeper.keepQuestion`, `MemoryKeeper.WRITE_SYSTEM` |
 | 호감도 숫자 | 바로: 실험실 '운영 설정'의 호감도 · 레벨. 기본값: `application.yml` `capsule.relation.*`. 공식은 `AffinityPolicy` |
 | 메시지 속도 제한 | `capsule.dialogue.message-limit`·`message-limit-window` |
