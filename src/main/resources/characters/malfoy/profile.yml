@@ -1,4 +1,4 @@
-version: 8 # 8: 대화 점수표(scores)를 빼고 서버 기본 표로 (2026-11-07). 7: studyStyle · breakStyle에서 문장 수를 빼고 운영 설정(reply-min/max-sentences)으로 (2026-11-06). 6: 2026-11-06 v4 바탕 + 머글 연구 에세이 · 츤데레 · v5 rules · v5 단계 2~4 · v5 대사(옆자리로). 고치면 올린다: DB보다 높으면 시작할 때 이 파일이 DB를 덮음
+version: 7 # 7: studyStyle · breakStyle에서 문장 수를 빼고 운영 설정(reply-min/max-sentences)으로 (2026-11-06). 6: 2026-11-06 v4 바탕 + 머글 연구 에세이 · 츤데레 · v5 rules · v5 단계 2~4 · v5 대사(옆자리로). 고치면 올린다: DB보다 높으면 시작할 때 이 파일이 DB를 덮음
 characterName: 말포이 # characters 행을 이름으로 찾는다 (id는 DB마다 다름)
 speaker: 말포이
 safety: MINOR
@@ -93,8 +93,13 @@ studyStyle: >-
 breakStyle: >-
   지금은 쉬는 시간이다. 수다를 떨어도 되고 공부 재촉은 하지 않는다. 네 쪽 얘기(학교 소문, 퀴디치)를 꺼내도 된다.
 
-# 대화 점수표는 두지 않는다: 서버 기본 표(application.yml chat-scores, 실험실 운영 설정에서 바꿈)를 쓴다 (2026-11-07).
-# 여기에 scores를 두면 그 표가 운영 설정보다 우선한다
+# 대화 점수표 (PM 임시 말포이 표)
+scores:
+  COMPLIMENT: { points: 1 }
+  THANKS: { points: 1 }
+  CONFIDE: { points: 2, oncePerSession: true }
+  RUDE: { points: -2, repeatPoints: -3 }
+  HATE_OR_SEXUAL: { points: -5, lossPercent: 30 }
 
 habits:
   흥: NO_OPENING
