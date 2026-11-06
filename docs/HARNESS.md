@@ -245,7 +245,7 @@ skeleton 스킬이 하는 일:
 - LLM 호출의 입구는 `dialogue/client/LlmGateway` 하나. 공급자 어댑터(`AnthropicProvider` · `OpenAiProvider` · `JevProvider`(결정 전용) · `FakeProvider`)는 `capsule.llm.provider`(fake · anthropic · openai)로 고른다 (ADR 0022). dialogue에는 `api` 패키지가 없다(다른 모듈 계약을 구현하는 `adapter`만). 구조 · 파이프라인 전체는 `docs/ARCHITECTURE.md`
 - 기본값은 `fake`라 테스트 · 로컬(`.env.local`에 공급자가 없을 때)은 Fake로 돈다 (E2E가 API 비용 없이 돎, 테스트는 환경변수가 있어도 fake). 개발 서버(`dev-server` 프로필)는 `CAPSULE_LLM_PROVIDER`가 필수라 빠지면 시작에 실패한다 (2026-11-05 #112, ADR 0018)
 - API 키는 `.env.local` (Claude는 읽지 못하게 막혀 있음). `scripts/run-local.sh`가 LLM 줄만 읽어 환경변수로 넘긴다: `CAPSULE_LLM_PROVIDER` · `CAPSULE_LLM_FALLBACK_PROVIDER` · `CAPSULE_LLM_DECIDE_PROVIDER` · `ANTHROPIC_API_KEY` · `OPENAI_API_KEY` · `JEV_API_KEY` · `CAPSULE_LLM_LAB_TOKEN`. worktree에 `.env.local`이 없으면 메인 체크아웃의 것을 쓴다(worktree마다 복사하지 않음). 셸에 이미 있는 값이 이긴다
-- 대화 품질 평가는 LLM 실험실(`/internal/llm-lab`, local에서만)의 평가 탭으로 한다: 골든 대본 × 반복, LLM 심사 0~10 + 사람 1~5, 실행끼리 비교 (ADR 0022 결정 8). verify에는 들어가지 않는다(실제 LLM 비용). 채팅 답장 스트리밍(28)은 ADR 0025
+- 대화 품질 평가: 실험실(`/internal/llm-lab`, 캡슐 운영실) '대화 테스트'에서 같은 말로 답장을 보고 턴마다 별점 1~5를 남긴다. 골든 대본 × 반복 평가(LLM 심사 0~10)는 화면에서 뺐고(2026-11-06 실험실 개편) API(`/internal/llm-lab/api/eval/*`)와 `http/eval-malfoy.http`로 돌린다 (ADR 0022 결정 8). verify에는 들어가지 않는다(실제 LLM 비용). 채팅 답장 스트리밍(28)은 ADR 0025
 
 ---
 
@@ -415,4 +415,4 @@ skeleton 스킬이 하는 일:
 - develop/main 보호: 지금은 GitHub 브랜치 보호를 못 써서(Free 플랜 조직의 private 저장소) 사람은 약속으로만 막힘. Claude는 훅이 develop/main에서의 파일 수정과 develop/main으로의 push를 막음. `git -C <경로> push`처럼 형태가 다른 명령까지는 못 잡음 (2-3장)
 - 확인한 것 (2026-11-03, Windows 11 + Git Bash): Claude Code 안 훅 호출(SessionStart 상태 출력, zone_guard가 develop 수정을 실제로 차단), 한글·Windows 경로 판정, GitHub Actions `verify` 첫 실행(setup-java cache 실패를 찾아 고침)
 - 뼈대 단계에서 확인함: 실제 Gradle 빌드, spec-sync의 노션 반영
-- 대화 품질(LLM) 평가는 실험실에서 사람이 돌린다(ADR 0022 결정 8). PR 전에 자동으로 도는 대화 회귀 평가는 없음
+- 대화 품질(LLM) 평가는 실험실 대화 테스트(별점)와 평가 API로 사람이 돌린다(ADR 0022 결정 8). PR 전에 자동으로 도는 대화 회귀 평가는 없음
