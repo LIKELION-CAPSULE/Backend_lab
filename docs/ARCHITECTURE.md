@@ -453,6 +453,7 @@ sequenceDiagram
 | `chat-repeat-window` / `chat-repeat-limit` | 10 / 2 | 칭찬 연타 방지 |
 | `memory-max` / `recap-max` | 20 / 2 | 기억 크기 |
 | `memory-async` / `memory-enabled` | true / true | 기억 정리를 따로 / 아예 끄기 |
+| `reply-min-sentences` / `reply-max-sentences` | 3 / 6 | 명세 20: 채팅 답장 길이 'N~M문장 안팎' (공부 중 · 쉬는 시간 같음) |
 | `llm-budget` | 7s | 명세 19·20·22: 이 안에 못 만들면 대체 대사 (28은 첫 대사 기준) |
 | `in-flight-wait` / `in-flight-poll` | 10s / 200ms | 같은 requestId 처리 중일 때 기다림 |
 | `message-limit` / `message-limit-window` | 30 / 1m | 사용자당 메시지 한도(20 · 28 합침), 넘으면 429 |
@@ -491,6 +492,7 @@ sequenceDiagram
 | 기억할 가치 기준·한 줄 쓰기 지시 | `MemoryKeeper.keepQuestion`, `MemoryKeeper.WRITE_SYSTEM` |
 | 호감도 숫자 | 바로: 실험실 '운영 설정'의 호감도 · 레벨. 기본값: `application.yml` `capsule.relation.*`. 공식은 `AffinityPolicy` |
 | 메시지 속도 제한 | `capsule.dialogue.message-limit`·`message-limit-window` |
+| 채팅 답 길이(문장 수) | 바로: 실험실 '운영 설정'. 기본값: `capsule.dialogue.reply-min-sentences` · `reply-max-sentences` |
 | LLM 마감(7초) | `capsule.dialogue.llm-budget` |
 | 공급자 | 바로: 실험실 '운영 설정'의 AI 공급자 · 모델(provider · fallback-provider · routes, 키가 있는 공급자만). 기본값: 환경변수 `CAPSULE_LLM_PROVIDER`(+ 키), 결정 모델은 `CAPSULE_LLM_DECIDE_PROVIDER` |
 | 용도별 모델 등급·토큰 한도 | `capsule.llm.routes` |
