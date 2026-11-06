@@ -26,9 +26,8 @@ import org.springframework.stereotype.Component;
 /**
  * 답장 한 턴 (명세 20): 답장 파이프라인(글)과 사용자 말의 종류 고르기. 서비스·실험실·평가가 같이 쓴다.
  * 원칙: LLM은 고르기만 하고 숫자는 코드가 정한다 (ADR 0022).
- * 종류는 A안(말 패턴, PM 확정)이 기본이다. 결정 모델은 두 경우만 답장과 동시에 부른다:
- *   ① 패턴이 혐오 · 성적이라고 할 때 확인 (비율 감점이라 오탐이면 RUDE로) ② signal-detector: DECIDER(B안)
- * 결정은 답장을 늦추지 않는다: 답장이 끝났을 때 마감이 지났으면 기다리지 않는다 (① RUDE, ② NEUTRAL).
+ * 종류는 결정 모델이 문장 뜻을 보고 고른다 (명세 20, 2026-11-07 말 패턴 폐기). 답장과 동시에 부르고,
+ * 답장을 늦추지 않는다: 답장이 끝났을 때 마감이 지났거나 실패 · 낮은 확신이면 NEUTRAL(0점).
  */
 @Component
 public class ChatReplier {
@@ -53,33 +52,21 @@ public class ChatReplier {
 
     /** @param onText 답장 LLM 원문 스트림 (명세 28). null이면 한 번에 */
     public ChatOutcome reply(ChatPipeline pipeline, ChatInput in, LlmContext ctx, Consumer<String> onText) {
-        SignalType guess = ChatScorer.detect(in.userMessage(), props.current().lowEffortMaxChars());
-        boolean decide = DialogueProperties.DECIDER.equals(props.current().signalDetector());
-        boolean confirm = !decide && guess == SignalType.HATE_OR_SEXUAL;
-        CompletableFuture<Decision> asked = decide || confirm
-                ? CompletableFuture.supplyAsync(() -> read(in, decide ? question() : severeQuestion(), ctx), THREADS)
-                : null;
+        CompletableFuture<Decision> asked = CompletableFuture.supplyAsync(() -> read(in, question(), ctx), THREADS);
         ChatOutcome outcome;
         try {
             outcome = pipeline.reply(in, ctx, onText);
         } catch (RuntimeException e) {
-            if (asked != null) asked.cancel(true);
+            asked.cancel(true);
             throw e;
         }
-        if (asked == null) return outcome.withSignal(guess, null);
         Decision d = await(asked, ctx.deadline());
         Double confidence = d == null ? null : d.confidence();
-        if (confirm) {
-            boolean severe = d != null
-                    && SignalType.HATE_OR_SEXUAL.name().equals(d.choice())
-                    && d.confidence() >= props.current().severeMinConfidence();
-            return outcome.withSignal(severe ? SignalType.HATE_OR_SEXUAL : SignalType.RUDE, confidence);
-        }
-        // TODO(judgment): J-06 B안: 확신이 낮으면 0점. 기준값은 실험실 평가로 정한다
+        // TODO(judgment): J-06 확신이 낮으면 0점. 기준값은 실험실 평가로 정한다
         if (d == null || d.confidence() < props.current().signalMinConfidence())
             return outcome.withSignal(SignalType.NEUTRAL, confidence);
         SignalType chosen = SignalType.valueOf(d.choice());
-        // 비율 감점은 A안과 같은 확신 기준을 넘어야 한다
+        // 비율 감점(−30%)이라 오탐이 비싸다: 더 높은 확신이 아니면 무례로
         if (chosen == SignalType.HATE_OR_SEXUAL
                 && d.confidence() < props.current().severeMinConfidence()) chosen = SignalType.RUDE;
         return outcome.withSignal(chosen, confidence);
@@ -115,18 +102,10 @@ public class ChatReplier {
                 + "사용자의 마지막 말: " + in.userMessage();
     }
 
-    /** B안: 모든 종류 중 하나 */
+    /** 모든 종류 중 하나 (보기 설명 = SignalType.meaning) */
     static Decider.Question question() {
         Map<String, String> criteria = new LinkedHashMap<>();
         Arrays.stream(SignalType.values()).forEach(s -> criteria.put(s.name(), s.meaning()));
         return new Decider.Question("사용자의 마지막 말이 어떤 종류의 말인지 하나 고른다", criteria);
-    }
-
-    /** 심한 말 확인: 패턴이 걸린 말이 정말 혐오 · 성적인지 */
-    static Decider.Question severeQuestion() {
-        Map<String, String> criteria = new LinkedHashMap<>();
-        criteria.put(SignalType.HATE_OR_SEXUAL.name(), SignalType.HATE_OR_SEXUAL.meaning());
-        criteria.put(SignalType.RUDE.name(), "혐오 · 성적인 말은 아니다 (욕, 농담, 힘들다는 표현, 남의 말 인용 등)");
-        return new Decider.Question("사용자의 마지막 말이 캐릭터를 향한 혐오 표현이나 성적인 말인지 고른다", criteria);
     }
 }
