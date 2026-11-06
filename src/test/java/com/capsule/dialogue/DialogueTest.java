@@ -450,13 +450,15 @@ class DialogueTest {
     void chatIsScoredByPatternAndSessionRules() throws Exception {
         // A안: 말 패턴으로 종류, 점수표(application.yml chat-scores)로 점수. 결정 모델은 부르지 않는다
         assertThat(scoreOf("오늘 날씨 좋다")).isEqualTo(new ChatScore(SignalType.NEUTRAL, 0, 0));
-        assertThat(scoreOf("고마워 진짜")).isEqualTo(new ChatScore(SignalType.THANKS, 1, 0));
-        assertThat(scoreOf("고맙다 정말")).isEqualTo(new ChatScore(SignalType.THANKS, 1, 0));
+        assertThat(scoreOf("고마워 진짜")).isEqualTo(new ChatScore(SignalType.THANKS, 2, 0));
+        assertThat(scoreOf("고맙다 정말")).isEqualTo(new ChatScore(SignalType.THANKS, 2, 0));
         assertThat(scoreOf("감사합니다요")).isEqualTo(new ChatScore(SignalType.THANKS, 0, 0)); // 10턴 안 세 번째
-        assertThat(scoreOf("요즘 너무 힘들어")).isEqualTo(new ChatScore(SignalType.CONFIDE, 2, 0));
+        assertThat(scoreOf("요즘 너무 힘들어")).isEqualTo(new ChatScore(SignalType.CONFIDE, 3, 0));
         assertThat(scoreOf("진짜 불안해 죽겠어")).isEqualTo(new ChatScore(SignalType.CONFIDE, 0, 0)); // 세션당 1번
-        assertThat(scoreOf("아 꺼져 좀")).isEqualTo(new ChatScore(SignalType.RUDE, -2, 0));
-        assertThat(scoreOf("닥쳐 진짜")).isEqualTo(new ChatScore(SignalType.RUDE, -3, 0)); // 같은 세션 반복
+        assertThat(scoreOf("아 꺼져 좀")).isEqualTo(new ChatScore(SignalType.RUDE, -4, 0));
+        assertThat(scoreOf("닥쳐 진짜")).isEqualTo(new ChatScore(SignalType.RUDE, -6, 0)); // 같은 세션 반복
+        assertThat(scoreOf("ㅇㅇ")).isEqualTo(new ChatScore(SignalType.LOW_EFFORT, 0, 0));
+        assertThat(scoreOf("ㄴㄴ")).isEqualTo(new ChatScore(SignalType.LOW_EFFORT, -1, 0)); // 같은 세션 반복
         assertThat(jdbc.queryForObject(
                         "SELECT signal FROM chat_messages WHERE session_id = ? AND sender = 'USER' ORDER BY id LIMIT 1",
                         String.class,
@@ -467,7 +469,7 @@ class DialogueTest {
     @Test
     void severeWordsAreConfirmedByTheDecider() throws Exception {
         // 패턴이 혐오 · 성적이라고 하면 결정 모델이 확인한다. Fake는 첫 보기(HATE_OR_SEXUAL, 0.9)를 고른다
-        assertThat(scoreOf("섹스 얘기 하자")).isEqualTo(new ChatScore(SignalType.HATE_OR_SEXUAL, -5, 30));
+        assertThat(scoreOf("섹스 얘기 하자")).isEqualTo(new ChatScore(SignalType.HATE_OR_SEXUAL, -10, 30));
 
         // 확인이 낮은 확신이면 RUDE로 (비율 감점 오탐 방지)
         doAnswer(inv -> {
@@ -478,16 +480,16 @@ class DialogueTest {
                 })
                 .when(decider)
                 .decide(anyString(), any(), any());
-        assertThat(scoreOf("야동 같은 소리")).isEqualTo(new ChatScore(SignalType.RUDE, -2, 0));
+        assertThat(scoreOf("야동 같은 소리")).isEqualTo(new ChatScore(SignalType.RUDE, -4, 0));
 
-        // 확인 호출이 실패해도 답장은 나가고 RUDE (같은 세션 두 번째라 −3)
+        // 확인 호출이 실패해도 답장은 나가고 RUDE (같은 세션 두 번째라 −6)
         doThrow(new IllegalStateException("결정 실패")).when(decider).decide(anyString(), any(), any());
         UUID failed = UUID.randomUUID();
         send(failed, "섹드립 ㄱ")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.fallback").value(false));
         verify(relationCommands)
-                .applyChatScore(userId, CHARACTER_ID, sessionId, failed, new ChatScore(SignalType.RUDE, -3, 0));
+                .applyChatScore(userId, CHARACTER_ID, sessionId, failed, new ChatScore(SignalType.RUDE, -6, 0));
     }
 
     @Test
