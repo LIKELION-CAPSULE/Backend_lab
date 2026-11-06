@@ -386,9 +386,9 @@ sequenceDiagram
 | 규칙 | 값 | 코드 |
 |---|---|---|
 | 범위·시작 | 0~100, 처음 만나면 50 (`meet`, 공부 시작 때) | `RelationTypes.START_POINTS`, DB CHECK |
-| 대화 점수 | 캐릭터 `scores` 표: 칭찬 +1, 고마움 +1, 고민 +2(세션 1번), 무례 −2(반복 −3), 혐오·성적 −5 또는 지금 값의 30%(올림, 큰 쪽) | `ChatScorer.score`, `AffinityPolicy.chatDelta` |
+| 대화 점수 | 기본 표 `chat-scores`(캐릭터 `scores`가 있으면 그 표, 말포이는 없음): 애정 · 고민(세션 1번) +3, 칭찬 · 고마움 +2, 근황 · 관심 +1, 단답 반복 −1, 불평 −1, 놀림 −2, 무례 −4(반복 −6), 혐오·성적 −10 또는 지금 값의 30%(올림, 큰 쪽) | `ChatScorer.score`, `AffinityPolicy.chatDelta` |
 | 대화 한 번 최대 오름 | +5 (상수, DB CHECK와 같음) | `AffinityPolicy.CHAT_MAX_GAIN` |
-| 대화 하루 오름 상한 | +15 (내려가는 쪽은 상한 없음) | `chat-daily-gain-cap` |
+| 대화 하루 오름 상한 | +25 (내려가는 쪽은 상한 없음) | `chat-daily-gain-cap` |
 | 심한 말 뒤 | 그날 오름 0 (`last_severe_at`) | `RelationService.applyChatScore` |
 | 자리 비움 | 60초 넘게 비우면 −1, 하루 최대 −3 | `away-*` |
 | 연속 출석 | 그날 첫 공부 시작이 출석, 2일째부터 하루 +1, 끊기면 1일째(감점 없음) | `streak-points` |
