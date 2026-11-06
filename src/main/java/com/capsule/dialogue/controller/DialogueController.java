@@ -34,7 +34,7 @@ class DialogueController {
 
     private static final Logger log = LoggerFactory.getLogger(DialogueController.class);
     private static final ExecutorService STREAMS = Executors.newVirtualThreadPerTaskExecutor();
-    /** 첫 대사 5초 + 끝까지 LLM http-timeout(30초)보다 넉넉히. 프론트 프록시 상한(60초) 안 */
+    /** 첫 대사 llm-budget + 끝까지 LLM http-timeout(30초)보다 넉넉히. 프론트 프록시 상한(60초) 안 */
     private static final Duration STREAM_TIMEOUT = Duration.ofSeconds(50);
 
     private final DialogueService dialogue;

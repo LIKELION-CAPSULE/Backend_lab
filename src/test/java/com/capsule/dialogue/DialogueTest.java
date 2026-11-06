@@ -136,8 +136,8 @@ class DialogueTest {
         when(sessionQuery.find(sessionId))
                 .thenReturn(Optional.of(new SessionInfo(sessionId, userId, 1, CHARACTER_ID, Instant.now(), null)));
         when(characterQuery.find(CHARACTER_ID))
-                .thenReturn(
-                        Optional.of(new CharacterInfo(CHARACTER_ID, 1, "채린", null, List.of("츤데레"), "짝꿍", true, null)));
+                .thenReturn(Optional.of(
+                        new CharacterInfo(CHARACTER_ID, 1, "채린", null, List.of("츤데레"), "짝꿍", true, null, null)));
         when(reactionQuery.pick(anyLong(), anyString(), any())).thenReturn(Reaction.NONE);
         when(relationQuery.view(userId, CHARACTER_ID)).thenReturn(view(1, 80));
     }
@@ -265,7 +265,7 @@ class DialogueTest {
     void slowLlmReactionFallsBackToFixedLineWithoutEmotion() throws Exception {
         event(13, "RETURN", false, false);
         doAnswer(invocation -> {
-                    Thread.sleep(6_000);
+                    Thread.sleep(8_000); // llm-budget(7초)보다 길게
                     return invocation.callRealMethod();
                 })
                 .when(llm)
@@ -382,7 +382,7 @@ class DialogueTest {
     @Test
     void streamWithoutAFirstWordInTimeFallsBack() throws Exception {
         doAnswer(invocation -> {
-                    Thread.sleep(6_000);
+                    Thread.sleep(8_000); // llm-budget(7초)보다 길게
                     return invocation.callRealMethod();
                 })
                 .when(llm)
@@ -392,7 +392,7 @@ class DialogueTest {
                 .thenReturn(change(0, 80));
 
         String body = streamed(requestId, "이거 어려워", MediaType.TEXT_EVENT_STREAM);
-        // 첫 대사가 5초 안에 안 왔으니 reply 없이 대체 대사 done 한 번 (늦게 온 글은 보내지 않는다)
+        // 첫 대사가 마감(7초) 안에 안 왔으니 reply 없이 대체 대사 done 한 번 (늦게 온 글은 보내지 않는다)
         assertThat(body).doesNotContain("event:reply");
         assertThat(body).contains("\"content\":\"미안, 잠깐 딴생각했어. 다시 말해줄래?\"").contains("\"fallback\":true");
         verify(relationCommands).applyChatScore(userId, CHARACTER_ID, sessionId, requestId, ChatScore.none());
@@ -400,14 +400,14 @@ class DialogueTest {
 
     @Test
     void streamKeepsWaitingOnceTheFirstWordIsOut() throws Exception {
-        // 첫 대사는 바로 나왔는데 끝나는 데 6초: 이미 보인 글을 대체 대사로 바꾸지 않고 끝까지 기다린다
+        // 첫 대사는 바로 나왔는데 끝나는 데 8초(마감 7초를 넘김): 이미 보인 글을 대체 대사로 바꾸지 않고 끝까지 기다린다
         doAnswer(invocation -> {
                     java.util.function.Consumer<String> onText = invocation.getArgument(4);
                     if (invocation.getArgument(0) != LlmPurpose.CHAT || onText == null)
                         return invocation.callRealMethod();
                     onText.accept("{\"reply\":\"잠깐만");
                     Object result = invocation.callRealMethod(); // 게이트웨이는 시작할 때만 마감을 본다
-                    Thread.sleep(6_000); // 스트림이 늦게 끝남
+                    Thread.sleep(8_000); // 스트림이 늦게 끝남
                     return result;
                 })
                 .when(llm)
@@ -628,7 +628,7 @@ class DialogueTest {
     @Test
     void slowLlmFallsBackWithoutAffinityChange() throws Exception {
         doAnswer(invocation -> {
-                    Thread.sleep(6_000);
+                    Thread.sleep(8_000); // llm-budget(7초)보다 길게
                     return invocation.callRealMethod();
                 })
                 .when(llm)

@@ -140,7 +140,7 @@ class SettingsApiTest {
             {"llm", "{\"provider\": null}", "provider"},
             {"dialogue", "{\"llmBudget\": null}", "llmBudget"},
             {"llm", "{\"openai.reasoningEffort\": \"hard\"}", "openai.reasoningEffort"},
-            {"dialogue", "{\"inFlightWait\": \"PT2S\"}", "inFlightWait"}, // llm-budget(5초)보다 짧음
+            {"dialogue", "{\"inFlightWait\": \"PT2S\"}", "inFlightWait"}, // llm-budget보다 짧음
             {"dialogue", "{\"awayIntensityMax\": 5}", "awayIntensityMax"}, // 명세 19 요청 검사 계약: 닫힌 칸
         }) {
             save(bad[0], bad[1])

@@ -82,7 +82,7 @@ public class LabService {
                    sum(cost_usd) AS cost_usd,
                    avg(latency_ms) AS avg_latency_ms,
                    percentile_cont(0.95) WITHIN GROUP (ORDER BY latency_ms) AS p95_latency_ms,
-                   count(*) FILTER (WHERE latency_ms > :budgetMs) AS over5s
+                   count(*) FILTER (WHERE latency_ms > :budgetMs) AS over_budget
             FROM llm_usages
             WHERE created_at >= now() - make_interval(days => :days)
             GROUP BY 1, 2, 3, 4, 5
@@ -166,7 +166,6 @@ public class LabService {
                         .map(c -> new LabMeta.Character(c.id(), c.name()))
                         .toList(),
                 TRIGGERS,
-                dialogueProps.current().emotions(),
                 llmProps.current().lab().token() != null
                         && !llmProps.current().lab().token().isBlank());
     }
@@ -307,12 +306,7 @@ public class LabService {
                             nickname,
                             config.summary(),
                             // 서비스(19)처럼 최근 몇 줄만
-                            history.subList(
-                                    Math.max(
-                                            0,
-                                            history.size()
-                                                    - dialogueProps.current().reactionContextLines()),
-                                    history.size()),
+                            PromptVars.tail(history, dialogueProps.current().reactionContextLines()),
                             pinned,
                             ctx);
                     return map("content", l.content(), "emotion", l.emotion());
@@ -351,11 +345,7 @@ public class LabService {
                 yield ctx -> memoryKeeper.preview(
                         c,
                         config.factsOrEmpty(),
-                        history.subList(
-                                Math.max(
-                                        0,
-                                        history.size() - dialogueProps.current().signalContextLines()),
-                                history.size()),
+                        PromptVars.tail(history, dialogueProps.current().signalContextLines()),
                         message,
                         ctx);
             }

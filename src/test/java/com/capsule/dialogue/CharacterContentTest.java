@@ -71,7 +71,7 @@ class CharacterContentTest {
         assertThat(contents.next(1, "BREAK", null, 4, session, "민수")
                         .orElseThrow()
                         .content())
-                .startsWith("쉬자.") // 단계 4 묶음 (두 줄 중 순서대로)
+                .startsWith("쉬자") // 단계 4 묶음 (두 줄 중 순서대로)
                 .doesNotContain("체력도 실력");
         // 강도 칸(AWAY_2)이 있으면 그 칸, 없는 상황은 빈 값 (공통 고정 대사로)
         assertThat(contents.next(1, "AWAY_2", "AWAY", 1, session, "민수")
@@ -111,7 +111,7 @@ class CharacterContentTest {
         assertThat(contents.next(1, "REPLY_FALLBACK", null, 4, key, "민수")
                         .orElseThrow()
                         .content())
-                .isEqualTo("잠깐만, 민수. 대충 대답하기 싫어서 그래.");
+                .isEqualTo("잠깐만 민수, 대충 대답하기 싫어서 그래");
     }
 
     @Test

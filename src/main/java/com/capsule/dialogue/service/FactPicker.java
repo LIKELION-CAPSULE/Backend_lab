@@ -55,7 +55,7 @@ public class FactPicker {
                 THREADS);
         Decision d;
         try {
-            // TODO(judgment): J-05 사실 고르기를 기다리는 한도 (5초 안에 답장이 나가야 하므로 짧게, fact-pick-wait)
+            // TODO(judgment): J-05 사실 고르기를 기다리는 한도 (llm-budget 안에 답장이 나가야 하므로 짧게, fact-pick-wait)
             d = f.get(props.current().factPickWait().toMillis(), TimeUnit.MILLISECONDS);
         } catch (Exception e) {
             f.cancel(true);

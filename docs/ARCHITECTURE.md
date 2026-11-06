@@ -158,7 +158,7 @@ flowchart LR
 
 | 클래스 | 하는 일 |
 |---|---|
-| `DialogueService` | 19·20·28·22의 API 규칙: 검증, 재전송, 사용자 말 저장, 속도 제한, 5초 대체 대사, 저장 트랜잭션, 종료 초안·저장 |
+| `DialogueService` | 19·20·28·22의 API 규칙: 검증, 재전송, 사용자 말 저장, 속도 제한, 마감(7초) 대체 대사, 저장 트랜잭션, 종료 초안·저장 |
 | `ChatPipeline` | 답장 만드는 방법 인터페이스. 구현은 `SceneChatPipeline`(기본), `SimpleChatPipeline` |
 | `SceneChatPipeline` | DB 캐릭터 설정으로 시스템 블록 2개(캐시되는 페르소나 블록 + 매번 바뀌는 상황 카드)를 만들어 LLM 한 번 |
 | `SimpleChatPipeline` | 캐릭터 설정이 없을 때: `chat.system`(캐시) + `chat.context`로 LLM 한 번 |
@@ -225,7 +225,8 @@ flowchart LR
 
 | 파일 | 프롬프트 키 | 쓰는 곳 |
 |---|---|---|
-| `prompts/scene.system.md` | `SCENE_SYSTEM` | 답장(SCENE)과 상태 반응의 고정 블록 틀. 캐시됨 |
+| `prompts/scene.system.md` | `SCENE_SYSTEM` | 답장(SCENE)의 고정 블록 틀. 캐시됨 |
+| `prompts/scene.reaction.md` | `SCENE_REACTION` | 상태 반응(SCENE)의 고정 블록 틀(바이블 · 규칙만). 캐시됨 |
 | `prompts/chat.system.md`, `chat.context.md` | `CHAT_SYSTEM`, `CHAT_CONTEXT` | SIMPLE 답장 (캐릭터 설정이 없을 때) |
 | `prompts/reaction.system.md` | `REACTION_SYSTEM` | 캐릭터 설정이 없는 캐릭터의 상태 반응 |
 | `prompts/summary.system.md` | `SUMMARY_SYSTEM` | 종료 때 세션 흐름 카드 |
@@ -254,11 +255,11 @@ flowchart LR
 
 `LlmGateway.complete` 순서:
 1. 공급자 순서 = 실험 고정 공급자 하나, 아니면 [용도 공급자(DECIDE→jev 등) → 기본 공급자 `capsule.llm.provider` → `fallback-provider`] 중복 제거.
-2. 매 시도 전에 `LlmContext.deadline`(서비스는 지금+5초)이 지났으면 새 호출을 시작하지 않는다.
+2. 매 시도 전에 `LlmContext.deadline`(서비스는 지금+`llm-budget`)이 지났으면 새 호출을 시작하지 않는다.
 3. 429·5xx·연결 오류만 같은 공급자로 `max-retries: 1`번, `retry-backoff: 300ms` 쉬고 다시.
 4. 거절(refusal)은 다른 공급자로 넘기지 않고 바로 실패(→ 대체 대사).
 5. 성공·실패 모두 `llm_usages`에 한 행. 비용은 `capsule.llm.prices` 또는 `Llm.DEFAULT_PRICES`. 원문은 `log-content`가 true이거나 실험실·평가일 때만.
-6. HTTP 한 번의 한도는 `http-timeout: 30s`. 명세의 5초는 서비스(`DialogueService`)가 따로 지킨다.
+6. HTTP 한 번의 한도는 `http-timeout: 30s`. 명세의 마감(`llm-budget` 7초)은 서비스(`DialogueService`)가 따로 지킨다.
 
 ### 20 메시지 전송
 
@@ -272,7 +273,7 @@ sequenceDiagram
   participant Rel as relation.api
   C->>S: send = accept + reply
   S->>S: accept: 세션 검증, 재전송 확인, 사용자 말 저장, 속도 제한
-  S->>R: reply (5초 안, 가상 스레드)
+  S->>R: reply (7초 안, 가상 스레드)
   R->>P: reply
   P->>G: DECIDE (FactPicker, 1.5초 안)
   P->>G: CHAT [고정 블록 + 상황 카드] + 최근 15줄 + 이번 말 → 대사만
@@ -294,18 +295,18 @@ sequenceDiagram
 
 **② 답하기 — `DialogueService.reply` → `answer`**
 1. 입력(`ChatInput`) 모으기: 캐릭터, 닉네임, 관계 단계, 지난 세션 카드(최근 2장, 오래된 것부터), 아는 사실(`MemoryKeeper.facts`), 사용자 일정(`MemoryQuery`), 이번 세션 대화, 이번 말, 쉬는 중인지(`SessionQuery.onBreak`), 수다가 길어졌는지(최근 10분 사용자 말 8번 이상), 공부한 분.
-2. `ChatReplier.reply`를 `llm-budget`(5초) 안에서 부른다. 이때 DB 트랜잭션은 열지 않는다.
+2. `ChatReplier.reply`를 `llm-budget`(7초) 안에서 부른다. 이때 DB 트랜잭션은 열지 않는다.
    - 말 종류 1차 판정: `ChatScorer.detect`(정규식, 앞에 걸린 것이 이김: 심한 말 > 무례 > 고민 > 고마움 > 칭찬 > 불평 > 단답).
    - 결정 모델은 두 경우만 답장과 동시에 부른다: 패턴이 `HATE_OR_SEXUAL`이면 확인(확신도 0.8 미만이면 `RUDE`), `signal-detector: DECIDER`면 전체 판정(0.6 미만이면 `NEUTRAL`). 답장이 끝났을 때 마감이 지났으면 기다리지 않는다.
 3. `SceneChatPipeline.reply` (캐릭터 설정이 없으면 `SimpleChatPipeline`):
    - 프롬프트 `SCENE_SYSTEM`을 `PromptService.resolve`로 고른다.
    - `FactPicker.pick`: 아는 사실이 있으면 결정 모델에게 [NONE + 사실 f1..fN] 중 하나를 고르게 한다. `fact-pick-wait`(1.5초) 넘거나 확신도 0.6 미만이면 안 넣는다.
-   - 시스템 블록 1 (캐시 O): `scene.system`에 `systemVars` — 페르소나(`bible`, 원작 말투 산문), 규칙, 지금 단계의 관계 설명, 단계별 말투 샘플, 상태 변화 예시 대사(상황마다 2줄).
+   - 시스템 블록 1 (캐시 O): `scene.system`에 `systemVars` — 페르소나(`bible`, 원작 말투 산문), 규칙, 지금 단계의 관계 설명, 단계별 말투 샘플. 상태 변화 예시는 넣지 않는다(상태 반응 카드에만).
    - 시스템 블록 2 (캐시 X, `card`): 닉네임·시각·공부한 분 / 첫 대화면 캐릭터의 오늘 근황(TODAY 대사, 요일로) / 고른 사실 하나 / 로어북 카드(이번 말에 키워드가 걸린 것 최대 2장) / 지난 세션 흐름 / 첫 대화면 사용자 일정 / 피할 말버릇 / 공부 중 수다가 길면 공부로 돌려보내기 지시 / 공부 중·쉬는 시간 말하는 법.
    - 메시지: 이번 세션 최근 `history-lines`(15)줄 + 이번 말. `LlmPurpose.CHAT`.
    - 결과 해석(`spoken`): LLM은 대사만 쓴다(말포이 v3, 3~6문장). 그 글이 대사다. 옛 형식 · 가짜 AI의 JSON이면 `reply`. 토큰 한도로 잘렸거나 JSON 모양인데 깨졌으면 예외 → 대체 대사.
-   - 표정(`ExpressionPicker`): 대사가 끝나면 결정 모델(Jev)에 [사용자 말 + 대사]를 주고 보기 = 캐릭터 표정 목록(`expressions`), 보기 설명 = `expressionGuide`로 하나를 고르게 한다. 보기 밖은 나오지 않는다. 답장 5초 마감과 따로 `fact-pick-wait`(1.5초), 실패하면 null(표정 안 바꿈).
-4. 5초 초과·실패면 대체 대사: 캐릭터 설정의 `REPLY_FALLBACK` 대사(순서대로) → 없으면 `fixed.lines.yml`의 `fallbacks.reply`. 이때 signal은 없고 호감도는 바뀌지 않는다.
+   - 표정(`ExpressionPicker`): 대사가 끝나면 결정 모델(Jev)에 [사용자 말 + 대사]를 주고 보기 = 캐릭터 표정 목록(`expressions`), 보기 설명 = `expressionGuide`로 하나를 고르게 한다. 보기 밖은 나오지 않는다. 답장 마감과 따로 `fact-pick-wait`(1.5초), 실패하면 null(표정 안 바꿈).
+4. 마감 초과·실패면 대체 대사: 캐릭터 설정의 `REPLY_FALLBACK` 대사(순서대로) → 없으면 `fixed.lines.yml`의 `fallbacks.reply`. 이때 signal은 없고 호감도는 바뀌지 않는다.
 5. 점수: `ChatScorer.score` — 캐릭터 `scores` 표(없으면 `capsule.dialogue.chat-scores`). 세션당 한 번(`once-per-session`), 반복 점수(`repeat-points`), 최근 10턴에 같은 종류가 이미 2번이면 오르는 점수는 0.
 6. 저장 트랜잭션 하나:
    - `RelationCommands.applyChatScore`부터 부른다(0점이어도). relation 행을 잠가서 공부 종료와 잠금 순서를 맞춘다.
@@ -314,7 +315,7 @@ sequenceDiagram
    - 감정 → 모션·표정: `ReactionQuery.pick(characterId, 감정)`(`live2d_reaction_maps`). 행이 없으면 동작 없음.
 7. 응답 뒤 기억 정리(`MemoryKeeper.afterTurn`)를 별도 가상 스레드에서 돈다(`memory-async`, `memory-enabled`).
 
-같은 `requestId`가 처리 중이면(`awaitAnswer`): 먼저 온 요청이 사용자 말을 저장한 시각부터 `in-flight-wait`(8초)까지 `in-flight-poll`(200ms)마다 답장이 저장됐는지 본다. 지나도 없으면 이 요청이 이어서 답한다. 둘 다 답하면 먼저 저장된 답장 하나만 남는다(UNIQUE). 재전송 응답에는 감정·모션·delta를 다시 싣지 않는다.
+같은 `requestId`가 처리 중이면(`awaitAnswer`): 먼저 온 요청이 사용자 말을 저장한 시각부터 `in-flight-wait`(10초)까지 `in-flight-poll`(200ms)마다 답장이 저장됐는지 본다. 지나도 없으면 이 요청이 이어서 답한다. 둘 다 답하면 먼저 저장된 답장 하나만 남는다(UNIQUE). 재전송 응답에는 감정·모션·delta를 다시 싣지 않는다.
 
 ### 28 스트리밍 (SSE)
 
@@ -327,11 +328,11 @@ sequenceDiagram
 `DialogueService.streamed`의 상태 규칙 (`state`: 0 = 첫 대사 전, 1 = 흘려 보내는 중, 2 = 대체 대사로 넘어감):
 - 공급자가 스트리밍으로 원문을 넘길 때마다 `ReplyStream.partial`로 지금까지의 대사를 꺼낸다(대사 글 그대로, 옛 형식 JSON이면 `"reply"` 값). 표정은 `done`에서(대사가 끝난 뒤 결정 모델). 비었거나 직전과 같으면 보내지 않는다.
 - 첫 대사가 오면 0 → 1. 1이면 계속 보낸다.
-- `llm-budget`(5초)이 지났는데 아직 0이면 0 → 2로 바꾸고 대체 대사로 답한다. LLM 호출은 끝까지 돌고 기록되지만 그 뒤 온 글은 보내지 않는다.
-- 5초 안에 첫 대사가 왔으면(1) 끝까지 기다린다. 이미 보인 글을 대체 대사로 바꾸지 않기 위해서다. 상한은 LLM `http-timeout`(30초).
+- `llm-budget`(7초)이 지났는데 아직 0이면 0 → 2로 바꾸고 대체 대사로 답한다. LLM 호출은 끝까지 돌고 기록되지만 그 뒤 온 글은 보내지 않는다.
+- 마감 안에 첫 대사가 왔으면(1) 끝까지 기다린다. 이미 보인 글을 대체 대사로 바꾸지 않기 위해서다. 상한은 LLM `http-timeout`(30초).
 - 화면 쓰기 실패는 LLM 실패로 바꾸지 않는다(다른 공급자 재호출 비용 방지).
 - 재전송·처리 중 대기는 `onReply`를 부르지 않는다: `reply` 이벤트 없이 `done`만 간다.
-- 알려진 경계: 원래 요청의 스트림이 8초(`in-flight-wait`)를 넘기면 그사이 온 재전송이 LLM을 한 번 더 부른다. 데이터는 하나만 남고 비용만 한 번 더 든다(실측 전체 1.8~2.5초라 드묾).
+- 알려진 경계: 원래 요청의 스트림이 10초(`in-flight-wait`)를 넘기면 그사이 온 재전송이 LLM을 한 번 더 부른다. 데이터는 하나만 남고 비용만 한 번 더 든다(실측 전체 1.8~2.5초라 드묾).
 
 ### 18·19 상태 이벤트와 반응
 
@@ -346,10 +347,10 @@ sequenceDiagram
 **19 상태 반응 (`DialogueService.react`)**
 - trigger 규칙은 18과 같다. `intensity`는 `AWAY`에만(없으면 1, 1~`away-intensity-max` 3, 넘으면 400). 강도 2·3은 상황 칸 `AWAY_2`·`AWAY_3`.
 - 관계 단계만 읽어 말투를 고른다. 호감도는 18이 이미 반영했다.
-- AI 대사: `reaction-llm-triggers` = `GREETING`, `AWAY`, `RETURN`, `BREAK`, `BREAK_END`. `ReactionWriter.generate`를 5초 안에(`LlmPurpose.REACTION`).
-  - 캐릭터 설정이 있으면 답장과 같은 고정 블록(`scene.system` + `systemVars`, 캐시) + 반응 카드(`ReactionWriter.card`: 닉네임, GREETING이면 오늘 근황, 지난 세션 흐름, 피할 말버릇, "한 문장, 다그치지 않기"). 메시지는 이번 세션 최근 `reaction-context-lines`(6)줄 + `(방금 일어난 일: …)`. LLM은 대사만 쓰고 표정은 답장과 같이 `ExpressionPicker`가.
+- AI 대사: `reaction-llm-triggers` = `GREETING`, `AWAY`, `RETURN`, `BREAK`, `BREAK_END`. `ReactionWriter.generate`를 마감(7초) 안에(`LlmPurpose.REACTION`).
+  - 캐릭터 설정이 있으면 반응 고정 블록(`scene.reaction`: 바이블 + 규칙만, 캐시) + 반응 카드(`ReactionWriter.card`: 닉네임, 그 단계 관계 설명 한 줄, GREETING이면 오늘 근황, 지난 세션 흐름, 이 상황 · 단계의 미리 쓴 대사 두 줄(말투 예시), 피할 말버릇, "한두 문장, 다그치지 않기"). 메시지는 이번 세션 최근 `reaction-context-lines`(6)줄 + `(방금 일어난 일: …)`. LLM은 대사만 쓰고 표정은 답장과 같이 `ExpressionPicker`가.
   - 설정이 없으면 `reaction.system` 공통 프롬프트, 감정 후보는 `capsule.dialogue.emotions`.
-- 미리 쓴 대사: 동작 이벤트(`DROWSY`·`YAWN`·`WAVE`·`HEAD_TURN`)와 LLM이 5초를 넘기거나 실패한 경우. `CharacterContents.next`(그 상황·단계 대사를 세션 단위로 순서대로) → 없으면 `FixedLines.reaction`(공통 `fixed.lines.yml`).
+- 미리 쓴 대사: 동작 이벤트(`DROWSY`·`YAWN`·`WAVE`·`HEAD_TURN`)와 LLM이 마감을 넘기거나 실패한 경우. `CharacterContents.next`(그 상황·단계 대사를 세션 단위로 순서대로) → 없으면 `FixedLines.reaction`(공통 `fixed.lines.yml`).
 - LLM이 실패해서 미리 쓴 대사로 간 경우 감정은 비우고(`fallback: true`) 동작도 없다(TODO J-12). 처음부터 미리 쓴 대사인 동작 이벤트는 그 대사 칸의 감정을 쓴다.
 - 감정 → 모션·표정은 20과 같은 `emotionReaction`.
 
@@ -362,7 +363,7 @@ sequenceDiagram
   participant Rel as RelationCommands
   SS->>SS: tx1 짧게: 세션 읽기, 공부 시간 검증 (잠금 없음)
   SS->>D: draft (트랜잭션 밖, DB 쓰기 없음)
-  D->>D: recap (SUMMARY, 5초) ∥ 완료 대사 (미리 쓴 대사 또는 CLOSING, 5초)
+  D->>D: recap (SUMMARY, 7초) ∥ 완료 대사 (미리 쓴 대사 또는 CLOSING, 7초)
   SS->>SS: tx2: 세션 잠금, 다시 검증, close
   SS->>Rel: settleStudy (자리 지킴 누적, 레벨)
   SS->>D: close(draft): 카드 저장, 오래된 카드 정리, 메시지 삭제
@@ -373,7 +374,7 @@ sequenceDiagram
 2. `SessionClosingHandler.draft` → `DialogueService.draft` (트랜잭션 밖, 개발 서버 DB 풀 2개를 잡지 않으려고):
    - 이 대화방에 남은 메시지 전부(앞선 종료에서 카드 쓰기에 실패한 것 포함)를 `ClosingWriter.recap`으로 카드 한 장으로. 머리말은 코드가 붙인다(`11/03 52분, …`), 본문 150자로 자름. 아는 사실은 되풀이하지 않게 같이 넣는다.
    - 완료 대사: 캐릭터 설정에 `CLOSING` 대사가 있으면 그것(사용자 단위로 순서대로). 직접 끝냈는데 목표 시간의 `give-up-ratio`(0.5) 미만이면 `GIVE_UP` 대사. 설정이 없으면 `ClosingWriter.closingLine`(LLM).
-   - 둘 다 5초. 실패하면 카드는 없음, 완료 대사는 `fallbacks.closing`.
+   - 둘 다 마감(7초) 안. 실패하면 카드는 없음, 완료 대사는 `fallbacks.closing`.
 3. 두 번째 트랜잭션 `endLocked`: 세션을 잠그고, 이미 끝났으면 그 리포트를 돌려준다. 아니면 `StudySession.close` → `RelationCommands.settleStudy` → `SessionClosingHandler.close`.
 4. `DialogueService.close`: 카드가 있으면 `conversation_recaps`에 저장, `recap-max`(2)장 넘는 오래된 카드 삭제, 카드에 넣은 `chat_messages` 삭제. 카드가 없으면 메시지를 남겨 다음 종료 때 같이 넣는다.
 5. 자동 종료(`autoCloseStale`, 10분마다, heartbeat가 6시간 없으면)도 같은 두 단계로 `AUTO_CLOSED` 처리한다.
@@ -482,7 +483,7 @@ sequenceDiagram
 | 피할 말버릇 | `profile.yml`의 `habits` |
 | 표정 이름 · 표정 고르는 기준 | `profile.yml`의 `expressions`, `expressionGuide` (결정 모델 질문 문구는 `ExpressionPicker`) |
 | 표정 → Live2D 모션 매핑 | `live2d_reaction_maps` (content, 예시 데이터는 `db/seed/R__demo_content.sql`) |
-| 답장·반응 공통 틀 | `prompts/scene.system.md` (설정 없는 캐릭터는 `chat.system.md`·`chat.context.md`·`reaction.system.md`) |
+| 답장 · 반응 틀 | `prompts/scene.system.md` · `prompts/scene.reaction.md` (설정 없는 캐릭터는 `chat.system.md`·`chat.context.md`·`reaction.system.md`) |
 | 세션 카드·완료 대사 프롬프트 | `prompts/summary.system.md`, `prompts/closing.system.md` |
 | 공통 고정 대사·대체 대사 | `prompts/fixed.lines.yml` |
 | 상황 카드에 넣는 내용 | `SceneChatPipeline.card`, 반응은 `ReactionWriter.card` |
@@ -490,7 +491,7 @@ sequenceDiagram
 | 기억할 가치 기준·한 줄 쓰기 지시 | `MemoryKeeper.keepQuestion`, `MemoryKeeper.WRITE_SYSTEM` |
 | 호감도 숫자 | 바로: 실험실 '운영 설정'의 호감도 · 레벨. 기본값: `application.yml` `capsule.relation.*`. 공식은 `AffinityPolicy` |
 | 메시지 속도 제한 | `capsule.dialogue.message-limit`·`message-limit-window` |
-| 5초 기준 | `capsule.dialogue.llm-budget` |
+| LLM 마감(7초) | `capsule.dialogue.llm-budget` |
 | 공급자 | 바로: 실험실 '운영 설정'의 AI 공급자 · 모델(provider · fallback-provider · routes, 키가 있는 공급자만). 기본값: 환경변수 `CAPSULE_LLM_PROVIDER`(+ 키), 결정 모델은 `CAPSULE_LLM_DECIDE_PROVIDER` |
 | 용도별 모델 등급·토큰 한도 | `capsule.llm.routes` |
 | 등급 → 실제 모델 이름 | `capsule.llm.anthropic.models`, `capsule.llm.openai.models` (Claude는 `thinking` 표도 같이) |

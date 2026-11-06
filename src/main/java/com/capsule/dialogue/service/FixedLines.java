@@ -14,7 +14,7 @@ import org.yaml.snakeyaml.Yaml;
 
 /**
  * LLM 없이 쓰는 대사 (프롬프트 키 fixed.lines, YAML). 캐릭터 전용 버전이 있으면 그걸, 없으면 공통.
- * 상태 반응(19)의 고정 대사·감정·상황 설명과, LLM이 5초 안에 못 만들 때의 대체 대사(20·22)를 준다.
+ * 상태 반응(19)의 고정 대사·감정·상황 설명과, LLM이 마감(llm-budget) 안에 못 만들 때의 대체 대사(20·22)를 준다.
  */
 @Component
 public class FixedLines {

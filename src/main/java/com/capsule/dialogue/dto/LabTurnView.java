@@ -9,7 +9,7 @@ import tools.jackson.databind.JsonNode;
 /**
  * 실험실: 대화 한 턴.
  *
- * @param overBudget 서비스였다면 5초를 넘겨 대체 대사가 나갔을 턴
+ * @param overBudget 서비스였다면 마감(llm-budget)을 넘겨 대체 대사가 나갔을 턴
  * @param usages 이 턴의 LLM 호출들 (감독·배우·심사 등)
  */
 public record LabTurnView(

@@ -122,7 +122,7 @@ class FlowE2ETest {
         MvcResult drowsyLine =
                 call(post(s + "/events/" + eventId(drowsy) + "/reaction"), token, reactionBody(null), 200);
         assertThat((String) JsonPath.read(body(drowsyLine), "$.characters[0].content"))
-                .isEqualTo("졸지 마. 너 졸면 내가 이기는 게 재미없잖아.");
+                .isEqualTo("졸지 마, 너 졸면 내가 이겨도 이긴 게 아니잖아 정정당당하게 지라고");
         assertThat((String) JsonPath.read(body(drowsyLine), "$.characters[0].emotion"))
                 .isEqualTo("경멸");
 
@@ -176,7 +176,7 @@ class FlowE2ETest {
         assertThat((String) JsonPath.read(body(end), "$.relation.stageName")).isEqualTo("친한 사이");
         assertThat((Integer) JsonPath.read(body(end), "$.relation.levelAfter")).isEqualTo(1); // 자리 지킴 1분
         // 목표 50분의 절반도 안 채우고 끝냄 → 말포이 공부 포기 대사, 관계 단계 2 묶음의 첫 줄 (이 사용자의 첫 종료)
-        assertThat((String) JsonPath.read(body(end), "$.closingLine")).isEqualTo("목표 반도 못 채웠잖아. …내일은 나보다 먼저 일어나지 마.");
+        assertThat((String) JsonPath.read(body(end), "$.closingLine")).isEqualTo("목표 반도 못 채웠잖아, 내일은 나보다 먼저 일어나지 마");
         MvcResult endAgain = call(post(s + "/end"), token, endBody, 200);
         assertThat(body(endAgain)).isEqualTo(body(end));
         MvcResult report = call(get(s + "/report"), token, null, 200);
@@ -192,7 +192,7 @@ class FlowE2ETest {
                 call(post("/api/sessions"), token, "{\"roomId\":1,\"characterId\":1,\"targetMinutes\":50}", 201);
         String s2 = "/api/sessions/" + ((Number) JsonPath.read(body(second), "$.sessionId")).longValue();
         MvcResult end2 = call(post(s2 + "/end"), token, "{\"studySeconds\":0,\"presentSeconds\":0}", 200);
-        assertThat((String) JsonPath.read(body(end2), "$.closingLine")).isEqualTo("오늘은 내 승리네. 억울하면 내일 다시 붙어.");
+        assertThat((String) JsonPath.read(body(end2), "$.closingLine")).isEqualTo("오늘은 내 승리네, 억울하면 내일 다시 붙어 기다릴 테니까");
 
         // 21~22 갱신 (만료된 액세스 토큰이 헤더에 붙어 있어도 됨, 옛 리프레시는 401) → 로그아웃
         MvcResult refreshed = mvc.perform(post("/api/auth/refresh")

@@ -13,7 +13,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param provider 기본 공급자: fake · anthropic · openai (jev는 결정 전용이라 routes의 provider로만)
  * @param jev TypeSafe Jev 결정 모델 (DECIDE 용도만). models의 fast = 고정할 버전
  * @param fallbackProvider 기본 공급자가 실패하면 한 번 더 시도할 공급자. 비우면 없음
- * @param httpTimeout 공급자 HTTP 한 번의 한도. 서비스의 5초 대체 대사(명세 19·20)와 별개로, 늦은 응답도 끝까지 받아 기록한다
+ * @param httpTimeout 공급자 HTTP 한 번의 한도. 서비스의 마감(llm-budget) 대체 대사(명세 19·20)와 별개로, 늦은 응답도 끝까지 받아 기록한다
  * @param connectTimeout 공급자 HTTP 연결 한도
  * @param maxRetries 429·5xx·연결 오류일 때 같은 공급자로 다시 시도할 횟수
  * @param retryBackoff 다시 시도하기 전에 쉬는 시간

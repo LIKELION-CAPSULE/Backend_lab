@@ -33,7 +33,8 @@ public class LlmCallException extends RuntimeException {
     }
 
     static LlmCallException deadlinePassed(String provider) {
-        return new LlmCallException(provider, null, "마감(5초)이 지나 " + provider + " 호출을 시작하지 않음", false, false, null);
+        return new LlmCallException(
+                provider, null, "마감(llm-budget)이 지나 " + provider + " 호출을 시작하지 않음", false, false, null);
     }
 
     static LlmCallException timeout(String provider, Throwable cause) {

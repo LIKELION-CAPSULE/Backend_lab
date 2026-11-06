@@ -25,8 +25,9 @@ import tools.jackson.databind.JsonNode;
 /**
  * 상태 반응 대사(명세 19)를 LLM으로 쓴다. 상태 변화(인사 · 자리 비움 · 복귀 · 쉬기 · 쉬기 끝)는 LLM이 대사와 표정을 같이 고르고,
  * 동작 이벤트(졸음 · 하품 · 손 흔들기 · 고개 돌림)는 미리 쓴 대사 (어떤 trigger를 LLM으로 할지는 reaction-llm-triggers, ADR 0022 결정 18).
- * 캐릭터 설정(DB)이 있으면 답장과 같은 고정 블록(scene.system, 캐시) + 반응 카드, 없으면 공통 프롬프트(reaction.system).
- * 시간 제한(5초)은 부르는 쪽이 지킨다: 실험실은 늦어도 끝까지 받아서 실제 지연을 본다.
+ * 캐릭터 설정(DB)이 있으면 바이블 · 규칙만 끼운 고정 블록(scene.reaction, 캐시) + 반응 카드(이 상황 예시 두 줄),
+ * 없으면 공통 프롬프트(reaction.system). 답장의 관계 설명 · 말투 샘플은 넣지 않는다: 예시가 이미 그 단계 대사다.
+ * 시간 제한(llm-budget)은 부르는 쪽이 지킨다: 실험실은 늦어도 끝까지 받아서 실제 지연을 본다.
  */
 @Component
 public class ReactionWriter {
@@ -101,7 +102,7 @@ public class ReactionWriter {
         return parse(r, e -> PromptVars.emotion(e, props.current().emotions()));
     }
 
-    /** 캐릭터 설정이 있는 캐릭터: 답장과 같은 고정 블록 + 반응 카드. 표정은 그 캐릭터의 표정 목록에서 */
+    /** 캐릭터 설정이 있는 캐릭터: 반응 고정 블록(scene.reaction) + 반응 카드. 표정은 그 캐릭터의 표정 목록에서 */
     private ReactionLine scene(
             CharacterContent c,
             String trigger,
@@ -112,7 +113,7 @@ public class ReactionWriter {
             List<ChatLine> recent,
             Map<String, Long> pinned,
             LlmContext ctx) {
-        PromptVersion system = prompts.resolve(PromptKey.SCENE_SYSTEM, c.characterId(), pinned);
+        PromptVersion system = prompts.resolve(PromptKey.SCENE_REACTION, c.characterId(), pinned);
         String situation = fixed.situation(c.characterId(), trigger, intensity, pinned);
         // 방금 나눈 대화는 답장처럼 메시지로, 일어난 일은 사용자 차례로 ("상태가 바뀌었다"만 주면 외모가 바뀐 걸로 읽었다)
         List<Llm.ChatTurn> messages = new ArrayList<>(PromptVars.turns(recent, recent.size()));
@@ -123,11 +124,7 @@ public class ReactionWriter {
                         new Llm.SystemBlock(
                                 PromptService.render(
                                         system.body(),
-                                        SceneChatPipeline.systemVars(
-                                                c,
-                                                stage,
-                                                nickname,
-                                                s -> fixed.situation(c.characterId(), s, null, pinned))),
+                                        Map.of("bible", c.bible(), "rules", c.rules(), "speaker", c.speaker())),
                                 true),
                         new Llm.SystemBlock(
                                 card(
@@ -135,26 +132,53 @@ public class ReactionWriter {
                                         nickname,
                                         summary,
                                         recent,
-                                        TODAY_TRIGGERS.contains(trigger) ? SceneChatPipeline.today(c, clock) : null),
+                                        TODAY_TRIGGERS.contains(trigger) ? SceneChatPipeline.today(c, clock) : null,
+                                        c.toneFor(stage),
+                                        examples(c, trigger, intensity, stage, nickname)),
                                 false)),
                 messages,
                 ctx.withPrompts(List.of(system.id())),
                 null);
-        String line = SceneChatPipeline.spoken(r);
+        // 채팅은 스트리밍으로 이미 보인 글이라 떼지 않는다 (채팅에선 "흥," 시작이 23턴 중 0번)
+        String line = SceneChatPipeline.dropOpening(c, SceneChatPipeline.spoken(r));
         // 표정은 다 쓴 대사를 보고 결정 모델이 그 캐릭터 표정 목록에서 (ADR 0028)
         return new ReactionLine(line, expressionPicker.pick(c, "(방금 일어난 일: " + situation + ")", line, ctx));
     }
 
+    /**
+     * 이번 상황의 미리 쓴 대사 두 줄 (말투 예시). 강도 칸(AWAY_2)에 없으면 기본 칸(AWAY).
+     * 두 줄: 한 줄만 주면 실제 키 평가에서 그대로 따라 했다
+     */
+    static List<String> examples(CharacterContent c, String trigger, Integer intensity, int stage, String nickname) {
+        List<CharacterContent.Line> lines = c.linesFor(FixedLines.key(trigger, intensity), stage);
+        if (lines.isEmpty()) lines = c.linesFor(trigger, stage);
+        return lines.stream()
+                .limit(2)
+                .map(l -> PromptVars.named(l.text(), nickname))
+                .toList();
+    }
+
     /** 상태 반응의 상황 카드. 지난 세션 흐름 · 오늘 근황이 있으면 다시 만난 사이처럼 (공부 시작 인사) */
-    static String card(CharacterContent c, String nickname, String summary, List<ChatLine> recent, String today) {
+    static String card(
+            CharacterContent c,
+            String nickname,
+            String summary,
+            List<ChatLine> recent,
+            String today,
+            String tone,
+            List<String> examples) {
         List<String> L = new ArrayList<>();
         L.add("<상황>");
         L.add("사용자: " + nickname);
+        // 관계 설명 한 줄: 예시 두 줄만 주면 단계 4도 단계 1처럼 차가웠다 (2026-11-06 품질 테스트, haiku)
+        if (tone != null && !tone.isBlank()) L.add("지금 이 사람과의 사이: " + tone.replace("\n", " "));
         if (today != null) L.add(c.speaker() + " 오늘: " + today);
         if (summary != null && !summary.isBlank()) L.add("<지난 세션 흐름 (최근 것이 아래)>\n" + summary + "\n</지난 세션 흐름>");
+        if (!examples.isEmpty())
+            L.add("<이럴 때 말투 예시 (분위기만, 그대로 쓰지 않는다)>\n- " + String.join("\n- ", examples) + "\n</이럴 때 말투 예시>");
         List<String> avoid = SceneChatPipeline.avoid(c, recent);
         if (!avoid.isEmpty()) L.add("피할 것: " + String.join(" / ", avoid));
-        L.add("이번 말: 방금 일어난 일에 바로 반응하는 한마디. 한 문장, 말풍선 두 줄 이내. 사용자를 탓하거나 다그치지 않는다");
+        L.add("이번 말: 방금 일어난 일에 바로 반응하는 한마디. 한두 문장으로 짧게. 예시 문장은 그대로 쓰지 않는다. 사용자를 탓하거나 다그치지 않는다");
         L.add("</상황>");
         return String.join("\n", L);
     }

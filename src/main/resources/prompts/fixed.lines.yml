@@ -73,6 +73,6 @@ reactions:
     lines: ["어디 봐? 여기 집중!", "뭐 있어? 다시 여기 보자."]
     byLevel:
       3: ["딴 데 보지 말고 나 봐~", "한눈팔면 안 돼. 집중!"]
-fallbacks: # LLM이 5초 안에 못 만들 때
+fallbacks: # LLM이 마감(llm-budget) 안에 못 만들 때
   reply: ["미안, 잠깐 딴생각했어. 다시 말해줄래?"]
   closing: ["오늘도 같이 공부해서 좋았어. 다음에도 함께하자."]
