@@ -28,6 +28,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param chattyMessages · chattyWindow 최근 window 안 사용자 말이 이번 말까지 이만큼이면 수다가 길어진 것 (J-14)
  * @param giveUpRatio 직접 끝냈는데 목표 시간의 이 비율 미만이면 공부 포기 (J-15)
  * @param awayIntensityMax 상태 반응 AWAY intensity의 최대 (명세 19)
+ * @param replyMinSentences · replyMaxSentences 채팅 답장 길이 'N~M문장 안팎' (명세 20, 공부 중 · 쉬는 시간 같음). 상황 카드 '지금:' 줄에 들어간다
  * @param historyLines 답장 LLM에 넘길 이번 세션 대화 수 (J-05)
  * @param signalContextLines 결정 모델(말의 종류 · 기억 정리)에 같이 보여 줄 앞 대화 수 (J-05)
  * @param factPickWait 아는 사실 고르기를 기다리는 한도. 답장이 llmBudget 안에 나가야 해서 짧게 (J-05)
@@ -60,6 +61,8 @@ public record DialogueProperties(
         Duration chattyWindow,
         double giveUpRatio,
         int awayIntensityMax,
+        int replyMinSentences,
+        int replyMaxSentences,
         int historyLines,
         int signalContextLines,
         Duration factPickWait,
