@@ -72,10 +72,6 @@ class DialogueSettingsConfig {
                 in(Set.of(ChatPipeline.SCENE, ChatPipeline.SIMPLE), v.chatPipeline()),
                 "chatPipeline",
                 "SCENE · SIMPLE");
-        require(
-                in(Set.of(DialogueProperties.PATTERN, DialogueProperties.DECIDER), v.signalDetector()),
-                "signalDetector",
-                "PATTERN · DECIDER");
         require(v.emotions() != null && !v.emotions().isEmpty(), "emotions", "하나 이상");
         require(v.reactionLlmTriggers() != null, "reactionLlmTriggers", "목록 (비우려면 [])");
         require(v.chatScores() != null, "chatScores", "표 (비우려면 {})");
@@ -92,7 +88,6 @@ class DialogueSettingsConfig {
         atLeast(v.chatRepeatLimit(), 0, "chatRepeatLimit");
         atLeast(v.reactionContextLines(), 0, "reactionContextLines");
         atLeast(v.signalContextLines(), 0, "signalContextLines");
-        atLeast(v.lowEffortMaxChars(), 0, "lowEffortMaxChars");
         positive(v.llmBudget(), "llmBudget");
         positive(v.inFlightWait(), "inFlightWait");
         positive(v.inFlightPoll(), "inFlightPoll");

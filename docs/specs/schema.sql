@@ -372,7 +372,7 @@ CREATE TABLE session_events (
 CREATE INDEX idx_session_events_session ON session_events (session_id, occurred_at);
 
 -- 호감도 변화 이력 (계속 남음). delta는 실제로 바뀐 만큼(0~100 밖으로 나간 몫은 잘림) → 50 + 기록의 합 = 지금 점수
---   CHAT: 말 패턴으로 고른 말의 종류(signal) → 캐릭터 점수표 → 오르는 쪽만 하루 상한. 심한 말은 지금 값의 %로 깎음
+--   CHAT: 결정 모델이 고른 말의 종류(signal) → 캐릭터 점수표 → 오르는 쪽만 하루 상한. 심한 말은 지금 값의 %로 깎음
 --   SESSION_EVENT: 자리 비움을 끝낸 상태 이벤트에서, 1분 넘게 비웠으면 감점 (하루 상한). 1:3 룸이면 캐릭터마다 한 행씩
 --   STREAK: 연속 출석 (2일째부터 하루 한 번, 세션 첫 FOCUS)
 --   EVENT: 기간 한정 이벤트(character_contents의 EVENT)로 받은 점수
