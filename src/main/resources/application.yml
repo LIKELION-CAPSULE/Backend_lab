@@ -77,14 +77,21 @@ capsule:
     # 사용자 말의 종류(SignalType)는 결정 모델이 문장 뜻을 보고 고른다 (2026-11-07 승희: 말 패턴 폐기, 명세 20)
     signal-min-confidence: 0.6 # 확신도가 이보다 낮거나 결정 모델이 실패 · 늦으면 NEUTRAL(0점). 실험실 평가로 조정
     severe-min-confidence: 0.8 # 혐오 · 성적은 이 확신도 이상일 때만 (비율 감점이라). 낮으면 RUDE로
-    # 대화 한 번의 점수표 (임시: 말포이 PM 표). 없는 종류는 0. 캐릭터 설정(profile.yml scores)이 있으면 그 표를 쓴다
+    # 대화 한 번의 점수표 (임시, 명세 20. 2026-11-07 승희: 종류 12개 · 점수폭 키움). 없는 종류는 0. 캐릭터 설정(profile.yml scores)이 있으면 그 표를 쓴다
     #   once-per-session: 세션당 1번만 점수, repeat-points: 같은 세션에서 또 나오면 이 점수, loss-percent: 지금 값의 %를 깎음(points는 최소 감점)
+    #   오르는 쪽은 한 번에 +5까지 (DB CHECK relation_logs_chat_range)
     chat-scores:
-      COMPLIMENT: { points: 1 }
-      THANKS: { points: 1 }
-      CONFIDE: { points: 2, once-per-session: true }
-      RUDE: { points: -2, repeat-points: -3 }
-      HATE_OR_SEXUAL: { points: -5, loss-percent: 30 }
+      AFFECTION: { points: 3 }
+      CONFIDE: { points: 3, once-per-session: true }
+      COMPLIMENT: { points: 2 }
+      THANKS: { points: 2 }
+      SHARE: { points: 1 }
+      CURIOUS: { points: 1 }
+      LOW_EFFORT: { points: 0, repeat-points: -1 }
+      COMPLAINT: { points: -1 }
+      TEASE: { points: -2 }
+      RUDE: { points: -4, repeat-points: -6 }
+      HATE_OR_SEXUAL: { points: -10, loss-percent: 30 }
     chat-repeat-window: 10 # 최근 10턴 안에
     chat-repeat-limit: 2 #   같은 종류가 이미 2번 있으면 세 번째부터 0점 (오르는 쪽만, 칭찬 연타 방지)
     memory-max: 20 # 캐릭터가 아는 사실 최대 개수. 넘치면 결정 모델이 가장 덜 중요한 하나를 버린다
@@ -110,7 +117,7 @@ capsule:
   # 호감도 · 레벨 (호감도 최종안 2026-11-04, ADR 0022). PM 답이 오면 값만 바꾼다. 날짜는 한국 날짜
   #   호감도 0~100, 50에서 시작(DB 기본값). 대화 한 번의 점수표는 캐릭터마다 달라서 dialogue 쪽(chat-scores)
   relation:
-    chat-daily-gain-cap: 15 # 대화로 하루에 오를 수 있는 최대. 내려가는 쪽은 상한 없음
+    chat-daily-gain-cap: 25 # 대화로 하루에 오를 수 있는 최대. 내려가는 쪽은 상한 없음 (2026-11-07: 15 → 25, 명세 20)
     away-min-seconds: 60 # 이보다 길게 비워야 감점 (AWAY를 끝낸 상태 이벤트에서 판단)
     away-penalty: -1
     away-daily-cap: 3 # 자리 비움으로 하루에 깎일 수 있는 최대

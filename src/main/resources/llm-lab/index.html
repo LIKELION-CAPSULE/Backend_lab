@@ -400,7 +400,7 @@ const SITUATIONS = {
   GIVE_UP: ['공부 포기', '목표 시간을 한참 못 채우고 직접 끝냈을 때의 완료 대사 (운영 설정 “공부 포기 기준”)'],
   TODAY: ['오늘 근황 (요일)', '캐릭터의 오늘 근황. 월요일부터 한 줄씩, 그날 첫 대화와 공부 시작 인사에 넣어요'],
 };
-const SIGNALS = {NEUTRAL: '보통', COMPLIMENT: '칭찬', THANKS: '고마움', CONFIDE: '고민 털어놓기', LOW_EFFORT: '단답', COMPLAINT: '불평', RUDE: '무례', HATE_OR_SEXUAL: '혐오 · 성적'};
+const SIGNALS = {NEUTRAL: '보통', AFFECTION: '애정 표현', COMPLIMENT: '칭찬', THANKS: '고마움', CONFIDE: '고민 털어놓기', SHARE: '근황 공유', CURIOUS: '캐릭터에게 관심', LOW_EFFORT: '단답', COMPLAINT: '불평', TEASE: '놀림', RUDE: '무례', HATE_OR_SEXUAL: '혐오 · 성적'};
 const PURPOSES = {CHAT: '채팅 답장', REACTION: '상태 반응', DECIDE: '결정 (표정 · 기억 · 말 종류 고르기)', MEMORY: '기억 한 줄', SUMMARY: '세션 카드', CLOSING: '완료 대사', EVAL_JUDGE: '평가 심사'};
 const SOURCES = {APP: '서비스', LAB: '실험실', EVAL: '평가'};
 const PROMPTS = {
@@ -442,7 +442,7 @@ const SET = {
     giveUpRatio: {g: 1, name: '공부 포기 기준 (목표 시간 비율)', kind: 'ratio', desc: 'J-15: 직접 끝냈는데 목표 시간의 이 비율 미만이면 완료 대사 대신 “공부 포기” 대사(명세 22). 0.5 = 절반.'},
     signalMinConfidence: {g: 2, name: '결정 모델 최소 확신도', kind: 'ratio', desc: '결정 모델이 사용자 말의 종류(칭찬 · 무례 …)를 골라요. 확신도가 이보다 낮거나 실패 · 늦으면 “보통”(0점).'},
     severeMinConfidence: {g: 2, name: '심한 말 최소 확신도', kind: 'ratio', desc: '결정 모델이 혐오 · 성적이라고 골라도 확신도가 이보다 낮으면 “무례”로 (지금 호감도의 % 감점이라 오탐이 비싸요).'},
-    chatScores: {g: 2, name: '기본 대화 점수표', kind: 'scores', desc: '캐릭터에 점수표가 없을 때만 쓰는 말 종류별 점수. 말포이는 캐릭터 탭의 대화 점수표를 써요.'},
+    chatScores: {g: 2, name: '기본 대화 점수표', kind: 'scores', desc: '말 종류별 점수 (명세 20). 캐릭터 탭에 대화 점수표를 넣은 캐릭터는 그 표를 써서 여기 값이 안 먹어요. 말포이는 표를 두지 않아 이 값을 써요.'},
     chatRepeatWindow: {g: 2, name: '칭찬 연타 막기 · 살펴볼 턴 수', kind: 'int', unit: '턴', min: 1, desc: '최근 이 턴 수 안에 같은 종류가 아래 횟수만큼 이미 있으면, 오르는 점수는 0.'},
     chatRepeatLimit: {g: 2, name: '칭찬 연타 막기 · 같은 종류 허용 횟수', kind: 'int', unit: '번', min: 0, desc: '예: 2면 세 번째부터 0점 (오르는 쪽만).'},
     memoryEnabled: {g: 3, name: '새 기억 만들기', kind: 'bool', desc: '끄면 캐릭터가 아는 사실을 새로 만들지 않아요 (턴마다 결정 1번 + 한 줄 쓰기 0~1번 비용이 빠짐).'},

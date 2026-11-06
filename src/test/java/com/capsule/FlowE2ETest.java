@@ -184,10 +184,10 @@ class FlowE2ETest {
         MvcResult end = call(post(s + "/end"), token, endBody, 200);
         assertThat((Integer) JsonPath.read(body(end), "$.returnCount")).isEqualTo(1);
         assertThat((Integer) JsonPath.read(body(end), "$.studySeconds")).isEqualTo(60);
-        // 호감도 0~100, 50에서 시작: 연속 출석 1일째 0, 짧은 자리 비움 0, 복귀 0, 칭찬 +1, 공부 시간은 레벨에만
+        // 호감도 0~100, 50에서 시작: 연속 출석 1일째 0, 짧은 자리 비움 0, 복귀 0, 칭찬 +2, 공부 시간은 레벨에만
         assertThat((Integer) JsonPath.read(body(end), "$.relation.pointsBefore"))
                 .isEqualTo(50);
-        assertThat((Integer) JsonPath.read(body(end), "$.relation.pointsAfter")).isEqualTo(51);
+        assertThat((Integer) JsonPath.read(body(end), "$.relation.pointsAfter")).isEqualTo(52);
         assertThat((String) JsonPath.read(body(end), "$.relation.stageName")).isEqualTo("친한 사이");
         assertThat((Integer) JsonPath.read(body(end), "$.relation.levelAfter")).isEqualTo(1); // 자리 지킴 1분
         // 목표 50분의 절반도 안 채우고 끝냄 → 말포이 공부 포기 대사, 관계 단계 2 묶음의 첫 줄 (이 사용자의 첫 종료)

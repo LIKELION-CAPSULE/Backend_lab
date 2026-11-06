@@ -471,18 +471,21 @@ class DialogueTest {
         for (String s : List.of("고마워 진짜", "고맙다 정말", "감사합니다요")) picks.put(s, new Decider.Decision("THANKS", 0.9));
         for (String s : List.of("요즘 너무 힘들어", "진짜 불안해 죽겠어")) picks.put(s, new Decider.Decision("CONFIDE", 0.9));
         for (String s : List.of("아 꺼져 좀", "닥쳐 진짜")) picks.put(s, new Decider.Decision("RUDE", 0.9));
+        for (String s : List.of("ㅇㅇ", "ㄴㄴ")) picks.put(s, new Decider.Decision("LOW_EFFORT", 0.9));
         picks.put("너 하나도 안 귀엽거든", new Decider.Decision("COMPLIMENT", 0.4)); // 확신이 낮으면 0점
         deciderReads(picks);
 
         assertThat(scoreOf("오늘 날씨 좋다")).isEqualTo(new ChatScore(SignalType.NEUTRAL, 0, 0));
         assertThat(scoreOf("너 하나도 안 귀엽거든")).isEqualTo(new ChatScore(SignalType.NEUTRAL, 0, 0));
-        assertThat(scoreOf("고마워 진짜")).isEqualTo(new ChatScore(SignalType.THANKS, 1, 0));
-        assertThat(scoreOf("고맙다 정말")).isEqualTo(new ChatScore(SignalType.THANKS, 1, 0));
+        assertThat(scoreOf("고마워 진짜")).isEqualTo(new ChatScore(SignalType.THANKS, 2, 0));
+        assertThat(scoreOf("고맙다 정말")).isEqualTo(new ChatScore(SignalType.THANKS, 2, 0));
         assertThat(scoreOf("감사합니다요")).isEqualTo(new ChatScore(SignalType.THANKS, 0, 0)); // 10턴 안 세 번째
-        assertThat(scoreOf("요즘 너무 힘들어")).isEqualTo(new ChatScore(SignalType.CONFIDE, 2, 0));
+        assertThat(scoreOf("요즘 너무 힘들어")).isEqualTo(new ChatScore(SignalType.CONFIDE, 3, 0));
         assertThat(scoreOf("진짜 불안해 죽겠어")).isEqualTo(new ChatScore(SignalType.CONFIDE, 0, 0)); // 세션당 1번
-        assertThat(scoreOf("아 꺼져 좀")).isEqualTo(new ChatScore(SignalType.RUDE, -2, 0));
-        assertThat(scoreOf("닥쳐 진짜")).isEqualTo(new ChatScore(SignalType.RUDE, -3, 0)); // 같은 세션 반복
+        assertThat(scoreOf("아 꺼져 좀")).isEqualTo(new ChatScore(SignalType.RUDE, -4, 0));
+        assertThat(scoreOf("닥쳐 진짜")).isEqualTo(new ChatScore(SignalType.RUDE, -6, 0)); // 같은 세션 반복
+        assertThat(scoreOf("ㅇㅇ")).isEqualTo(new ChatScore(SignalType.LOW_EFFORT, 0, 0));
+        assertThat(scoreOf("ㄴㄴ")).isEqualTo(new ChatScore(SignalType.LOW_EFFORT, -1, 0)); // 같은 세션 반복
         assertThat(jdbc.queryForObject(
                         "SELECT signal FROM chat_messages WHERE session_id = ? AND sender = 'USER' ORDER BY id LIMIT 1",
                         String.class,
@@ -495,9 +498,9 @@ class DialogueTest {
         deciderReads(Map.of(
                 "섹스 얘기 하자", new Decider.Decision("HATE_OR_SEXUAL", 0.9),
                 "야동 같은 소리", new Decider.Decision("HATE_OR_SEXUAL", 0.7)));
-        assertThat(scoreOf("섹스 얘기 하자")).isEqualTo(new ChatScore(SignalType.HATE_OR_SEXUAL, -5, 30));
+        assertThat(scoreOf("섹스 얘기 하자")).isEqualTo(new ChatScore(SignalType.HATE_OR_SEXUAL, -10, 30));
         // 0.6 이상이지만 0.8보다 낮으면 RUDE로 (비율 감점 오탐 방지)
-        assertThat(scoreOf("야동 같은 소리")).isEqualTo(new ChatScore(SignalType.RUDE, -2, 0));
+        assertThat(scoreOf("야동 같은 소리")).isEqualTo(new ChatScore(SignalType.RUDE, -4, 0));
 
         // 결정 호출이 실패해도 답장은 나가고 0점 (NEUTRAL)
         doThrow(new IllegalStateException("결정 실패")).when(decider).decide(anyString(), any(), any());

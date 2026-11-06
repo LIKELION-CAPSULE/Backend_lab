@@ -22,7 +22,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
-/** 호감도 최종안 (application.yml capsule.relation 값 기준: 하루 +15, 자리 비움 1분 넘게 −1 · 하루 −3, 단계 0/30/70/90) */
+/** 호감도 최종안 (application.yml capsule.relation 값 기준: 하루 +25, 자리 비움 1분 넘게 −1 · 하루 −3, 단계 0/30/70/90) */
 @SpringBootTest
 @ActiveProfiles("test")
 @Import(TestcontainersConfiguration.class)
@@ -107,13 +107,13 @@ class RelationServiceTest {
         assertThat(commands.applyChatScore(userId, CHARACTER, session, once, PLUS_ONE)
                         .points())
                 .isEqualTo(51); // 같은 요청은 한 번만
-        for (int i = 0; i < 20; i++) chat(session, PLUS_ONE);
-        assertThat(query.view(userId, CHARACTER).points()).isEqualTo(65); // 하루 +15까지
+        for (int i = 0; i < 30; i++) chat(session, PLUS_ONE);
+        assertThat(query.view(userId, CHARACTER).points()).isEqualTo(75); // 하루 +25까지
 
         // 내려가는 쪽은 상한 없음
-        for (int i = 0; i < 10; i++) chat(session, new ChatScore(SignalType.RUDE, -2, 0));
-        assertThat(query.view(userId, CHARACTER).points()).isEqualTo(45);
-        assertThat(logSum() + 50).isEqualTo(45); // 기록의 합 + 50 = 지금 점수
+        for (int i = 0; i < 10; i++) chat(session, new ChatScore(SignalType.RUDE, -4, 0));
+        assertThat(query.view(userId, CHARACTER).points()).isEqualTo(35);
+        assertThat(logSum() + 50).isEqualTo(35); // 기록의 합 + 50 = 지금 점수
     }
 
     @Test

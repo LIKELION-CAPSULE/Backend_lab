@@ -161,8 +161,8 @@ try { LAB_TOKEN = localStorage.getItem('llmLabToken') || ''; } catch { /* 저장
 const EVENT = {FOCUS: '다시 공부', AWAY: '자리 비움', RETURN: '돌아옴', BREAK: '쉬기',
   DROWSY: '졸음', YAWN: '하품', WAVE: '손 흔들기', HEAD_TURN: '고개 돌림'};
 const REASON = {CHAT: '대화', SESSION_EVENT: '자리 비움', STREAK: '연속 출석', ADJUST: '손으로 맞춤', EVENT: '이벤트'};
-const SIGNAL = {COMPLIMENT: '칭찬', THANKS: '고마움', CONFIDE: '고민', LOW_EFFORT: '단답', COMPLAINT: '불평',
-  RUDE: '무례', HATE_OR_SEXUAL: '혐오 · 성적', NEUTRAL: '평범'};
+const SIGNAL = {AFFECTION: '애정 표현', COMPLIMENT: '칭찬', THANKS: '고마움', CONFIDE: '고민', SHARE: '근황 공유', CURIOUS: '관심',
+  LOW_EFFORT: '단답', COMPLAINT: '불평', TEASE: '놀림', RUDE: '무례', HATE_OR_SEXUAL: '혐오 · 성적', NEUTRAL: '평범'};
 
 // S.s = 진행 중 세션: {id, characterId, mode: FOCUS|AWAY|BREAK, study, present, away, brk, returns, awayEventId, awayAt, awayLevel, hb}
 const S = {token: null, userId: null, member: null, rooms: [], s: null, timer: null};
