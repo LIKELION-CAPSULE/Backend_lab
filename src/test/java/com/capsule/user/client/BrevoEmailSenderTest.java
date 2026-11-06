@@ -24,7 +24,7 @@ import org.springframework.web.client.RestClient;
 class BrevoEmailSenderTest {
 
     static final String CDN = "https://cdn.capsule.invalid/";
-    static final String ICON = "https://cdn.capsule.invalid/brand/capsule-icon-v1.png";
+    static final String ICON = "https://cdn.capsule.invalid/brand/capsule-icon-v2.png";
 
     private final RestClient.Builder builder = RestClient.builder();
     private final MockRestServiceServer brevo =

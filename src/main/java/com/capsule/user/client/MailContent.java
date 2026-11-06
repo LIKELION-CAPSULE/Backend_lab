@@ -13,8 +13,8 @@ record MailContent(String subject, String text, String html) {
     static final String CODE_VALID = "5분";
     static final String RESET_VALID = "30분";
 
-    /** 캡슐 아이콘(200×211 PNG). Supabase 버킷 live2d-model에 올린 파일, 바꿀 때는 v2로 새로 올린다 (ADR 0024) */
-    static final String ICON_PATH = "brand/capsule-icon-v1.png";
+    /** 캡슐 아이콘(56×60 PNG, 화면 28px의 2배, 5KB). Supabase 버킷 live2d-model. 바꿀 때는 새 버전으로 올린다 (ADR 0024). v1(200×211)은 이미 보낸 메일이 쓰므로 지우지 않는다 */
+    static final String ICON_PATH = "brand/capsule-icon-v2.png";
 
     static final String BRAND_COLOR = "#6f52ed";
 
