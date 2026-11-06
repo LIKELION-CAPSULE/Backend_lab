@@ -2,7 +2,7 @@
 
 - 결정
   - `application.yml` 값을 기본값으로 두고, 실험실 '운영 설정' 화면에서 바꾼 칸만 DB에 저장해 그 위에 덮어쓴다(`common.settings.RuntimeSettings`)
-  - 묶음 셋: `relation`(`capsule.relation.*` 호감도 숫자 · 단계), `dialogue`(`capsule.dialogue.*` 파이프라인 · 상태 반응 AI trigger · 점수표 · 기억 · 5초 기준 · 속도 제한), `llm`(`capsule.llm.*` 기본 · 대체 공급자, 용도별 등급과 한도, 등급 → 모델, 생각 설정, 가격)
+  - 묶음 셋: `relation`(`capsule.relation.*` 호감도 숫자 · 단계), `dialogue`(`capsule.dialogue.*` 파이프라인 · 상태 반응 AI trigger · 점수표 · 기억 · LLM 마감(llm-budget) · 속도 제한), `llm`(`capsule.llm.*` 기본 · 대체 공급자, 용도별 등급과 한도, 등급 → 모델, 생각 설정, 가격)
   - 테이블은 모듈마다 자기 것: `relation_settings`(relation), `dialogue_settings`(dialogue). 다른 모듈 테이블을 읽지 않는다는 규칙을 지키려고. 모양은 같다(`section`, `overrides jsonb`, `updated_at`)
   - 바꿀 수 있는 칸은 허용 목록뿐. 열지 않는 칸: API 키 · 공급자 주소 · 버전 헤더(키가 다른 곳으로 새거나 호출이 다 깨짐), `log-content`(실제 사용자 대화 원문을 남길지는 개인정보 결정), 실험실 자체(`lab`), 시작할 때 한 번 읽는 값(HTTP 한도, 캐릭터 설정 캐시 시간 · 크기), 프론트와의 요청 검사 계약(`away-intensity-max`: 명세 19 "1~3 밖이면 400")
   - 칸은 점 경로(`anthropic.models`)이고 그 값을 통째로 바꾼다. 저장 전에 형식(레코드로 바뀌는지)과 범위(모듈별 check)를 보고, 틀리면 400 `INVALID_SETTING {path, reason}`으로 저장하지 않는다. yml 값도 같은 check를 거쳐 틀리면 앱이 시작하지 않는다
@@ -28,5 +28,5 @@
   - 실험실 토큰 하나가 서비스 동작을 바꾸는 권한이 됐다. 토큰을 아는 사람은 호감도 규칙 · 공급자를 바꿀 수 있다
   - 한 요청 안에서 설정을 여러 번 읽으므로 저장하는 순간 걸친 요청은 앞뒤 값을 섞어 쓸 수 있다(그 한 번만). 값끼리 맞아야 하는 곳(LLM 호출 한 번의 용도 · 모델, 세션 카드 정리)은 한 번만 읽는다
   - 관계 단계 수를 바꾸면 캐릭터 설정의 단계별 말투(stageTones · samples)와 안 맞을 수 있다. 단계 번호는 저장하지 않아 다음 조회부터 새 구간으로 계산된다
-  - 명세에 적힌 숫자(메시지 한도 1분 30번 · 5초 기준 · 아는 사실 20개 등)도 열려 있다. 운영 설정에서 바꾼 채로 둘 거면 명세 PR로 api.md를 맞춘다
+  - 명세에 적힌 숫자(메시지 한도 1분 30번 · LLM 마감 7초 · 아는 사실 20개 등)도 열려 있다. 운영 설정에서 바꾼 채로 둘 거면 명세 PR로 api.md를 맞춘다
   - 노트북 실험실의 프롬프트 · 캐릭터 설정 편집은 `run-local.sh --shared`(공용 개발 DB)일 때 토큰 없이 개발 서버 데이터를 바꾼다(원래 성질). 운영 설정만 막았다(위 결정)
