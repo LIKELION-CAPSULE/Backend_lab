@@ -30,27 +30,6 @@ public class ChatScorer {
             Pattern.compile("(이쁘|예쁘|귀엽|멋있|멋지|잘한다|천재|대단|똑똑|잘생(겼|긴|김)|머리 ?(진짜 ?|완전 ?|좀 ?)?좋)", U);
     /** 호감도 신호 THANKS (PM 2026-11-04) */
     private static final Pattern THANKS = Pattern.compile("(고마워|고맙|감사|땡큐|ㄱㅅ|ㄳ|thank)", U | Pattern.CASE_INSENSITIVE);
-    /** 상대를 부르는 말 한 단어 ('너무' · '아니'의 너 · 니는 아님) */
-    private static final String YOU = "(?<![가-힣])(너|넌|너는|너도|너가|니가|네가|너의|니|널|너를)(?![가-힣])";
-    /**
-     * 애정 표현 (2026-11-07). '보고 싶다'는 '영화 보고 싶다'와 헷갈려 '보고 싶었'만.
-     * ponytail: 짧은 단어 목록. 놓치는 말은 평범한 말(0점)로 빠진다. 많으면 결정 모델(signal-detector: DECIDER)로
-     */
-    private static final Pattern AFFECTION = Pattern.compile(
-            YOU + "\\s*(진짜|정말|완전|많이|제일|너무|좀)?\\s*(좋아(해|한다|하는|졌)|사랑)"
-                    + "|^(좋아해|사랑해)|보고 ?싶었|그리웠"
-                    + "|(?<![가-힣])(너|네)\\s*(랑|하고|와|옆에서|있어서|있으니까)[^.!?\\n]{0,15}(?<!안 ?)(좋|행복|든든|즐거|재밌|설레)",
-            U);
-    /** 놀림 · 깎아내림 (2026-11-07). '나 바보인가'처럼 자기를 낮추는 말과 헷갈리지 않게 상대를 부르는 말 뒤에서만 */
-    private static final Pattern TEASE =
-            Pattern.compile(YOU + "\\s*(진짜|정말|완전|좀|되게|너무|존나)?\\s*(찌질|한심|바보|멍청|못생|재수 ?없|허접|구려|구리다|하찮|겁쟁이|비겁)", U);
-    /** 공부 성과 · 근황 공유 (2026-11-07). 물음표로 끝나면 묻는 말이라 보지 않는다 (detect) */
-    private static final Pattern SHARE = Pattern.compile(
-            "(다 ?(풀|했|끝냈|외웠)|풀었|끝냈|외웠|해냈|합격|붙었|만점|백점|1등|일등|시험 ?(잘|봤|끝났)|(점수|성적) ?(올랐|잘)"
-                    + "|(\\d+|한|두|세|네|다섯)\\s*시간\\s*(째|동안|이나|했|공부))",
-            U);
-    /** 캐릭터 자신에 대해 묻는 말 (2026-11-07): 상대를 부르는 말이 든 물음, 또는 '궁금' */
-    private static final Pattern CURIOUS = Pattern.compile(YOU + "[^?]*\\?|궁금", U);
     /**
      * 호감도 신호 HATE_OR_SEXUAL 후보. 걸리면 결정 모델이 한 번 더 확인한다(오탐이면 RUDE).
      * 공부 대화에 흔한 말(자위대 · 자위권 · 한남동 · 사과 따먹었어)은 걸리지 않게 뒤를 막는다 (ChatScorerTest).
@@ -70,8 +49,7 @@ public class ChatScorer {
     }
 
     /**
-     * 앞에 걸리는 것이 이긴다: 심한 말 > 무례 > 놀림 > 고민 > 고마움 > 애정 > 칭찬 > 불평 > 근황 > 관심 > 단답.
-     * 불평이 근황 · 관심보다 앞: '너 왜 맨날 잔소리야?'는 관심(+1)이 아니라 불평
+     * 앞에 걸리는 것이 이긴다: 심한 말 > 무례 > 고민 > 고마움 > 칭찬 > 불평 > 단답
      *
      * @param lowEffortMaxChars 공백을 빼고 이 글자 수 이하면 단답 (low-effort-max-chars)
      */
@@ -80,14 +58,10 @@ public class ChatScorer {
         if (t.isEmpty()) return SignalType.NEUTRAL;
         if (find(HATE_OR_SEXUAL, t)) return SignalType.HATE_OR_SEXUAL;
         if (find(RUDE, t)) return SignalType.RUDE;
-        if (find(TEASE, t)) return SignalType.TEASE;
         if (find(NEGATIVE, t)) return SignalType.CONFIDE;
         if (find(THANKS, t)) return SignalType.THANKS;
-        if (find(AFFECTION, t)) return SignalType.AFFECTION;
         if (find(COMPLIMENT, t)) return SignalType.COMPLIMENT;
         if (find(COMPLAINT, t)) return SignalType.COMPLAINT;
-        if (!t.endsWith("?") && find(SHARE, t)) return SignalType.SHARE;
-        if (find(CURIOUS, t)) return SignalType.CURIOUS;
         if (t.replaceAll("\\s", "").length() <= lowEffortMaxChars || find(LOW_EFFORT, t)) return SignalType.LOW_EFFORT;
         return SignalType.NEUTRAL;
     }
