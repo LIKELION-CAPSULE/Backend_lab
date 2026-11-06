@@ -7,6 +7,7 @@ import com.capsule.content.api.ContentTypes.CharacterInfo;
 import com.capsule.dialogue.client.Llm;
 import com.capsule.dialogue.client.LlmJson;
 import com.capsule.dialogue.config.CharacterContentSeeder;
+import com.capsule.dialogue.config.DialogueProperties;
 import com.capsule.dialogue.domain.ChatMessage;
 import com.capsule.dialogue.dto.CharacterContent;
 import com.capsule.dialogue.dto.ChatInput;
@@ -43,7 +44,14 @@ class SceneChatPipelineTest {
     }
 
     static String card(ChatInput in, String fact) {
-        return SceneChatPipeline.card(MALFOY, in, fact, "2026-11-05 (목) 21:00", "엄마가 과자 상자를 보냈다");
+        DialogueProperties p = YmlDefaults.DIALOGUE;
+        return SceneChatPipeline.card(
+                MALFOY,
+                in,
+                fact,
+                "2026-11-05 (목) 21:00",
+                "엄마가 과자 상자를 보냈다",
+                SceneChatPipeline.length(p.replyMinSentences(), p.replyMaxSentences()));
     }
 
     @Test
@@ -137,14 +145,28 @@ class SceneChatPipelineTest {
         assertThat(card.lines().toList())
                 .element(card.lines().toList().size() - 2)
                 .asString()
-                .startsWith("지금: 지금은 공부 중이다. 3~6문장");
+                .isEqualTo("지금: 지금은 공부 중이다. 방금 한 말에 바로 받아친다. 3~6문장 안팎으로 답한다.");
+    }
+
+    @Test
+    void replyLengthComesFromTheSettings() {
+        // 명세 20: 문장 수는 운영 설정 (yml 기본 3 · 6), 같으면 "N문장"
+        assertThat(YmlDefaults.DIALOGUE.replyMinSentences()).isEqualTo(3);
+        assertThat(YmlDefaults.DIALOGUE.replyMaxSentences()).isEqualTo(6);
+        assertThat(SceneChatPipeline.length(2, 4)).isEqualTo("2~4문장 안팎으로 답한다.");
+        assertThat(SceneChatPipeline.length(3, 3)).isEqualTo("3문장 안팎으로 답한다.");
+        // 캐릭터 문구에는 숫자를 쓰지 않는다 (둘이 어긋나지 않게)
+        assertThat(MALFOY.studyStyle() + MALFOY.breakStyle()).doesNotContainPattern("\\d+\\s*~\\s*\\d+\\s*문장");
     }
 
     @Test
     void breakAndChattyChangeTheLastLines() {
         String rest = card(input("오늘 뭐 해", List.of(), List.of(), true, true), null);
         String chatty = card(input("ㅋㅋ 또 뭐 해", List.of(), List.of(), false, true), null);
-        assertThat(rest).contains("지금: 지금은 쉬는 시간이다. 3~6문장").doesNotContain("수다가 길어지고"); // 쉬는 시간엔 수다가 정상
+        assertThat(rest)
+                .contains("지금: 지금은 쉬는 시간이다.")
+                .contains("3~6문장 안팎으로 답한다.")
+                .doesNotContain("수다가 길어지고"); // 쉬는 시간엔 수다가 정상
         assertThat(chatty).contains("수다가 길어지고 있다").contains("잔소리는 하지 않는다");
         // 수다가 이어지면 턴마다 돌려보내는 방법이 바뀐다
         assertThat(SceneChatPipeline.chattyDirective(0)).isNotEqualTo(SceneChatPipeline.chattyDirective(1));

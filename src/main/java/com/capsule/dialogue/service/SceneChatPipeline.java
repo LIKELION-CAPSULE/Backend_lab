@@ -96,7 +96,14 @@ class SceneChatPipeline implements ChatPipeline {
         CharacterContent c = found.get();
         PromptVersion system = prompts.resolve(PromptKey.SCENE_SYSTEM, characterId, in.pinnedPrompts());
         String fact = factPicker.pick(in, ctx).orElse(null); // 아는 사실은 결정 모델이 고른 하나만 (없으면 안 넣음)
-        String card = card(c, in, fact, PromptVars.now(clock), today(c, clock));
+        DialogueProperties now = props.current(); // 운영 설정: 실험실에서 바꾸면 다음 답장부터
+        String card = card(
+                c,
+                in,
+                fact,
+                PromptVars.now(clock),
+                today(c, clock),
+                length(now.replyMinSentences(), now.replyMaxSentences()));
         List<Llm.SystemBlock> blocks = List.of(
                 new Llm.SystemBlock(
                         PromptService.render(system.body(), systemVars(c, in.stage(), in.nickname())), true),
@@ -156,7 +163,7 @@ class SceneChatPipeline implements ChatPipeline {
     }
 
     /** 이번 턴의 사실만: 시각 · 기억 · 지난 세션 · 일정(첫 대화) · 피할 말버릇 · 수다 길어짐 · 지금(길이 · 구성, 맨 끝) */
-    static String card(CharacterContent c, ChatInput in, String fact, String now, String today) {
+    static String card(CharacterContent c, ChatInput in, String fact, String now, String today, String length) {
         List<String> L = new ArrayList<>();
         L.add("<상황>");
         L.add("사용자: " + in.nickname() + " / 시각: " + now
@@ -182,9 +189,14 @@ class SceneChatPipeline implements ChatPipeline {
         if (!avoid.isEmpty()) L.add("피할 것: " + String.join(" / ", avoid));
         // 공부 중 · 쉬는 시간에 따라 말하는 법이 다르다 (명세 20, 캐릭터 설정 studyStyle · breakStyle). 맨 끝에 둔다
         if (!in.onBreak() && in.chatty()) L.add(chattyDirective(userTurns(in.history())));
-        L.add("지금: " + (in.onBreak() ? c.breakStyle() : c.studyStyle()));
+        L.add("지금: " + (in.onBreak() ? c.breakStyle() : c.studyStyle()) + " " + length);
         L.add("</상황>");
         return String.join("\n", L);
+    }
+
+    /** 답 길이 한 줄 (명세 20, 운영 설정 reply-min-sentences ~ reply-max-sentences): "3~6문장 안팎으로 답한다." */
+    static String length(int min, int max) {
+        return (min == max ? min + "문장" : min + "~" + max + "문장") + " 안팎으로 답한다.";
     }
 
     /** JSON 답의 키 ("reply": · "emotion":) */

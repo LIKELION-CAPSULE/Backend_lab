@@ -102,6 +102,11 @@ class DialogueSettingsConfig {
         // 재전송 대기는 답장(llm-budget) + 저장보다 길어야 하고, 사실 고르기는 답장 안에서 끝나야 한다
         require(v.inFlightWait().compareTo(v.llmBudget()) > 0, "inFlightWait", "llm-budget보다 길게");
         require(v.factPickWait().compareTo(v.llmBudget()) < 0, "factPickWait", "llm-budget보다 짧게");
+        require(v.replyMinSentences() >= 1 && v.replyMinSentences() <= 10, "replyMinSentences", "1~10");
+        require(
+                v.replyMaxSentences() >= v.replyMinSentences() && v.replyMaxSentences() <= 10,
+                "replyMaxSentences",
+                "최소 문장 수 이상, 10 이하");
     }
 
     /**

@@ -453,8 +453,8 @@ sequenceDiagram
 | `chat-repeat-window` / `chat-repeat-limit` | 10 / 2 | 칭찬 연타 방지 |
 | `memory-max` / `recap-max` | 20 / 2 | 기억 크기 |
 | `memory-async` / `memory-enabled` | true / true | 기억 정리를 따로 / 아예 끄기 |
-| `llm-budget` | 5s | 명세 19·20·22: 이 안에 못 만들면 대체 대사 (28은 첫 대사 기준) |
-| `in-flight-wait` / `in-flight-poll` | 8s / 200ms | 같은 requestId 처리 중일 때 기다림 |
+| `llm-budget` | 7s | 명세 19·20·22: 이 안에 못 만들면 대체 대사 (28은 첫 대사 기준) |
+| `in-flight-wait` / `in-flight-poll` | 10s / 200ms | 같은 requestId 처리 중일 때 기다림 |
 | `message-limit` / `message-limit-window` | 30 / 1m | 사용자당 메시지 한도(20 · 28 합침), 넘으면 429 |
 | `chatty-messages` / `chatty-window` | 8 / 10m | 수다가 길어졌다 기준 (J-14 임시) |
 | `give-up-ratio` | 0.5 | 공부 포기 대사 기준 (J-15 임시) |
