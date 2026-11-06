@@ -446,10 +446,37 @@ class DialogueTest {
         return score.getValue();
     }
 
+    /** 말의 종류 질문에는 말마다 정한 답을, 다른 질문(기억 등)은 Fake 그대로. 없는 말은 NEUTRAL */
+    private void deciderReads(Map<String, Decider.Decision> byMessage) {
+        doAnswer(inv -> {
+                    Map<?, ?> questions = inv.getArgument(1);
+                    if (!questions.containsKey(ChatReplier.QUESTION)) return inv.callRealMethod();
+                    String state = inv.getArgument(0);
+                    return Map.of(
+                            ChatReplier.QUESTION,
+                            byMessage.entrySet().stream()
+                                    .filter(e -> state.endsWith("사용자의 마지막 말: " + e.getKey()))
+                                    .map(Map.Entry::getValue)
+                                    .findFirst()
+                                    .orElse(new Decider.Decision("NEUTRAL", 0.9)));
+                })
+                .when(decider)
+                .decide(anyString(), any(), any());
+    }
+
     @Test
-    void chatIsScoredByPatternAndSessionRules() throws Exception {
-        // A안: 말 패턴으로 종류, 점수표(application.yml chat-scores)로 점수. 결정 모델은 부르지 않는다
+    void chatIsScoredByTheDeciderAndSessionRules() throws Exception {
+        // 결정 모델이 문장 뜻으로 종류, 점수표(application.yml chat-scores)로 점수 (명세 20, 말 패턴 폐기)
+        Map<String, Decider.Decision> picks = new java.util.HashMap<>();
+        for (String s : List.of("고마워 진짜", "고맙다 정말", "감사합니다요")) picks.put(s, new Decider.Decision("THANKS", 0.9));
+        for (String s : List.of("요즘 너무 힘들어", "진짜 불안해 죽겠어")) picks.put(s, new Decider.Decision("CONFIDE", 0.9));
+        for (String s : List.of("아 꺼져 좀", "닥쳐 진짜")) picks.put(s, new Decider.Decision("RUDE", 0.9));
+        for (String s : List.of("ㅇㅇ", "ㄴㄴ")) picks.put(s, new Decider.Decision("LOW_EFFORT", 0.9));
+        picks.put("너 하나도 안 귀엽거든", new Decider.Decision("COMPLIMENT", 0.4)); // 확신이 낮으면 0점
+        deciderReads(picks);
+
         assertThat(scoreOf("오늘 날씨 좋다")).isEqualTo(new ChatScore(SignalType.NEUTRAL, 0, 0));
+        assertThat(scoreOf("너 하나도 안 귀엽거든")).isEqualTo(new ChatScore(SignalType.NEUTRAL, 0, 0));
         assertThat(scoreOf("고마워 진짜")).isEqualTo(new ChatScore(SignalType.THANKS, 2, 0));
         assertThat(scoreOf("고맙다 정말")).isEqualTo(new ChatScore(SignalType.THANKS, 2, 0));
         assertThat(scoreOf("감사합니다요")).isEqualTo(new ChatScore(SignalType.THANKS, 0, 0)); // 10턴 안 세 번째
@@ -467,29 +494,22 @@ class DialogueTest {
     }
 
     @Test
-    void severeWordsAreConfirmedByTheDecider() throws Exception {
-        // 패턴이 혐오 · 성적이라고 하면 결정 모델이 확인한다. Fake는 첫 보기(HATE_OR_SEXUAL, 0.9)를 고른다
+    void severeWordsNeedHighConfidence() throws Exception {
+        deciderReads(Map.of(
+                "섹스 얘기 하자", new Decider.Decision("HATE_OR_SEXUAL", 0.9),
+                "야동 같은 소리", new Decider.Decision("HATE_OR_SEXUAL", 0.7)));
         assertThat(scoreOf("섹스 얘기 하자")).isEqualTo(new ChatScore(SignalType.HATE_OR_SEXUAL, -10, 30));
-
-        // 확인이 낮은 확신이면 RUDE로 (비율 감점 오탐 방지)
-        doAnswer(inv -> {
-                    Map<?, ?> questions = inv.getArgument(1);
-                    return questions.containsKey(ChatReplier.QUESTION)
-                            ? Map.of(ChatReplier.QUESTION, new Decider.Decision("HATE_OR_SEXUAL", 0.5))
-                            : inv.callRealMethod();
-                })
-                .when(decider)
-                .decide(anyString(), any(), any());
+        // 0.6 이상이지만 0.8보다 낮으면 RUDE로 (비율 감점 오탐 방지)
         assertThat(scoreOf("야동 같은 소리")).isEqualTo(new ChatScore(SignalType.RUDE, -4, 0));
 
-        // 확인 호출이 실패해도 답장은 나가고 RUDE (같은 세션 두 번째라 −6)
+        // 결정 호출이 실패해도 답장은 나가고 0점 (NEUTRAL)
         doThrow(new IllegalStateException("결정 실패")).when(decider).decide(anyString(), any(), any());
         UUID failed = UUID.randomUUID();
         send(failed, "섹드립 ㄱ")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.fallback").value(false));
         verify(relationCommands)
-                .applyChatScore(userId, CHARACTER_ID, sessionId, failed, new ChatScore(SignalType.RUDE, -6, 0));
+                .applyChatScore(userId, CHARACTER_ID, sessionId, failed, new ChatScore(SignalType.NEUTRAL, 0, 0));
     }
 
     @Test

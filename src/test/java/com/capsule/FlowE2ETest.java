@@ -6,6 +6,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
+import com.capsule.dialogue.client.Decider;
+import com.capsule.dialogue.service.ChatReplier;
 import com.capsule.user.client.FakeEmailSender;
 import com.jayway.jsonpath.JsonPath;
 import jakarta.servlet.http.Cookie;
@@ -13,6 +15,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,6 +26,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
@@ -45,6 +49,9 @@ class FlowE2ETest {
 
     @Autowired
     JdbcTemplate jdbc;
+
+    @MockitoSpyBean // 말의 종류는 결정 모델이 고른다 (명세 20). Fake는 늘 첫 보기(NEUTRAL)라 칭찬을 칭찬으로 고르게 한다
+    Decider decider;
 
     @Test
     void 흐름1_이메일_가입부터_리포트까지() throws Exception {
@@ -147,6 +154,14 @@ class FlowE2ETest {
         call(post(s + "/events/" + eventId(returned) + "/reaction"), token, reactionBody(null), 200);
 
         // 16 채팅 → 같은 requestId 재전송은 한 번만
+        org.mockito.Mockito.doAnswer(inv -> ((Map<?, ?>) inv.getArgument(1)).containsKey(ChatReplier.QUESTION)
+                        ? Map.of(ChatReplier.QUESTION, new Decider.Decision("COMPLIMENT", 0.9))
+                        : inv.callRealMethod())
+                .when(decider)
+                .decide(
+                        org.mockito.ArgumentMatchers.anyString(),
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any());
         String requestId = UUID.randomUUID().toString();
         String message = "{\"requestId\":\"" + requestId
                 + "\",\"characterId\":1,\"content\":\"너 설명 진짜 멋있다\",\"inputType\":\"TEXT\"}";

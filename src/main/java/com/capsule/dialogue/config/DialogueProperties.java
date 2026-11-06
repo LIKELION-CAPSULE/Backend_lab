@@ -12,9 +12,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param chatPipeline 메시지 답장(20)에 쓸 파이프라인: SCENE · SIMPLE
  * @param reactionLlmTriggers 상태 반응(19)을 LLM으로 만들 trigger. 나머지는 고정 대사 (J-04)
  * @param emotions 답장·반응 감정 후보 (명세 19·20)
- * @param signalDetector 사용자 말의 종류를 고르는 쪽: PATTERN(A안) · DECIDER(B안)
- * @param signalMinConfidence DECIDER일 때 이보다 낮은 확신도면 NEUTRAL(0점)
- * @param severeMinConfidence 패턴이 혐오 · 성적이라고 할 때 결정 모델 확인의 최소 확신도. 낮으면 RUDE
+ * @param signalMinConfidence 결정 모델이 고른 말의 종류가 이보다 낮은 확신도면 NEUTRAL(0점)
+ * @param severeMinConfidence 혐오 · 성적(HATE_OR_SEXUAL)으로 인정할 최소 확신도. 낮으면 RUDE
  * @param chatScores 말의 종류별 점수표 (없는 종류는 0)
  * @param chatRepeatWindow · chatRepeatLimit 최근 window턴 안에 같은 종류가 이미 limit번 있으면 오르는 점수는 0
  * @param reactionContextLines 상태 반응 LLM에 같이 넣을 이번 세션 최근 대화 수
@@ -34,14 +33,12 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param factPickWait 아는 사실 고르기를 기다리는 한도. 답장이 llmBudget 안에 나가야 해서 짧게 (J-05)
  * @param contentCacheTtl DB 캐릭터 설정을 들고 있는 시간 (실험실에서 고치면 바로 비움)
  * @param contentMaxCursors 순서대로 돌려 쓰는 상황 대사 자리를 몇 개까지 들고 있을지 (넘으면 오래된 것부터 버림)
- * @param lowEffortMaxChars 공백을 빼고 이 글자 수 이하면 성의 없는 단답(LOW_EFFORT)
  */
 @ConfigurationProperties("capsule.dialogue")
 public record DialogueProperties(
         String chatPipeline,
         List<String> reactionLlmTriggers,
         List<String> emotions,
-        String signalDetector,
         double signalMinConfidence,
         double severeMinConfidence,
         Map<SignalType, ScoreRule> chatScores,
@@ -67,11 +64,7 @@ public record DialogueProperties(
         int signalContextLines,
         Duration factPickWait,
         Duration contentCacheTtl,
-        int contentMaxCursors,
-        int lowEffortMaxChars) {
-
-    public static final String PATTERN = "PATTERN";
-    public static final String DECIDER = "DECIDER";
+        int contentMaxCursors) {
 
     /**
      * @param points 더할 점수 (lossPercent가 있으면 최소 감점)
