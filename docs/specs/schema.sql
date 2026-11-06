@@ -53,6 +53,8 @@
 --     나머지는 application.yml 값. 배포 없이 호감도 숫자 · 대화 설정 · AI 공급자와 모델을 바꾼다
 --   - 표정은 결정 모델이 고른다 (ADR 0028): character_profiles.expression_fallbacks 삭제(모델이 쓴 목록 밖 감정 이름을 맞추던 대체 표),
 --     expression_guide 추가(표정마다 언제 쓰는지. 결정 모델 보기 설명)
+--   - character_profiles.lab_edited_at 추가: 실험실에서 고친 캐릭터 설정은 profile.yml 버전이 올라가도 시작할 때 덮지 않는다.
+--     실험실에 "파일에 새 버전"을 띄우고, 사람이 [파일 값으로 바꾸기]를 눌러야 파일 값이 들어간다
 -- =====================================================================
 
 BEGIN;
@@ -515,7 +517,8 @@ CREATE TABLE character_profiles (
     break_style          text        NOT NULL,           -- 쉬는 시간 답 길이 · 구성 (예: 2~4문장, 공부 재촉 없이 수다)
     samples              jsonb       NOT NULL DEFAULT '[]',  -- 관계 단계별 말투 샘플 [{"minStage", "user", "reply"}] (ADR 0022 결정 19)
     lore                 jsonb       NOT NULL DEFAULT '[]',  -- 로어북 [{"title", "keys": [...], "text"}]. 사용자 말에 keys 중 하나가 있으면 그 카드만 답장 프롬프트에 (최대 2장)
-    content_version      integer     NOT NULL DEFAULT 0,     -- 불러온 profile.yml의 version. 파일 쪽이 더 높으면 앱 시작 때 파일로 다시 불러온다 (실험실에서 고친 값은 덮임)
+    content_version      integer     NOT NULL DEFAULT 0,     -- 불러온 profile.yml의 version. 파일 쪽이 더 높으면 앱 시작 때 파일로 다시 불러온다 (lab_edited_at이 있으면 안 덮음)
+    lab_edited_at        timestamptz,                        -- 실험실에서 마지막으로 고친 때. NULL이면 파일 값 그대로. 파일 값으로 바꾸면(reseed) NULL
     updated_at           timestamptz NOT NULL DEFAULT now()
 );
 
