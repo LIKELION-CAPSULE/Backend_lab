@@ -37,8 +37,9 @@ class BrevoEmailSenderTest {
                 .andExpect(jsonPath("$.sender.email").value("capsule.team@example.com"))
                 .andExpect(jsonPath("$.sender.name").value("캡슐"))
                 .andExpect(jsonPath("$.to[0].email").value("user@example.com"))
-                .andExpect(jsonPath("$.subject").value("[캡슐] 이메일 인증번호 123456"))
+                .andExpect(jsonPath("$.subject").value("캡슐 이메일 인증번호 안내"))
                 .andExpect(jsonPath("$.textContent").value(org.hamcrest.Matchers.containsString("123456")))
+                .andExpect(jsonPath("$.htmlContent").value(org.hamcrest.Matchers.containsString("123456")))
                 .andRespond(withStatus(HttpStatus.CREATED)
                         .contentType(MediaType.APPLICATION_JSON)
                         .body("{\"messageId\":\"<abc@smtp-relay.mailin.fr>\"}"));
@@ -54,8 +55,10 @@ class BrevoEmailSenderTest {
         String link = "https://front.example.com/password/reset?token=pr_abc";
         brevo.expect(requestTo(BrevoEmailSender.SEND_URL))
                 .andExpect(jsonPath("$.to[0].email").value("user@example.com"))
-                .andExpect(jsonPath("$.subject").value("[캡슐] 비밀번호 재설정"))
+                .andExpect(jsonPath("$.subject").value("캡슐 비밀번호 재설정 안내"))
                 .andExpect(jsonPath("$.textContent").value(org.hamcrest.Matchers.containsString(link)))
+                .andExpect(
+                        jsonPath("$.htmlContent").value(org.hamcrest.Matchers.containsString("href=\"" + link + "\"")))
                 .andRespond(withStatus(HttpStatus.CREATED));
 
         sender.sendPasswordResetLink("user@example.com", link);
@@ -95,6 +98,21 @@ class BrevoEmailSenderTest {
 
     @Test
     void mailTextHasCodeAndExpiry() {
-        assertThat(BrevoEmailSender.text("654321")).contains("654321").contains("5분");
+        MailContent mail = MailContent.verificationCode("654321");
+        assertThat(mail.text()).contains("654321").contains("5분");
+        assertThat(mail.html())
+                .contains("654321")
+                .contains("5분")
+                .doesNotContain("%s")
+                .doesNotContain("%%");
+    }
+
+    @Test
+    void resetLinkIsEscapedInHtml() {
+        // 링크의 &가 HTML에서 깨지지 않게 이스케이프된다. 텍스트 본문은 그대로
+        String link = "https://front.example.com/password/reset?token=pr_abc&x=1";
+        MailContent mail = MailContent.passwordReset(link);
+        assertThat(mail.html()).contains("href=\"https://front.example.com/password/reset?token=pr_abc&amp;x=1\"");
+        assertThat(mail.text()).contains(link).contains("30분");
     }
 }
