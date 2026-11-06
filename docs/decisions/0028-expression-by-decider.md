@@ -3,7 +3,7 @@
 - 결정
   - 답장(20 · 28)과 상태 반응(19)에서 LLM은 대사만 쓴다. 표정 지시를 프롬프트(`scene.system`)에서 뺀다
   - 대사가 끝나면 `ExpressionPicker`가 `Decider`(DECIDE 용도, 설정상 Jev)에 묻는다: 상태 = 사용자 말 + 대사, 보기 = 캐릭터 표정 목록(`character_profiles.expressions`), 보기 설명 = `expression_guide`(표정마다 언제 쓰는지)
-  - `Decider`는 보기 밖 답을 버리므로 목록 밖 값은 나오지 않는다. fact-pick-wait(1.5초) 안에 못 고르거나 실패하면 null(표정을 바꾸지 않음). 답장의 5초 마감과는 따로 기다린다(스트리밍은 첫 대사 뒤 5초를 넘겨 끝날 수 있음)
+  - `Decider`는 보기 밖 답을 버리므로 목록 밖 값은 나오지 않는다. fact-pick-wait(1.5초) 안에 못 고르거나 실패하면 null(표정을 바꾸지 않음). 답장의 마감(llm-budget 7초)과는 따로 기다린다(스트리밍은 첫 대사 뒤 마감을 넘겨 끝날 수 있음)
   - 지운 것: 목록 밖 감정 이름 · 에셋 없는 표정 대체 표(`expression_fallbacks`, 코드와 profile.yml. DB 칸은 배포 뒤 다음 마이그레이션에서), 대사 끝 감정 표시를 떼던 코드(`[emotion=…]` · `emotion=…`), 스트리밍 미리보기의 태그 숨김
   - 캐릭터 설정이 없는 캐릭터(공통 프롬프트, 공통 후보 HAPPY 등)는 그대로 JSON {content/reply, emotion}
 - 이유
