@@ -31,14 +31,18 @@ class BrevoEmailSender implements EmailSender {
     private final RestClient rest;
     private final String apiKey;
     private final String from;
+    private final String iconUrl;
 
     @Autowired
-    BrevoEmailSender(@Value("${capsule.brevo.key}") String apiKey, @Value("${capsule.mail.from}") String from) {
-        this(RestClient.builder().requestFactory(timeouts()), apiKey, from);
+    BrevoEmailSender(
+            @Value("${capsule.brevo.key}") String apiKey,
+            @Value("${capsule.mail.from}") String from,
+            @Value("${capsule.cdn.base-url}") String cdnBaseUrl) {
+        this(RestClient.builder().requestFactory(timeouts()), apiKey, from, cdnBaseUrl);
     }
 
     /** 테스트가 MockRestServiceServer를 붙인 builder를 넘긴다 */
-    BrevoEmailSender(RestClient.Builder builder, String apiKey, String from) {
+    BrevoEmailSender(RestClient.Builder builder, String apiKey, String from, String cdnBaseUrl) {
         if (apiKey == null || apiKey.isBlank()) {
             throw new IllegalStateException("capsule.brevo.key가 비어 있다");
         }
@@ -48,18 +52,20 @@ class BrevoEmailSender implements EmailSender {
         this.rest = builder.build();
         this.apiKey = apiKey;
         this.from = from;
+        // 메일 머리의 캡슐 아이콘. 콘텐츠 이미지와 같은 CDN(Supabase 버킷)에서 연다
+        this.iconUrl = cdnBaseUrl.replaceAll("/+$", "") + "/" + MailContent.ICON_PATH;
         log.info("인증 메일: Brevo로 실제 발송"); // 개발 서버에서 키를 빠뜨려 Fake로 떨어졌는지 시작 로그로 구분
     }
 
     @Override
     public void sendVerificationCode(String email, String code) {
-        send(email, MailContent.verificationCode(code));
+        send(email, MailContent.verificationCode(code, iconUrl));
         log.info("인증 메일 발송 요청 완료"); // 주소 · 번호는 남기지 않는다
     }
 
     @Override
     public void sendPasswordResetLink(String email, String link) {
-        send(email, MailContent.passwordReset(link));
+        send(email, MailContent.passwordReset(link, iconUrl));
         log.info("비밀번호 재설정 메일 발송 요청 완료"); // 주소 · 링크(토큰)는 남기지 않는다
     }
 
