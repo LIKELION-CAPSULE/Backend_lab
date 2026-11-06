@@ -119,7 +119,7 @@ class ContentTest {
         assertThat(malfoy.roomId()).isEqualTo(1);
         assertThat(malfoy.personality()).containsExactly("츤데레", "슬리데린 5학년", "라이벌");
         assertThat(malfoy.model())
-                .isEqualTo(new ModelInfo("https://cdn.capsule.invalid/chaerin/v2/chaerin.model3.json", 1.0, 0, 12));
+                .isEqualTo(new ModelInfo("https://cdn.capsule.invalid/chaerin/v3/chaerin.model3.json", 1.0, 0, 12));
     }
 
     @Test

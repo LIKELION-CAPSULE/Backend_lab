@@ -9,7 +9,7 @@
 --    프론트가 겹쳐 그리지 않아도 되게 합쳐서 thumbnail_url로. home_image_url은 비워서 홈 profileImageUrl도 study)
 --   나머지(홈 환영 배너 · 홈 전경 · 반응 · 호감 · 완료 리포트 · 룸 제목)는 API 칸이 없어 DB에 넣지 않음 (프론트가 직접 사용)
 -- 이미지 칸은 CDN 상대 경로로 넣는다. 서버가 CAPSULE_CDN_BASE_URL을 붙여 내려줌 (schema.sql 이미지 칸 규칙, #105)
--- 캐릭터 1 Live2D(모델 1)는 실제 에셋 (2026-11-05, Supabase 버킷 live2d-model의 chaerin/v2/, #9. v1은 이전 판).
+-- 캐릭터 1 Live2D(모델 1)는 실제 에셋 (2026-11-05, Supabase 버킷 live2d-model의 chaerin/v3/, #9. v1 · v2는 이전 판).
 --   CAPSULE_CDN_BASE_URL=https://<project-ref>.supabase.co/storage/v1/object/public/live2d-model 이면 그대로 열린다
 --   모션 파일은 없음 (api.md 19: 말포이 동작은 기본 동작뿐, motion은 보통 null). 반응은 표정만
 
@@ -18,7 +18,8 @@ DELETE FROM live2d_reaction_maps WHERE model_id = 1;
 DELETE FROM live2d_motions WHERE model_id = 1;
 
 INSERT INTO live2d_models (id, storage_prefix, model_json_path, scale, offset_x, offset_y) OVERRIDING SYSTEM VALUE
-VALUES (1, 'chaerin/v2/', 'chaerin.model3.json', 1.00, 0, 12), -- v2 (2026-11-06): 머리카락 · 물리 파라미터 12개 추가, physics3 추가, 표정 8개 수정
+VALUES (1, 'chaerin/v3/', 'chaerin.model3.json', 1.00, 0, 12), -- v3 (2026-11-06): v2 파일에 model3.json의 EyeBlink(ParamEyeLOpen · ParamEyeROpen) · LipSync(ParamMouthOpenY) 그룹만 채움
+       -- 이전 판 v2 (2026-11-06): 머리카락 · 물리 파라미터 12개 추가, physics3 추가, 표정 8개 수정
        (2, 'haru/v1/', 'Haru.model3.json', 1.00, 0, 0), -- 아바타: Live2D 공식 샘플 Haru (무료 소재 라이선스, 출처 표기 필요, 음성 참조 제거)
        -- 아바타 2 · 3 (2026-11-06): Live2D 공식 샘플 Hiyori PRO · Natori PRO. Haru와 같은 무료 소재 라이선스(Live2D 오리지널 캐릭터).
        --   api.md 9 아바타 조건(얼굴 트래킹 표준 파라미터 6개 + 팔 · 손 파라미터)을 둘 다 만족. 음성 파일 · 참조 없음.
