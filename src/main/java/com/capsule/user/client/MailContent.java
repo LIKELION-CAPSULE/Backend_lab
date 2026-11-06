@@ -6,15 +6,18 @@ import org.springframework.web.util.HtmlUtils;
  * 인증 메일 한 통의 제목 · 본문. HTML과 텍스트를 같이 보낸다.
  * 텍스트만 있으면 링크가 날것으로 보이고 스팸 점수도 오르기 쉽다. HTML을 못 여는 메일 앱은 텍스트를 보여준다.
  * HTML은 메일 앱 호환을 위해 표(table) 레이아웃 + 인라인 스타일만 쓴다(외부 CSS · 스크립트 없음).
- * 이미지는 머리의 캡슐 아이콘 하나(CDN 주소). 이미지를 막는 메일 앱에서도 옆의 '캡슐' 글자는 보인다.
+ * 이미지는 머리의 캡슐 로고 하나(CDN 주소). 이미지를 막는 메일 앱에서는 대신 alt 글자 'CAPSULE'이 보인다.
  */
 record MailContent(String subject, String text, String html) {
 
     static final String CODE_VALID = "5분";
     static final String RESET_VALID = "30분";
 
-    /** 캡슐 아이콘(56×60 PNG, 화면 28px의 2배, 5KB). Supabase 버킷 live2d-model. 바꿀 때는 새 버전으로 올린다 (ADR 0024). v1(200×211)은 이미 보낸 메일이 쓰므로 지우지 않는다 */
-    static final String ICON_PATH = "brand/capsule-icon-v2.png";
+    /**
+     * 캡슐 로고(아이콘 + CAPSULE 글자, 276×64 PNG, 화면 138×32의 2배). Supabase 버킷 live2d-model.
+     * 바꿀 때는 새 버전으로 올린다 (ADR 0024). v1 · v2(아이콘만)는 이미 보낸 메일이 쓰므로 지우지 않는다
+     */
+    static final String ICON_PATH = "brand/capsule-icon-v3.png";
 
     static final String BRAND_COLOR = "#6f52ed";
 
@@ -108,10 +111,8 @@ record MailContent(String subject, String text, String html) {
                 background:#ffffff;border-radius:12px;">
                 <tr><td style="padding:40px 32px;font-family:'Apple SD Gothic Neo','Malgun Gothic',\
                 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1f2329;">
-                <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 32px;"><tr>
-                <td style="padding:0 8px 0 0;vertical-align:middle;"><img src="%s" width="28" height="30" alt="" style="display:block;border:0;width:28px;height:30px;"></td>
-                <td style="vertical-align:middle;font-size:18px;font-weight:800;letter-spacing:-0.3px;">캡슐</td>
-                </tr></table>
+                <img src="%s" width="138" height="32" alt="CAPSULE" style="display:block;border:0;width:138px;\
+                height:32px;margin:0 0 32px;font-size:18px;font-weight:800;color:#6f52ed;">
                 <h1 style="margin:0 0 12px;font-size:22px;font-weight:700;">%s</h1>
                 <p style="margin:0;font-size:15px;line-height:1.7;color:#374151;">%s</p>
                 %s
