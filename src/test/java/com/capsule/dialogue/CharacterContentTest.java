@@ -13,6 +13,7 @@ import com.capsule.dialogue.config.CharacterContentSeeder;
 import com.capsule.dialogue.dto.CharacterContent;
 import com.capsule.dialogue.repository.CharacterContentRepository;
 import com.capsule.dialogue.service.CharacterContents;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -147,8 +148,15 @@ class CharacterContentTest {
         assertThat(contents.find(1).orElseThrow().bible()).endsWith("'흠'으로 끝낸다.");
         assertThat(contents.find(1).orElseThrow().version()).isEqualTo(c.version()); // 실험실 저장은 버전을 바꾸지 않는다
 
+        mvc.perform(get(API + "/1/content/source"))
+                .andExpect(jsonPath("$.code").value("malfoy"))
+                .andExpect(jsonPath("$.fileVersion").value(c.version()))
+                .andExpect(jsonPath("$.labEditedAt").isNotEmpty());
+
         mvc.perform(post(API + "/reseed/malfoy")).andExpect(status().isOk());
         assertThat(contents.find(1).orElseThrow().bible()).doesNotContain("'흠'으로");
+        mvc.perform(get(API + "/1/content/source"))
+                .andExpect(jsonPath("$.labEditedAt").doesNotExist());
     }
 
     @Test
@@ -156,7 +164,7 @@ class CharacterContentTest {
         CharacterContent git = CharacterContentSeeder.load("malfoy", 1);
         Optional<Long> reseeded;
         try {
-            repository.replace(withBible(git, git.bible() + "\n- 실험실에서 고침")); // 실험실에서 고친 DB 값
+            repository.replace(withBible(git, git.bible() + "\n- 실험실에서 고침"), Instant.now()); // 실험실에서 고친 DB 값
             assertThat(seeder.seed("malfoy", false)).isEmpty(); // 이미 있으면 건너뜀
             assertThat(repository.find(1).orElseThrow().bible()).endsWith("실험실에서 고침");
         } finally {
@@ -175,17 +183,25 @@ class CharacterContentTest {
         CharacterContent git = CharacterContentSeeder.load("malfoy", 1);
         assertThat(git.version()).isPositive();
         try {
-            // 공용 DB처럼 옛 버전이 들어가 있고 실험실에서 고친 값 → 파일 버전이 높으니 파일로 다시 불러옴
-            repository.replace(withBible(git, git.bible() + "\n- 옛 버전").withVersion(git.version() - 1));
+            // 공용 DB처럼 옛 버전이 파일 값 그대로 들어가 있으면 → 파일 버전이 높으니 파일로 다시 불러옴
+            repository.replace(withBible(git, git.bible() + "\n- 옛 버전").withVersion(git.version() - 1), null);
             assertThat(seeder.seed("malfoy", false)).contains(1L);
             CharacterContent upgraded = repository.find(1).orElseThrow();
             assertThat(upgraded.bible()).isEqualTo(git.bible());
             assertThat(upgraded.version()).isEqualTo(git.version());
 
             // 같은 버전이면 그대로 둔다 (실험실에서 고친 값 유지)
-            repository.replace(withBible(git, git.bible() + "\n- 같은 버전"));
+            repository.replace(withBible(git, git.bible() + "\n- 같은 버전"), null);
             assertThat(seeder.seed("malfoy", false)).isEmpty();
             assertThat(repository.find(1).orElseThrow().bible()).endsWith("같은 버전");
+
+            // 실험실에서 고친 옛 버전은 파일 버전이 높아도 덮지 않는다 (실험실 [파일 값으로 바꾸기]로만)
+            repository.replace(
+                    withBible(git, git.bible() + "\n- 실험실 옛 버전").withVersion(git.version() - 1), Instant.now());
+            assertThat(seeder.seed("malfoy", false)).isEmpty();
+            assertThat(repository.find(1).orElseThrow().bible()).endsWith("실험실 옛 버전");
+            assertThat(seeder.fileVersion("malfoy")).contains(git.version());
+            assertThat(seeder.fileVersion("nope")).isEmpty();
         } finally {
             seeder.seed("malfoy", true); // 다른 테스트를 위해 git 값으로 되돌림
             contents.evict(1);

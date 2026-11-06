@@ -54,12 +54,20 @@ public class CharacterContents {
         return c.content();
     }
 
-    /** 실험실 저장. 버전은 보낸 값이 아니라 DB 값 그대로: profile.yml version을 올리면 다음 시작 때 파일이 이긴다 */
+    /**
+     * 실험실 저장. 버전은 보낸 값이 아니라 DB 값 그대로이고, 고친 때를 남겨 profile.yml version을 올려도 시작할 때 덮지 않는다
+     * (실험실 [파일 값으로 바꾸기]로만)
+     */
     public void replace(CharacterContent content) {
         // 시더와 같은 기준(code)으로 읽는다: 다른 캐릭터로 옮겨 저장해도 버전이 0으로 떨어지지 않게
         int version = repository.versionOf(content.code()).orElse(0);
-        repository.replace(content.withVersion(version));
+        repository.replace(content.withVersion(version), Instant.now(clock));
         cache.remove(content.characterId());
+    }
+
+    /** 실험실에서 마지막으로 고친 때. 파일 값 그대로면 빈 값 */
+    public Optional<Instant> labEditedAt(String code) {
+        return repository.labEditedAt(code);
     }
 
     public void evict(long characterId) {

@@ -200,7 +200,7 @@ flowchart LR
 | `DialogueProperties` | `capsule.dialogue.*` |
 | `LlmProperties` | `capsule.llm.*` (routes, models, prices, thinking) |
 | `PromptSeeder` | 시작할 때 `prompts/` 파일 본문이 DB에 없으면 새 ACTIVE 버전으로 |
-| `CharacterContentSeeder` | 시작할 때 `characters/<code>/profile.yml`의 `version`이 DB보다 높으면 다시 불러옴 |
+| `CharacterContentSeeder` | 시작할 때 `characters/<code>/profile.yml`의 `version`이 DB보다 높으면 다시 불러옴. 실험실에서 고친 설정(`lab_edited_at`)은 덮지 않고 실험실에 "파일에 새 버전"을 띄운다 |
 | `LabSecurityConfig` | 실험실 보안: `X-Lab-Token`에 관리자 로그인 토큰 또는 고정 토큰. 둘 다 설정이 없을 때만 이 컴퓨터(loopback)에서. 프록시 뒤에서 둘 다 없이 켜면 시작 실패 |
 | `AdminProperties`, `LabAdmins` | 관리자 계정(`capsule.admin.users`, 환경변수 `CAPSULE_ADMIN_USERS_<아이디>`, `{bcrypt}`/`{noop}`)과 로그인 토큰 발급 · 확인. 비밀번호를 바꾸면 그 전 토큰은 무효 (ADR 0027) |
 | `DialogueSettingsConfig` | 운영 설정 `dialogue` · `llm` 묶음(테이블 `dialogue_settings`): 바꿀 수 있는 칸 목록과 범위 검사. API 키 · 주소 · `log-content` · `lab`은 열지 않음 |
@@ -477,7 +477,7 @@ sequenceDiagram
 
 | 바꾸고 싶은 것 | 파일 |
 |---|---|
-| 말포이 말투·페르소나·관계 단계별 설명·말투 샘플 | `characters/malfoy/profile.yml` (`bible`, `rules`, `stageTones`, `samples`) → `version` 올리기. 로컬에서 바로 보려면 실험실 캐릭터 설정 |
+| 말포이 말투·페르소나·관계 단계별 설명·말투 샘플 | `characters/malfoy/profile.yml` (`bible`, `rules`, `stageTones`, `samples`) → `version` 올리기. 로컬에서 바로 보려면 실험실 캐릭터 설정. 실험실에서 고친 적이 있는 DB에는 실험실 [파일 값으로 바꾸기]를 눌러야 들어감 |
 | 상황별 미리 쓴 대사(인사, 동작, 대체, 완료, 포기, 오늘 근황) | `profile.yml`의 `lines` |
 | 원작 키워드 카드(로어북) | `profile.yml`의 `lore` (카드 수 상한은 `SceneChatPipeline.LORE_CARDS`) |
 | 캐릭터별 점수표 | `profile.yml`의 `scores` (없으면 `capsule.dialogue.chat-scores`) |

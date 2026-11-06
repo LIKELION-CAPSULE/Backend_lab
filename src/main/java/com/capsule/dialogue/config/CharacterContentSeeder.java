@@ -30,8 +30,9 @@ import tools.jackson.databind.json.JsonMapper;
 /**
  * classpath:characters/<code>/의 처음 값(profile.yml)을 DB 캐릭터 설정으로 불러온다 (ADR 0022 결정 15).
  * 시작할 때 DB에 그 캐릭터 설정(code)이 없으면 넣고, 있으면 버전을 본다: profile.yml의 version이 DB의 content_version보다
- * 높으면 파일로 다시 불러오고(실험실에서 고친 값은 덮임), 같거나 낮으면 그대로 둔다. 실험실 저장은 버전을 바꾸지 않으므로
- * 문구를 git에서 고쳤으면 version을 올려야 공용 DB · 개발 서버에 들어간다 (그곳은 실험실 reseed가 꺼져 있다).
+ * 높으면 파일로 다시 불러오고, 같거나 낮으면 그대로 둔다. 실험실 저장은 버전을 바꾸지 않으므로 문구를 git에서 고쳤으면 version을
+ * 올려야 공용 DB · 개발 서버에 들어간다. 단 실험실에서 고친 설정(lab_edited_at)은 버전이 높아도 덮지 않는다: 실험실이
+ * "파일에 새 버전"을 띄우고, 사람이 [파일 값으로 바꾸기](reseed)를 눌러야 들어간다.
  * 붙을 characters 행(content 모듈)은 profile.yml의 characterName으로 찾는다 (id는 DB마다 다르다). 없으면 건너뛴다.
  * 버전과 상관없이 다시 불러오려면 실험실 reseed. 파일이 깨졌거나 DB가 준비되지 않았어도 앱은 뜬다: 그 캐릭터만 건너뛰고(설정이 없으면 SIMPLE로 답함) 로그를 남긴다.
  */
@@ -100,6 +101,14 @@ public class CharacterContentSeeder implements ApplicationRunner {
             log.info("캐릭터 설정 {}은 그대로 둠 (DB 버전 {} ≥ 파일 버전 {})", code, dbVersion.get(), fileVersion);
             return Optional.empty();
         }
+        if (!overwrite && dbVersion.isPresent() && contents.labEditedAt(code).isPresent()) {
+            log.warn(
+                    "캐릭터 설정 {}은 실험실에서 고쳐서 그대로 둠 (DB 버전 {} < 파일 버전 {}, 실험실 [파일 값으로 바꾸기]로 들어감)",
+                    code,
+                    dbVersion.get(),
+                    fileVersion);
+            return Optional.empty();
+        }
         if (p.characterName() == null || p.characterName().isBlank())
             throw new IllegalStateException("characters/" + code + "/profile.yml에 characterName이 없음");
         Optional<Long> id = characterIdOf(p.characterName());
@@ -113,12 +122,22 @@ public class CharacterContentSeeder implements ApplicationRunner {
             log.warn("캐릭터 {}에 다른 설정({})이 이미 있어 {}을 불러오지 않음 (덮으려면 실험실 reseed)", id.get(), attached.get(), code);
             return Optional.empty();
         }
-        contents.replace(build(code, p, id.get()));
+        contents.replace(build(code, p, id.get()), null);
         if (overwrite) log.info("캐릭터 설정을 파일로 덮음 (reseed): {} 버전 {} → 캐릭터 {}", code, fileVersion, id.get());
         else if (dbVersion.isPresent())
             log.info("캐릭터 설정을 새 버전으로 다시 불러옴: {} 버전 {} → {} (캐릭터 {})", code, dbVersion.get(), fileVersion, id.get());
         else log.info("캐릭터 설정을 불러옴: {} 버전 {} → 캐릭터 {}", code, fileVersion, id.get());
         return id;
+    }
+
+    /** profile.yml의 version. 그 폴더가 없으면 빈 값 (실험실 '파일에 새 버전' 표시) */
+    public Optional<Integer> fileVersion(String code) {
+        try {
+            Integer v = profile(code).version();
+            return Optional.of(v == null ? 0 : v);
+        } catch (RuntimeException e) { // 파일이 없거나 깨졌으면 표시만 빼고 실험실은 연다
+            return Optional.empty();
+        }
     }
 
     /** 활성 룸의 활성 캐릭터 중 이름이 같은(앞뒤 공백 무시) 하나. 여럿이면 어느 쪽인지 모르므로 빈 값 */
