@@ -31,6 +31,25 @@ class ChatScorerTest {
         assertThat(detect("너 몸매 야하다")).isEqualTo(SignalType.HATE_OR_SEXUAL);
         assertThat(detect("너 잘생겼다")).isEqualTo(SignalType.COMPLIMENT);
         assertThat(detect("잘생각해봐 이 문제")).isEqualTo(SignalType.NEUTRAL);
-        assertThat(detect("3단원 다 풀었어")).isEqualTo(SignalType.NEUTRAL);
+    }
+
+    @Test
+    void newKindsFrom20261107() {
+        assertThat(detect("너 좋아해")).isEqualTo(SignalType.AFFECTION);
+        assertThat(detect("보고 싶었어")).isEqualTo(SignalType.AFFECTION);
+        assertThat(detect("너랑 공부하니까 좋다")).isEqualTo(SignalType.AFFECTION);
+        assertThat(detect("3단원 다 풀었어")).isEqualTo(SignalType.SHARE);
+        assertThat(detect("오늘 3시간 했어")).isEqualTo(SignalType.SHARE);
+        assertThat(detect("넌 뭐 좋아해?")).isEqualTo(SignalType.CURIOUS);
+        assertThat(detect("너는?")).isEqualTo(SignalType.CURIOUS);
+        assertThat(detect("넌 진짜 찌질해")).isEqualTo(SignalType.TEASE);
+        assertThat(detect("너 바보야?")).isEqualTo(SignalType.TEASE);
+        // 헷갈리기 쉬운 말
+        assertThat(detect("나 진짜 바보인가")).as("자기를 낮추는 말").isEqualTo(SignalType.NEUTRAL);
+        assertThat(detect("너무 어려워?")).as("'너무'의 너").isEqualTo(SignalType.NEUTRAL);
+        assertThat(detect("그 영화 보고 싶다")).isEqualTo(SignalType.NEUTRAL);
+        assertThat(detect("너랑 하는 거 안 좋아")).isNotEqualTo(SignalType.AFFECTION);
+        assertThat(detect("숙제 다 했어?")).as("묻는 말은 근황 아님").isNotEqualTo(SignalType.SHARE);
+        assertThat(detect("너 왜 맨날 잔소리야?")).as("불평이 관심보다 앞").isEqualTo(SignalType.COMPLAINT);
     }
 }
