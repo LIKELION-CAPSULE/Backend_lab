@@ -162,7 +162,7 @@ class RelationService implements RelationQuery, RelationCommands {
         int delta = AffinityPolicy.chatDelta(rel.points(), score);
         if (delta > 0) {
             Instant today = todayStart();
-            // TODO(judgment): J-06 오르는 쪽 하루 상한 (임시 +15), 심한 말 뒤 그날 오름 멈춤
+            // TODO(judgment): J-06 오르는 쪽 하루 상한 (임시값 chat-daily-gain-cap), 심한 말 뒤 그날 오름 멈춤
             boolean severeToday =
                     rel.lastSevereAt() != null && !rel.lastSevereAt().isBefore(today);
             delta = severeToday
