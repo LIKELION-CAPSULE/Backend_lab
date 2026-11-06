@@ -142,6 +142,8 @@ class SettingsApiTest {
             {"llm", "{\"openai.reasoningEffort\": \"hard\"}", "openai.reasoningEffort"},
             {"dialogue", "{\"inFlightWait\": \"PT2S\"}", "inFlightWait"}, // llm-budget보다 짧음
             {"dialogue", "{\"awayIntensityMax\": 5}", "awayIntensityMax"}, // 명세 19 요청 검사 계약: 닫힌 칸
+            {"dialogue", "{\"replyMinSentences\": 0}", "replyMinSentences"}, // 답 길이 1~10
+            {"dialogue", "{\"replyMinSentences\": 5, \"replyMaxSentences\": 3}", "replyMaxSentences"}, // 최소 ≤ 최대
         }) {
             save(bad[0], bad[1])
                     .andExpect(status().isBadRequest())

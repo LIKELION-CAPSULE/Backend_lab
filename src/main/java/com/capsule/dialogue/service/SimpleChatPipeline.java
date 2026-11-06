@@ -59,6 +59,10 @@ class SimpleChatPipeline implements ChatPipeline {
         Map<String, String> vars = PromptVars.character(in.character());
         vars.put("emotions", String.join(", ", props.current().emotions()));
         vars.put("now", PromptVars.now(clock));
+        vars.put(
+                "length",
+                SceneChatPipeline.length(
+                        props.current().replyMinSentences(), props.current().replyMaxSentences()));
         vars.put("nickname", in.nickname());
         vars.put(
                 "mode",
