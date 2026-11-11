@@ -61,6 +61,7 @@
 | Testcontainers | H2의 "테스트 통과, 실서버 실패"를 막음 | `docs/decisions/0003` |
 | git flow (가볍게) | main ← develop ← feature. 에이전트는 많이 바꾸므로 브랜치는 짧게 | `docs/decisions/0004` |
 | Spotless | 포맷 논쟁 제거, Stop 훅이 자동 정리 | - |
+| 코드 스타일: `public` 기본 + Lombok | 팀이 익숙한 흔한 Spring 레포 모양. 경계는 접근 제어자가 아니라 Modulith가 지킴. 처음 뼈대는 package-private + Lombok 없음이었음 | `docs/decisions/0029` |
 | 하네스 직접 구성 | 위 표 | `docs/decisions/0006`, `0007`, `0010` |
 | 명세 원본 레포, 노션 사본 (레포 → 노션) | 위 표 | `docs/decisions/0013` (0008 대체) |
 | PR 제목 커밋 규칙, 라벨 없음 | 위 표 | `docs/decisions/0014` |
