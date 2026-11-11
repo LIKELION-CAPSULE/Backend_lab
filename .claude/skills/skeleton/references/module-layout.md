@@ -61,6 +61,35 @@
 - 점수처럼 여러 엔티티를 거치는 갱신에 `@Modifying(clearAutomatically = true)`를 쓰지 않는다. 컨텍스트 전체가 비워져 같은 트랜잭션의 다른 모듈 엔티티 변경이 사라진다. 필요하면 그 행만 `entityManager.refresh(entity)`.
 - 테스트도 같은 모듈 패키지에 둔다(`src/test/java/<base>/<module>/...`) → 구역 판정과 `verify.sh --quick`의 모듈별 테스트 실행이 이 위치에 의존한다.
 
+## 코드 스타일 (ADR 0029)
+흔한 Spring 레포 모양: `public` 기본 + Lombok. 모듈 경계는 접근 제어자가 아니라 Spring Modulith가 지킨다.
+
+- main 코드의 클래스 · 메서드 · 생성자는 `public`, 필드는 `private`. 클래스 안에서만 쓰는 상수는 `private static final`
+- 생성자 주입은 `@RequiredArgsConstructor` + `private final` 필드. 설정값은 필드에 `@Value`(lombok.config가 생성자로 옮김). 생성자 안에서 값을 가공 · 검증하는 클래스만 생성자를 직접 쓴다
+- 엔티티는 `private` 필드 + `@Getter`(`getId()`, boolean은 `isX()`) + `@NoArgsConstructor(access = AccessLevel.PROTECTED)`. 값은 이름 있는 메서드로만 바꾼다. 내보내면 안 되는 필드(비밀번호 해시 등)는 `@Getter(AccessLevel.NONE)`
+- `@Setter` · `@Data` · `@SneakyThrows` · `val`은 쓰지 않는다(lombok.config에서 컴파일 에러)
+- DTO와 계약 타입은 `record`. 테스트 코드는 JUnit 5 관례대로 접근 제어자를 생략한다
+
+```java
+@Service
+@RequiredArgsConstructor
+public class ProfileService {
+    private final UserRepository users;
+
+    public MeResponse me(long userId) { ... }
+}
+
+@Entity
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+public class UserMemory {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    ...
+}
+```
+
 ## ModularityTests
 ```java
 class ModularityTests {
