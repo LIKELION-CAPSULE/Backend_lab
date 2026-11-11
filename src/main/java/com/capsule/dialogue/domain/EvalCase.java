@@ -7,11 +7,16 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 import org.hibernate.annotations.ColumnTransformer;
 
 /** 평가 케이스(골든 대본). turns = 사용자 말 JSON 배열, context = LabConfig JSON(가상 사용자 정보) */
 @Entity
 @Table(name = "llm_eval_cases")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class EvalCase {
 
     @Id
@@ -32,8 +37,6 @@ public class EvalCase {
     private String rubric;
     private Instant createdAt;
 
-    protected EvalCase() {}
-
     public EvalCase(String name, long characterId, String turns, String context, String rubric, Instant now) {
         this.name = name;
         this.characterId = characterId;
@@ -49,33 +52,5 @@ public class EvalCase {
         this.turns = turns;
         this.context = context;
         this.rubric = rubric;
-    }
-
-    public Long id() {
-        return id;
-    }
-
-    public String name() {
-        return name;
-    }
-
-    public long characterId() {
-        return characterId;
-    }
-
-    public String turns() {
-        return turns;
-    }
-
-    public String context() {
-        return context;
-    }
-
-    public String rubric() {
-        return rubric;
-    }
-
-    public Instant createdAt() {
-        return createdAt;
     }
 }

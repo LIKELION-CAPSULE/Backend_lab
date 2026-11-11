@@ -15,7 +15,7 @@ import org.springframework.web.method.support.ModelAndViewContainer;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 @Configuration
-class LoginUserArgumentResolver implements HandlerMethodArgumentResolver, WebMvcConfigurer {
+public class LoginUserArgumentResolver implements HandlerMethodArgumentResolver, WebMvcConfigurer {
 
     @Override
     public void addArgumentResolvers(List<HandlerMethodArgumentResolver> resolvers) {

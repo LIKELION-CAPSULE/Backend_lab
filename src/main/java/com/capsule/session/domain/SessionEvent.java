@@ -7,9 +7,14 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.Set;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 @Entity
 @Table(name = "session_events")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class SessionEvent {
 
     public static final String FOCUS = "FOCUS";
@@ -30,14 +35,12 @@ public class SessionEvent {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    Long id;
+    private Long id;
 
-    long sessionId;
-    String type;
-    boolean falsePositive;
-    Instant occurredAt;
-
-    protected SessionEvent() {}
+    private long sessionId;
+    private String type;
+    private boolean falsePositive;
+    private Instant occurredAt;
 
     public SessionEvent(long sessionId, String type, Instant occurredAt) {
         this.sessionId = sessionId;
@@ -53,21 +56,5 @@ public class SessionEvent {
     /** '아니야' 버튼 (오탐이면 집중으로 계산) */
     public void markFalsePositive() {
         this.falsePositive = true;
-    }
-
-    public Long id() {
-        return id;
-    }
-
-    public String type() {
-        return type;
-    }
-
-    public boolean falsePositive() {
-        return falsePositive;
-    }
-
-    public Instant occurredAt() {
-        return occurredAt;
     }
 }

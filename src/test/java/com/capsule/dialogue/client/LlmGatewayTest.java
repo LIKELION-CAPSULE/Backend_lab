@@ -111,9 +111,9 @@ class LlmGatewayTest {
         assertThat(anthropic.requests).hasSize(2);
         assertThat(anthropic.requests.getFirst().model()).isEqualTo("claude-x");
         List<LlmUsage> rows = recorded(2);
-        assertThat(rows.get(0).status()).isEqualTo(LlmUsage.ERROR);
-        assertThat(rows.get(1).status()).isEqualTo(LlmUsage.OK);
-        assertThat(rows.get(1).request()).isNull(); // 서비스 호출은 원문을 남기지 않음 (log-content=false)
+        assertThat(rows.get(0).getStatus()).isEqualTo(LlmUsage.ERROR);
+        assertThat(rows.get(1).getStatus()).isEqualTo(LlmUsage.OK);
+        assertThat(rows.get(1).getRequest()).isNull(); // 서비스 호출은 원문을 남기지 않음 (log-content=false)
     }
 
     @Test
@@ -130,7 +130,7 @@ class LlmGatewayTest {
         assertThat(openai.requests.getFirst().model()).isEqualTo("gpt-x");
         assertThat(openai.requests.getFirst().reasoningEffort()).isEqualTo("minimal");
         assertThat(openai.requests.getFirst().thinking()).isNull();
-        assertThat(recorded(2)).extracting(LlmUsage::provider).containsExactly("anthropic", "openai");
+        assertThat(recorded(2)).extracting(LlmUsage::getProvider).containsExactly("anthropic", "openai");
     }
 
     @Test
@@ -143,7 +143,7 @@ class LlmGatewayTest {
                 .isInstanceOfSatisfying(
                         LlmCallException.class, e -> assertThat(e.refusal()).isTrue());
         assertThat(openai.requests).isEmpty();
-        assertThat(recorded(1).getFirst().error()).isEqualTo(LlmCallException.REFUSAL);
+        assertThat(recorded(1).getFirst().getError()).isEqualTo(LlmCallException.REFUSAL);
     }
 
     @Test
@@ -162,7 +162,7 @@ class LlmGatewayTest {
         assertThat(sent.thinking()).isNull(); // 표에 없는 모델: 보내지 않음 (모델 기본값)
         assertThat(sent.temperature()).isEqualTo(0.2);
         assertThat(sent.maxTokens()).isEqualTo(50);
-        assertThat(recorded(1).getFirst().request()).contains("claude-pinned"); // 실험실은 원문을 남긴다
+        assertThat(recorded(1).getFirst().getRequest()).contains("claude-pinned"); // 실험실은 원문을 남긴다
     }
 
     @Test
@@ -182,7 +182,7 @@ class LlmGatewayTest {
         assertThat(r.text()).isEqualTo("답");
         assertThat(jev.requests.getFirst().model()).isEqualTo("jev-x");
         assertThat(anthropic.requests.getFirst().model()).isEqualTo("claude-x");
-        assertThat(recorded(2)).extracting(LlmUsage::provider).containsExactly("jev", "anthropic");
+        assertThat(recorded(2)).extracting(LlmUsage::getProvider).containsExactly("jev", "anthropic");
     }
 
     @Test

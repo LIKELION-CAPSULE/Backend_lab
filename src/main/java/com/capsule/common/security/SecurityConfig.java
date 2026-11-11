@@ -35,7 +35,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 /** JWT(HS256) 검증·발급 설정 (ADR 0011). 액세스 토큰의 sub = 사용자 id. */
 @Configuration
-class SecurityConfig {
+public class SecurityConfig {
 
     /** 로그인 없이 부르는 API (명세 '인증: 불필요') */
     private static final RequestMatcher PUBLIC = publicEndpoints();
@@ -64,7 +64,7 @@ class SecurityConfig {
     }
 
     @Bean
-    SecurityFilterChain apiSecurity(HttpSecurity http) throws Exception {
+    public SecurityFilterChain apiSecurity(HttpSecurity http) throws Exception {
         http.csrf(csrf -> csrf.disable()) // 액세스 토큰은 헤더. 리프레시 쿠키는 SameSite로 막음
                 .cors(Customizer.withDefaults())
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -98,7 +98,7 @@ class SecurityConfig {
     }
 
     @Bean
-    SecretKey jwtSecretKey(AuthProperties props) {
+    public SecretKey jwtSecretKey(AuthProperties props) {
         byte[] secret =
                 props.jwtSecret() == null ? new byte[0] : props.jwtSecret().getBytes(StandardCharsets.UTF_8);
         if (secret.length < 32) {
@@ -108,24 +108,25 @@ class SecurityConfig {
     }
 
     @Bean
-    JwtDecoder jwtDecoder(SecretKey key) {
+    public JwtDecoder jwtDecoder(SecretKey key) {
         return NimbusJwtDecoder.withSecretKey(key)
                 .macAlgorithm(MacAlgorithm.HS256)
                 .build();
     }
 
     @Bean
-    JwtEncoder jwtEncoder(SecretKey key) {
+    public JwtEncoder jwtEncoder(SecretKey key) {
         return new NimbusJwtEncoder(new ImmutableSecret<>(key));
     }
 
     @Bean
-    PasswordEncoder passwordEncoder() {
+    public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
 
     @Bean
-    CorsConfigurationSource corsConfigurationSource(@Value("${capsule.cors.allowed-origins:}") List<String> origins) {
+    public CorsConfigurationSource corsConfigurationSource(
+            @Value("${capsule.cors.allowed-origins:}") List<String> origins) {
         CorsConfiguration cors = new CorsConfiguration();
         cors.setAllowedOrigins(origins.stream().filter(o -> !o.isBlank()).toList());
         cors.setAllowedMethods(List.of("GET", "POST", "PATCH", "DELETE", "OPTIONS"));

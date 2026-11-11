@@ -14,6 +14,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -24,20 +25,16 @@ import org.springframework.stereotype.Component;
  * 프롬프트가 길어질수록 지시를 덜 따르기 때문이다. 답장보다 먼저 돌아야 해서 짧게 기다리고, 늦거나 실패하면 선택 안 함.
  */
 @Component
+@RequiredArgsConstructor
 public class FactPicker {
 
     private static final Logger log = LoggerFactory.getLogger(FactPicker.class);
     private static final ExecutorService THREADS = Executors.newVirtualThreadPerTaskExecutor();
-    static final String QUESTION = "fact";
-    static final String NONE = "NONE";
+    public static final String QUESTION = "fact";
+    public static final String NONE = "NONE";
 
     private final Decider decider;
     private final RuntimeSettings<DialogueProperties> props;
-
-    FactPicker(Decider decider, RuntimeSettings<DialogueProperties> props) {
-        this.decider = decider;
-        this.props = props;
-    }
 
     /** 이번 말에 꺼낼 사실 하나. 없거나 확신이 낮거나 늦으면 빈 값 */
     public Optional<String> pick(ChatInput in, LlmContext ctx) {

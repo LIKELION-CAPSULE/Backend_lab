@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 @RestControllerAdvice
-class GlobalExceptionHandler {
+public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
@@ -20,12 +20,12 @@ class GlobalExceptionHandler {
     private static final Pattern ERROR_CODE = Pattern.compile("[A-Z][A-Z0-9_]*");
 
     @ExceptionHandler(ApiException.class)
-    ResponseEntity<ErrorResponse> api(ApiException e) {
+    public ResponseEntity<ErrorResponse> api(ApiException e) {
         return ResponseEntity.status(e.status()).body(new ErrorResponse(e.code(), e.code(), e.detail()));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    ResponseEntity<ErrorResponse> invalid(MethodArgumentNotValidException e) {
+    public ResponseEntity<ErrorResponse> invalid(MethodArgumentNotValidException e) {
         String message = e.getBindingResult().getAllErrors().stream()
                 .map(error -> error.getDefaultMessage())
                 .filter(m -> m != null && ERROR_CODE.matcher(m).matches())
@@ -35,7 +35,7 @@ class GlobalExceptionHandler {
     }
 
     @ExceptionHandler({HttpMessageNotReadableException.class, MethodArgumentTypeMismatchException.class})
-    ResponseEntity<ErrorResponse> unreadable(Exception e) {
+    public ResponseEntity<ErrorResponse> unreadable(Exception e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorResponse.of("INVALID_REQUEST"));
     }
 
@@ -44,7 +44,7 @@ class GlobalExceptionHandler {
      * 그 밖은 500 INTERNAL_ERROR (내용은 로그에만).
      */
     @ExceptionHandler(Exception.class)
-    ResponseEntity<ErrorResponse> unexpected(Exception e) {
+    public ResponseEntity<ErrorResponse> unexpected(Exception e) {
         if (e instanceof org.springframework.web.ErrorResponse known) {
             HttpStatus status = HttpStatus.valueOf(known.getStatusCode().value());
             String code = status == HttpStatus.BAD_REQUEST ? "INVALID_REQUEST" : status.name();

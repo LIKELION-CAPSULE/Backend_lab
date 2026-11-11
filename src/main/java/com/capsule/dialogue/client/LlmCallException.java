@@ -13,7 +13,7 @@ public class LlmCallException extends RuntimeException {
     private final boolean retryable;
     private final boolean refusal;
 
-    LlmCallException(
+    public LlmCallException(
             String provider, Integer status, String message, boolean retryable, boolean refusal, Throwable cause) {
         super(message, cause);
         this.provider = provider;
@@ -22,34 +22,34 @@ public class LlmCallException extends RuntimeException {
         this.refusal = refusal;
     }
 
-    static LlmCallException http(String provider, int status, String body) {
+    public static LlmCallException http(String provider, int status, String body) {
         boolean retryable = status == 408 || status == 429 || status >= 500;
         return new LlmCallException(
                 provider, status, provider + " HTTP " + status + ": " + abbreviate(body), retryable, false, null);
     }
 
-    static LlmCallException io(String provider, Throwable cause) {
+    public static LlmCallException io(String provider, Throwable cause) {
         return new LlmCallException(provider, null, provider + " 연결 실패: " + cause.getMessage(), true, false, cause);
     }
 
-    static LlmCallException deadlinePassed(String provider) {
+    public static LlmCallException deadlinePassed(String provider) {
         return new LlmCallException(
                 provider, null, "마감(llm-budget)이 지나 " + provider + " 호출을 시작하지 않음", false, false, null);
     }
 
-    static LlmCallException timeout(String provider, Throwable cause) {
+    public static LlmCallException timeout(String provider, Throwable cause) {
         return new LlmCallException(provider, null, provider + " 응답 시간 초과", false, false, cause);
     }
 
-    static LlmCallException invalid(String provider, String what) {
+    public static LlmCallException invalid(String provider, String what) {
         return new LlmCallException(provider, null, provider + " 응답 형식 오류: " + abbreviate(what), false, false, null);
     }
 
-    static LlmCallException refusal(String provider) {
+    public static LlmCallException refusal(String provider) {
         return new LlmCallException(provider, null, provider + " 답변 거절 (" + REFUSAL + ")", false, true, null);
     }
 
-    static LlmCallException unexpected(String provider, RuntimeException cause) {
+    public static LlmCallException unexpected(String provider, RuntimeException cause) {
         return new LlmCallException(provider, null, provider + " 처리 오류: " + cause, false, false, cause);
     }
 
@@ -69,7 +69,7 @@ public class LlmCallException extends RuntimeException {
         return refusal;
     }
 
-    static String abbreviate(String s) {
+    public static String abbreviate(String s) {
         if (s == null) return "";
         return s.length() <= 500 ? s : s.substring(0, 500) + "…";
     }

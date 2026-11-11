@@ -5,23 +5,20 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 @Entity
 @Table(name = "live2d_expressions")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Live2dExpression {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    Long id;
+    private Long id;
 
-    String name;
-    String filePath;
-
-    public String name() {
-        return name;
-    }
-
-    public String filePath() {
-        return filePath;
-    }
+    private String name;
+    private String filePath;
 }

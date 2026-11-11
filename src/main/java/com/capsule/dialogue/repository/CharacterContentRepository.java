@@ -35,7 +35,7 @@ public class CharacterContentRepository {
 
     private final JdbcClient jdbc;
 
-    CharacterContentRepository(JdbcTemplate jdbcTemplate) {
+    public CharacterContentRepository(JdbcTemplate jdbcTemplate) {
         this.jdbc = JdbcClient.create(jdbcTemplate);
     }
 

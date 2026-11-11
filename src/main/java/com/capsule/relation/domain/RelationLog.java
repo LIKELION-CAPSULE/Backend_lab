@@ -7,9 +7,14 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 @Entity
 @Table(name = "relation_logs")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class RelationLog {
 
     @Id
@@ -24,8 +29,6 @@ public class RelationLog {
     private String reason;
     private String signal;
     private Instant createdAt;
-
-    protected RelationLog() {}
 
     /** @param signal CHAT일 때 말의 종류 (SignalType 이름), 아니면 null */
     public RelationLog(
@@ -45,29 +48,5 @@ public class RelationLog {
         this.requestId = requestId;
         this.signal = signal;
         this.createdAt = createdAt;
-    }
-
-    public long id() {
-        return id;
-    }
-
-    public int delta() {
-        return delta;
-    }
-
-    public String reason() {
-        return reason;
-    }
-
-    public String signal() {
-        return signal;
-    }
-
-    public Long sessionId() {
-        return sessionId;
-    }
-
-    public Instant createdAt() {
-        return createdAt;
     }
 }

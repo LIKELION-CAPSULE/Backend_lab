@@ -8,68 +8,37 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.util.List;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 /** 이름이 Character면 java.lang.Character와 겹쳐서 Entity를 붙임 */
 @Entity
 @Table(name = "characters")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class CharacterEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    Long id;
+    private Long id;
 
-    long roomId;
+    private long roomId;
 
     @ManyToOne
     @JoinColumn(name = "model_id")
-    Live2dModel model;
+    private Live2dModel model;
 
-    String name;
+    private String name;
 
     @JdbcTypeCode(SqlTypes.ARRAY)
-    List<String> personality;
+    private List<String> personality;
 
-    String intro;
-    String profileImageUrl;
-    String homeImageUrl;
-    int sortOrder;
-    boolean isActive;
-
-    public Long id() {
-        return id;
-    }
-
-    public long roomId() {
-        return roomId;
-    }
-
-    public Live2dModel model() {
-        return model;
-    }
-
-    public String name() {
-        return name;
-    }
-
-    public List<String> personality() {
-        return personality;
-    }
-
-    public String intro() {
-        return intro;
-    }
-
-    public String profileImageUrl() {
-        return profileImageUrl;
-    }
-
-    public String homeImageUrl() {
-        return homeImageUrl;
-    }
-
-    public boolean isActive() {
-        return isActive;
-    }
+    private String intro;
+    private String profileImageUrl;
+    private String homeImageUrl;
+    private int sortOrder;
+    private boolean isActive;
 }

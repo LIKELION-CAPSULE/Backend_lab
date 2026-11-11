@@ -12,6 +12,7 @@ import jakarta.persistence.EntityManager;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -24,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @ConditionalOnProperty(name = "capsule.llm.lab.enabled", havingValue = "true")
 @Transactional
+@RequiredArgsConstructor
 public class RelationLab {
 
     private final RelationRepository relations;
@@ -33,27 +35,13 @@ public class RelationLab {
     private final Clock clock;
     private final EntityManager entityManager;
 
-    RelationLab(
-            RelationRepository relations,
-            RelationLogRepository logs,
-            RelationQuery query,
-            AffinityPolicy policy,
-            Clock clock,
-            EntityManager entityManager) {
-        this.relations = relations;
-        this.logs = logs;
-        this.query = query;
-        this.policy = policy;
-        this.clock = clock;
-        this.entityManager = entityManager;
-    }
-
     @Transactional(readOnly = true)
     public RelationLabView view(long userId, long characterId) {
         List<LogLine> lines = relations
                 .findByUserIdAndCharacterId(userId, characterId)
-                .map(r -> logs.findTop30ByRelationIdOrderByIdDesc(r.id()).stream()
-                        .map(l -> new LogLine(l.reason(), l.signal(), l.delta(), l.sessionId(), l.createdAt()))
+                .map(r -> logs.findTop30ByRelationIdOrderByIdDesc(r.getId()).stream()
+                        .map(l -> new LogLine(
+                                l.getReason(), l.getSignal(), l.getDelta(), l.getSessionId(), l.getCreatedAt()))
                         .toList())
                 .orElse(List.of());
         return new RelationLabView(query.view(userId, characterId), lines);
@@ -75,14 +63,14 @@ public class RelationLab {
         if (points != null) {
             int delta = AffinityPolicy.clamp(points) - rel.points();
             if (delta != 0) {
-                logs.save(new RelationLog(rel.id(), "ADJUST", delta, sessionId, null, null, null, now));
-                relations.addPoints(rel.id(), delta);
+                logs.save(new RelationLog(rel.getId(), "ADJUST", delta, sessionId, null, null, null, now));
+                relations.addPoints(rel.getId(), delta);
             }
         }
         if (presentSeconds != null) {
             int target = Math.max(0, presentSeconds);
-            int shift = target - rel.totalPresentSeconds();
-            relations.addStudy(rel.id(), shift, shift, policy.levelOf(target), now);
+            int shift = target - rel.getTotalPresentSeconds();
+            relations.addStudy(rel.getId(), shift, shift, policy.levelOf(target), now);
         }
         entityManager.refresh(rel); // 벌크 갱신은 컨텍스트에 안 보이므로 이 행만 다시 읽는다 (RelationService와 같음)
         return view(userId, characterId);

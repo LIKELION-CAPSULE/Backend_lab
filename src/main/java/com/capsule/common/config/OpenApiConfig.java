@@ -18,7 +18,7 @@ import org.springframework.context.annotation.Configuration;
  * Authorize 버튼에 액세스 토큰(Bearer 없이 값만)을 넣으면 로그인이 필요한 API를 부를 수 있다.
  */
 @Configuration
-class OpenApiConfig {
+public class OpenApiConfig {
 
     private static final String BEARER = "bearer";
 
@@ -28,7 +28,7 @@ class OpenApiConfig {
     }
 
     @Bean
-    OpenAPI capsuleOpenApi() {
+    public OpenAPI capsuleOpenApi() {
         return new OpenAPI()
                 // 상대 주소로 고정: Railway 프록시 뒤에서 첫 요청의 http 주소가 캐시되어 https 화면에서 막히는 일을 피한다
                 .servers(List.of(new Server().url("/")))

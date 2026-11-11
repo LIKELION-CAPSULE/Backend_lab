@@ -7,32 +7,29 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 @Entity
 @Table(name = "live2d_reaction_maps")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ReactionMap {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    Long id;
+    private Long id;
 
-    long modelId;
-    String triggerType;
-    Short intensity;
+    private long modelId;
+    private String triggerType;
+    private Short intensity;
 
     @ManyToOne
     @JoinColumn(name = "motion_id")
-    Live2dMotion motion;
+    private Live2dMotion motion;
 
     @ManyToOne
     @JoinColumn(name = "expression_id")
-    Live2dExpression expression;
-
-    public Live2dMotion motion() {
-        return motion;
-    }
-
-    public Live2dExpression expression() {
-        return expression;
-    }
+    private Live2dExpression expression;
 }

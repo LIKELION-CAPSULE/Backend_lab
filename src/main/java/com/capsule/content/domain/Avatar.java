@@ -7,41 +7,26 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 @Entity
 @Table(name = "avatars")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Avatar {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    Long id;
+    private Long id;
 
     @ManyToOne
     @JoinColumn(name = "model_id")
-    Live2dModel model;
+    private Live2dModel model;
 
-    String name;
-    String thumbnailUrl;
-    int sortOrder;
-    boolean isActive;
-
-    public Long id() {
-        return id;
-    }
-
-    public Live2dModel model() {
-        return model;
-    }
-
-    public String name() {
-        return name;
-    }
-
-    public String thumbnailUrl() {
-        return thumbnailUrl;
-    }
-
-    public boolean isActive() {
-        return isActive;
-    }
+    private String name;
+    private String thumbnailUrl;
+    private int sortOrder;
+    private boolean isActive;
 }

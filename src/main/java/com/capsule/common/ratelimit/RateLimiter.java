@@ -1,18 +1,16 @@
 package com.capsule.common.ratelimit;
 
 import java.time.Duration;
+import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
 /** Redis 요청 횟수 제한. 예: 인증번호 1분 1번, 메시지 1분 30번. */
 @Component
+@RequiredArgsConstructor
 public class RateLimiter {
 
     private final StringRedisTemplate redis;
-
-    RateLimiter(StringRedisTemplate redis) {
-        this.redis = redis;
-    }
 
     /**
      * window 안에서 max번까지 true, 넘으면 false.

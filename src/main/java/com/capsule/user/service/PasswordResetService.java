@@ -28,9 +28,9 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 public class PasswordResetService {
 
     /** 링크 유효시간. api.md 25 '예시 · 확정 필요' */
-    static final Duration RESET_TTL = Duration.ofMinutes(30);
+    private static final Duration RESET_TTL = Duration.ofMinutes(30);
 
-    static final String RESET_PATH = "/password/reset?token="; // 프론트 페이지 경로, api.md 25 '확정 필요'
+    private static final String RESET_PATH = "/password/reset?token="; // 프론트 페이지 경로, api.md 25 '확정 필요'
 
     private static final Logger log = LoggerFactory.getLogger(PasswordResetService.class);
 
@@ -44,7 +44,7 @@ public class PasswordResetService {
     private final String frontendUrl;
     private final Executor mailExecutor;
 
-    PasswordResetService(
+    public PasswordResetService(
             UserRepository users,
             StringRedisTemplate redis,
             RateLimiter rateLimiter,
@@ -81,7 +81,7 @@ public class PasswordResetService {
         if (user.isEmpty()) {
             return;
         }
-        long userId = user.get().id();
+        long userId = user.get().getId();
         String previous = redis.opsForValue().get(userTokenKey(userId));
         if (previous != null) {
             redis.delete(tokenKey(previous)); // 마지막 링크만 유효
@@ -116,8 +116,8 @@ public class PasswordResetService {
                 .filter(u -> u.isActive() && u.passwordHash() != null)
                 .orElseThrow(() -> new ApiException(HttpStatus.BAD_REQUEST, "RESET_TOKEN_INVALID"));
         user.changePassword(passwordEncoder.encode(newPassword), Instant.now(clock));
-        long id = user.id();
-        String email = user.email();
+        long id = user.getId();
+        String email = user.getEmail();
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {

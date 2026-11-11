@@ -12,36 +12,39 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 @Entity
 @Table(name = "study_sessions")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class StudySession {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    Long id;
+    private Long id;
 
-    long userId;
-    long roomId;
-    long backgroundId;
-    Integer targetMinutes;
-    Instant startedAt;
-    Instant endedAt;
-    String endType;
-    Instant lastHeartbeatAt;
-    Integer heartbeatStudySeconds;
-    Integer heartbeatPresentSeconds;
-    int focusSeconds;
-    int distractSeconds;
-    int breakSeconds;
-    int returnCount;
-    String closingLine;
+    private long userId;
+    private long roomId;
+    private long backgroundId;
+    private Integer targetMinutes;
+    private Instant startedAt;
+    private Instant endedAt;
+    private String endType;
+    private Instant lastHeartbeatAt;
+    private Integer heartbeatStudySeconds;
+    private Integer heartbeatPresentSeconds;
+    private int focusSeconds;
+    private int distractSeconds;
+    private int breakSeconds;
+    private int returnCount;
+    private String closingLine;
 
     @ElementCollection
     @CollectionTable(name = "session_characters", joinColumns = @JoinColumn(name = "session_id"))
-    List<SessionCharacter> characters = new ArrayList<>();
-
-    protected StudySession() {}
+    private List<SessionCharacter> characters = new ArrayList<>();
 
     public StudySession(long userId, long roomId, long backgroundId, long characterId, int targetMinutes, Instant now) {
         this.userId = userId;
@@ -89,66 +92,6 @@ public class StudySession {
         this.closingLine = closingLine;
     }
 
-    public Long id() {
-        return id;
-    }
-
-    public long userId() {
-        return userId;
-    }
-
-    public long roomId() {
-        return roomId;
-    }
-
-    public long backgroundId() {
-        return backgroundId;
-    }
-
-    public Integer targetMinutes() {
-        return targetMinutes;
-    }
-
-    public Instant startedAt() {
-        return startedAt;
-    }
-
-    public Instant endedAt() {
-        return endedAt;
-    }
-
-    public String endType() {
-        return endType;
-    }
-
-    public Instant lastHeartbeatAt() {
-        return lastHeartbeatAt;
-    }
-
-    public Integer heartbeatStudySeconds() {
-        return heartbeatStudySeconds;
-    }
-
-    public Integer heartbeatPresentSeconds() {
-        return heartbeatPresentSeconds;
-    }
-
-    public int focusSeconds() {
-        return focusSeconds;
-    }
-
-    public int distractSeconds() {
-        return distractSeconds;
-    }
-
-    public int returnCount() {
-        return returnCount;
-    }
-
-    public String closingLine() {
-        return closingLine;
-    }
-
     @Embeddable
-    record SessionCharacter(long roomId, long characterId) {}
+    public record SessionCharacter(long roomId, long characterId) {}
 }

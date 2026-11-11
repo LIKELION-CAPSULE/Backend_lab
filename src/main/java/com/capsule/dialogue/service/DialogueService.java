@@ -107,7 +107,7 @@ public class DialogueService {
     private final RuntimeSettings<DialogueProperties> props;
     private final Clock clock;
 
-    DialogueService(
+    public DialogueService(
             SessionQuery sessions,
             CharacterQuery characters,
             ReactionQuery reactions,
@@ -189,9 +189,9 @@ public class DialogueService {
             CharacterInfo character = character(characterId);
             String nickname = nickname(userId);
             Optional<Conversation> conv = conversations.findByUserIdAndCharacterId(userId, characterId);
-            String summary = conv.map(c -> recaps(c.id())).orElse(null);
+            String summary = conv.map(c -> recaps(c.getId())).orElse(null);
             List<ChatLine> recent = conv.map(c -> PromptVars.tail(
-                            lines(messages.findByConversationIdAndSessionIdOrderById(c.id(), sessionId)),
+                            lines(messages.findByConversationIdAndSessionIdOrderById(c.getId(), sessionId)),
                             props.current().reactionContextLines()))
                     .orElse(List.of());
             LlmContext ctx = LlmContext.app(userId, sessionId, deadline());
@@ -264,23 +264,23 @@ public class DialogueService {
         Optional<ChatMessage> asked = question(conversation, request);
         if (asked.isPresent()) {
             return new Accepted(
-                    session, conversation, request, null, asked.get().createdAt());
+                    session, conversation, request, null, asked.get().getCreatedAt());
         }
         // 한도 검사보다 먼저 저장한다: 같은 requestId가 동시에 오면 늦은 쪽은 UNIQUE에 막혀 먼저 온 쪽의 답장을 기다린다.
         // 그래서 처리 중 재전송은 횟수에 세지 않는다(명세 20). 저장은 바로 커밋되므로 429면 이 사용자 말을 지운다
         try {
             messages.saveAndFlush(new ChatMessage(
-                    conversation.id(), sessionId, request.requestId(), USER, request.content(), Instant.now(clock)));
+                    conversation.getId(), sessionId, request.requestId(), USER, request.content(), Instant.now(clock)));
         } catch (DataIntegrityViolationException e) {
             // 다른 쪽이 먼저 저장했으면 그 답을 기다린다. 다른 이유의 무결성 오류면 그대로 던진다
             ChatMessage other = question(conversation, request).orElseThrow(() -> e);
-            return new Accepted(session, conversation, request, null, other.createdAt());
+            return new Accepted(session, conversation, request, null, other.getCreatedAt());
         }
         if (!rateLimiter.tryAcquire(
                 "rate:chat:" + userId,
                 props.current().messageLimit(),
                 props.current().messageLimitWindow())) {
-            messages.deleteQuestion(conversation.id(), request.requestId());
+            messages.deleteQuestion(conversation.getId(), request.requestId());
             throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "TOO_MANY_REQUESTS");
         }
         return new Accepted(session, conversation, request, null, null);
@@ -312,8 +312,8 @@ public class DialogueService {
         UUID requestId = request.requestId();
 
         List<ChatMessage> earlier =
-                messages.findByConversationIdAndSessionIdOrderById(conversation.id(), sessionId).stream()
-                        .filter(m -> !m.requestId().equals(requestId))
+                messages.findByConversationIdAndSessionIdOrderById(conversation.getId(), sessionId).stream()
+                        .filter(m -> !m.getRequestId().equals(requestId))
                         .toList();
         List<ChatLine> history = lines(earlier);
         CharacterInfo character = character(characterId);
@@ -321,7 +321,7 @@ public class DialogueService {
                 character,
                 nickname(userId),
                 relationQuery.view(userId, characterId).stage(),
-                recaps(conversation.id()),
+                recaps(conversation.getId()),
                 memoryKeeper.facts(userId, characterId),
                 memoryLines(userId),
                 history,
@@ -352,8 +352,8 @@ public class DialogueService {
                         characterId,
                         signal,
                         earlier.stream()
-                                .filter(m -> USER.equals(m.sender()) && m.signal() != null)
-                                .map(m -> SignalType.valueOf(m.signal()))
+                                .filter(m -> USER.equals(m.getSender()) && m.getSignal() != null)
+                                .map(m -> SignalType.valueOf(m.getSignal()))
                                 .toList());
 
         MessageResponse response;
@@ -365,9 +365,9 @@ public class DialogueService {
                     status.setRollbackOnly(); // 답하는 사이 공부가 끝났다: 정산·요약이 끝난 세션에 남기지 않는다
                     return null;
                 }
-                if (signal != null) messages.markSignal(conversation.id(), requestId, signal.name());
-                messages.save(
-                        new ChatMessage(conversation.id(), sessionId, requestId, CHARACTER, reply, Instant.now(clock)));
+                if (signal != null) messages.markSignal(conversation.getId(), requestId, signal.name());
+                messages.save(new ChatMessage(
+                        conversation.getId(), sessionId, requestId, CHARACTER, reply, Instant.now(clock)));
                 String emotion = outcome.map(ChatOutcome::emotion).orElse(null);
                 Reaction reaction = emotionReaction(characterId, emotion);
                 return new MessageResponse(
@@ -387,7 +387,7 @@ public class DialogueService {
         }
         if (response == null) {
             // 종료가 이번 사용자 말을 요약 전에 읽지 못했으면 끝난 세션에 남는다. 요약에 들어갔으면 이미 지워져 있다
-            messages.deleteQuestion(conversation.id(), requestId);
+            messages.deleteQuestion(conversation.getId(), requestId);
             throw new ApiException(HttpStatus.CONFLICT, "SESSION_ENDED");
         }
         // 기억 ①: 답장을 저장한 뒤 이번 사용자 말에서 기억할 것을 정리한다 (답장을 늦추지 않게 따로, 마감 없음)
@@ -478,11 +478,11 @@ public class DialogueService {
     /** 이미 답한 requestId면 저장된 답장 */
     private Optional<MessageResponse> answered(Conversation conversation, SessionInfo session, MessageRequest request) {
         // ponytail: 재전송 때 원래 delta(와 감정·모션·표정·fallback)는 다시 보여주지 않음 (명세 20). 필요하면 chat_messages에 같이 저장
-        return messages.findByConversationIdAndRequestIdAndSender(conversation.id(), request.requestId(), CHARACTER)
+        return messages.findByConversationIdAndRequestIdAndSender(conversation.getId(), request.requestId(), CHARACTER)
                 .map(m -> new MessageResponse(
                         request.requestId(),
                         session.characterId(),
-                        m.content(),
+                        m.getContent(),
                         null,
                         null,
                         null,
@@ -506,7 +506,7 @@ public class DialogueService {
     public ClosingDraft draft(SessionClosing closing) {
         List<ChatMessage> pending = conversations
                 .findByUserIdAndCharacterId(closing.userId(), closing.characterId())
-                .map(c -> messages.findByConversationIdOrderById(c.id()))
+                .map(c -> messages.findByConversationIdOrderById(c.getId()))
                 .orElse(List.of());
         CharacterInfo character = character(closing.characterId());
         String nickname = nickname(closing.userId());
@@ -545,7 +545,7 @@ public class DialogueService {
 
         Optional<String> card = recap == null ? Optional.empty() : await(recap);
         String text = await(line).orElseGet(() -> fixedLines.closingFallback(closing.characterId()));
-        return new ClosingDraft(pending.stream().map(ChatMessage::id).toList(), card, text);
+        return new ClosingDraft(pending.stream().map(ChatMessage::getId).toList(), card, text);
     }
 
     /** 공부 종료 2단계: 공부 종료 트랜잭션 안에서 초안을 저장하고 완료 대사를 돌려준다. draft가 null이면 여기서 만든다 (자동 마감 배치) */
@@ -555,9 +555,9 @@ public class DialogueService {
         if (d.card().isPresent()) {
             Conversation conversation = conversation(closing.userId(), closing.characterId());
             recapRepository.save(new ConversationRecap(
-                    conversation.id(), closing.sessionId(), d.card().get(), Instant.now(clock)));
+                    conversation.getId(), closing.sessionId(), d.card().get(), Instant.now(clock)));
             // 최근 recap-max장만 남긴다. 오래된 흐름은 지워져도 된다 (오래 남길 사실은 기억 ①에 있음)
-            List<ConversationRecap> all = recapRepository.findByConversationIdOrderByIdDesc(conversation.id());
+            List<ConversationRecap> all = recapRepository.findByConversationIdOrderByIdDesc(conversation.getId());
             int keep = props.current().recapMax(); // 한 번만 읽기: 사이에 커지면 subList가 범위를 넘는다
             if (all.size() > keep) recapRepository.deleteAll(all.subList(keep, all.size()));
             messages.deleteAllByIdInBatch(d.pendingIds());
@@ -611,7 +611,7 @@ public class DialogueService {
     private String recaps(long conversationId) {
         List<String> cards = recapRepository.findByConversationIdOrderByIdDesc(conversationId).stream()
                 .limit(props.current().recapMax())
-                .map(ConversationRecap::content)
+                .map(ConversationRecap::getContent)
                 .collect(java.util.stream.Collectors.toCollection(java.util.ArrayList::new));
         if (cards.isEmpty()) return null;
         java.util.Collections.reverse(cards);
@@ -639,7 +639,7 @@ public class DialogueService {
 
     /** 직접 끝냈는데 목표 시간의 ratio(give-up-ratio)도 못 채웠으면 공부 포기 (자동 종료는 포기로 보지 않는다) */
     // TODO(judgment): J-15 '공부 포기'의 기준 (승희 2026-11-05 임시: 직접 끝냈는데 목표 시간의 절반 미만)
-    static boolean gaveUp(SessionClosing closing, double ratio) {
+    public static boolean gaveUp(SessionClosing closing, double ratio) {
         Integer target = closing.targetMinutes();
         return "NORMAL".equals(closing.endType())
                 && target != null
@@ -648,7 +648,9 @@ public class DialogueService {
     }
 
     private static List<ChatLine> lines(List<ChatMessage> chat) {
-        return chat.stream().map(m -> new ChatLine(m.sender(), m.content())).toList();
+        return chat.stream()
+                .map(m -> new ChatLine(m.getSender(), m.getContent()))
+                .toList();
     }
 
     /**
@@ -659,13 +661,13 @@ public class DialogueService {
     private boolean chatty(List<ChatMessage> earlier) {
         Instant since = Instant.now(clock).minus(props.current().chattyWindow());
         long recent = earlier.stream()
-                .filter(m -> USER.equals(m.sender()) && m.createdAt().isAfter(since))
+                .filter(m -> USER.equals(m.getSender()) && m.getCreatedAt().isAfter(since))
                 .count();
         return recent + 1 >= props.current().chattyMessages();
     }
 
     private Optional<ChatMessage> question(Conversation conversation, MessageRequest request) {
-        return messages.findByConversationIdAndRequestIdAndSender(conversation.id(), request.requestId(), USER);
+        return messages.findByConversationIdAndRequestIdAndSender(conversation.getId(), request.requestId(), USER);
     }
 
     /** 서비스 LLM 호출의 마감: 이 시각이 지나면 게이트웨이가 새 호출을 시작하지 않는다 (결과가 버려지므로) */

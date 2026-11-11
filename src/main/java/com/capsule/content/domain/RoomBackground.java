@@ -5,33 +5,22 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 @Entity
 @Table(name = "room_backgrounds")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class RoomBackground {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    Long id;
+    private Long id;
 
-    long roomId;
-    String name;
-    String imageUrl;
-    boolean isDefault;
-
-    public Long id() {
-        return id;
-    }
-
-    public long roomId() {
-        return roomId;
-    }
-
-    public String name() {
-        return name;
-    }
-
-    public String imageUrl() {
-        return imageUrl;
-    }
+    private long roomId;
+    private String name;
+    private String imageUrl;
+    private boolean isDefault;
 }

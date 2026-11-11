@@ -19,12 +19,12 @@ import tools.jackson.databind.JsonNode;
  * ponytail: choice 질문만 쓴다. score · noul 질문이 필요해지면 Decider.Question에 type을 더할 것
  */
 @Component
-class JevProvider implements LlmProvider {
+public class JevProvider implements LlmProvider {
 
     private final LlmProperties.Provider settings;
     private final RestClient http;
 
-    JevProvider(LlmProperties props) {
+    public JevProvider(LlmProperties props) {
         this.settings = props.jev();
         this.http = settings == null
                 ? null

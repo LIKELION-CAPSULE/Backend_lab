@@ -41,7 +41,7 @@ public class LabAdmins {
     /** 없는 아이디도 비밀번호 비교에 같은 시간을 쓰게 (아이디가 있는지 응답 시간으로 알 수 없게) */
     private final String dummy;
 
-    LabAdmins(AdminProperties props, AuthProperties auth, Clock clock) {
+    public LabAdmins(AdminProperties props, AuthProperties auth, Clock clock) {
         props.users().forEach((user, stored) -> {
             try {
                 // 형식(앞의 {id})이 틀리면 여기서 던진다: 첫 로그인이 아니라 시작 때 알게. 빈 값은 비교 없이 false라 "-"

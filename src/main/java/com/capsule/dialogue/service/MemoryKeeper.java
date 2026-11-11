@@ -23,6 +23,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -33,20 +34,21 @@ import org.springframework.stereotype.Component;
  * 답장을 늦추지 않게 답장을 저장한 뒤에 돈다. 실패하면 이번 턴은 기억하지 않을 뿐이다.
  */
 @Component
+@RequiredArgsConstructor
 public class MemoryKeeper {
 
     private static final Logger log = LoggerFactory.getLogger(MemoryKeeper.class);
-    static final String KEEP = "memory";
-    static final String DROP = "drop";
-    static final String NOOP = "NOOP";
-    static final String ADD = "ADD";
+    private static final String KEEP = "memory";
+    private static final String DROP = "drop";
+    private static final String NOOP = "NOOP";
+    private static final String ADD = "ADD";
     /** 설정이 아니라 상수: DB CHECK character_memories.content 1~80자 (V20261104_204409). 프롬프트는 40자 이내로 쓰게 한다 */
-    static final int MAX_LENGTH = 80;
+    private static final int MAX_LENGTH = 80;
 
     /** 결정 모델 판단과 상관없이 저장하지 않는다: 전화번호 · 주민번호 · 계좌 · 카드처럼 긴 숫자 */
     private static final Pattern PRIVATE = Pattern.compile("(\\d{2,4}-\\d{3,4}-\\d{4}|\\d{6}-?\\d{7}|\\d{10,})");
 
-    static final String WRITE_SYSTEM = """
+    private static final String WRITE_SYSTEM = """
             너는 캐릭터 {name}가 사용자에 대해 기억할 사실을 한 줄로 적는다. 오늘은 {today}다.
             - <사용자의 말>에 나온 사실만 쓴다. 추측하지 않는다.
             - 40자 이내 한 줄. 주어는 '사용자'. 날짜가 나오면 날짜를 넣는다 ("다음 주"는 날짜로 바꾼다).
@@ -59,23 +61,10 @@ public class MemoryKeeper {
     private final RuntimeSettings<DialogueProperties> props;
     private final Clock clock;
 
-    MemoryKeeper(
-            Decider decider,
-            LlmGateway llm,
-            CharacterMemoryRepository memories,
-            RuntimeSettings<DialogueProperties> props,
-            Clock clock) {
-        this.decider = decider;
-        this.llm = llm;
-        this.memories = memories;
-        this.props = props;
-        this.clock = clock;
-    }
-
     /** 답장 프롬프트에 넣을 사실 (오래된 것부터) */
     public List<String> facts(long userId, long characterId) {
         return memories.findByUserIdAndCharacterIdOrderById(userId, characterId).stream()
-                .map(CharacterMemory::content)
+                .map(CharacterMemory::getContent)
                 .toList();
     }
 
@@ -107,19 +96,19 @@ public class MemoryKeeper {
         List<CharacterMemory> known = memories.findByUserIdAndCharacterIdOrderById(userId, character.id());
         Decision d = decide(
                 character,
-                known.stream().map(m -> new Known(m.id(), m.content())).toList(),
+                known.stream().map(m -> new Known(m.getId(), m.getContent())).toList(),
                 recent,
                 userMessage,
                 ctx);
         if (d == null || NOOP.equals(d.choice())) return;
         String op = d.choice();
         Optional<CharacterMemory> target =
-                known.stream().filter(m -> op.endsWith("_" + m.id())).findFirst();
+                known.stream().filter(m -> op.endsWith("_" + m.getId())).findFirst();
         if (op.startsWith("DELETE_")) {
             target.ifPresent(memories::delete);
             return;
         }
-        String line = write(character, target.map(CharacterMemory::content).orElse(null), recent, userMessage, ctx);
+        String line = write(character, target.map(CharacterMemory::getContent).orElse(null), recent, userMessage, ctx);
         Instant now = Instant.now(clock);
         if (target.isPresent()) {
             target.get().rewrite(line, requestId, now);
@@ -134,7 +123,7 @@ public class MemoryKeeper {
     private void drop(CharacterInfo character, long userId, LlmContext ctx) {
         List<CharacterMemory> all = memories.findByUserIdAndCharacterIdOrderById(userId, character.id());
         Map<String, String> criteria = new LinkedHashMap<>();
-        all.forEach(m -> criteria.put("m" + m.id(), m.content()));
+        all.forEach(m -> criteria.put("m" + m.getId(), m.getContent()));
         Decision d = null;
         try {
             d = decider.decide(
@@ -150,7 +139,7 @@ public class MemoryKeeper {
         }
         String choice = d == null ? null : d.choice();
         CharacterMemory victim = all.stream()
-                .filter(m -> ("m" + m.id()).equals(choice))
+                .filter(m -> ("m" + m.getId()).equals(choice))
                 .findFirst()
                 .orElse(all.getFirst());
         memories.delete(victim);
@@ -174,7 +163,7 @@ public class MemoryKeeper {
     }
 
     /** 이미 아는 사실 (id는 결정 보기 이름에 쓰임) */
-    record Known(long id, String content) {}
+    public record Known(long id, String content) {}
 
     /**
      * 실험실 미리보기: 저장하지 않고 결정과 쓸 한 줄만 보여 준다 (서비스와 같은 질문 · 같은 프롬프트).
@@ -214,7 +203,7 @@ public class MemoryKeeper {
                 .get(KEEP);
     }
 
-    static String state(CharacterInfo character, List<Known> known, List<ChatLine> recent, String userMessage) {
+    public static String state(CharacterInfo character, List<Known> known, List<ChatLine> recent, String userMessage) {
         String facts = known.isEmpty()
                 ? "없음"
                 : known.stream().map(m -> "#" + m.id() + " " + m.content()).collect(Collectors.joining("\n"));
@@ -225,7 +214,7 @@ public class MemoryKeeper {
     }
 
     // TODO(judgment): J-13 기억할 가치 기준 (임시: 아래 보기 설명). 실험실 평가로 다듬는다
-    static Decider.Question keepQuestion(List<Known> known) {
+    public static Decider.Question keepQuestion(List<Known> known) {
         Map<String, String> criteria = new LinkedHashMap<>();
         criteria.put(NOOP, "기억할 것이 없다: 인사, 잡담, 맞장구, 공부 문제 내용 자체, 그때뿐인 상태(배고파), 이미 아는 사실 그대로, 사용자 일정에 따로 있는 시험 · 약속 날짜");
         criteria.put(ADD, "새로 기억할 사실이 있다: 목표 · 계획, 이어지는 고민 · 감정, 취향 · 습관, 캐릭터와 한 약속, 자기 이야기(학년, 전공, 불러 달라는 이름)");

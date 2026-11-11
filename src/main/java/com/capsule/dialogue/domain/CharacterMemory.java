@@ -7,10 +7,15 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 /** 캐릭터가 사용자에 대해 아는 사실 한 줄 (최대 20개, MemoryKeeper가 관리) */
 @Entity
 @Table(name = "character_memories")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class CharacterMemory {
 
     @Id
@@ -24,8 +29,6 @@ public class CharacterMemory {
     private Instant createdAt;
     private Instant updatedAt;
 
-    protected CharacterMemory() {}
-
     public CharacterMemory(long userId, long characterId, String content, UUID sourceRequestId, Instant now) {
         this.userId = userId;
         this.characterId = characterId;
@@ -33,14 +36,6 @@ public class CharacterMemory {
         this.sourceRequestId = sourceRequestId;
         this.createdAt = now;
         this.updatedAt = now;
-    }
-
-    public long id() {
-        return id;
-    }
-
-    public String content() {
-        return content;
     }
 
     public void rewrite(String content, UUID sourceRequestId, Instant now) {

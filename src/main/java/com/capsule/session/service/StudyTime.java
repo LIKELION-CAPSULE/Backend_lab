@@ -6,14 +6,14 @@ import java.time.Instant;
 import java.util.List;
 
 /** 이벤트로 계산한 시간 (이어하기·자동 마감·종료 공용). 각 상태는 다음 이벤트(또는 끝 시각)까지 이어진다 */
-record StudyTime(int presentSeconds, int awaySeconds, int breakSeconds) {
+public record StudyTime(int presentSeconds, int awaySeconds, int breakSeconds) {
 
-    int studySeconds() {
+    public int studySeconds() {
         return presentSeconds + awaySeconds;
     }
 
     /** events는 시각·id 순. 끝 시각 뒤의 이벤트는 끝 시각에서 자른다 */
-    static StudyTime of(Instant startedAt, List<SessionEvent> events, Instant end) {
+    public static StudyTime of(Instant startedAt, List<SessionEvent> events, Instant end) {
         long[] millis = new long[3]; // 자리 지킴 · 자리 비움 · 휴식
         int state = 0; // 첫 이벤트 전 구간은 자리 지킴
         Instant from = startedAt;
@@ -21,13 +21,13 @@ record StudyTime(int presentSeconds, int awaySeconds, int breakSeconds) {
             if (!e.isState()) {
                 continue; // 동작 이벤트는 구간을 끊지 않는다 (api.md 18)
             }
-            Instant to = e.occurredAt().isBefore(end) ? e.occurredAt() : end;
+            Instant to = e.getOccurredAt().isBefore(end) ? e.getOccurredAt() : end;
             if (to.isAfter(from)) {
                 millis[state] += Duration.between(from, to).toMillis();
                 from = to;
             }
-            state = switch (e.type()) {
-                case SessionEvent.AWAY -> e.falsePositive() ? 0 : 1; // '아니야' 버튼이면 자리 지킴
+            state = switch (e.getType()) {
+                case SessionEvent.AWAY -> e.isFalsePositive() ? 0 : 1; // '아니야' 버튼이면 자리 지킴
                 case SessionEvent.BREAK -> 2;
                 default -> 0; // FOCUS · RETURN
             };

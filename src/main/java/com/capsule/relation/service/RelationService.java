@@ -25,6 +25,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,7 +36,8 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 @Transactional
-class RelationService implements RelationQuery, RelationCommands {
+@RequiredArgsConstructor
+public class RelationService implements RelationQuery, RelationCommands {
 
     private final RelationRepository relations;
     private final RelationLogRepository logs;
@@ -44,28 +46,13 @@ class RelationService implements RelationQuery, RelationCommands {
     private final Clock clock;
     private final EntityManager entityManager;
 
-    RelationService(
-            RelationRepository relations,
-            RelationLogRepository logs,
-            RelationSettlementRepository settlements,
-            AffinityPolicy policy,
-            Clock clock,
-            EntityManager entityManager) {
-        this.relations = relations;
-        this.logs = logs;
-        this.settlements = settlements;
-        this.policy = policy;
-        this.clock = clock;
-        this.entityManager = entityManager;
-    }
-
     @Override
     @Transactional(readOnly = true)
     public RelationView view(long userId, long characterId) {
         Optional<Relation> found = relations.findByUserIdAndCharacterId(userId, characterId);
         int points = found.map(Relation::points).orElse(START_POINTS);
-        int study = found.map(Relation::totalStudySeconds).orElse(0);
-        int present = found.map(Relation::totalPresentSeconds).orElse(0);
+        int study = found.map(Relation::getTotalStudySeconds).orElse(0);
+        int present = found.map(Relation::getTotalPresentSeconds).orElse(0);
         int level = policy.levelOf(present);
         int stage = policy.stageOf(points);
         String stageName = policy.stageName(stage);
@@ -89,10 +76,10 @@ class RelationService implements RelationQuery, RelationCommands {
         if (found.isEmpty()) return change(START_POINTS, 0, 0);
         Relation rel = found.get();
         List<RelationLog> eventLogs =
-                new ArrayList<>(logs.findByRelationIdAndSessionEventId(rel.id(), event.sessionEventId()));
+                new ArrayList<>(logs.findByRelationIdAndSessionEventId(rel.getId(), event.sessionEventId()));
         // STREAK은 session_event_id 없이 기록되므로(DB CHECK) 세션으로 찾는다
         if (event.firstFocusOfSession()) {
-            logs.findFirstByRelationIdAndSessionIdAndReason(rel.id(), event.sessionId(), "STREAK")
+            logs.findFirstByRelationIdAndSessionIdAndReason(rel.getId(), event.sessionId(), "STREAK")
                     .ifPresent(eventLogs::add);
         }
         return change(rel, eventLogs);
@@ -104,19 +91,19 @@ class RelationService implements RelationQuery, RelationCommands {
         Optional<Relation> found = relations.findByUserIdAndCharacterId(userId, characterId);
         if (found.isEmpty()) return settlement(START_POINTS, START_POINTS, 1, 1);
         Relation rel = found.get();
-        Optional<RelationSettlement> settled = settlements.findByRelationIdAndSessionId(rel.id(), sessionId);
-        int levelNow = policy.levelOf(rel.totalPresentSeconds());
-        int levelBefore = settled.map(RelationSettlement::levelBefore).orElse(levelNow);
-        int levelAfter = settled.map(RelationSettlement::levelAfter).orElse(levelNow);
-        Long lastId = logs.lastIdBySession(rel.id(), sessionId);
+        Optional<RelationSettlement> settled = settlements.findByRelationIdAndSessionId(rel.getId(), sessionId);
+        int levelNow = policy.levelOf(rel.getTotalPresentSeconds());
+        int levelBefore = settled.map(RelationSettlement::getLevelBefore).orElse(levelNow);
+        int levelAfter = settled.map(RelationSettlement::getLevelAfter).orElse(levelNow);
+        Long lastId = logs.lastIdBySession(rel.getId(), sessionId);
         if (lastId == null) {
             // 이 세션에서 바뀐 게 없으면 앞선 세션까지의 값. 뒤에 다른 세션이 쌓여도 리포트가 처음과 같다(명세 23)
-            Long before = logs.lastIdBeforeSession(rel.id(), sessionId);
-            int points = START_POINTS + (before == null ? 0 : logs.sumUpTo(rel.id(), before));
+            Long before = logs.lastIdBeforeSession(rel.getId(), sessionId);
+            int points = START_POINTS + (before == null ? 0 : logs.sumUpTo(rel.getId(), before));
             return settlement(points, points, levelBefore, levelAfter);
         }
-        int after = START_POINTS + logs.sumUpTo(rel.id(), lastId);
-        return settlement(after - logs.sumBySession(rel.id(), sessionId), after, levelBefore, levelAfter);
+        int after = START_POINTS + logs.sumUpTo(rel.getId(), lastId);
+        return settlement(after - logs.sumBySession(rel.getId(), sessionId), after, levelBefore, levelAfter);
     }
 
     @Override
@@ -130,9 +117,9 @@ class RelationService implements RelationQuery, RelationCommands {
         if (event.eventType().equals("FOCUS") && event.firstFocusOfSession()) streak(rel, event.sessionId());
         if (event.awaySeconds() != null
                 && event.awaySeconds() > policy.props().awayMinSeconds()
-                && !logs.existsByRelationIdAndSessionEventId(rel.id(), event.sessionEventId())) {
+                && !logs.existsByRelationIdAndSessionEventId(rel.getId(), event.sessionEventId())) {
             // TODO(judgment): J-01 자리 비움 감점 (임시: 1분 넘게 비우면 −1, 하루 최대 −3)
-            int left = policy.props().awayDailyCap() + logs.eventLossSince(rel.id(), todayStart());
+            int left = policy.props().awayDailyCap() + logs.eventLossSince(rel.getId(), todayStart());
             int delta = Math.max(policy.props().awayPenalty(), -Math.max(0, left));
             record(rel, "SESSION_EVENT", delta, event.sessionId(), event.sessionEventId(), null, null);
         }
@@ -146,9 +133,9 @@ class RelationService implements RelationQuery, RelationCommands {
     // TODO(judgment): J-01 연속 출석 점수 (임시: 2일째부터 하루 +1)
     private void streak(Relation rel, long sessionId) {
         LocalDate today = LocalDate.now(clock.withZone(ClockConfig.KST));
-        if (today.equals(rel.lastStudyDate())) return;
-        int days = today.minusDays(1).equals(rel.lastStudyDate()) ? rel.streakDays() + 1 : 1;
-        relations.updateStreak(rel.id(), days, today);
+        if (today.equals(rel.getLastStudyDate())) return;
+        int days = today.minusDays(1).equals(rel.getLastStudyDate()) ? rel.getStreakDays() + 1 : 1;
+        relations.updateStreak(rel.getId(), days, today);
         entityManager.refresh(rel);
         if (days >= 2) record(rel, "STREAK", policy.props().streakPoints(), sessionId, null, null, null);
     }
@@ -157,25 +144,25 @@ class RelationService implements RelationQuery, RelationCommands {
     public AffinityChange applyChatScore(
             long userId, long characterId, long sessionId, UUID requestId, ChatScore score) {
         Relation rel = lock(userId, characterId);
-        Optional<RelationLog> done = logs.findByRelationIdAndRequestId(rel.id(), requestId);
+        Optional<RelationLog> done = logs.findByRelationIdAndRequestId(rel.getId(), requestId);
         if (done.isPresent()) return change(rel, List.of(done.get()));
         int delta = AffinityPolicy.chatDelta(rel.points(), score);
         if (delta > 0) {
             Instant today = todayStart();
             // TODO(judgment): J-06 오르는 쪽 하루 상한 (임시값 chat-daily-gain-cap), 심한 말 뒤 그날 오름 멈춤
             boolean severeToday =
-                    rel.lastSevereAt() != null && !rel.lastSevereAt().isBefore(today);
+                    rel.getLastSevereAt() != null && !rel.getLastSevereAt().isBefore(today);
             delta = severeToday
                     ? 0
                     : Math.min(
                             delta,
-                            Math.max(0, policy.props().chatDailyGainCap() - logs.chatGainSince(rel.id(), today)));
+                            Math.max(0, policy.props().chatDailyGainCap() - logs.chatGainSince(rel.getId(), today)));
         }
         List<RelationLog> changed = record(
                 rel, "CHAT", delta, sessionId, null, requestId, score.signal().name());
         // 0점이라 기록이 남지 않아도 그날 오름 멈춤이 걸리게 따로 남긴다
         if (score.signal() == SignalType.HATE_OR_SEXUAL) {
-            relations.markSevere(rel.id(), Instant.now(clock));
+            relations.markSevere(rel.getId(), Instant.now(clock));
             entityManager.refresh(rel);
         }
         return change(rel, changed);
@@ -185,14 +172,14 @@ class RelationService implements RelationQuery, RelationCommands {
     public StudySettlement settleStudy(
             long userId, long characterId, long sessionId, int studySeconds, int presentSeconds) {
         Relation rel = lock(userId, characterId);
-        if (settlements.findByRelationIdAndSessionId(rel.id(), sessionId).isEmpty()) {
-            int before = policy.levelOf(rel.totalPresentSeconds());
-            int after = policy.levelOf(rel.totalPresentSeconds() + presentSeconds);
+        if (settlements.findByRelationIdAndSessionId(rel.getId(), sessionId).isEmpty()) {
+            int before = policy.levelOf(rel.getTotalPresentSeconds());
+            int after = policy.levelOf(rel.getTotalPresentSeconds() + presentSeconds);
             // ponytail: last_met_at = 정산 시각. 자동 마감이면 실제 종료(마지막 heartbeat)보다 6시간 넘게 늦다.
             //   이 값을 화면에 쓰게 되면 계약에 종료 시각을 받아서 넣을 것 (지금 읽는 API 없음)
-            relations.addStudy(rel.id(), studySeconds, presentSeconds, after, Instant.now(clock));
+            relations.addStudy(rel.getId(), studySeconds, presentSeconds, after, Instant.now(clock));
             settlements.save(
-                    new RelationSettlement(rel.id(), sessionId, presentSeconds, before, after, Instant.now(clock)));
+                    new RelationSettlement(rel.getId(), sessionId, presentSeconds, before, after, Instant.now(clock)));
             entityManager.refresh(rel);
         }
         return settlementOf(userId, characterId, sessionId);
@@ -227,15 +214,15 @@ class RelationService implements RelationQuery, RelationCommands {
         int applied = AffinityPolicy.clamp(rel.points() + delta) - rel.points();
         if (applied == 0) return List.of();
         RelationLog log = logs.save(new RelationLog(
-                rel.id(), reason, applied, sessionId, sessionEventId, requestId, signal, Instant.now(clock)));
-        relations.addPoints(rel.id(), applied);
+                rel.getId(), reason, applied, sessionId, sessionEventId, requestId, signal, Instant.now(clock)));
+        relations.addPoints(rel.getId(), applied);
         entityManager.refresh(rel); // 이 행만 다시 읽는다 (컨텍스트 전체를 비우면 다른 모듈 엔티티의 변경이 사라짐)
         return List.of(log);
     }
 
     private AffinityChange change(Relation rel, List<RelationLog> changed) {
         return change(
-                rel.points(), changed.stream().mapToInt(RelationLog::delta).sum(), rel.totalPresentSeconds());
+                rel.points(), changed.stream().mapToInt(RelationLog::getDelta).sum(), rel.getTotalPresentSeconds());
     }
 
     private AffinityChange change(int points, int delta, int totalPresentSeconds) {

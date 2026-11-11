@@ -8,6 +8,7 @@ import com.capsule.relation.api.RelationTypes.ChatScore;
 import com.capsule.relation.api.RelationTypes.SignalType;
 import java.util.List;
 import java.util.Map;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 /**
@@ -15,15 +16,11 @@ import org.springframework.stereotype.Component;
  * 하루 상한 · 0~100 · 심한 말 뒤 오름 멈춤은 relation이 한다.
  */
 @Component
+@RequiredArgsConstructor
 public class ChatScorer {
 
     private final RuntimeSettings<DialogueProperties> props;
     private final CharacterContents contents;
-
-    ChatScorer(RuntimeSettings<DialogueProperties> props, CharacterContents contents) {
-        this.props = props;
-        this.contents = contents;
-    }
 
     /**
      * @param earlier 이번 세션에서 앞선 사용자 말들의 종류 (오래된 것부터, 모르는 것은 null)

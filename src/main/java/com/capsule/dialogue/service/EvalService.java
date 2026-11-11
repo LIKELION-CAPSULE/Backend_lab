@@ -46,6 +46,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.Semaphore;
 import java.util.stream.Collectors;
+import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -60,11 +61,12 @@ import tools.jackson.databind.JsonNode;
  * 실행은 백그라운드에서 돌고(동시에 lab.eval-parallelism개), 화면은 결과가 쌓이는 것을 다시 읽는다.
  */
 @Service
+@RequiredArgsConstructor
 public class EvalService {
 
     private static final Logger log = LoggerFactory.getLogger(EvalService.class);
     private static final ExecutorService RUNNER = Executors.newVirtualThreadPerTaskExecutor();
-    static final String DEFAULT_RUBRIC = """
+    private static final String DEFAULT_RUBRIC = """
             - 캐릭터의 성격과 말투가 처음부터 끝까지 같은가
             - 사용자의 말에 맞게 반응했는가 (딴소리·공부 재촉만 하지 않음)
             - 답이 3~6문장 안팎으로 늘어지지 않는가 (명세 20)
@@ -81,29 +83,6 @@ public class EvalService {
     private final RuntimeSettings<LlmProperties> llmProps;
     private final RuntimeSettings<DialogueProperties> dialogueProps;
     private final Clock clock;
-
-    EvalService(
-            EvalCaseRepository cases,
-            EvalRunRepository runs,
-            EvalResultRepository results,
-            LlmUsageRepository usages,
-            LabService lab,
-            PromptService prompts,
-            LlmGateway gateway,
-            RuntimeSettings<LlmProperties> llmProps,
-            RuntimeSettings<DialogueProperties> dialogueProps,
-            Clock clock) {
-        this.cases = cases;
-        this.runs = runs;
-        this.results = results;
-        this.usages = usages;
-        this.lab = lab;
-        this.prompts = prompts;
-        this.gateway = gateway;
-        this.llmProps = llmProps;
-        this.dialogueProps = dialogueProps;
-        this.clock = clock;
-    }
 
     /** 서버가 실행 도중 꺼졌으면 RUNNING으로 남은 실행을 실패로 정리 */
     @EventListener(ApplicationReadyEvent.class)
@@ -170,14 +149,14 @@ public class EvalService {
 
     public List<EvalRunView> runs() {
         return runs.findAllByOrderByIdDesc().stream()
-                .map(run -> view(run, results.findByRunIdOrderByCaseIdAscRepeatNoAsc(run.id()), null))
+                .map(run -> view(run, results.findByRunIdOrderByCaseIdAscRepeatNoAsc(run.getId()), null))
                 .toList();
     }
 
     public EvalRunView run(long id) {
         EvalRun run = runs.findById(id).orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "EVAL_RUN_NOT_FOUND"));
-        Map<Long, String> names =
-                cases.findAllById(run.caseIds()).stream().collect(Collectors.toMap(EvalCase::id, EvalCase::name));
+        Map<Long, String> names = cases.findAllById(run.getCaseIds()).stream()
+                .collect(Collectors.toMap(EvalCase::getId, EvalCase::getName));
         return view(run, results.findByRunIdOrderByCaseIdAscRepeatNoAsc(id), names);
     }
 
@@ -186,7 +165,7 @@ public class EvalService {
         EvalResult result = results.findById(resultId)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "EVAL_RESULT_NOT_FOUND"));
         result.rate(r.score(), r.note());
-        String name = cases.findById(result.caseId()).map(EvalCase::name).orElse(null);
+        String name = cases.findById(result.getCaseId()).map(EvalCase::getName).orElse(null);
         return view(result, name);
     }
 
@@ -196,7 +175,7 @@ public class EvalService {
         String status = EvalRun.DONE;
         try {
             for (EvalCase c : selected)
-                for (int i = 1; i <= run.repeats(); i++) {
+                for (int i = 1; i <= run.getRepeats(); i++) {
                     int repeatNo = i;
                     jobs.add(RUNNER.submit(() -> {
                         slots.acquireUninterruptibly();
@@ -209,17 +188,17 @@ public class EvalService {
                 }
             for (Future<?> job : jobs) job.get();
         } catch (Exception e) {
-            log.error("평가 실행 {} 실패", run.id(), e);
+            log.error("평가 실행 {} 실패", run.getId(), e);
             status = EvalRun.FAILED;
         }
-        EvalRun done = runs.findById(run.id()).orElseThrow();
+        EvalRun done = runs.findById(run.getId()).orElseThrow();
         done.finish(status, Instant.now(clock));
         runs.save(done);
     }
 
     /** 케이스 대본을 처음부터 끝까지 한 번: 사용자 말을 차례로 보내고 답을 이어 붙인다. 턴이 실패하면 거기서 멈춘다 */
     private void runCase(EvalRun run, EvalCase c, int repeatNo, LabConfig runConfig) {
-        LabConfig context = LabService.config(c.context());
+        LabConfig context = LabService.config(c.getContext());
         LabConfig config = new LabConfig(
                 context.nickname(),
                 context.relationLevel(),
@@ -235,13 +214,13 @@ public class EvalService {
                 context.chatty(),
                 context.sessionMinutes());
         LlmContext ctx = LlmContext.lab(LlmContext.EVAL, config);
-        CharacterInfo character = lab.character(c.characterId());
-        ChatPipeline pipeline = lab.pipeline(run.pipeline());
+        CharacterInfo character = lab.character(c.getCharacterId());
+        ChatPipeline pipeline = lab.pipeline(run.getPipeline());
         List<ChatLine> history = new ArrayList<>();
         List<TranscriptTurn> transcript = new ArrayList<>();
         String error = null;
         long total = 0;
-        for (String userText : Arrays.asList(LlmJson.read(c.turns(), String[].class))) {
+        for (String userText : Arrays.asList(LlmJson.read(c.getTurns(), String[].class))) {
             long t0 = System.nanoTime();
             try {
                 ChatOutcome o = lab.chatTurn(
@@ -262,9 +241,9 @@ public class EvalService {
         }
         BigDecimal judgeScore = null;
         String judgeNote = null;
-        if (run.judge() && error == null) {
+        if (run.isJudge() && error == null) {
             try {
-                JsonNode verdict = judge(character, c.rubric(), transcript, config.pinnedOrEmpty(), ctx.traceId());
+                JsonNode verdict = judge(character, c.getRubric(), transcript, config.pinnedOrEmpty(), ctx.traceId());
                 judgeScore =
                         BigDecimal.valueOf(verdict.path("score").asDouble()).setScale(1, RoundingMode.HALF_UP);
                 judgeNote = LlmJson.str(verdict.path("reason"));
@@ -273,8 +252,8 @@ public class EvalService {
             }
         }
         results.save(new EvalResult(
-                run.id(),
-                c.id(),
+                run.getId(),
+                c.getId(),
                 repeatNo,
                 ctx.traceId(),
                 LlmJson.write(transcript),
@@ -303,10 +282,10 @@ public class EvalService {
         }
         vars.put("transcript", PromptVars.transcript(lines, character.name()));
         LlmContext judgeCtx =
-                new LlmContext(LlmContext.EVAL, traceId, null, null, List.of(p.id()), null, null, null, null, null);
+                new LlmContext(LlmContext.EVAL, traceId, null, null, List.of(p.getId()), null, null, null, null, null);
         Llm.Result r = gateway.complete(
                 LlmPurpose.EVAL_JUDGE,
-                List.of(new Llm.SystemBlock(PromptService.render(p.body(), vars), false)),
+                List.of(new Llm.SystemBlock(PromptService.render(p.getBody(), vars), false)),
                 List.of(new Llm.ChatTurn("user", "채점해 줘.")),
                 judgeCtx,
                 null);
@@ -321,69 +300,72 @@ public class EvalService {
 
     private static EvalCaseView view(EvalCase c) {
         return new EvalCaseView(
-                c.id(),
-                c.name(),
-                c.characterId(),
-                Arrays.asList(LlmJson.read(c.turns(), String[].class)),
-                LabService.config(c.context()),
-                c.rubric(),
-                c.createdAt());
+                c.getId(),
+                c.getName(),
+                c.getCharacterId(),
+                Arrays.asList(LlmJson.read(c.getTurns(), String[].class)),
+                LabService.config(c.getContext()),
+                c.getRubric(),
+                c.getCreatedAt());
     }
 
     /** names가 null이면 결과 목록은 빼고 집계만 */
     private EvalRunView view(EvalRun run, List<EvalResult> list, Map<Long, String> names) {
         OptionalDouble judge = list.stream()
-                .map(EvalResult::judgeScore)
+                .map(EvalResult::getJudgeScore)
                 .filter(Objects::nonNull)
                 .mapToDouble(BigDecimal::doubleValue)
                 .average();
         OptionalDouble human = list.stream()
-                .map(EvalResult::humanScore)
+                .map(EvalResult::getHumanScore)
                 .filter(Objects::nonNull)
                 .mapToInt(Integer::intValue)
                 .average();
-        OptionalDouble latency = list.stream().mapToInt(EvalResult::latencyMs).average();
+        OptionalDouble latency =
+                list.stream().mapToInt(EvalResult::getLatencyMs).average();
         return new EvalRunView(
-                run.id(),
-                run.label(),
-                run.pipeline(),
-                LabService.config(run.config()),
-                run.caseIds(),
-                run.repeats(),
-                run.judge(),
-                run.status(),
-                run.createdAt(),
-                run.finishedAt(),
-                run.caseIds().size() * run.repeats(),
+                run.getId(),
+                run.getLabel(),
+                run.getPipeline(),
+                LabService.config(run.getConfig()),
+                run.getCaseIds(),
+                run.getRepeats(),
+                run.isJudge(),
+                run.getStatus(),
+                run.getCreatedAt(),
+                run.getFinishedAt(),
+                run.getCaseIds().size() * run.getRepeats(),
                 list.size(),
-                (int) list.stream().filter(x -> x.error() != null).count(),
+                (int) list.stream().filter(x -> x.getError() != null).count(),
                 judge.isPresent() ? judge.getAsDouble() : null,
                 human.isPresent() ? human.getAsDouble() : null,
                 latency.isPresent() ? latency.getAsDouble() : null,
                 list.stream()
-                        .map(EvalResult::costUsd)
+                        .map(EvalResult::getCostUsd)
                         .filter(Objects::nonNull)
                         .reduce(BigDecimal.ZERO, BigDecimal::add),
                 names == null
                         ? List.of()
-                        : list.stream().map(x -> view(x, names.get(x.caseId()))).toList());
+                        : list.stream()
+                                .map(x -> view(x, names.get(x.getCaseId())))
+                                .toList());
     }
 
     private static EvalResultView view(EvalResult r, String caseName) {
         return new EvalResultView(
-                r.id(),
-                r.caseId(),
+                r.getId(),
+                r.getCaseId(),
                 caseName,
-                r.repeatNo(),
-                r.traceId(),
-                Arrays.asList(LlmJson.read(r.transcript(), TranscriptTurn[].class)),
-                r.judgeScore(),
-                r.judgeNote(),
-                r.humanScore(),
-                r.humanNote(),
-                r.latencyMs(),
-                r.costUsd(),
-                r.error(),
-                r.createdAt());
+                r.getRepeatNo(),
+                r.getTraceId(),
+                Arrays.asList(LlmJson.read(r.getTranscript(), TranscriptTurn[].class)),
+                r.getJudgeScore(),
+                r.getJudgeNote(),
+                r.getHumanScore(),
+                r.getHumanNote(),
+                r.getLatencyMs(),
+                r.getCostUsd(),
+                r.getError(),
+                r.getCreatedAt());
     }
 }

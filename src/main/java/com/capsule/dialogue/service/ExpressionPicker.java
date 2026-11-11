@@ -11,6 +11,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -20,19 +21,15 @@ import org.springframework.stereotype.Component;
  * 보기가 그 목록뿐이라 목록 밖 이름은 나오지 않는다 (Decider가 모르는 보기는 버린다).
  */
 @Component
+@RequiredArgsConstructor
 public class ExpressionPicker {
 
     private static final Logger log = LoggerFactory.getLogger(ExpressionPicker.class);
     private static final ExecutorService THREADS = Executors.newVirtualThreadPerTaskExecutor();
-    static final String QUESTION = "expression";
+    public static final String QUESTION = "expression";
 
     private final Decider decider;
     private final RuntimeSettings<DialogueProperties> props;
-
-    ExpressionPicker(Decider decider, RuntimeSettings<DialogueProperties> props) {
-        this.decider = decider;
-        this.props = props;
-    }
 
     /**
      * 이 대사의 표정. 목록이 없거나, 늦거나(fact-pick-wait, 사실 고르기와 같은 한도), 실패하면 null (표정을 바꾸지 않음).

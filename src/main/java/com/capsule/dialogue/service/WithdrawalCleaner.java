@@ -3,6 +3,7 @@ package com.capsule.dialogue.service;
 import com.capsule.dialogue.repository.CharacterMemoryRepository;
 import com.capsule.dialogue.repository.ConversationRepository;
 import com.capsule.user.api.UserWithdrawnEvent;
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
@@ -12,18 +13,14 @@ import org.springframework.stereotype.Component;
  * llm_usages는 비용 근거라 남긴다.
  */
 @Component
-class WithdrawalCleaner {
+@RequiredArgsConstructor
+public class WithdrawalCleaner {
 
     private final ConversationRepository conversations;
     private final CharacterMemoryRepository memories;
 
-    WithdrawalCleaner(ConversationRepository conversations, CharacterMemoryRepository memories) {
-        this.conversations = conversations;
-        this.memories = memories;
-    }
-
     @EventListener
-    void on(UserWithdrawnEvent event) {
+    public void on(UserWithdrawnEvent event) {
         conversations.deleteByUserId(event.userId()); // 대화 원문 · 세션 카드는 CASCADE
         memories.deleteByUserId(event.userId());
     }

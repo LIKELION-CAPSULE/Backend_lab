@@ -34,7 +34,7 @@ import tools.jackson.databind.node.ObjectNode;
 public final class RuntimeSettings<T> {
 
     private static final Logger log = LoggerFactory.getLogger(RuntimeSettings.class);
-    static final long RELOAD_NANOS = 30_000_000_000L;
+    private static final long RELOAD_NANOS = 30_000_000_000L;
     public static final String INVALID = "INVALID_SETTING";
 
     private final String table;
@@ -142,7 +142,7 @@ public final class RuntimeSettings<T> {
     }
 
     /** 테스트: 다음 current()가 다시 읽기를 시작하게 */
-    void expire() {
+    public void expire() {
         lock.lock();
         try {
             Snapshot<T> s = snap;

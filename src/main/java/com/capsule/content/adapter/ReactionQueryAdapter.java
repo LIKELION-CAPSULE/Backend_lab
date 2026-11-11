@@ -9,26 +9,23 @@ import com.capsule.content.repository.CharacterRepository;
 import com.capsule.content.repository.ReactionMapRepository;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @Transactional(readOnly = true)
-class ReactionQueryAdapter implements ReactionQuery {
+@RequiredArgsConstructor
+public class ReactionQueryAdapter implements ReactionQuery {
 
     private final CharacterRepository characters;
     private final ReactionMapRepository reactions;
-
-    ReactionQueryAdapter(CharacterRepository characters, ReactionMapRepository reactions) {
-        this.characters = characters;
-        this.reactions = reactions;
-    }
 
     @Override
     public Reaction pick(long characterId, String trigger, Integer intensity) {
         return characters
                 .findById(characterId)
-                .map(c -> pickOne(rows(c.model().id(), trigger, intensity)))
+                .map(c -> pickOne(rows(c.getModel().getId(), trigger, intensity)))
                 .orElse(Reaction.NONE);
     }
 
@@ -49,12 +46,13 @@ class ReactionQueryAdapter implements ReactionQuery {
         }
         ReactionMap r = rows.get(ThreadLocalRandom.current().nextInt(rows.size()));
         return new Reaction(
-                r.motion() == null
+                r.getMotion() == null
                         ? null
-                        : new MotionRef(r.motion().groupName(), r.motion().filePath()),
-                r.expression() == null
+                        : new MotionRef(
+                                r.getMotion().getGroupName(), r.getMotion().getFilePath()),
+                r.getExpression() == null
                         ? null
                         : new ExpressionRef(
-                                r.expression().name(), r.expression().filePath()));
+                                r.getExpression().getName(), r.getExpression().getFilePath()));
     }
 }

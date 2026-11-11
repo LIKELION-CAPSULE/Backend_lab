@@ -65,6 +65,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -73,6 +74,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
+@RequiredArgsConstructor
 public class SessionService {
 
     private static final Logger log = LoggerFactory.getLogger(SessionService.class);
@@ -91,37 +93,6 @@ public class SessionService {
     private final TransactionTemplate tx;
     private final Clock clock;
     private final SessionProperties props;
-
-    SessionService(
-            StudySessionRepository sessions,
-            SessionEventRepository events,
-            UserQuery users,
-            AvatarQuery avatars,
-            RoomQuery rooms,
-            CharacterQuery characters,
-            ReactionQuery reactions,
-            RelationQuery relationQuery,
-            RelationCommands relationCommands,
-            SessionClosingHandler closingHandler,
-            ActiveSessionLookup activeSessions,
-            TransactionTemplate tx,
-            Clock clock,
-            SessionProperties props) {
-        this.sessions = sessions;
-        this.events = events;
-        this.users = users;
-        this.avatars = avatars;
-        this.rooms = rooms;
-        this.characters = characters;
-        this.reactions = reactions;
-        this.relationQuery = relationQuery;
-        this.relationCommands = relationCommands;
-        this.closingHandler = closingHandler;
-        this.activeSessions = activeSessions;
-        this.tx = tx;
-        this.clock = clock;
-        this.props = props;
-    }
 
     // ---- 11 홈 · 12 룸 상세
 
@@ -169,8 +140,8 @@ public class SessionService {
                 .toList();
         // 다른 룸의 진행 중 세션이면 이 룸 버튼은 그대로 둔다 (시작하면 409 → H18 팝업)
         Long activeSessionId = sessions.findByUserIdAndEndedAtIsNull(userId)
-                .filter(s -> s.roomId() == roomId)
-                .map(StudySession::id)
+                .filter(s -> s.getRoomId() == roomId)
+                .map(StudySession::getId)
                 .orElse(null);
         return new RoomDetail(
                 room.id(),
@@ -192,7 +163,7 @@ public class SessionService {
     /** 동시 시작이 유니크 인덱스에 막혔을 때 먼저 만들어진 세션 */
     @Transactional(readOnly = true)
     public Optional<Long> inProgressSessionId(long userId) {
-        return sessions.findByUserIdAndEndedAtIsNull(userId).map(StudySession::id);
+        return sessions.findByUserIdAndEndedAtIsNull(userId).map(StudySession::getId);
     }
 
     @Transactional
@@ -217,7 +188,7 @@ public class SessionService {
             throw new ApiException(FORBIDDEN, "ONBOARDING_REQUIRED");
         }
         sessions.findByUserIdAndEndedAtIsNull(userId).ifPresent(s -> {
-            throw alreadyInProgress(s.id());
+            throw alreadyInProgress(s.getId());
         });
         BackgroundInfo background = rooms.defaultBackground(room.id()).orElseThrow();
         // 동시에 두 번 시작하면 부분 유니크 인덱스(사용자당 진행 중 세션 하나)가 막는다 → 컨트롤러가 409로 바꿈
@@ -226,8 +197,8 @@ public class SessionService {
         relationCommands.meet(userId, character.id());
         AvatarInfo avatar = avatar(user);
         return new StartResponse(
-                s.id(),
-                s.startedAt(),
+                s.getId(),
+                s.getStartedAt(),
                 minutes,
                 roomView(room, background),
                 figure(character),
@@ -240,35 +211,35 @@ public class SessionService {
     public ResumeResponse resume(long userId, long sessionId) {
         StudySession s = inProgress(userId, sessionId);
         Instant now = now();
-        List<SessionEvent> list = new ArrayList<>(events.findBySessionIdOrderByOccurredAtAscIdAsc(s.id()));
+        List<SessionEvent> list = new ArrayList<>(events.findBySessionIdOrderByOccurredAtAscIdAsc(s.getId()));
         // 동작 이벤트는 상태를 바꾸지 않으므로 마지막 '상태' 이벤트로 판단 (api.md 18)
         SessionEvent last =
                 list.stream().filter(SessionEvent::isState).reduce((a, b) -> b).orElse(null);
-        if (last == null || !BREAK.equals(last.type())) {
+        if (last == null || !BREAK.equals(last.getType())) {
             // 끊긴 구간 = 휴식. heartbeat 뒤에 온 이벤트가 있으면 그 뒤부터 (그 상태가 끊긴 동안 이어지지 않게)
-            Instant breakAt = s.lastHeartbeatAt() != null ? s.lastHeartbeatAt() : s.startedAt();
-            if (last != null && last.occurredAt().isAfter(breakAt)) {
-                breakAt = last.occurredAt();
+            Instant breakAt = s.getLastHeartbeatAt() != null ? s.getLastHeartbeatAt() : s.getStartedAt();
+            if (last != null && last.getOccurredAt().isAfter(breakAt)) {
+                breakAt = last.getOccurredAt();
             }
             if (breakAt.isAfter(now)) {
                 breakAt = now;
             }
-            list.add(events.save(new SessionEvent(s.id(), BREAK, breakAt)));
+            list.add(events.save(new SessionEvent(s.getId(), BREAK, breakAt)));
         }
-        list.add(events.save(new SessionEvent(s.id(), FOCUS, now)));
+        list.add(events.save(new SessionEvent(s.getId(), FOCUS, now)));
         // 서버가 넣은 두 이벤트는 호감도에 반영하지 않는다 (api.md 17)
-        StudyTime time = StudyTime.of(s.startedAt(), list, now);
+        StudyTime time = StudyTime.of(s.getStartedAt(), list, now);
         // 끊기기 전 heartbeat 값이 남아 있으면, 다음 heartbeat 전에 또 끊길 때 자동 마감이 옛 값으로 기록한다 → 이어하기 응답과 같은 값으로 맞춤
         s.heartbeat(now, time.studySeconds(), time.presentSeconds());
 
         UserProfile user = user(userId);
         AvatarInfo avatar = avatar(user);
         return new ResumeResponse(
-                s.id(),
-                s.targetMinutes(),
+                s.getId(),
+                s.getTargetMinutes(),
                 roomView(
-                        rooms.find(s.roomId()).orElseThrow(),
-                        rooms.background(s.backgroundId()).orElseThrow()),
+                        rooms.find(s.getRoomId()).orElseThrow(),
+                        rooms.background(s.getBackgroundId()).orElseThrow()),
                 figure(character(s.characterId())),
                 figure(avatar),
                 me(user, avatar),
@@ -287,58 +258,61 @@ public class SessionService {
             throw new ApiException(BAD_REQUEST, "INVALID_EVENT");
         }
         // 프론트 시계가 서버보다 조금 늦으면 시작 직후 FOCUS가 세션 시작보다 앞설 수 있어서, 거절하지 않고 시작 시각으로 맞춘다
-        Instant occurredAt = req.occurredAt().isBefore(s.startedAt()) ? s.startedAt() : req.occurredAt();
+        Instant occurredAt = req.occurredAt().isBefore(s.getStartedAt()) ? s.getStartedAt() : req.occurredAt();
         Instant at = occurredAt.truncatedTo(ChronoUnit.MICROS); // DB 정밀도와 맞춰야 재전송이 같은 값으로 걸린다
-        List<SessionEvent> list = events.findBySessionIdOrderByOccurredAtAscIdAsc(s.id());
+        List<SessionEvent> list = events.findBySessionIdOrderByOccurredAtAscIdAsc(s.getId());
 
         Optional<SessionEvent> duplicate = list.stream()
-                .filter(e -> e.type().equals(type) && e.occurredAt().equals(at))
+                .filter(e -> e.getType().equals(type) && e.getOccurredAt().equals(at))
                 .findFirst();
         if (duplicate.isPresent()) {
             // 재전송: 호감도는 다시 반영하지 않고 처음 반영된 변화를 돌려준다
             SessionEvent e = duplicate.get();
-            SessionEventRef ref = eventRef(s, e.id(), type, firstFocus(list, e.id(), type, at));
-            return new EventResponse(e.id(), eventCharacters(ref, relationQuery.changeOf(ref)), false);
+            SessionEventRef ref = eventRef(s, e.getId(), type, firstFocus(list, e.getId(), type, at));
+            return new EventResponse(e.getId(), eventCharacters(ref, relationQuery.changeOf(ref)), false);
         }
         SessionEvent stateAt = null; // 이 이벤트 시각의 상태 (늦게 도착한 이벤트도 제자리에서 판단). 동작 이벤트는 상태가 아님
         for (SessionEvent e : list) {
-            if (e.isState() && !e.occurredAt().isAfter(at)) {
+            if (e.isState() && !e.getOccurredAt().isAfter(at)) {
                 stateAt = e;
             }
         }
         boolean motion = SessionEvent.MOTION_TYPES.contains(type);
-        if (stateAt != null && BREAK.equals(stateAt.type()) && (AWAY.equals(type) || RETURN.equals(type) || motion)) {
+        if (stateAt != null
+                && BREAK.equals(stateAt.getType())
+                && (AWAY.equals(type) || RETURN.equals(type) || motion)) {
             // 명세는 "서버가 무시"뿐이라 저장하지 않고 eventId null로 돌려준다
             return EventResponse.ignored();
         }
         // 동작 이벤트 쿨다운 (api.md 18): 같은 type이 motion-cooldown(1분) 안에 다시 오면 무시. 늦게 도착한 앞선 이벤트도 걸리게 앞뒤로 본다
         if (motion
                 && list.stream()
-                        .anyMatch(e -> e.type().equals(type)
-                                && Duration.between(e.occurredAt(), at).abs().compareTo(props.motionCooldown()) < 0)) {
+                        .anyMatch(e -> e.getType().equals(type)
+                                && Duration.between(e.getOccurredAt(), at).abs().compareTo(props.motionCooldown())
+                                        < 0)) {
             return EventResponse.ignored();
         }
 
-        SessionEvent saved = events.save(new SessionEvent(s.id(), type, at));
+        SessionEvent saved = events.save(new SessionEvent(s.getId(), type, at));
         // 자리 비움을 끝낸 상태 이벤트면 비운 시간을 같이 넘긴다 (relation이 오래 비웠으면 감점).
         // 늦게 도착한 이벤트가 이미 다른 상태 이벤트로 끝난 AWAY를 또 끝내지 않게, 그 AWAY 뒤에 상태 이벤트가 없을 때만
         SessionEvent away = stateAt;
         boolean closesAway = !motion
                 && away != null
-                && AWAY.equals(away.type())
+                && AWAY.equals(away.getType())
                 && !AWAY.equals(type)
-                && list.stream().noneMatch(e -> e.isState() && e.occurredAt().isAfter(away.occurredAt()));
+                && list.stream().noneMatch(e -> e.isState() && e.getOccurredAt().isAfter(away.getOccurredAt()));
         Integer awaySeconds =
-                closesAway ? (int) Duration.between(away.occurredAt(), at).toSeconds() : null;
+                closesAway ? (int) Duration.between(away.getOccurredAt(), at).toSeconds() : null;
         SessionEventRef ref = new SessionEventRef(
-                s.userId(),
+                s.getUserId(),
                 s.characterId(),
-                s.id(),
-                saved.id(),
+                s.getId(),
+                saved.getId(),
                 type,
-                firstFocus(list, saved.id(), type, at),
+                firstFocus(list, saved.getId(), type, at),
                 awaySeconds);
-        return new EventResponse(saved.id(), eventCharacters(ref, relationCommands.applySessionEvent(ref)), true);
+        return new EventResponse(saved.getId(), eventCharacters(ref, relationCommands.applySessionEvent(ref)), true);
     }
 
     /**
@@ -384,14 +358,14 @@ public class SessionService {
     private ReportResponse endLocked(long userId, long sessionId, EndRequest req, SessionClosingHandler.Draft draft) {
         StudySession s = owned(sessions.findWithLockById(sessionId), userId);
         if (!s.inProgress()) {
-            return toReport(s, relationQuery.settlementOf(s.userId(), s.characterId(), s.id()));
+            return toReport(s, relationQuery.settlementOf(s.getUserId(), s.characterId(), s.getId()));
         }
         Instant now = now();
         Integer study = req.studySeconds();
         Integer present = req.presentSeconds();
         validateStudyTime(s, study, present, now);
-        List<SessionEvent> list = events.findBySessionIdOrderByOccurredAtAscIdAsc(s.id());
-        StudyTime time = StudyTime.of(s.startedAt(), list, now);
+        List<SessionEvent> list = events.findBySessionIdOrderByOccurredAtAscIdAsc(s.getId());
+        StudyTime time = StudyTime.of(s.getStartedAt(), list, now);
         // TODO(judgment): J-11 프론트 값이 서버 계산값(time)과 "크게" 다를 때의 기준 미정. 지금은 부등식 검증만 하고 프론트 값을 그대로 씀
         return close(s, now, "NORMAL", present, study - present, time.breakSeconds(), list, draft);
     }
@@ -402,7 +376,7 @@ public class SessionService {
         if (s.inProgress()) {
             throw new ApiException(CONFLICT, "SESSION_IN_PROGRESS");
         }
-        return toReport(s, relationQuery.settlementOf(s.userId(), s.characterId(), s.id()));
+        return toReport(s, relationQuery.settlementOf(s.getUserId(), s.characterId(), s.getId()));
     }
 
     /** heartbeat가 auto-close-after(6h)보다 오래 없는 세션을 마지막 heartbeat 시각으로 닫는다 (api.md 21) */
@@ -431,15 +405,15 @@ public class SessionService {
 
     /** 자동 마감할 시각과 시간. 그 사이 종료됐거나 이어하기했으면 빈 값 */
     private Optional<AutoClosePlan> autoClosePlan(StudySession s, Instant cutoff) {
-        Instant end = s.lastHeartbeatAt() != null ? s.lastHeartbeatAt() : s.startedAt();
+        Instant end = s.getLastHeartbeatAt() != null ? s.getLastHeartbeatAt() : s.getStartedAt();
         if (!s.inProgress() || !end.isBefore(cutoff)) {
             return Optional.empty();
         }
-        List<SessionEvent> list = events.findBySessionIdOrderByOccurredAtAscIdAsc(s.id());
-        StudyTime time = StudyTime.of(s.startedAt(), list, end);
+        List<SessionEvent> list = events.findBySessionIdOrderByOccurredAtAscIdAsc(s.getId());
+        StudyTime time = StudyTime.of(s.getStartedAt(), list, end);
         // 마지막 heartbeat가 보낸 프론트 값으로 기록 (api.md 21). 값을 받은 적이 없으면 이벤트로 계산
-        Integer study = s.heartbeatStudySeconds();
-        Integer present = s.heartbeatPresentSeconds();
+        Integer study = s.getHeartbeatStudySeconds();
+        Integer present = s.getHeartbeatPresentSeconds();
         boolean sent = study != null && present != null;
         return Optional.of(new AutoClosePlan(
                 end,
@@ -466,10 +440,10 @@ public class SessionService {
             List<SessionEvent> list,
             SessionClosingHandler.Draft draft) {
         s.close(endedAt, endType, present, away, breakSeconds, (int)
-                list.stream().filter(e -> RETURN.equals(e.type())).count());
+                list.stream().filter(e -> RETURN.equals(e.getType())).count());
         long characterId = s.characterId();
         StudySettlement settlement =
-                relationCommands.settleStudy(s.userId(), characterId, s.id(), present + away, present);
+                relationCommands.settleStudy(s.getUserId(), characterId, s.getId(), present + away, present);
         s.recordClosingLine(closingHandler.close(closingOf(s, endType, present + away), draft));
         return toReport(s, settlement);
     }
@@ -477,30 +451,30 @@ public class SessionService {
     /** 초안 · 저장 둘 다 이걸로 만든다. 목표 시간을 빠뜨리면 공부 포기(GIVE_UP) 판정이 꺼진다 */
     private SessionClosing closingOf(StudySession s, String endType, int studySeconds) {
         return new SessionClosing(
-                s.id(),
-                s.userId(),
+                s.getId(),
+                s.getUserId(),
                 s.characterId(),
                 character(s.characterId()).name(),
                 endType,
                 studySeconds,
-                s.targetMinutes());
+                s.getTargetMinutes());
     }
 
     private ReportResponse toReport(StudySession s, StudySettlement settlement) {
         long characterId = s.characterId();
         return new ReportResponse(
-                s.id(),
-                rooms.find(s.roomId()).map(RoomInfo::name).orElse(null),
-                s.startedAt(),
-                s.endedAt(),
-                s.endType(),
-                s.focusSeconds() + s.distractSeconds(),
-                s.focusSeconds(),
-                s.distractSeconds(),
-                s.returnCount(),
+                s.getId(),
+                rooms.find(s.getRoomId()).map(RoomInfo::name).orElse(null),
+                s.getStartedAt(),
+                s.getEndedAt(),
+                s.getEndType(),
+                s.getFocusSeconds() + s.getDistractSeconds(),
+                s.getFocusSeconds(),
+                s.getDistractSeconds(),
+                s.getReturnCount(),
                 new CharacterRef(characterId, character(characterId).name()),
                 settlement,
-                s.closingLine());
+                s.getClosingLine());
     }
 
     // ---- 도우미
@@ -517,21 +491,21 @@ public class SessionService {
                 && present != null
                 && present >= 0
                 && present <= study
-                && study <= Duration.between(s.startedAt(), now).toSeconds();
+                && study <= Duration.between(s.getStartedAt(), now).toSeconds();
     }
 
     /** 이 이벤트 시각까지(자기 자신 빼고) FOCUS가 없으면 세션 첫 FOCUS */
     private static boolean firstFocus(List<SessionEvent> list, long eventId, String type, Instant at) {
         return FOCUS.equals(type)
                 && list.stream()
-                        .noneMatch(e -> e.id() != eventId
-                                && FOCUS.equals(e.type())
-                                && !e.occurredAt().isAfter(at));
+                        .noneMatch(e -> e.getId() != eventId
+                                && FOCUS.equals(e.getType())
+                                && !e.getOccurredAt().isAfter(at));
     }
 
     /** 이미 반영된 이벤트를 다시 읽을 때 (changeOf는 비운 시간을 쓰지 않음) */
     private static SessionEventRef eventRef(StudySession s, long eventId, String type, boolean firstFocus) {
-        return new SessionEventRef(s.userId(), s.characterId(), s.id(), eventId, type, firstFocus, null);
+        return new SessionEventRef(s.getUserId(), s.characterId(), s.getId(), eventId, type, firstFocus, null);
     }
 
     /** 18 응답의 캐릭터별 모션·표정·호감도. 뼈대는 세션당 캐릭터 1명 */
@@ -545,7 +519,7 @@ public class SessionService {
 
     /** 남의 세션도 없는 세션과 똑같이 404 */
     private static StudySession owned(Optional<StudySession> found, long userId) {
-        return found.filter(s -> s.userId() == userId)
+        return found.filter(s -> s.getUserId() == userId)
                 .orElseThrow(() -> new ApiException(NOT_FOUND, "SESSION_NOT_FOUND"));
     }
 

@@ -21,12 +21,12 @@ import tools.jackson.databind.JsonNode;
  * prompt_tokens에는 캐시 읽기가 들어 있어서 빼고 input으로 기록한다. 거절(refusal·content_filter)은 stopReason "refusal".
  */
 @Component
-class OpenAiProvider implements LlmProvider {
+public class OpenAiProvider implements LlmProvider {
 
     private final LlmProperties.Provider settings;
     private final RestClient http;
 
-    OpenAiProvider(LlmProperties props) {
+    public OpenAiProvider(LlmProperties props) {
         this.settings = props.openai();
         this.http = LlmHttp.client(settings.baseUrl(), props.connectTimeout(), props.httpTimeout(), h -> {
             if (settings.hasKey()) h.setBearerAuth(settings.apiKey());
@@ -118,7 +118,7 @@ class OpenAiProvider implements LlmProvider {
      * reasoning_effort를 받는 추론 모델인지. 다른 모델(gpt-4o 등, base-url 호환 서버)에 보내면 400이 난다.
      * ponytail: 모델 이름으로 가른다. 새 추론 계열이 나오면 여기에 더한다
      */
-    static boolean reasoningModel(String model) {
+    public static boolean reasoningModel(String model) {
         return model != null && (model.startsWith("gpt-5") || model.matches("o\\d.*"));
     }
 

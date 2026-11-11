@@ -4,6 +4,7 @@ import com.capsule.user.api.UserQuery;
 import com.capsule.user.api.UserTypes.UserProfile;
 import com.capsule.user.service.ProfileService;
 import java.util.Optional;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 /**
@@ -11,13 +12,10 @@ import org.springframework.stereotype.Component;
  * 다른 모듈 테스트가 이 계약을 @MockitoBean으로 바꿔도 컨트롤러가 쓰는 ProfileService는 그대로 남게.
  */
 @Component
-class UserQueryAdapter implements UserQuery {
+@RequiredArgsConstructor
+public class UserQueryAdapter implements UserQuery {
 
     private final ProfileService profiles;
-
-    UserQueryAdapter(ProfileService profiles) {
-        this.profiles = profiles;
-    }
 
     @Override
     public Optional<UserProfile> find(long userId) {

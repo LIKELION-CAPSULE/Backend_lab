@@ -6,18 +6,16 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Collection;
 import java.util.List;
+import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
 /** terms, term_versions, user_terms. 읽기와 동의 기록(추가만)뿐이라 엔티티 없이 SQL로 둔다. */
 @Repository
+@RequiredArgsConstructor
 public class TermsRepository {
 
     private final JdbcClient jdbc;
-
-    TermsRepository(JdbcClient jdbc) {
-        this.jdbc = jdbc;
-    }
 
     /** 약관마다 시행일이 지난 버전 중 가장 높은 것, 표시 순서대로 */
     public List<TermVersion> latestVersions(Instant now) {

@@ -9,10 +9,15 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 /** user_memories 테이블. 날짜·시간은 타임존 없이 한국 날짜·시간 그대로. created_at은 DB 기본값 */
 @Entity
 @Table(name = "user_memories")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class UserMemory {
 
     public enum Type {
@@ -34,33 +39,11 @@ public class UserMemory {
     private LocalDate dueDate;
     private LocalTime dueTime;
 
-    protected UserMemory() {}
-
     public UserMemory(long userId, Type type, String title, LocalDate dueDate, LocalTime dueTime) {
         this.userId = userId;
         this.type = type;
         this.title = title;
         this.dueDate = dueDate;
         this.dueTime = dueTime;
-    }
-
-    public long id() {
-        return id;
-    }
-
-    public Type type() {
-        return type;
-    }
-
-    public String title() {
-        return title;
-    }
-
-    public LocalDate dueDate() {
-        return dueDate;
-    }
-
-    public LocalTime dueTime() {
-        return dueTime;
     }
 }

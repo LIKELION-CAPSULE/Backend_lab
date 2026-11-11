@@ -9,11 +9,16 @@ import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 import org.hibernate.annotations.ColumnTransformer;
 
 /** 케이스 × 반복 한 번의 결과. transcript = TranscriptTurn JSON 배열 */
 @Entity
 @Table(name = "llm_eval_results")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class EvalResult {
 
     @Id
@@ -37,8 +42,6 @@ public class EvalResult {
     private BigDecimal costUsd;
     private String error;
     private Instant createdAt;
-
-    protected EvalResult() {}
 
     public EvalResult(
             long runId,
@@ -68,61 +71,5 @@ public class EvalResult {
     public void rate(Integer score, String note) {
         this.humanScore = score;
         this.humanNote = note;
-    }
-
-    public Long id() {
-        return id;
-    }
-
-    public long runId() {
-        return runId;
-    }
-
-    public long caseId() {
-        return caseId;
-    }
-
-    public int repeatNo() {
-        return repeatNo;
-    }
-
-    public UUID traceId() {
-        return traceId;
-    }
-
-    public String transcript() {
-        return transcript;
-    }
-
-    public BigDecimal judgeScore() {
-        return judgeScore;
-    }
-
-    public String judgeNote() {
-        return judgeNote;
-    }
-
-    public Integer humanScore() {
-        return humanScore;
-    }
-
-    public String humanNote() {
-        return humanNote;
-    }
-
-    public int latencyMs() {
-        return latencyMs;
-    }
-
-    public BigDecimal costUsd() {
-        return costUsd;
-    }
-
-    public String error() {
-        return error;
-    }
-
-    public Instant createdAt() {
-        return createdAt;
     }
 }
