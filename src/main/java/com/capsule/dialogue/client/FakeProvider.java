@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component;
  * 용도마다 실제 응답과 같은 형식(JSON 등)으로 답한다. 품질은 보지 않는다.
  */
 @Component
-class FakeProvider implements LlmProvider {
+public class FakeProvider implements LlmProvider {
 
     @Override
     public String name() {

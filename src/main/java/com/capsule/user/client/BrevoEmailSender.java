@@ -21,9 +21,9 @@ import org.springframework.web.client.RestClient;
  */
 @Component
 @ConditionalOnExpression("!'${capsule.brevo.key:}'.isBlank()")
-class BrevoEmailSender implements EmailSender {
+public class BrevoEmailSender implements EmailSender {
 
-    static final String SEND_URL = "https://api.brevo.com/v3/smtp/email";
+    public static final String SEND_URL = "https://api.brevo.com/v3/smtp/email";
     private static final String SENDER_NAME = "캡슐";
 
     private static final Logger log = LoggerFactory.getLogger(BrevoEmailSender.class);
@@ -34,7 +34,7 @@ class BrevoEmailSender implements EmailSender {
     private final String iconUrl;
 
     @Autowired
-    BrevoEmailSender(
+    public BrevoEmailSender(
             @Value("${capsule.brevo.key}") String apiKey,
             @Value("${capsule.mail.from}") String from,
             @Value("${capsule.cdn.base-url}") String cdnBaseUrl) {
@@ -42,7 +42,7 @@ class BrevoEmailSender implements EmailSender {
     }
 
     /** 테스트가 MockRestServiceServer를 붙인 builder를 넘긴다 */
-    BrevoEmailSender(RestClient.Builder builder, String apiKey, String from, String cdnBaseUrl) {
+    public BrevoEmailSender(RestClient.Builder builder, String apiKey, String from, String cdnBaseUrl) {
         if (apiKey == null || apiKey.isBlank()) {
             throw new IllegalStateException("capsule.brevo.key가 비어 있다");
         }

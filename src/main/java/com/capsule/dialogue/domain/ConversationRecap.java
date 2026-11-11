@@ -6,10 +6,15 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 /** 지난 세션 하나의 흐름 카드 (공부 종료 때 한 번 쓰고 고치지 않음. 최근 몇 장만 남김) */
 @Entity
 @Table(name = "conversation_recaps")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ConversationRecap {
 
     @Id
@@ -21,16 +26,10 @@ public class ConversationRecap {
     private String content;
     private Instant createdAt;
 
-    protected ConversationRecap() {}
-
     public ConversationRecap(long conversationId, long sessionId, String content, Instant now) {
         this.conversationId = conversationId;
         this.sessionId = sessionId;
         this.content = content;
         this.createdAt = now;
-    }
-
-    public String content() {
-        return content;
     }
 }

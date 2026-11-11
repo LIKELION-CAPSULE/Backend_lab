@@ -4,6 +4,7 @@ import com.capsule.relation.dto.RelationAdjustRequest;
 import com.capsule.relation.dto.RelationLabView;
 import com.capsule.relation.service.RelationLab;
 import io.swagger.v3.oas.annotations.Hidden;
+import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -20,21 +21,18 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/internal/llm-lab/api/relations")
 @ConditionalOnProperty(name = "capsule.llm.lab.enabled", havingValue = "true")
-class RelationLabController {
+@RequiredArgsConstructor
+public class RelationLabController {
 
     private final RelationLab lab;
 
-    RelationLabController(RelationLab lab) {
-        this.lab = lab;
-    }
-
     @GetMapping
-    RelationLabView get(@RequestParam long userId, @RequestParam long characterId) {
+    public RelationLabView get(@RequestParam long userId, @RequestParam long characterId) {
         return lab.view(userId, characterId);
     }
 
     @PutMapping
-    RelationLabView adjust(
+    public RelationLabView adjust(
             @RequestParam long userId, @RequestParam long characterId, @RequestBody RelationAdjustRequest body) {
         Integer presentSeconds = body.presentMinutes() == null ? null : body.presentMinutes() * 60;
         return lab.adjust(userId, characterId, body.points(), presentSeconds, body.sessionId());

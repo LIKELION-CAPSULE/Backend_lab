@@ -11,10 +11,11 @@ import tools.jackson.databind.json.JsonMapper;
 
 /** 호감도 숫자를 실험실 '운영 설정'에서 바꾸게 (ADR 0026). 전부 매번 읽는 값이라 모든 칸을 연다 */
 @Configuration
-class RelationSettingsConfig {
+public class RelationSettingsConfig {
 
     @Bean
-    RuntimeSettings<RelationProperties> relationSettings(JdbcTemplate jdbc, JsonMapper json, RelationProperties yml) {
+    public RuntimeSettings<RelationProperties> relationSettings(
+            JdbcTemplate jdbc, JsonMapper json, RelationProperties yml) {
         return RuntimeSettings.stored(
                 jdbc,
                 json,
@@ -27,7 +28,7 @@ class RelationSettingsConfig {
     }
 
     /** 공식(AffinityPolicy)이 나누기 · 단계 고르기에서 깨지지 않을 범위 */
-    static void check(RelationProperties v) {
+    public static void check(RelationProperties v) {
         require(v.chatDailyGainCap() >= 0, "chatDailyGainCap", "0 이상");
         require(v.awayMinSeconds() >= 0, "awayMinSeconds", "0 이상");
         require(v.awayPenalty() <= 0, "awayPenalty", "0 이하 (감점)");

@@ -12,6 +12,7 @@ import com.capsule.user.repository.UserRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Optional;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,19 +22,13 @@ import org.springframework.transaction.annotation.Transactional;
  * {@link com.capsule.user.adapter.UserQueryAdapter}가 이 클래스로 위임
  */
 @Service
+@RequiredArgsConstructor
 public class ProfileService {
 
     private final UserRepository users;
     private final AvatarQuery avatars;
     private final ActiveSessionLookup activeSessions;
     private final Clock clock;
-
-    ProfileService(UserRepository users, AvatarQuery avatars, ActiveSessionLookup activeSessions, Clock clock) {
-        this.users = users;
-        this.avatars = avatars;
-        this.activeSessions = activeSessions;
-        this.clock = clock;
-    }
 
     @Transactional(readOnly = true)
     public MeResponse me(long userId) {
@@ -48,9 +43,9 @@ public class ProfileService {
     @Transactional
     public MeResponse update(long userId, UpdateMeRequest req) {
         User user = activeUser(userId);
-        String nickname = req.nickname() == null ? user.nickname() : User.validNickname(req.nickname());
-        if (req.avatarId() == null && user.avatarId() != null) {
-            user.updateProfile(nickname, user.avatarId(), Instant.now(clock));
+        String nickname = req.nickname() == null ? user.getNickname() : User.validNickname(req.nickname());
+        if (req.avatarId() == null && user.getAvatarId() != null) {
+            user.updateProfile(nickname, user.getAvatarId(), Instant.now(clock));
             return toMe(user, thumbnail(user));
         }
         AvatarInfo avatar = (req.avatarId() == null ? avatars.defaultAvatar() : avatars.find(req.avatarId()))
@@ -65,23 +60,28 @@ public class ProfileService {
         return users.findById(userId)
                 .filter(User::isActive)
                 .map(u -> new UserProfile(
-                        u.id(), u.nickname(), u.email(), u.avatarId(), thumbnail(u), u.onboardingRequired()));
+                        u.getId(),
+                        u.getNickname(),
+                        u.getEmail(),
+                        u.getAvatarId(),
+                        thumbnail(u),
+                        u.onboardingRequired()));
     }
 
     private MeResponse toMe(User user, String profileImage) {
         return new MeResponse(
-                user.id(),
-                user.nickname(),
-                user.email(),
+                user.getId(),
+                user.getNickname(),
+                user.getEmail(),
                 user.onboardingRequired(),
-                activeSessions.find(user.id()).orElse(null),
+                activeSessions.find(user.getId()).orElse(null),
                 profileImage);
     }
 
     private String thumbnail(User user) {
-        return user.avatarId() == null
+        return user.getAvatarId() == null
                 ? null
-                : avatars.find(user.avatarId()).map(AvatarInfo::thumbnailUrl).orElse(null);
+                : avatars.find(user.getAvatarId()).map(AvatarInfo::thumbnailUrl).orElse(null);
     }
 
     /** 토큰은 맞는데 탈퇴했거나 없는 사용자 */

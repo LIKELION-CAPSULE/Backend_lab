@@ -16,15 +16,16 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
 /** 공급자 HTTP 공통. Spring RestClient + JDK HttpClient라 의존성을 더하지 않는다 (ADR 0022). */
-final class LlmHttp {
+public final class LlmHttp {
     private LlmHttp() {}
 
     @FunctionalInterface
-    interface BodyReader<T> {
+    public interface BodyReader<T> {
         T read(BufferedReader body) throws IOException;
     }
 
-    static RestClient client(String baseUrl, Duration connectTimeout, Duration timeout, Consumer<HttpHeaders> headers) {
+    public static RestClient client(
+            String baseUrl, Duration connectTimeout, Duration timeout, Consumer<HttpHeaders> headers) {
         HttpClient http = HttpClient.newBuilder().connectTimeout(connectTimeout).build();
         JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(http);
         factory.setReadTimeout(timeout);
@@ -36,7 +37,7 @@ final class LlmHttp {
     }
 
     /** JSON을 POST하고 본문을 reader로 읽는다. 4xx·5xx·연결 실패·형식 오류는 모두 LlmCallException */
-    static <T> T post(RestClient http, String provider, String path, Object body, BodyReader<T> reader) {
+    public static <T> T post(RestClient http, String provider, String path, Object body, BodyReader<T> reader) {
         try {
             return http.post()
                     .uri(path)
@@ -61,12 +62,12 @@ final class LlmHttp {
         }
     }
 
-    static String readAll(BufferedReader in) {
+    public static String readAll(BufferedReader in) {
         return in.lines().collect(Collectors.joining("\n"));
     }
 
     /** SSE 본문에서 data: 줄만 꺼낸다. OpenAI의 [DONE]에서 끝 */
-    static void forEachData(BufferedReader in, Consumer<String> onData) throws IOException {
+    public static void forEachData(BufferedReader in, Consumer<String> onData) throws IOException {
         String line;
         while ((line = in.readLine()) != null) {
             if (!line.startsWith("data:")) continue;
@@ -76,7 +77,7 @@ final class LlmHttp {
         }
     }
 
-    static long msSince(long startNanos) {
+    public static long msSince(long startNanos) {
         return (System.nanoTime() - startNanos) / 1_000_000;
     }
 

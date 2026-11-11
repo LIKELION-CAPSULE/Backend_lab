@@ -21,12 +21,12 @@ import tools.jackson.databind.json.JsonMapper;
  * 개인정보 결정(log-content: 실제 사용자 대화 원문 저장), 실험실 자체(lab).
  */
 @Configuration
-class DialogueSettingsConfig {
+public class DialogueSettingsConfig {
 
-    static final String TABLE = "dialogue_settings";
+    private static final String TABLE = "dialogue_settings";
 
     /** 새 칸을 열 때는 그 값을 매번 읽는지(시작할 때 한 번 읽어 들고 있지 않은지) 먼저 본다 */
-    static final List<String> LLM_PATHS = List.of(
+    private static final List<String> LLM_PATHS = List.of(
             "provider",
             "fallbackProvider",
             "maxRetries",
@@ -39,14 +39,15 @@ class DialogueSettingsConfig {
             "jev.models",
             "prices");
 
-    static final Set<String> PROVIDERS = Set.of("fake", "anthropic", "openai");
-    static final Set<String> THINKING_TYPES = Set.of("disabled", "between_tools", "adaptive");
-    static final Set<String> EFFORTS = Set.of("low", "medium", "high", "xhigh", "max");
+    private static final Set<String> PROVIDERS = Set.of("fake", "anthropic", "openai");
+    private static final Set<String> THINKING_TYPES = Set.of("disabled", "between_tools", "adaptive");
+    private static final Set<String> EFFORTS = Set.of("low", "medium", "high", "xhigh", "max");
     /** OpenAI reasoning_effort (모델마다 받는 값이 다르다: 5.1 이후는 minimal 대신 none) */
-    static final Set<String> REASONING_EFFORTS = Set.of("none", "minimal", "low", "medium", "high", "xhigh");
+    private static final Set<String> REASONING_EFFORTS = Set.of("none", "minimal", "low", "medium", "high", "xhigh");
 
     @Bean
-    RuntimeSettings<DialogueProperties> dialogueSettings(JdbcTemplate jdbc, JsonMapper json, DialogueProperties yml) {
+    public RuntimeSettings<DialogueProperties> dialogueSettings(
+            JdbcTemplate jdbc, JsonMapper json, DialogueProperties yml) {
         return RuntimeSettings.stored(
                 jdbc,
                 json,
@@ -61,13 +62,13 @@ class DialogueSettingsConfig {
     }
 
     @Bean
-    RuntimeSettings<LlmProperties> llmSettings(JdbcTemplate jdbc, JsonMapper json, LlmProperties yml) {
+    public RuntimeSettings<LlmProperties> llmSettings(JdbcTemplate jdbc, JsonMapper json, LlmProperties yml) {
         return RuntimeSettings.stored(
                 jdbc, json, TABLE, "llm", yml, LlmProperties.class, LLM_PATHS, v -> checkLlm(v, yml));
     }
 
     /** 나누기 · 잘라 내기 · 기다리기가 깨지지 않을 범위만 본다. 값이 좋은지는 실험실에서 */
-    static void checkDialogue(DialogueProperties v) {
+    public static void checkDialogue(DialogueProperties v) {
         require(
                 in(Set.of(ChatPipeline.SCENE, ChatPipeline.SIMPLE), v.chatPipeline()),
                 "chatPipeline",
@@ -108,7 +109,7 @@ class DialogueSettingsConfig {
      * 공급자 이름 · 등급 → 모델이 다 맞는지 (틀리면 호출마다 실패해서 대체 대사만 나간다).
      * yml과 다른 공급자로 바꿀 때만 키가 있는지 본다: 키 없는 로컬에서도 다른 칸은 바꿀 수 있게
      */
-    static void checkLlm(LlmProperties v, LlmProperties yml) {
+    public static void checkLlm(LlmProperties v, LlmProperties yml) {
         require(in(PROVIDERS, v.provider()), "provider", "fake · anthropic · openai");
         require(!"fake".equals(v.provider()) || "fake".equals(yml.provider()), "provider", "실제 LLM 서버를 가짜로 바꿀 수 없음");
         String fallback = v.fallbackProvider();

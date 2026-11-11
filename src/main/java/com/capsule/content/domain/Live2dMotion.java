@@ -5,23 +5,20 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 @Entity
 @Table(name = "live2d_motions")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Live2dMotion {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    Long id;
+    private Long id;
 
-    String groupName;
-    String filePath;
-
-    public String groupName() {
-        return groupName;
-    }
-
-    public String filePath() {
-        return filePath;
-    }
+    private String groupName;
+    private String filePath;
 }

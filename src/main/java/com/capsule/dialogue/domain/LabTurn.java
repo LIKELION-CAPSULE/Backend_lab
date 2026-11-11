@@ -9,11 +9,16 @@ import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 import org.hibernate.annotations.ColumnTransformer;
 
 /** 실험 대화 한 턴. 실패한 턴도 남긴다(error). 이 턴의 LLM 호출은 llm_usages.trace_id */
 @Entity
 @Table(name = "llm_lab_turns")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class LabTurn {
 
     @Id
@@ -37,8 +42,6 @@ public class LabTurn {
     private Integer rating;
     private String ratingNote;
     private Instant createdAt;
-
-    protected LabTurn() {}
 
     public LabTurn(
             long labSessionId,
@@ -68,57 +71,5 @@ public class LabTurn {
     public void rate(Integer rating, String note) {
         this.rating = rating;
         this.ratingNote = note;
-    }
-
-    public Long id() {
-        return id;
-    }
-
-    public UUID traceId() {
-        return traceId;
-    }
-
-    public String userText() {
-        return userText;
-    }
-
-    public String reply() {
-        return reply;
-    }
-
-    public String emotion() {
-        return emotion;
-    }
-
-    public Integer affinity() {
-        return affinity;
-    }
-
-    public String error() {
-        return error;
-    }
-
-    public int latencyMs() {
-        return latencyMs;
-    }
-
-    public BigDecimal costUsd() {
-        return costUsd;
-    }
-
-    public String trace() {
-        return trace;
-    }
-
-    public Integer rating() {
-        return rating;
-    }
-
-    public String ratingNote() {
-        return ratingNote;
-    }
-
-    public Instant createdAt() {
-        return createdAt;
     }
 }

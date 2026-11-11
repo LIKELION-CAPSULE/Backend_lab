@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
@@ -37,6 +38,7 @@ import tools.jackson.databind.json.JsonMapper;
  * 버전과 상관없이 다시 불러오려면 실험실 reseed. 파일이 깨졌거나 DB가 준비되지 않았어도 앱은 뜬다: 그 캐릭터만 건너뛰고(설정이 없으면 SIMPLE로 답함) 로그를 남긴다.
  */
 @Component
+@RequiredArgsConstructor
 public class CharacterContentSeeder implements ApplicationRunner {
 
     private static final Logger log = LoggerFactory.getLogger(CharacterContentSeeder.class);
@@ -46,7 +48,7 @@ public class CharacterContentSeeder implements ApplicationRunner {
             .build();
 
     /** profile.yml 모양 */
-    record ProfileFile(
+    public record ProfileFile(
             Integer version,
             String characterName,
             String speaker,
@@ -64,17 +66,12 @@ public class CharacterContentSeeder implements ApplicationRunner {
             Map<Integer, List<SampleFile>> samples,
             List<CharacterContent.Lore> lore) {}
 
-    record LineFile(String text, String expression, Integer minStage) {}
+    public record LineFile(String text, String expression, Integer minStage) {}
 
-    record SampleFile(String user, String reply) {}
+    public record SampleFile(String user, String reply) {}
 
     private final CharacterContentRepository contents;
     private final RoomQuery rooms;
-
-    CharacterContentSeeder(CharacterContentRepository contents, RoomQuery rooms) {
-        this.contents = contents;
-        this.rooms = rooms;
-    }
 
     @Override
     public void run(ApplicationArguments args) throws IOException {
@@ -162,7 +159,7 @@ public class CharacterContentSeeder implements ApplicationRunner {
     }
 
     /** classpath 텍스트 파일 (PromptSeeder도 씀) */
-    static String read(String path) {
+    public static String read(String path) {
         try (InputStream in = CharacterContentSeeder.class.getClassLoader().getResourceAsStream(path)) {
             if (in == null) throw new IllegalStateException("리소스 없음: " + path);
             return new String(in.readAllBytes(), StandardCharsets.UTF_8);

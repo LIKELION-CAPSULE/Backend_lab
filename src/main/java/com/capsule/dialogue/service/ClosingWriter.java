@@ -10,22 +10,19 @@ import com.capsule.dialogue.dto.LlmContext;
 import com.capsule.dialogue.dto.LlmPurpose;
 import java.util.List;
 import java.util.Map;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 /** 공부 종료(명세 22)에서 LLM이 쓰는 글: 이번 세션 흐름 카드, 완료 대사. 시간 제한(llm-budget)은 부르는 쪽이 지킨다 */
 @Component
+@RequiredArgsConstructor
 public class ClosingWriter {
 
     /** 카드 본문 길이. 설정이 아니라 상수: DB CHECK conversation_recaps.content 1~200자, 머리말 포함 (V20261104_204409) */
-    static final int RECAP_MAX = 150;
+    private static final int RECAP_MAX = 150;
 
     private final LlmGateway llm;
     private final PromptService prompts;
-
-    ClosingWriter(LlmGateway llm, PromptService prompts) {
-        this.llm = llm;
-        this.prompts = prompts;
-    }
 
     /**
      * 세션 하나를 흐름 카드 한 장으로 (기억 ②, ADR 0022). 지난 카드를 다시 압축하지 않는다(재귀 요약은 쓸수록 정보가 빠짐).
@@ -50,9 +47,9 @@ public class ClosingWriter {
                 + "\n</아는 사실>\n\n<이번 대화>\n" + PromptVars.transcript(lines, character.name()) + "\n</이번 대화>";
         Llm.Result r = llm.complete(
                 LlmPurpose.SUMMARY,
-                List.of(new Llm.SystemBlock(PromptService.render(system.body(), vars), false)),
+                List.of(new Llm.SystemBlock(PromptService.render(system.getBody(), vars), false)),
                 List.of(new Llm.ChatTurn("user", input)),
-                ctx.withPrompts(List.of(system.id())),
+                ctx.withPrompts(List.of(system.getId())),
                 null);
         String body = r.text().strip().replaceAll("\\s+", " ");
         if (body.isEmpty()) throw new IllegalStateException("빈 카드");
@@ -77,9 +74,9 @@ public class ClosingWriter {
                         + ("AUTO_CLOSED".equals(endType) ? "오래 켜 둬서 자동으로 끝남" : "직접 끝냄"));
         Llm.Result r = llm.complete(
                 LlmPurpose.CLOSING,
-                List.of(new Llm.SystemBlock(PromptService.render(system.body(), vars), false)),
+                List.of(new Llm.SystemBlock(PromptService.render(system.getBody(), vars), false)),
                 List.of(new Llm.ChatTurn("user", "완료 대사를 써 줘.")),
-                ctx.withPrompts(List.of(system.id())),
+                ctx.withPrompts(List.of(system.getId())),
                 null);
         String line = r.text().strip().replaceAll("^[\"“]|[\"”]$", "").strip();
         if (line.isEmpty()) throw new IllegalStateException("빈 완료 대사");

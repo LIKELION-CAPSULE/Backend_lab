@@ -17,12 +17,12 @@ import tools.jackson.databind.JsonNode;
  * 입력 토큰은 캐시에 없던 것(input_tokens)과 캐시 쓰기·읽기를 따로 받는다.
  */
 @Component
-class AnthropicProvider implements LlmProvider {
+public class AnthropicProvider implements LlmProvider {
 
     private final LlmProperties.Provider settings;
     private final RestClient http;
 
-    AnthropicProvider(LlmProperties props) {
+    public AnthropicProvider(LlmProperties props) {
         this.settings = props.anthropic();
         this.http = LlmHttp.client(settings.baseUrl(), props.connectTimeout(), props.httpTimeout(), h -> {
             h.set("x-api-key", settings.hasKey() ? settings.apiKey() : "");

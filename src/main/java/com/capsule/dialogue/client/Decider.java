@@ -5,6 +5,7 @@ import com.capsule.dialogue.dto.LlmPurpose;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 
@@ -15,6 +16,7 @@ import tools.jackson.databind.JsonNode;
  * 답은 {id: {"choice", "confidence"}} JSON이다. LLM은 아래 시스템 지시를 따라, Jev 어댑터는 이 JSON을 Jev 형식으로 바꿔 보낸다.
  */
 @Component
+@RequiredArgsConstructor
 public class Decider {
 
     /** @param criteria 보기 이름 → 설명. 순서를 지킨다 (LinkedHashMap) */
@@ -23,17 +25,13 @@ public class Decider {
     /** @param confidence 0~1. 고른 보기를 얼마나 확신하는지 */
     public record Decision(String choice, double confidence) {}
 
-    static final String SYSTEM = """
+    private static final String SYSTEM = """
             너는 글을 쓰지 않고 결정만 하는 분류기다.
             user 메시지의 JSON에서 state를 읽고, questions의 질문마다 그 질문의 criteria 키 중 정확히 하나를 고른다.
             confidence는 그 보기가 맞을 확률(0~1)이다. 애매하면 낮게 준다.
             JSON 한 줄만 출력한다: {"<질문 id>": {"choice": "<criteria 키>", "confidence": 0.0}, ...}""";
 
     private final LlmGateway llm;
-
-    Decider(LlmGateway llm) {
-        this.llm = llm;
-    }
 
     /** 형식이 틀린 답(모르는 보기 등)은 빼고 돌려준다. 호출이 실패하면 예외 (부르는 쪽이 기본값으로) */
     public Map<String, Decision> decide(String state, Map<String, Question> questions, LlmContext ctx) {

@@ -5,12 +5,12 @@ package com.capsule.dialogue.service;
  * 답장 형식은 대사 글 그대로(scene.system, 표정은 ExpressionPicker), 옛 형식 {"reply": "대사", "emotion": "감정"}도 받는다.
  * 최종 답장은 끝난 뒤 SceneChatPipeline.spoken이 정한다: 여기 값은 미리보기일 뿐이다.
  */
-final class ReplyStream {
+public final class ReplyStream {
 
     private ReplyStream() {}
 
     /** 지금까지의 대사. 아직 대사가 시작되지 않았으면 null */
-    static String partial(String raw) {
+    public static String partial(String raw) {
         if (raw == null) return null;
         String t = raw.strip();
         if (t.startsWith("```")) {

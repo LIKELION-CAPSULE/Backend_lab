@@ -12,7 +12,7 @@ public class ClockConfig {
     public static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     @Bean
-    Clock clock() {
+    public Clock clock() {
         return Clock.system(KST);
     }
 }

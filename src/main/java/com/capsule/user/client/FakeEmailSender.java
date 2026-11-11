@@ -23,7 +23,7 @@ public class FakeEmailSender implements EmailSender {
 
     private final Map<String, String> codes = new ConcurrentHashMap<>();
 
-    FakeEmailSender() {
+    public FakeEmailSender() {
         log.info("인증 메일: Fake (메일을 보내지 않음. 실제로 보내려면 CAPSULE_BREVO_KEY · CAPSULE_MAIL_FROM)");
     }
 

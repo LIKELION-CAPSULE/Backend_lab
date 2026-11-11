@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,6 +24,7 @@ import org.yaml.snakeyaml.Yaml;
  * LLM 호출마다 쓴 버전 id가 llm_usages.prompt_version_ids에 남아서, 버전별 품질·비용을 비교할 수 있다.
  */
 @Service
+@RequiredArgsConstructor
 public class PromptService {
 
     private static final Pattern VAR = Pattern.compile("\\{\\{(\\w+)}}");
@@ -30,16 +32,11 @@ public class PromptService {
     private final PromptVersionRepository versions;
     private final Clock clock;
 
-    PromptService(PromptVersionRepository versions, Clock clock) {
-        this.versions = versions;
-        this.clock = clock;
-    }
-
     public PromptVersion resolve(PromptKey key, long characterId, Map<String, Long> pinned) {
         Long pin = pinned.get(key.key());
         if (pin != null)
             return versions.findById(pin)
-                    .filter(v -> v.promptKey().equals(key.key()))
+                    .filter(v -> v.getPromptKey().equals(key.key()))
                     .orElseThrow(() -> new ApiException(HttpStatus.BAD_REQUEST, "PROMPT_VERSION_NOT_FOUND"));
         return find(key, characterId)
                 .orElseThrow(
@@ -74,15 +71,15 @@ public class PromptService {
         int next = versions.maxVersion(key.key(), characterId) + 1;
         PromptVersion v =
                 versions.saveAndFlush(new PromptVersion(key.key(), characterId, next, body, note, Instant.now(clock)));
-        return activate ? activate(v.id()) : v;
+        return activate ? activate(v.getId()) : v;
     }
 
     /** 이 버전을 켜고 같은 (키, 캐릭터)의 이전 ACTIVE는 ARCHIVED. 되돌리기도 이것 (예전 버전을 다시 켬) */
     @Transactional
     public PromptVersion activate(long id) {
         PromptVersion v = get(id);
-        versions.findActiveExact(v.promptKey(), v.characterId())
-                .filter(a -> !a.id().equals(v.id()))
+        versions.findActiveExact(v.getPromptKey(), v.getCharacterId())
+                .filter(a -> !a.getId().equals(v.getId()))
                 .ifPresent(a -> {
                     a.archive();
                     versions.saveAndFlush(a); // 새 ACTIVE보다 먼저 내보낸다 (ACTIVE 하나 제약)

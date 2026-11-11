@@ -3,6 +3,7 @@ package com.capsule.dialogue.config;
 import com.capsule.dialogue.domain.PromptKey;
 import com.capsule.dialogue.repository.PromptVersionRepository;
 import com.capsule.dialogue.service.PromptService;
+import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
@@ -18,17 +19,13 @@ import org.springframework.stereotype.Component;
  * 실험실에서 좋았던 공통 프롬프트를 운영에 내보내려면 그 본문을 시드 파일에 옮겨 커밋한다.
  */
 @Component
-class PromptSeeder implements ApplicationRunner {
+@RequiredArgsConstructor
+public class PromptSeeder implements ApplicationRunner {
 
     private static final Logger log = LoggerFactory.getLogger(PromptSeeder.class);
 
     private final PromptService prompts;
     private final PromptVersionRepository versions;
-
-    PromptSeeder(PromptService prompts, PromptVersionRepository versions) {
-        this.prompts = prompts;
-        this.versions = versions;
-    }
 
     @Override
     public void run(ApplicationArguments args) {

@@ -31,7 +31,7 @@ public class CharacterContents {
     /** 순서대로 돌려 쓰는 상황 대사의 다음 자리. 세션 수만큼 늘어나지 않게 content-max-cursors를 넘으면 오래된 것부터 버린다 */
     private final Map<String, Integer> cursors;
 
-    CharacterContents(CharacterContentRepository repository, Clock clock, DialogueProperties props) {
+    public CharacterContents(CharacterContentRepository repository, Clock clock, DialogueProperties props) {
         this.repository = repository;
         this.clock = clock;
         this.ttl = props.contentCacheTtl();

@@ -30,23 +30,23 @@ public record UsageView(
 
     public static UsageView from(LlmUsage u) {
         return new UsageView(
-                u.id(),
-                u.purpose(),
-                u.provider(),
-                u.model(),
-                u.status(),
-                u.error(),
-                u.stopReason(),
-                u.inputTokens(),
-                u.outputTokens(),
-                u.cacheReadTokens(),
-                u.cacheWriteTokens(),
-                u.costUsd(),
-                u.latencyMs(),
-                u.ttftMs(),
-                u.promptVersionIds(),
-                u.request() == null ? null : LlmJson.tree(u.request()),
-                u.response(),
-                u.createdAt());
+                u.getId(),
+                u.getPurpose(),
+                u.getProvider(),
+                u.getModel(),
+                u.getStatus(),
+                u.getError(),
+                u.getStopReason(),
+                u.getInputTokens(),
+                u.getOutputTokens(),
+                u.getCacheReadTokens(),
+                u.getCacheWriteTokens(),
+                u.getCostUsd(),
+                u.getLatencyMs(),
+                u.getTtftMs(),
+                u.getPromptVersionIds(),
+                u.getRequest() == null ? null : LlmJson.tree(u.getRequest()),
+                u.getResponse(),
+                u.getCreatedAt());
     }
 }

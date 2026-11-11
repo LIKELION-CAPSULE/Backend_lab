@@ -26,10 +26,10 @@ import org.springframework.web.client.RestClient;
  */
 @Component
 @ConditionalOnExpression("!${capsule.fake-integrations:false} or !'${capsule.kakao.rest-api-key:}'.isBlank()")
-class HttpKakaoClient implements KakaoClient {
+public class HttpKakaoClient implements KakaoClient {
 
-    static final String TOKEN_URL = "https://kauth.kakao.com/oauth/token";
-    static final String ME_URL = "https://kapi.kakao.com/v2/user/me";
+    public static final String TOKEN_URL = "https://kauth.kakao.com/oauth/token";
+    public static final String ME_URL = "https://kapi.kakao.com/v2/user/me";
 
     private static final Logger log = LoggerFactory.getLogger(HttpKakaoClient.class);
 
@@ -38,14 +38,14 @@ class HttpKakaoClient implements KakaoClient {
     private final String clientSecret;
 
     @Autowired
-    HttpKakaoClient(
+    public HttpKakaoClient(
             @Value("${capsule.kakao.rest-api-key}") String restApiKey,
             @Value("${capsule.kakao.client-secret:}") String clientSecret) {
         this(RestClient.builder().requestFactory(timeouts()), restApiKey, clientSecret);
     }
 
     /** 테스트가 MockRestServiceServer를 붙인 builder를 넘긴다 */
-    HttpKakaoClient(RestClient.Builder builder, String restApiKey, String clientSecret) {
+    public HttpKakaoClient(RestClient.Builder builder, String restApiKey, String clientSecret) {
         if (restApiKey == null || restApiKey.isBlank()) {
             throw new IllegalStateException("capsule.kakao.rest-api-key가 비어 있다");
         }
@@ -117,14 +117,15 @@ class HttpKakaoClient implements KakaoClient {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    record TokenResponse(@JsonProperty("access_token") String accessToken) {}
+    public record TokenResponse(
+            @JsonProperty("access_token") String accessToken) {}
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    record UserResponse(
+    public record UserResponse(
             Long id, @JsonProperty("kakao_account") Account kakaoAccount, Properties properties) {
 
         /** 동의 항목 닉네임은 kakao_account.profile에 온다. 옛 앱 설정이면 properties에만 있을 수 있다 */
-        String nickname() {
+        public String nickname() {
             if (kakaoAccount != null
                     && kakaoAccount.profile() != null
                     && kakaoAccount.profile().nickname() != null) {
@@ -135,11 +136,11 @@ class HttpKakaoClient implements KakaoClient {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    record Account(Profile profile) {}
+    public record Account(Profile profile) {}
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    record Profile(String nickname) {}
+    public record Profile(String nickname) {}
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    record Properties(String nickname) {}
+    public record Properties(String nickname) {}
 }

@@ -23,6 +23,7 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Pattern;
+import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpStatus;
@@ -33,6 +34,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 /** 약관, 이메일 인증, 가입, 로그인, 카카오 (api.md 1~6). 토큰 발급은 {@link TokenService}. */
 @Service
+@RequiredArgsConstructor
 public class AuthService {
 
     private static final Pattern EMAIL = Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
@@ -54,27 +56,6 @@ public class AuthService {
     private final KakaoClient kakaoClient;
     private final TransactionTemplate tx;
     private final Clock clock;
-
-    AuthService(
-            UserRepository users,
-            TermsRepository terms,
-            StringRedisTemplate redis,
-            RateLimiter rateLimiter,
-            PasswordEncoder passwordEncoder,
-            EmailSender emailSender,
-            KakaoClient kakaoClient,
-            TransactionTemplate tx,
-            Clock clock) {
-        this.users = users;
-        this.terms = terms;
-        this.redis = redis;
-        this.rateLimiter = rateLimiter;
-        this.passwordEncoder = passwordEncoder;
-        this.emailSender = emailSender;
-        this.kakaoClient = kakaoClient;
-        this.tx = tx;
-        this.clock = clock;
-    }
 
     @Transactional(readOnly = true)
     public List<TermVersion> terms() {
@@ -151,9 +132,9 @@ public class AuthService {
         } catch (DataIntegrityViolationException e) {
             throw new ApiException(HttpStatus.CONFLICT, "EMAIL_ALREADY_USED");
         }
-        terms.recordAgreements(user.id(), agreed);
+        terms.recordAgreements(user.getId(), agreed);
         redis.delete(verifiedKey);
-        return new Login(user.id(), true, true);
+        return new Login(user.getId(), true, true);
     }
 
     /** 없는 이메일·틀린 비밀번호·탈퇴는 구분하지 않는다. 5번 틀리면 5분 잠금 */
@@ -182,7 +163,7 @@ public class AuthService {
         }
         rateLimiter.reset(failKey);
         user.get().loggedIn(Instant.now(clock));
-        return new Login(user.get().id(), user.get().onboardingRequired(), false);
+        return new Login(user.get().getId(), user.get().onboardingRequired(), false);
     }
 
     /**
@@ -205,7 +186,7 @@ public class AuthService {
                     .filter(User::isActive)
                     .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "SOCIAL_AUTH_FAILED"));
             user.loggedIn(now);
-            return new Login(user.id(), user.onboardingRequired(), false);
+            return new Login(user.getId(), user.onboardingRequired(), false);
         }
         String nickname = User.fitNickname(profile.nickname());
         if (nickname.isEmpty()) {
@@ -213,14 +194,14 @@ public class AuthService {
             nickname = "카카오 사용자";
         }
         User user = users.save(User.socialUser(nickname, now));
-        users.insertSocialAccount(KAKAO, profile.providerUserId(), user.id());
+        users.insertSocialAccount(KAKAO, profile.providerUserId(), user.getId());
         terms.recordAgreements(
-                user.id(),
+                user.getId(),
                 terms.latestVersions(now).stream()
                         .filter(TermVersion::required)
                         .map(TermVersion::termVersionId)
                         .toList());
-        return new Login(user.id(), true, true);
+        return new Login(user.getId(), true, true);
     }
 
     /** 필수 약관마다 최신 시행 버전에 동의했는지 본다. 기록할 id = 보낸 것 중 지금 최신 버전인 것 */
@@ -239,7 +220,7 @@ public class AuthService {
     }
 
     /** 가입 · 비밀번호 재설정 공통: 8자 이상, 72바이트 이하(bcrypt 한계) */
-    static void requireValidPassword(String password) {
+    public static void requireValidPassword(String password) {
         if (password == null
                 || password.length() < PASSWORD_MIN
                 || password.getBytes(StandardCharsets.UTF_8).length > BCRYPT_MAX_BYTES) {
@@ -247,16 +228,16 @@ public class AuthService {
         }
     }
 
-    static String normalize(String email) {
+    public static String normalize(String email) {
         return email == null ? "" : email.strip().toLowerCase(Locale.ROOT);
     }
 
-    static boolean isEmail(String normalizedEmail) {
+    public static boolean isEmail(String normalizedEmail) {
         return EMAIL.matcher(normalizedEmail).matches();
     }
 
     /** 로그인 5회 실패 잠금 키 (비밀번호를 바꾸면 푼다) */
-    static List<String> loginLockKeys(String normalizedEmail) {
+    public static List<String> loginLockKeys(String normalizedEmail) {
         return List.of("auth:login-lock:" + normalizedEmail, "auth:login-fail:" + normalizedEmail);
     }
 

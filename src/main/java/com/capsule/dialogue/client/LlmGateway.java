@@ -35,7 +35,7 @@ public class LlmGateway {
     private final LlmUsageRepository usages;
     private final Clock clock;
 
-    LlmGateway(
+    public LlmGateway(
             List<LlmProvider> providers, RuntimeSettings<LlmProperties> props, LlmUsageRepository usages, Clock clock) {
         this.providers = providers.stream().collect(Collectors.toMap(LlmProvider::name, Function.identity()));
         this.props = props;

@@ -8,6 +8,7 @@ import com.capsule.user.repository.UserMemoryRepository;
 import com.capsule.user.repository.UserRepository;
 import java.time.Clock;
 import java.time.Instant;
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -15,6 +16,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 /** 회원 탈퇴 (api.md 27). DB는 한 트랜잭션, 리프레시 토큰 폐기는 커밋 뒤 */
 @Service
+@RequiredArgsConstructor
 public class WithdrawalService {
 
     private final UserRepository users;
@@ -24,23 +26,6 @@ public class WithdrawalService {
     private final TokenService tokens;
     private final TransactionTemplate tx;
     private final Clock clock;
-
-    WithdrawalService(
-            UserRepository users,
-            UserMemoryRepository memories,
-            ActiveSessionLookup activeSessions,
-            ApplicationEventPublisher events,
-            TokenService tokens,
-            TransactionTemplate tx,
-            Clock clock) {
-        this.users = users;
-        this.memories = memories;
-        this.activeSessions = activeSessions;
-        this.events = events;
-        this.tokens = tokens;
-        this.tx = tx;
-        this.clock = clock;
-    }
 
     /**
      * 이미 탈퇴한 사용자면 DB는 그대로 두고 토큰 폐기만 다시 한다 (명세: 그래도 204).

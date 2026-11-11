@@ -32,6 +32,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
@@ -59,7 +60,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/internal/llm-lab")
 @ConditionalOnProperty(name = "capsule.llm.lab.enabled", havingValue = "true")
-class LlmLabController {
+@RequiredArgsConstructor
+public class LlmLabController {
 
     private final LabService lab;
     private final EvalService eval;
@@ -67,23 +69,10 @@ class LlmLabController {
     private final CharacterContents contents;
     private final CharacterContentSeeder seeder;
 
-    LlmLabController(
-            LabService lab,
-            EvalService eval,
-            PromptService prompts,
-            CharacterContents contents,
-            CharacterContentSeeder seeder) {
-        this.lab = lab;
-        this.eval = eval;
-        this.prompts = prompts;
-        this.contents = contents;
-        this.seeder = seeder;
-    }
-
     // --- 캐릭터 설정 (DB가 원본, ADR 0022 결정 15) ---
 
     @GetMapping("/api/characters/{id}/content")
-    CharacterContent content(@PathVariable long id) {
+    public CharacterContent content(@PathVariable long id) {
         return contents.find(id).orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "CONTENT_NOT_FOUND"));
     }
 
@@ -94,10 +83,10 @@ class LlmLabController {
      * @param fileVersion 그 폴더의 profile.yml이 없으면 null
      * @param labEditedAt 파일 값 그대로면 null
      */
-    record ContentSource(String code, int version, Integer fileVersion, Instant labEditedAt) {}
+    public record ContentSource(String code, int version, Integer fileVersion, Instant labEditedAt) {}
 
     @GetMapping("/api/characters/{id}/content/source")
-    ContentSource contentSource(@PathVariable long id) {
+    public ContentSource contentSource(@PathVariable long id) {
         CharacterContent c = content(id);
         return new ContentSource(
                 c.code(),
@@ -108,7 +97,7 @@ class LlmLabController {
 
     /** 설정 전체를 이 내용으로 바꾼다 (GET으로 받은 JSON을 고쳐서 보낸다). 바로 서비스 답장에 쓰인다 */
     @PutMapping("/api/characters/{id}/content")
-    CharacterContent replaceContent(@PathVariable long id, @RequestBody CharacterContent body) {
+    public CharacterContent replaceContent(@PathVariable long id, @RequestBody CharacterContent body) {
         if (body.characterId() != id) throw new ApiException(HttpStatus.BAD_REQUEST, "CHARACTER_ID_MISMATCH");
         contents.replace(body);
         return content(id);
@@ -116,7 +105,7 @@ class LlmLabController {
 
     /** git의 처음 값(classpath:characters/{code}/)으로 덮어쓴다 */
     @PostMapping("/api/characters/reseed/{code}")
-    CharacterContent reseed(@PathVariable String code) {
+    public CharacterContent reseed(@PathVariable String code) {
         long id = seeder.seed(code, true)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "CHARACTER_NOT_FOUND"));
         contents.evict(id);
@@ -124,41 +113,41 @@ class LlmLabController {
     }
 
     @GetMapping({"", "/"})
-    ResponseEntity<Resource> page() {
+    public ResponseEntity<Resource> page() {
         return ResponseEntity.ok().contentType(MediaType.TEXT_HTML).body(new ClassPathResource("llm-lab/index.html"));
     }
 
     /** 흐름 테스트: 실제 API(16~23)를 프론트 순서대로 부르고 호감도 · 공부 시간을 상태판으로 본다 */
     @GetMapping("/flow")
-    ResponseEntity<Resource> flowPage() {
+    public ResponseEntity<Resource> flowPage() {
         return ResponseEntity.ok().contentType(MediaType.TEXT_HTML).body(new ClassPathResource("llm-lab/flow.html"));
     }
 
     @GetMapping("/api/meta")
-    LabMeta meta() {
+    public LabMeta meta() {
         return lab.meta();
     }
 
     // --- 프롬프트 버전 ---
 
     @GetMapping("/api/prompts")
-    List<PromptView> prompts(
+    public List<PromptView> prompts(
             @RequestParam(required = false) String key, @RequestParam(required = false) Long characterId) {
         return prompts.search(key, characterId).stream().map(PromptView::from).toList();
     }
 
     @PostMapping("/api/prompts")
-    PromptView createPrompt(@Valid @RequestBody PromptRequest r) {
+    public PromptView createPrompt(@Valid @RequestBody PromptRequest r) {
         return PromptView.from(prompts.create(key(r.key()), r.characterId(), r.body(), r.note(), r.activate()));
     }
 
     @PostMapping("/api/prompts/{id}/activate")
-    PromptView activate(@PathVariable long id) {
+    public PromptView activate(@PathVariable long id) {
         return PromptView.from(prompts.activate(id));
     }
 
     @GetMapping("/api/prompts/active")
-    Map<String, PromptView> active(@RequestParam long characterId) {
+    public Map<String, PromptView> active(@RequestParam long characterId) {
         Map<String, PromptView> set = new LinkedHashMap<>();
         prompts.activeSet(characterId).forEach((k, v) -> set.put(k, PromptView.from(v)));
         return set;
@@ -167,110 +156,110 @@ class LlmLabController {
     // --- 실험 대화방 ---
 
     @GetMapping("/api/sessions")
-    List<LabSessionView> sessions() {
+    public List<LabSessionView> sessions() {
         return lab.sessions();
     }
 
     @PostMapping("/api/sessions")
-    LabSessionView createSession(@RequestBody LabSessionRequest r) {
+    public LabSessionView createSession(@RequestBody LabSessionRequest r) {
         return lab.create(r);
     }
 
     @GetMapping("/api/sessions/{id}")
-    LabSessionView session(@PathVariable long id) {
+    public LabSessionView session(@PathVariable long id) {
         return lab.session(id);
     }
 
     @PatchMapping("/api/sessions/{id}")
-    LabSessionView updateSession(@PathVariable long id, @RequestBody LabSessionRequest r) {
+    public LabSessionView updateSession(@PathVariable long id, @RequestBody LabSessionRequest r) {
         return lab.update(id, r);
     }
 
     @PostMapping("/api/sessions/{id}/reset")
-    LabSessionView reset(@PathVariable long id) {
+    public LabSessionView reset(@PathVariable long id) {
         return lab.reset(id);
     }
 
     @DeleteMapping("/api/sessions/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    void deleteSession(@PathVariable long id) {
+    public void deleteSession(@PathVariable long id) {
         lab.delete(id);
     }
 
     @PostMapping("/api/sessions/{id}/turns")
-    LabTurnView turn(@PathVariable long id, @Valid @RequestBody LabTurnRequest r) {
+    public LabTurnView turn(@PathVariable long id, @Valid @RequestBody LabTurnRequest r) {
         return lab.turn(id, r.text());
     }
 
     @PatchMapping("/api/turns/{id}")
-    LabTurnView rateTurn(@PathVariable long id, @Valid @RequestBody RatingRequest r) {
+    public LabTurnView rateTurn(@PathVariable long id, @Valid @RequestBody RatingRequest r) {
         return lab.rate(id, r);
     }
 
     // --- 한 번 실행 ---
 
     @PostMapping("/api/playground")
-    List<PlaygroundResult> playground(@Valid @RequestBody PlaygroundRequest r) {
+    public List<PlaygroundResult> playground(@Valid @RequestBody PlaygroundRequest r) {
         return lab.playground(r);
     }
 
     // --- 평가 ---
 
     @GetMapping("/api/eval/cases")
-    List<EvalCaseView> cases() {
+    public List<EvalCaseView> cases() {
         return eval.cases();
     }
 
     @PostMapping("/api/eval/cases")
-    EvalCaseView createCase(@Valid @RequestBody EvalCaseRequest r) {
+    public EvalCaseView createCase(@Valid @RequestBody EvalCaseRequest r) {
         return eval.createCase(r);
     }
 
     @PutMapping("/api/eval/cases/{id}")
-    EvalCaseView updateCase(@PathVariable long id, @Valid @RequestBody EvalCaseRequest r) {
+    public EvalCaseView updateCase(@PathVariable long id, @Valid @RequestBody EvalCaseRequest r) {
         return eval.updateCase(id, r);
     }
 
     @DeleteMapping("/api/eval/cases/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    void deleteCase(@PathVariable long id) {
+    public void deleteCase(@PathVariable long id) {
         eval.deleteCase(id);
     }
 
     @PostMapping("/api/eval/runs")
-    EvalRunView startRun(@Valid @RequestBody EvalRunRequest r) {
+    public EvalRunView startRun(@Valid @RequestBody EvalRunRequest r) {
         return eval.start(r);
     }
 
     @GetMapping("/api/eval/runs")
-    List<EvalRunView> runs() {
+    public List<EvalRunView> runs() {
         return eval.runs();
     }
 
     @GetMapping("/api/eval/runs/{id}")
-    EvalRunView run(@PathVariable long id) {
+    public EvalRunView run(@PathVariable long id) {
         return eval.run(id);
     }
 
     @PatchMapping("/api/eval/results/{id}")
-    EvalResultView rateResult(@PathVariable long id, @Valid @RequestBody RatingRequest r) {
+    public EvalResultView rateResult(@PathVariable long id, @Valid @RequestBody RatingRequest r) {
         return eval.rate(id, r);
     }
 
     // --- 호출 기록 ---
 
     @GetMapping("/api/usages")
-    List<UsageView> usages() {
+    public List<UsageView> usages() {
         return lab.recentUsages();
     }
 
     @GetMapping("/api/usages/summary")
-    List<UsageSummary> usageSummary(@RequestParam(defaultValue = "7") int days) {
+    public List<UsageSummary> usageSummary(@RequestParam(defaultValue = "7") int days) {
         return lab.usageSummary(days);
     }
 
     @GetMapping("/api/usages/trace/{traceId}")
-    List<UsageView> trace(@PathVariable UUID traceId) {
+    public List<UsageView> trace(@PathVariable UUID traceId) {
         return lab.trace(traceId);
     }
 

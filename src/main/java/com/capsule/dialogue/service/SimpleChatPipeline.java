@@ -17,6 +17,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 
@@ -25,26 +26,14 @@ import tools.jackson.databind.JsonNode;
  * 시스템 = [캐릭터·규칙(chat.system, 캐시)] + [상황(chat.context, 매번 바뀜)], 메시지 = 이번 세션 대화 + 이번 말.
  */
 @Component
-class SimpleChatPipeline implements ChatPipeline {
+@RequiredArgsConstructor
+public class SimpleChatPipeline implements ChatPipeline {
 
     private final LlmGateway llm;
     private final PromptService prompts;
     private final RuntimeSettings<DialogueProperties> props;
     private final FactPicker factPicker;
     private final Clock clock;
-
-    SimpleChatPipeline(
-            LlmGateway llm,
-            PromptService prompts,
-            RuntimeSettings<DialogueProperties> props,
-            FactPicker factPicker,
-            Clock clock) {
-        this.llm = llm;
-        this.prompts = prompts;
-        this.props = props;
-        this.factPicker = factPicker;
-        this.clock = clock;
-    }
 
     @Override
     public String name() {
@@ -81,8 +70,8 @@ class SimpleChatPipeline implements ChatPipeline {
         vars.put("memories", in.memories().isEmpty() ? "없음" : "- " + String.join("\n- ", in.memories()));
 
         List<Llm.SystemBlock> system = List.of(
-                new Llm.SystemBlock(PromptService.render(systemPrompt.body(), vars), true),
-                new Llm.SystemBlock(PromptService.render(contextPrompt.body(), vars), false));
+                new Llm.SystemBlock(PromptService.render(systemPrompt.getBody(), vars), true),
+                new Llm.SystemBlock(PromptService.render(contextPrompt.getBody(), vars), false));
         // TODO(judgment): J-05 LLM에 넘길 대화 수 (승희 2026-11-04: 15줄 history-lines. 프롬프트가 길수록 지시를 덜 따름)
         List<Llm.ChatTurn> messages =
                 new ArrayList<>(PromptVars.turns(in.history(), props.current().historyLines()));

@@ -10,28 +10,19 @@ import com.capsule.content.repository.RoomBackgroundRepository;
 import com.capsule.content.repository.StudyRoomRepository;
 import java.util.List;
 import java.util.Optional;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @Transactional(readOnly = true)
-class RoomQueryAdapter implements RoomQuery {
+@RequiredArgsConstructor
+public class RoomQueryAdapter implements RoomQuery {
 
     private final StudyRoomRepository rooms;
     private final RoomBackgroundRepository backgrounds;
     private final CharacterRepository characters;
     private final ContentMapper mapper;
-
-    RoomQueryAdapter(
-            StudyRoomRepository rooms,
-            RoomBackgroundRepository backgrounds,
-            CharacterRepository characters,
-            ContentMapper mapper) {
-        this.rooms = rooms;
-        this.backgrounds = backgrounds;
-        this.characters = characters;
-        this.mapper = mapper;
-    }
 
     @Override
     public List<RoomInfo> activeRooms() {
@@ -56,20 +47,20 @@ class RoomQueryAdapter implements RoomQuery {
     }
 
     private RoomInfo info(StudyRoom r) {
-        var roomCharacters = characters.findByRoomIdAndIsActiveTrueOrderBySortOrderAscIdAsc(r.id()).stream()
+        var roomCharacters = characters.findByRoomIdAndIsActiveTrueOrderBySortOrderAscIdAsc(r.getId()).stream()
                 .map(mapper::character)
                 .toList();
         return new RoomInfo(
-                r.id(),
-                r.name(),
-                r.description(),
-                mapper.asset(r.thumbnailUrl()),
+                r.getId(),
+                r.getName(),
+                r.getDescription(),
+                mapper.asset(r.getThumbnailUrl()),
                 r.isActive(),
                 roomCharacters,
-                mapper.asset(r.bannerUrl()));
+                mapper.asset(r.getBannerUrl()));
     }
 
     private BackgroundInfo info(RoomBackground b) {
-        return new BackgroundInfo(b.id(), b.roomId(), b.name(), mapper.asset(b.imageUrl()));
+        return new BackgroundInfo(b.getId(), b.getRoomId(), b.getName(), mapper.asset(b.getImageUrl()));
     }
 }

@@ -7,6 +7,7 @@ import com.capsule.dialogue.dto.ReactionLine;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
+import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -17,6 +18,7 @@ import org.yaml.snakeyaml.Yaml;
  * 상태 반응(19)의 고정 대사·감정·상황 설명과, LLM이 마감(llm-budget) 안에 못 만들 때의 대체 대사(20·22)를 준다.
  */
 @Component
+@RequiredArgsConstructor
 public class FixedLines {
 
     private static final Logger log = LoggerFactory.getLogger(FixedLines.class);
@@ -46,10 +48,6 @@ public class FixedLines {
     private record Table(Map<String, Entry> reactions, Fallbacks fallbacks) {}
 
     private final PromptService prompts;
-
-    FixedLines(PromptService prompts) {
-        this.prompts = prompts;
-    }
 
     /**
      * trigger 고정 대사(호감도 단계에 맞는 묶음에서 하나)와 감정.
@@ -111,7 +109,7 @@ public class FixedLines {
 
     private Table table(long characterId, Map<String, Long> pinned) {
         return LlmJson.JSON.convertValue(
-                new Yaml().load(version(characterId, pinned).body()), Table.class);
+                new Yaml().load(version(characterId, pinned).getBody()), Table.class);
     }
 
     private static List<String> lines(Entry exact, Entry base, int level) {
@@ -128,7 +126,7 @@ public class FixedLines {
     }
 
     /** 상황 칸 이름: AWAY 강도 2·3은 AWAY_2 · AWAY_3, 그 밖에는 trigger 그대로 (fixed.lines · character_lines 같이 씀) */
-    static String key(String trigger, Integer intensity) {
+    public static String key(String trigger, Integer intensity) {
         return intensity != null && intensity > 1 ? trigger + "_" + intensity : trigger;
     }
 

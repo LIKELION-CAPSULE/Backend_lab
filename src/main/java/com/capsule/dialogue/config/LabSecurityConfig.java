@@ -29,11 +29,11 @@ import org.springframework.security.web.SecurityFilterChain;
  */
 @Configuration
 @ConditionalOnProperty(name = "capsule.llm.lab.enabled", havingValue = "true")
-class LabSecurityConfig {
+public class LabSecurityConfig {
 
     @Bean
     @Order(0)
-    SecurityFilterChain llmLabSecurity(
+    public SecurityFilterChain llmLabSecurity(
             HttpSecurity http,
             LlmProperties props,
             LabAdmins admins,
@@ -69,7 +69,7 @@ class LabSecurityConfig {
      * 관리자 로그인 토큰 → 고정 토큰 순서로 본다. 둘 중 하나라도 설정돼 있으면 이 컴퓨터에서 온 요청도 헤더가 있어야 한다.
      * 둘 다 없을 때(로컬 기본)만 loopback으로 통과
      */
-    static boolean allowed(HttpServletRequest request, String token, LabAdmins admins) {
+    public static boolean allowed(HttpServletRequest request, String token, LabAdmins admins) {
         String given = request.getHeader("X-Lab-Token");
         if (given != null) {
             var admin = admins.verify(given);

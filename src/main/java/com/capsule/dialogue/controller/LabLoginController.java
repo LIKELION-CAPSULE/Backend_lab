@@ -6,6 +6,7 @@ import com.capsule.dialogue.config.LabAdmins;
 import io.swagger.v3.oas.annotations.Hidden;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Duration;
+import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -22,25 +23,21 @@ import org.springframework.web.bind.annotation.RestController;
 @Hidden // 내부 도구: 프론트용 Swagger에 넣지 않는다
 @RestController
 @ConditionalOnProperty(name = "capsule.llm.lab.enabled", havingValue = "true")
-class LabLoginController {
+@RequiredArgsConstructor
+public class LabLoginController {
 
     private static final Logger log = LoggerFactory.getLogger(LabLoginController.class);
-    static final int ATTEMPTS = 10;
-    static final int TOTAL_ATTEMPTS = 30;
-    static final Duration WINDOW = Duration.ofMinutes(1);
+    private static final int ATTEMPTS = 10;
+    private static final int TOTAL_ATTEMPTS = 30;
+    private static final Duration WINDOW = Duration.ofMinutes(1);
 
-    record LoginRequest(String username, String password) {}
+    public record LoginRequest(String username, String password) {}
 
     private final LabAdmins admins;
     private final RateLimiter rateLimiter;
 
-    LabLoginController(LabAdmins admins, RateLimiter rateLimiter) {
-        this.admins = admins;
-        this.rateLimiter = rateLimiter;
-    }
-
     @PostMapping("/internal/llm-lab/api/login")
-    LabAdmins.Session login(@RequestBody LoginRequest body, HttpServletRequest request) {
+    public LabAdmins.Session login(@RequestBody LoginRequest body, HttpServletRequest request) {
         String from = request.getRemoteAddr(); // 프록시 뒤에서는 보내는 쪽이 정한 값: 로그 참고용
         if (!rateLimiter.tryAcquire("rate:lab-login:" + from, ATTEMPTS, WINDOW)
                 || !rateLimiter.tryAcquire("rate:lab-login", TOTAL_ATTEMPTS, WINDOW))

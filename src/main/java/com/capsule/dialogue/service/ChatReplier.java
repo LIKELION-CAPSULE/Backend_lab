@@ -19,6 +19,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -30,6 +31,7 @@ import org.springframework.stereotype.Component;
  * 답장을 늦추지 않는다: 답장이 끝났을 때 마감이 지났거나 실패 · 낮은 확신이면 NEUTRAL(0점).
  */
 @Component
+@RequiredArgsConstructor
 public class ChatReplier {
 
     private static final Logger log = LoggerFactory.getLogger(ChatReplier.class);
@@ -39,12 +41,6 @@ public class ChatReplier {
     private final Decider decider;
     private final RuntimeSettings<DialogueProperties> props;
     private final Clock clock;
-
-    ChatReplier(Decider decider, RuntimeSettings<DialogueProperties> props, Clock clock) {
-        this.decider = decider;
-        this.props = props;
-        this.clock = clock;
-    }
 
     public ChatOutcome reply(ChatPipeline pipeline, ChatInput in, LlmContext ctx) {
         return reply(pipeline, in, ctx, null);
@@ -94,7 +90,7 @@ public class ChatReplier {
 
     /** @param contextLines 같이 보여 줄 앞 대화 수 (signal-context-lines) */
     // TODO(judgment): J-05 결정 모델에 같이 보여 줄 앞 대화 수
-    static String state(ChatInput in, int contextLines) {
+    public static String state(ChatInput in, int contextLines) {
         String recent = PromptVars.transcript(
                 PromptVars.tail(in.history(), contextLines), in.character().name());
         return "캐릭터: " + in.character().name() + "\n"
@@ -103,7 +99,7 @@ public class ChatReplier {
     }
 
     /** 모든 종류 중 하나 (보기 설명 = SignalType.meaning) */
-    static Decider.Question question() {
+    public static Decider.Question question() {
         Map<String, String> criteria = new LinkedHashMap<>();
         Arrays.stream(SignalType.values()).forEach(s -> criteria.put(s.name(), s.meaning()));
         return new Decider.Question("사용자의 마지막 말이 어떤 종류의 말인지 하나 고른다", criteria);

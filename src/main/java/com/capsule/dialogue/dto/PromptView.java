@@ -17,14 +17,14 @@ public record PromptView(
 
     public static PromptView from(PromptVersion v) {
         return new PromptView(
-                v.id(),
-                v.promptKey(),
-                v.characterId(),
-                v.version(),
-                v.status(),
-                v.body(),
-                v.note(),
-                v.createdAt(),
-                v.activatedAt());
+                v.getId(),
+                v.getPromptKey(),
+                v.getCharacterId(),
+                v.getVersion(),
+                v.getStatus(),
+                v.getBody(),
+                v.getNote(),
+                v.getCreatedAt(),
+                v.getActivatedAt());
     }
 }

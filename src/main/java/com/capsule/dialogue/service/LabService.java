@@ -66,7 +66,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class LabService {
 
-    static final List<String> TRIGGERS =
+    private static final List<String> TRIGGERS =
             List.of("GREETING", "AWAY", "RETURN", "BREAK", "BREAK_END", "DROWSY", "YAWN", "WAVE", "HEAD_TURN");
 
     private static final ExecutorService THREADS = Executors.newVirtualThreadPerTaskExecutor();
@@ -105,7 +105,7 @@ public class LabService {
     private final JdbcClient jdbc;
     private final Clock clock;
 
-    LabService(
+    public LabService(
             LabSessionRepository sessions,
             LabTurnRepository turns,
             LlmUsageRepository usages,
@@ -174,7 +174,7 @@ public class LabService {
 
     public List<LabSessionView> sessions() {
         return sessions.findAllByOrderByIdDesc().stream()
-                .map(s -> view(s, List.of(), turns.countByLabSessionId(s.id())))
+                .map(s -> view(s, List.of(), turns.countByLabSessionId(s.getId())))
                 .toList();
     }
 
@@ -225,19 +225,19 @@ public class LabService {
     /** 한 턴: 서비스와 같은 파이프라인을 실험 조건으로 부른다. 실패한 턴도 남긴다 (오류를 보려고) */
     public LabTurnView turn(long sessionId, String text) {
         LabSession s = find(sessionId);
-        LabConfig config = config(s.config());
+        LabConfig config = config(s.getConfig());
         List<ChatLine> history = new ArrayList<>();
         for (LabTurn t : turns.findByLabSessionIdOrderById(sessionId)) {
-            if (t.reply() == null) continue;
-            history.add(new ChatLine(ChatMessage.USER, t.userText()));
-            history.add(new ChatLine(ChatMessage.CHARACTER, t.reply()));
+            if (t.getReply() == null) continue;
+            history.add(new ChatLine(ChatMessage.USER, t.getUserText()));
+            history.add(new ChatLine(ChatMessage.CHARACTER, t.getReply()));
         }
         LlmContext ctx = LlmContext.lab(LlmContext.LAB, config);
         long t0 = System.nanoTime();
         ChatOutcome out = null;
         String error = null;
         try {
-            out = chatTurn(pipeline(s.pipeline()), input(character(s.characterId()), config, history, text), ctx);
+            out = chatTurn(pipeline(s.getPipeline()), input(character(s.getCharacterId()), config, history, text), ctx);
         } catch (RuntimeException e) {
             error = e.toString();
         }
@@ -249,7 +249,7 @@ public class LabService {
                 text,
                 out == null ? null : out.reply(),
                 out == null ? null : out.emotion(),
-                points(out, s.characterId()),
+                points(out, s.getCharacterId()),
                 error,
                 ms,
                 cost(used),
@@ -381,7 +381,7 @@ public class LabService {
 
     // --- 공통 (EvalService도 씀) ---
 
-    static ChatInput input(CharacterInfo c, LabConfig config, List<ChatLine> history, String text) {
+    public static ChatInput input(CharacterInfo c, LabConfig config, List<ChatLine> history, String text) {
         return new ChatInput(
                 c,
                 config.nicknameOrDefault(),
@@ -397,39 +397,42 @@ public class LabService {
                 config.sessionMinutesOrDefault());
     }
 
-    static BigDecimal cost(List<LlmUsage> used) {
-        return used.stream().map(LlmUsage::costUsd).filter(Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add);
+    public static BigDecimal cost(List<LlmUsage> used) {
+        return used.stream()
+                .map(LlmUsage::getCostUsd)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
-    static long elapsedMs(long startNanos) {
+    public static long elapsedMs(long startNanos) {
         return (System.nanoTime() - startNanos) / 1_000_000;
     }
 
-    static LabConfig config(String json) {
+    public static LabConfig config(String json) {
         return json == null ? LabConfig.EMPTY : LlmJson.read(json, LabConfig.class);
     }
 
     /** 서비스(20)와 같은 한 턴: 답장 + 신호 */
-    ChatOutcome chatTurn(ChatPipeline pipeline, ChatInput in, LlmContext ctx) {
+    public ChatOutcome chatTurn(ChatPipeline pipeline, ChatInput in, LlmContext ctx) {
         return replier.reply(pipeline, in, ctx);
     }
 
     /**
      * 서비스였다면 이 턴의 호감도 점수 (세션 반복 규칙 · 하루 상한 전, 비율 감점은 50점 기준). 실험실은 호감도를 바꾸지 않는다
      */
-    Integer points(ChatOutcome o, long characterId) {
+    public Integer points(ChatOutcome o, long characterId) {
         if (o == null || o.signal() == null) return null;
         ChatScore s = scorer.score(characterId, o.signal(), List.of());
         return s.lossPercent() > 0 ? Math.min(s.points(), -(START_POINTS * s.lossPercent() + 99) / 100) : s.points();
     }
 
-    ChatPipeline pipeline(String name) {
+    public ChatPipeline pipeline(String name) {
         ChatPipeline p = pipelines.get(name);
         if (p == null) throw new ApiException(HttpStatus.BAD_REQUEST, "UNKNOWN_PIPELINE");
         return p;
     }
 
-    CharacterInfo character(long id) {
+    public CharacterInfo character(long id) {
         return characters.find(id).orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "CHARACTER_NOT_FOUND"));
     }
 
@@ -461,37 +464,37 @@ public class LabService {
 
     private LabSessionView view(LabSession s, List<LabTurnView> list, long count) {
         return new LabSessionView(
-                s.id(),
-                s.title(),
-                s.characterId(),
-                s.pipeline(),
-                config(s.config()),
+                s.getId(),
+                s.getTitle(),
+                s.getCharacterId(),
+                s.getPipeline(),
+                config(s.getConfig()),
                 count,
-                s.createdAt(),
-                s.updatedAt(),
+                s.getCreatedAt(),
+                s.getUpdatedAt(),
                 list);
     }
 
     private LabTurnView view(LabTurn t) {
-        return view(t, usages.findByTraceIdOrderById(t.traceId()));
+        return view(t, usages.findByTraceIdOrderById(t.getTraceId()));
     }
 
     private LabTurnView view(LabTurn t, List<LlmUsage> used) {
         return new LabTurnView(
-                t.id(),
-                t.traceId(),
-                t.userText(),
-                t.reply(),
-                t.emotion(),
-                t.affinity(),
-                t.error(),
-                t.latencyMs(),
-                t.latencyMs() > budgetMs(),
-                t.costUsd(),
-                LlmJson.tree(t.trace()),
-                t.rating(),
-                t.ratingNote(),
-                t.createdAt(),
+                t.getId(),
+                t.getTraceId(),
+                t.getUserText(),
+                t.getReply(),
+                t.getEmotion(),
+                t.getAffinity(),
+                t.getError(),
+                t.getLatencyMs(),
+                t.getLatencyMs() > budgetMs(),
+                t.getCostUsd(),
+                LlmJson.tree(t.getTrace()),
+                t.getRating(),
+                t.getRatingNote(),
+                t.getCreatedAt(),
                 used.stream().map(UsageView::from).toList());
     }
 

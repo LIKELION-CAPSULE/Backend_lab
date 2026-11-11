@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.UnaryOperator;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 
@@ -30,6 +31,7 @@ import tools.jackson.databind.JsonNode;
  * 시간 제한(llm-budget)은 부르는 쪽이 지킨다: 실험실은 늦어도 끝까지 받아서 실제 지연을 본다.
  */
 @Component
+@RequiredArgsConstructor
 public class ReactionWriter {
 
     private final LlmGateway llm;
@@ -37,28 +39,11 @@ public class ReactionWriter {
     private final FixedLines fixed;
     private final RuntimeSettings<DialogueProperties> props;
     /** 오늘 근황을 넣는 상태 변화: 공부 시작 인사만 (쉬기 시작에도 넣었더니 한마디마다 근황을 꺼냈다) */
-    static final List<String> TODAY_TRIGGERS = List.of("GREETING");
+    private static final List<String> TODAY_TRIGGERS = List.of("GREETING");
 
     private final CharacterContents contents;
     private final ExpressionPicker expressionPicker;
     private final Clock clock;
-
-    ReactionWriter(
-            LlmGateway llm,
-            PromptService prompts,
-            FixedLines fixed,
-            RuntimeSettings<DialogueProperties> props,
-            CharacterContents contents,
-            ExpressionPicker expressionPicker,
-            Clock clock) {
-        this.llm = llm;
-        this.prompts = prompts;
-        this.fixed = fixed;
-        this.props = props;
-        this.contents = contents;
-        this.expressionPicker = expressionPicker;
-        this.clock = clock;
-    }
 
     public boolean usesLlm(String trigger) {
         return props.current().reactionLlmTriggers() != null
@@ -95,7 +80,7 @@ public class ReactionWriter {
         vars.put("emotions", String.join(", ", props.current().emotions()));
         Llm.Result r = llm.complete(
                 LlmPurpose.REACTION,
-                List.of(new Llm.SystemBlock(PromptService.render(system.body(), vars), false)),
+                List.of(new Llm.SystemBlock(PromptService.render(system.getBody(), vars), false)),
                 List.of(new Llm.ChatTurn("user", "지금 상황에 맞는 한마디를 해 줘.")),
                 ctx.withPrompts(PromptVars.ids(List.of(system, lines))),
                 null);
@@ -123,7 +108,7 @@ public class ReactionWriter {
                 List.of(
                         new Llm.SystemBlock(
                                 PromptService.render(
-                                        system.body(),
+                                        system.getBody(),
                                         Map.of("bible", c.bible(), "rules", c.rules(), "speaker", c.speaker())),
                                 true),
                         new Llm.SystemBlock(
@@ -137,7 +122,7 @@ public class ReactionWriter {
                                         examples(c, trigger, intensity, stage, nickname)),
                                 false)),
                 messages,
-                ctx.withPrompts(List.of(system.id())),
+                ctx.withPrompts(List.of(system.getId())),
                 null);
         // 채팅은 스트리밍으로 이미 보인 글이라 떼지 않는다 (채팅에선 "흥," 시작이 23턴 중 0번)
         String line = SceneChatPipeline.dropOpening(c, SceneChatPipeline.spoken(r));
@@ -149,7 +134,8 @@ public class ReactionWriter {
      * 이번 상황의 미리 쓴 대사 두 줄 (말투 예시). 강도 칸(AWAY_2)에 없으면 기본 칸(AWAY).
      * 두 줄: 한 줄만 주면 실제 키 평가에서 그대로 따라 했다
      */
-    static List<String> examples(CharacterContent c, String trigger, Integer intensity, int stage, String nickname) {
+    public static List<String> examples(
+            CharacterContent c, String trigger, Integer intensity, int stage, String nickname) {
         List<CharacterContent.Line> lines = c.linesFor(FixedLines.key(trigger, intensity), stage);
         if (lines.isEmpty()) lines = c.linesFor(trigger, stage);
         return lines.stream()
@@ -159,7 +145,7 @@ public class ReactionWriter {
     }
 
     /** 상태 반응의 상황 카드. 지난 세션 흐름 · 오늘 근황이 있으면 다시 만난 사이처럼 (공부 시작 인사) */
-    static String card(
+    public static String card(
             CharacterContent c,
             String nickname,
             String summary,
@@ -188,7 +174,7 @@ public class ReactionWriter {
      * JSON 없는 맨 글은 그 글을 대사로(감정 없음),
      * 깨진 JSON은 IllegalStateException (스모크에서 맨 글 한 줄을 형식 오류로 버려 고정 대사로 갔다)
      */
-    static ReactionLine parse(Llm.Result r, UnaryOperator<String> emotion) {
+    public static ReactionLine parse(Llm.Result r, UnaryOperator<String> emotion) {
         JsonNode json = SceneChatPipeline.replyJson(r);
         if (json == null) {
             if (r.text().isBlank()) throw new IllegalStateException("반응 대사 형식 오류: " + r.text());

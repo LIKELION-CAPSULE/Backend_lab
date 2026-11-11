@@ -8,23 +8,23 @@ import org.springframework.web.util.HtmlUtils;
  * HTML은 메일 앱 호환을 위해 표(table) 레이아웃 + 인라인 스타일만 쓴다(외부 CSS · 스크립트 없음).
  * 이미지는 머리의 캡슐 로고 하나(CDN 주소). 이미지를 막는 메일 앱에서는 대신 alt 글자 'CAPSULE'이 보인다.
  */
-record MailContent(String subject, String text, String html) {
+public record MailContent(String subject, String text, String html) {
 
-    static final String CODE_VALID = "5분";
-    static final String RESET_VALID = "30분";
+    private static final String CODE_VALID = "5분";
+    private static final String RESET_VALID = "30분";
 
     /**
      * 캡슐 로고(아이콘 + CAPSULE 글자, 276×64 PNG, 화면 138×32의 2배). Supabase 버킷 live2d-model.
      * 바꿀 때는 새 버전으로 올린다 (ADR 0024). v1 · v2(아이콘만)는 이미 보낸 메일이 쓰므로 지우지 않는다
      */
-    static final String ICON_PATH = "brand/capsule-icon-v3.png";
+    public static final String ICON_PATH = "brand/capsule-icon-v3.png";
 
-    static final String BRAND_COLOR = "#6f52ed";
+    private static final String BRAND_COLOR = "#6f52ed";
 
     /** 미리보기 문장 뒤에 본문 글자가 이어 붙어 보이지 않게 채우는 보이지 않는 공백 */
     private static final String PREHEADER_PAD = "&#847;&zwnj;&nbsp;".repeat(60);
 
-    static MailContent verificationCode(String code, String iconUrl) {
+    public static MailContent verificationCode(String code, String iconUrl) {
         String subject = "캡슐 이메일 인증번호 안내";
         String text = """
                 안녕하세요, 캡슐이에요.
@@ -55,7 +55,7 @@ record MailContent(String subject, String text, String html) {
         return new MailContent(subject, text, html);
     }
 
-    static MailContent passwordReset(String link, String iconUrl) {
+    public static MailContent passwordReset(String link, String iconUrl) {
         String subject = "캡슐 비밀번호 재설정 안내";
         String text = """
                 안녕하세요, 캡슐이에요.

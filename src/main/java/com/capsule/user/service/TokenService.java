@@ -10,6 +10,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
+import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseCookie;
@@ -22,6 +23,7 @@ import org.springframework.stereotype.Service;
 
 /** 액세스 토큰(JWT 30분) + 리프레시 토큰(무작위 값, Redis, 쓸 때마다 교체) (ADR 0011) */
 @Service
+@RequiredArgsConstructor
 public class TokenService {
 
     public static final String REFRESH_COOKIE = "refresh_token";
@@ -33,15 +35,6 @@ public class TokenService {
     private final AuthProperties props;
     private final UserRepository users;
     private final Clock clock;
-
-    TokenService(
-            JwtEncoder jwtEncoder, StringRedisTemplate redis, AuthProperties props, UserRepository users, Clock clock) {
-        this.jwtEncoder = jwtEncoder;
-        this.redis = redis;
-        this.props = props;
-        this.users = users;
-        this.clock = clock;
-    }
 
     public Issued issue(long userId) {
         Instant now = Instant.now(clock);
@@ -99,7 +92,7 @@ public class TokenService {
         return cookie("", Duration.ZERO);
     }
 
-    static String randomToken() {
+    public static String randomToken() {
         byte[] bytes = new byte[32];
         RANDOM.nextBytes(bytes);
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);

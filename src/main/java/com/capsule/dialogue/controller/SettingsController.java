@@ -31,7 +31,7 @@ import tools.jackson.databind.JsonNode;
 @RestController
 @RequestMapping("/internal/llm-lab/api/settings")
 @ConditionalOnProperty(name = "capsule.llm.lab.enabled", havingValue = "true")
-class SettingsController {
+public class SettingsController {
 
     private static final Logger log = LoggerFactory.getLogger(SettingsController.class);
 
@@ -39,7 +39,7 @@ class SettingsController {
     /** 공용 개발 DB에 인증 없이 붙은 노트북(run-local.sh --shared): 그 행은 개발 서버가 읽으므로 저장을 막는다 */
     private final boolean readOnly;
 
-    SettingsController(List<RuntimeSettings<?>> all, Environment env, LlmProperties llm, LabAdmins admins) {
+    public SettingsController(List<RuntimeSettings<?>> all, Environment env, LlmProperties llm, LabAdmins admins) {
         for (RuntimeSettings<?> s : all)
             if (sections.put(s.section(), s) != null) throw new IllegalStateException("운영 설정 이름이 겹침: " + s.section());
         String token = llm.lab().token();
@@ -47,13 +47,13 @@ class SettingsController {
     }
 
     @GetMapping
-    List<RuntimeSettings.View> all() {
+    public List<RuntimeSettings.View> all() {
         return sections.values().stream().map(RuntimeSettings::view).toList();
     }
 
     /** 덮어쓸 칸 전체 {칸: 값}. 빠진 칸은 yml 값으로 돌아간다 ({}면 전부 되돌리기) */
     @PutMapping("/{section}")
-    RuntimeSettings.View save(
+    public RuntimeSettings.View save(
             @PathVariable String section,
             @RequestBody JsonNode overrides,
             @RequestAttribute(name = LabAdmins.REQUEST_ATTRIBUTE, required = false) String admin) {

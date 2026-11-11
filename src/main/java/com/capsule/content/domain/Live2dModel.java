@@ -7,46 +7,27 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 @Entity
 @Table(name = "live2d_models")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Live2dModel {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    Long id;
+    private Long id;
 
-    String storagePrefix;
-    String modelJsonPath;
-    BigDecimal scale;
+    private String storagePrefix;
+    private String modelJsonPath;
+    private BigDecimal scale;
 
     @Column(name = "offset_x") // 끝 글자가 대문자면 이름 규칙이 _를 안 넣음
-    int offsetX;
+    private int offsetX;
 
     @Column(name = "offset_y")
-    int offsetY;
-
-    public Long id() {
-        return id;
-    }
-
-    public String storagePrefix() {
-        return storagePrefix;
-    }
-
-    public String modelJsonPath() {
-        return modelJsonPath;
-    }
-
-    public BigDecimal scale() {
-        return scale;
-    }
-
-    public int offsetX() {
-        return offsetX;
-    }
-
-    public int offsetY() {
-        return offsetY;
-    }
+    private int offsetY;
 }

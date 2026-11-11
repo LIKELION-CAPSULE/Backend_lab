@@ -7,11 +7,16 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 import org.springframework.http.HttpStatus;
 
 /** users 테이블. created_at은 DB 기본값, profile_image_url은 쓰지 않아서(B7) 매핑하지 않는다. */
 @Entity
 @Table(name = "users")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class User {
 
     private static final int NICKNAME_MAX = 20;
@@ -23,13 +28,14 @@ public class User {
 
     private String nickname;
     private String email;
+
+    @Getter(AccessLevel.NONE) // 해시는 passwordHash()로만 꺼낸다
     private String password;
+
     private Long avatarId;
     private Instant lastLoginAt;
     private Instant updatedAt;
     private Instant withdrawnAt;
-
-    protected User() {}
 
     private User(String nickname, String email, String passwordHash, Instant now) {
         this.nickname = nickname;
@@ -90,24 +96,8 @@ public class User {
         this.updatedAt = now;
     }
 
-    public long id() {
-        return id;
-    }
-
-    public String nickname() {
-        return nickname;
-    }
-
-    public String email() {
-        return email;
-    }
-
     public String passwordHash() {
         return password;
-    }
-
-    public Long avatarId() {
-        return avatarId;
     }
 
     public boolean isActive() {

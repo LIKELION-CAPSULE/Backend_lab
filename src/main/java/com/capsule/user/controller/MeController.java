@@ -16,6 +16,7 @@ import com.capsule.user.service.WithdrawalService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.LocalDate;
+import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.format.annotation.DateTimeFormat.ISO;
 import org.springframework.http.HttpHeaders;
@@ -35,29 +36,23 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/me")
 @Tag(name = ApiTags.ONBOARDING_HOME)
-class MeController {
+@RequiredArgsConstructor
+public class MeController {
 
     private final ProfileService profiles;
     private final MemoryService memories;
     private final WithdrawalService withdrawals;
     private final TokenService tokens;
 
-    MeController(ProfileService profiles, MemoryService memories, WithdrawalService withdrawals, TokenService tokens) {
-        this.profiles = profiles;
-        this.memories = memories;
-        this.withdrawals = withdrawals;
-        this.tokens = tokens;
-    }
-
     @Operation(summary = "8. 내 정보 조회", description = "내 정보 + 온보딩 필요 여부 + 진행 중 세션(H18 판단) (명세: api.md 8)")
     @GetMapping
-    MeResponse me(@LoginUser long userId) {
+    public MeResponse me(@LoginUser long userId) {
         return profiles.me(userId);
     }
 
     @Operation(summary = "10. 프로필 설정", description = "닉네임 · 아바타 저장 (온보딩 완료) (명세: api.md 10)")
     @PatchMapping
-    MeResponse update(@LoginUser long userId, @RequestBody UpdateMeRequest req) {
+    public MeResponse update(@LoginUser long userId, @RequestBody UpdateMeRequest req) {
         return profiles.update(userId, req);
     }
 
@@ -65,7 +60,7 @@ class MeController {
             summary = "27. 회원 탈퇴",
             description = "개인정보를 비우고 일정 · 대화 기억 삭제, 모든 기기 로그아웃. 진행 중 세션이 있으면 409 (명세: api.md 27)")
     @DeleteMapping
-    ResponseEntity<Void> withdraw(@LoginUser long userId) {
+    public ResponseEntity<Void> withdraw(@LoginUser long userId) {
         withdrawals.withdraw(userId);
         // 리프레시 쿠키는 경로가 /api/auth라 여기로 오지 않는다. 비우는 Set-Cookie만 보낸다
         return ResponseEntity.noContent()
@@ -76,7 +71,7 @@ class MeController {
     @Operation(summary = "13. 일정 저장", description = "시험 · 약속 · 목표 일정 저장 (명세: api.md 13)")
     @PostMapping("/memories")
     @ResponseStatus(HttpStatus.CREATED)
-    MemoryResponse createMemory(@LoginUser long userId, @RequestBody CreateMemoryRequest req) {
+    public MemoryResponse createMemory(@LoginUser long userId, @RequestBody CreateMemoryRequest req) {
         return memories.create(userId, req);
     }
 
@@ -84,7 +79,7 @@ class MeController {
             summary = "14. 내 일정 조회",
             description = "내 일정(시험 · 약속 · 목표) 조회. 달력 점 · 날짜 클릭 · 예정/전체/지난 탭 (명세: api.md 14)")
     @GetMapping("/memories")
-    MemoryList memories(
+    public MemoryList memories(
             @LoginUser long userId,
             @RequestParam(required = false) @DateTimeFormat(iso = ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = ISO.DATE) LocalDate to,

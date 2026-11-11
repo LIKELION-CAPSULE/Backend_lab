@@ -6,10 +6,15 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 /** 프롬프트 한 버전. 본문은 바꾸지 않는다: 고치려면 새 버전을 만든다 (무엇이 언제 바뀌었는지 남도록) */
 @Entity
 @Table(name = "prompt_versions")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class PromptVersion {
 
     public static final String DRAFT = "DRAFT";
@@ -29,8 +34,6 @@ public class PromptVersion {
     private Instant createdAt;
     private Instant activatedAt;
 
-    protected PromptVersion() {}
-
     public PromptVersion(String promptKey, Long characterId, int version, String body, String note, Instant now) {
         this.promptKey = promptKey;
         this.characterId = characterId;
@@ -48,41 +51,5 @@ public class PromptVersion {
 
     public void archive() {
         this.status = ARCHIVED;
-    }
-
-    public Long id() {
-        return id;
-    }
-
-    public String promptKey() {
-        return promptKey;
-    }
-
-    public Long characterId() {
-        return characterId;
-    }
-
-    public int version() {
-        return version;
-    }
-
-    public String status() {
-        return status;
-    }
-
-    public String body() {
-        return body;
-    }
-
-    public String note() {
-        return note;
-    }
-
-    public Instant createdAt() {
-        return createdAt;
-    }
-
-    public Instant activatedAt() {
-        return activatedAt;
     }
 }

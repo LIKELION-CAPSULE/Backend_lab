@@ -22,6 +22,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.List;
 import java.util.function.Function;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,6 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
  * {@link com.capsule.user.adapter.MemoryQueryAdapter}가 이 클래스로 위임
  */
 @Service
+@RequiredArgsConstructor
 public class MemoryService {
 
     private static final String DEFAULT_PROMISE_TITLE = "같이 공부하기";
@@ -39,26 +41,20 @@ public class MemoryService {
 
     /** 같은 날이면 시간 있는 일정 먼저, 종일은 그 다음 */
     private static final Comparator<UserMemory> SAME_DAY = Comparator.comparing(
-                    UserMemory::dueTime, Comparator.nullsLast(Comparator.<LocalTime>naturalOrder()))
-            .thenComparing(UserMemory::id);
+                    UserMemory::getDueTime, Comparator.nullsLast(Comparator.<LocalTime>naturalOrder()))
+            .thenComparing(UserMemory::getId);
     /** 예정·전체: 가까운 날짜부터, 날짜 없는 목표는 맨 아래 */
     private static final Comparator<UserMemory> NEAREST_FIRST = Comparator.comparing(
-                    UserMemory::dueDate, Comparator.nullsLast(Comparator.<LocalDate>naturalOrder()))
+                    UserMemory::getDueDate, Comparator.nullsLast(Comparator.<LocalDate>naturalOrder()))
             .thenComparing(SAME_DAY);
     /** 지난 일정: 최근 것부터 */
     private static final Comparator<UserMemory> LATEST_FIRST = Comparator.comparing(
-                    UserMemory::dueDate, Comparator.nullsLast(Comparator.<LocalDate>reverseOrder()))
+                    UserMemory::getDueDate, Comparator.nullsLast(Comparator.<LocalDate>reverseOrder()))
             .thenComparing(SAME_DAY);
 
     private final UserMemoryRepository memories;
     private final UserRepository users;
     private final Clock clock;
-
-    MemoryService(UserMemoryRepository memories, UserRepository users, Clock clock) {
-        this.memories = memories;
-        this.users = users;
-        this.clock = clock;
-    }
 
     /** EXAM·PROMISE는 날짜 필수, GOAL은 선택(B9). 날짜 없이 시간만·지난 날짜는 안 됨 */
     @Transactional
@@ -96,18 +92,19 @@ public class MemoryService {
         LocalDate today = today();
         // ponytail: 사용자 일정을 전부 읽어 메모리에서 거른다. 일정이 수천 개가 되면 SQL 조건으로
         List<UserMemory> mine = memories.findByUserId(userId).stream()
-                .filter(m -> type == null || m.type() == type)
+                .filter(m -> type == null || m.getType() == type)
                 .toList();
         List<MemoryResponse> listed = mine.stream()
                 // 날짜 없는 목표는 기간과 상관없이 넣고, status에서 '전체'만 남긴다 (api.md 14 규칙)
-                .filter(m ->
-                        date != null ? date.equals(m.dueDate()) : m.dueDate() == null || inRange(m.dueDate(), from, to))
-                .filter(m -> inStatus(status, m.dueDate(), today))
+                .filter(m -> date != null
+                        ? date.equals(m.getDueDate())
+                        : m.getDueDate() == null || inRange(m.getDueDate(), from, to))
+                .filter(m -> inStatus(status, m.getDueDate(), today))
                 .sorted(status == MemoryStatus.PAST ? LATEST_FIRST : NEAREST_FIRST)
                 .map(m -> toResponse(m, today))
                 .toList();
         List<LocalDate> dates = mine.stream()
-                .map(UserMemory::dueDate)
+                .map(UserMemory::getDueDate)
                 .filter(d -> d != null && inRange(d, from, to))
                 .distinct()
                 .sorted()
@@ -119,9 +116,9 @@ public class MemoryService {
     public List<MemoryInfo> memoriesForConversation(long userId) {
         LocalDate today = today();
         return memories.findByUserId(userId).stream()
-                .filter(m -> m.dueDate() == null || !m.dueDate().isBefore(today))
+                .filter(m -> m.getDueDate() == null || !m.getDueDate().isBefore(today))
                 .sorted(NEAREST_FIRST)
-                .map(m -> new MemoryInfo(m.id(), m.type().name(), m.title(), m.dueDate(), m.dueTime()))
+                .map(m -> new MemoryInfo(m.getId(), m.getType().name(), m.getTitle(), m.getDueDate(), m.getDueTime()))
                 .toList();
     }
 
@@ -131,12 +128,12 @@ public class MemoryService {
 
     private static MemoryResponse toResponse(UserMemory m, LocalDate today) {
         return new MemoryResponse(
-                m.id(),
-                m.type(),
-                m.title(),
-                m.dueDate(),
-                m.dueTime() == null ? null : m.dueTime().format(HH_MM),
-                m.dueDate() == null ? null : (int) ChronoUnit.DAYS.between(today, m.dueDate()));
+                m.getId(),
+                m.getType(),
+                m.getTitle(),
+                m.getDueDate(),
+                m.getDueTime() == null ? null : m.getDueTime().format(HH_MM),
+                m.getDueDate() == null ? null : (int) ChronoUnit.DAYS.between(today, m.getDueDate()));
     }
 
     /** 범위가 없으면 날짜 없는 목표도 포함 */

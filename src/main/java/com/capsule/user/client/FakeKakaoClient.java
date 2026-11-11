@@ -20,7 +20,7 @@ public class FakeKakaoClient implements KakaoClient {
     private static final Logger log = LoggerFactory.getLogger(FakeKakaoClient.class);
     private static final String PREFIX = "fake-kakao:";
 
-    FakeKakaoClient() {
+    public FakeKakaoClient() {
         log.info("카카오 로그인: Fake (fake-kakao:<번호>:<이름> 코드로 로그인. 실제로 하려면 CAPSULE_KAKAO_REST_API_KEY)");
     }
 
