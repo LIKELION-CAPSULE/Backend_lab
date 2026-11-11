@@ -2,7 +2,7 @@
 
 - 결정
   - main 코드의 클래스 · 메서드 · 생성자는 `public`을 기본으로 쓴다(흔한 Spring 레포 모양). 필드는 `private`
-  - 생성자 주입은 `@RequiredArgsConstructor`. 생성자 안에서 값을 가공하거나 `@Value` 파라미터를 받는 클래스는 생성자를 직접 쓴다
+  - 생성자 주입은 `@RequiredArgsConstructor`. 설정값은 `private final` 필드에 `@Value`를 붙인다(`lombok.config`의 `copyableAnnotations`가 생성자 파라미터로 옮김). 생성자 안에서 값을 가공해야 하는 클래스만 생성자를 직접 쓴다
   - 엔티티: `private` 필드 + `@Getter`(`getId()` 형식), JPA 기본 생성자는 `@NoArgsConstructor(access = AccessLevel.PROTECTED)`. 값 변경은 이름 있는 메서드(`changeNickname` 등)로만, `@Setter` · `@Data` 금지(`lombok.config`에서 막음)
   - DTO · 계약 타입은 지금처럼 `record`
   - 테스트 코드는 JUnit 5 관례대로 접근 제어자를 생략한다(바꾸지 않음)
