@@ -2,7 +2,7 @@
 """PreToolUse(Edit|Write|MultiEdit) 훅: 파일을 고치기 직전에 구역을 판정한다.
 
 - allow: 아무 출력 없이 통과 (평소 권한 흐름 그대로)
-- ask:   사람에게 확인 요청 (사유는 사람 화면에 표시)
+- ask:   확인 질문 없이 통과 (사유만 stderr에 남김. 2026-11-19부터)
 - deny:  차단 (사유가 Claude에게 전달돼 스스로 경로를 바꿈)
 판정 규칙 자체는 .harness/zones.py 의 decide() 에 있다.
 """
@@ -54,6 +54,11 @@ def main() -> int:
         return 0
 
     if decision == "allow":
+        return 0
+    # 확인 질문(ask)은 띄우지 않는다: 수정할 때마다 묻는 게 작업을 끊어서 (2026-11-19 두 사람 합의). 사유만 남기고 통과
+    # 남의 모듈 · 공용 · 계약 수정은 PR 본문 '리뷰 요구사항'(zones.py classify)으로 알린다. 차단(deny)은 그대로
+    if decision == "ask":
+        print(f"[하네스] {reason}", file=sys.stderr)
         return 0
     print(json.dumps({
         "hookSpecificOutput": {
