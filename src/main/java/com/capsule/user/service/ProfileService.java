@@ -1,11 +1,13 @@
 package com.capsule.user.service;
 
 import com.capsule.common.error.ApiException;
+import com.capsule.common.error.CommonErrorCode;
 import com.capsule.content.api.AvatarQuery;
 import com.capsule.content.api.ContentTypes.AvatarInfo;
 import com.capsule.user.api.ActiveSessionLookup;
 import com.capsule.user.api.UserTypes.UserProfile;
 import com.capsule.user.domain.User;
+import com.capsule.user.domain.UserErrorCode;
 import com.capsule.user.dto.MeResponse;
 import com.capsule.user.dto.UpdateMeRequest;
 import com.capsule.user.repository.UserRepository;
@@ -13,7 +15,6 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -50,7 +51,7 @@ public class ProfileService {
         }
         AvatarInfo avatar = (req.avatarId() == null ? avatars.defaultAvatar() : avatars.find(req.avatarId()))
                 .filter(AvatarInfo::active)
-                .orElseThrow(() -> new ApiException(HttpStatus.BAD_REQUEST, "AVATAR_NOT_FOUND"));
+                .orElseThrow(() -> new ApiException(UserErrorCode.AVATAR_NOT_FOUND));
         user.updateProfile(nickname, avatar.id(), Instant.now(clock));
         return toMe(user, avatar.thumbnailUrl());
     }
@@ -88,6 +89,6 @@ public class ProfileService {
     private User activeUser(long userId) {
         return users.findById(userId)
                 .filter(User::isActive)
-                .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED"));
+                .orElseThrow(() -> new ApiException(CommonErrorCode.UNAUTHORIZED));
     }
 }

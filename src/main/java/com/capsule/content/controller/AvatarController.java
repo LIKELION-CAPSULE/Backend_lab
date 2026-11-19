@@ -1,6 +1,7 @@
 package com.capsule.content.controller;
 
 import com.capsule.common.config.ApiTags;
+import com.capsule.common.response.ApiResponse;
 import com.capsule.content.api.AvatarQuery;
 import com.capsule.content.dto.AvatarItem;
 import com.capsule.content.dto.AvatarsResponse;
@@ -20,9 +21,9 @@ public class AvatarController {
     /** api.md 9 */
     @Operation(summary = "9. 아바타 목록 조회", description = "완성형 Live2D 아바타 목록 (현재 1개) (명세: api.md 9)")
     @GetMapping("/api/avatars")
-    public AvatarsResponse list() {
-        return new AvatarsResponse(avatars.activeAvatars().stream()
+    public ApiResponse<AvatarsResponse> list() {
+        return ApiResponse.ok(new AvatarsResponse(avatars.activeAvatars().stream()
                 .map(a -> new AvatarItem(a.id(), a.name(), a.thumbnailUrl(), a.model()))
-                .toList());
+                .toList()));
     }
 }

@@ -1,6 +1,7 @@
 package com.capsule.user.controller;
 
 import com.capsule.common.config.ApiTags;
+import com.capsule.common.response.ApiResponse;
 import com.capsule.user.dto.AccessTokenResponse;
 import com.capsule.user.dto.ConfirmRequest;
 import com.capsule.user.dto.EmailRequest;
@@ -57,54 +58,54 @@ public class AuthController {
 
     @Operation(summary = "1. 약관 조회", description = "회원가입 화면에 띄울 필수 약관 2종 최신 버전 (명세: api.md 1)")
     @GetMapping("/api/terms")
-    public TermsResponse terms() {
-        return new TermsResponse(auth.terms());
+    public ApiResponse<TermsResponse> terms() {
+        return ApiResponse.ok(new TermsResponse(auth.terms()));
     }
 
     @Operation(summary = "2. 이메일 인증번호 요청", description = "가입할 이메일로 6자리 인증번호 발송 (5분 유효) (명세: api.md 2)")
     @PostMapping("/api/auth/email/verification")
     @ResponseStatus(HttpStatus.ACCEPTED)
-    public ExpiresResponse requestVerification(@RequestBody EmailRequest req) {
-        return new ExpiresResponse(auth.requestVerification(req.email()));
+    public ApiResponse<ExpiresResponse> requestVerification(@RequestBody EmailRequest req) {
+        return ApiResponse.ok(new ExpiresResponse(auth.requestVerification(req.email())));
     }
 
     @Operation(summary = "3. 이메일 인증 확인", description = "인증번호 확인 → 가입용 토큰 발급 (명세: api.md 3)")
     @PostMapping("/api/auth/email/verification/confirm")
-    public VerificationResponse confirmVerification(@RequestBody ConfirmRequest req) {
-        return new VerificationResponse(auth.confirmVerification(req.email(), req.code()));
+    public ApiResponse<VerificationResponse> confirmVerification(@RequestBody ConfirmRequest req) {
+        return ApiResponse.ok(new VerificationResponse(auth.confirmVerification(req.email(), req.code())));
     }
 
     @Operation(summary = "4. 회원가입", description = "이메일 · 비밀번호 · 닉네임 · 약관 동의로 가입, 바로 로그인 토큰 발급 (명세: api.md 4)")
     @PostMapping("/api/auth/email/signup")
-    public ResponseEntity<LoginResponse> signup(@RequestBody SignupRequest req) {
+    public ResponseEntity<ApiResponse<LoginResponse>> signup(@RequestBody SignupRequest req) {
         return loggedIn(HttpStatus.CREATED, auth.signup(req));
     }
 
     @Operation(summary = "5. 이메일 로그인", description = "이메일 · 비밀번호 로그인 (명세: api.md 5)")
     @PostMapping("/api/auth/email/login")
-    public ResponseEntity<LoginResponse> login(@RequestBody LoginRequest req) {
+    public ResponseEntity<ApiResponse<LoginResponse>> login(@RequestBody LoginRequest req) {
         return loggedIn(HttpStatus.OK, auth.login(req.email(), req.password()));
     }
 
     @Operation(summary = "6. 카카오 로그인 · 가입", description = "카카오 인가 코드로 로그인, 처음이면 가입까지 (소셜은 카카오만) (명세: api.md 6)")
     @PostMapping("/api/auth/social/KAKAO")
-    public ResponseEntity<KakaoResponse> kakao(@RequestBody KakaoRequest req) {
+    public ResponseEntity<ApiResponse<KakaoResponse>> kakao(@RequestBody KakaoRequest req) {
         Login login = auth.kakao(req);
         Issued issued = tokens.issue(login.userId());
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, issued.cookie())
-                .body(new KakaoResponse(
-                        issued.accessToken(), login.userId(), login.newUser(), login.onboardingRequired()));
+                .body(ApiResponse.ok(new KakaoResponse(
+                        issued.accessToken(), login.userId(), login.newUser(), login.onboardingRequired())));
     }
 
     @Operation(summary = "7. 토큰 갱신", description = "액세스 토큰 만료 시 재발급. 리프레시 토큰 쿠키로 (명세: api.md 7)")
     @PostMapping("/api/auth/refresh")
-    public ResponseEntity<AccessTokenResponse> refresh(
+    public ResponseEntity<ApiResponse<AccessTokenResponse>> refresh(
             @CookieValue(name = TokenService.REFRESH_COOKIE, required = false) String refreshToken) {
         Issued issued = tokens.rotate(refreshToken);
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, issued.cookie())
-                .body(new AccessTokenResponse(issued.accessToken()));
+                .body(ApiResponse.ok(new AccessTokenResponse(issued.accessToken())));
     }
 
     /** 진행 중 세션은 끝내지 않는다 (재로그인 시 이어하기) */
@@ -117,10 +118,11 @@ public class AuthController {
                 .build();
     }
 
-    private ResponseEntity<LoginResponse> loggedIn(HttpStatus status, Login login) {
+    private ResponseEntity<ApiResponse<LoginResponse>> loggedIn(HttpStatus status, Login login) {
         Issued issued = tokens.issue(login.userId());
         return ResponseEntity.status(status)
                 .header(HttpHeaders.SET_COOKIE, issued.cookie())
-                .body(new LoginResponse(issued.accessToken(), login.userId(), login.onboardingRequired()));
+                .body(ApiResponse.ok(
+                        new LoginResponse(issued.accessToken(), login.userId(), login.onboardingRequired())));
     }
 }

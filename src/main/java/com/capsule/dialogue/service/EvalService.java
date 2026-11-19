@@ -9,6 +9,7 @@ import com.capsule.dialogue.client.LlmJson;
 import com.capsule.dialogue.config.DialogueProperties;
 import com.capsule.dialogue.config.LlmProperties;
 import com.capsule.dialogue.domain.ChatMessage;
+import com.capsule.dialogue.domain.DialogueErrorCode;
 import com.capsule.dialogue.domain.EvalCase;
 import com.capsule.dialogue.domain.EvalResult;
 import com.capsule.dialogue.domain.EvalRun;
@@ -51,7 +52,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.JsonNode;
@@ -130,7 +130,7 @@ public class EvalService {
 
     public EvalRunView start(EvalRunRequest r) {
         List<EvalCase> selected = cases.findAllById(r.caseIds());
-        if (selected.size() != r.caseIds().size()) throw new ApiException(HttpStatus.NOT_FOUND, "EVAL_CASE_NOT_FOUND");
+        if (selected.size() != r.caseIds().size()) throw new ApiException(DialogueErrorCode.EVAL_CASE_NOT_FOUND);
         String pipeline = lab.pipeline(
                         r.pipeline() == null ? dialogueProps.current().chatPipeline() : r.pipeline())
                 .name();
@@ -154,7 +154,7 @@ public class EvalService {
     }
 
     public EvalRunView run(long id) {
-        EvalRun run = runs.findById(id).orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "EVAL_RUN_NOT_FOUND"));
+        EvalRun run = runs.findById(id).orElseThrow(() -> new ApiException(DialogueErrorCode.EVAL_RUN_NOT_FOUND));
         Map<Long, String> names = cases.findAllById(run.getCaseIds()).stream()
                 .collect(Collectors.toMap(EvalCase::getId, EvalCase::getName));
         return view(run, results.findByRunIdOrderByCaseIdAscRepeatNoAsc(id), names);
@@ -162,8 +162,8 @@ public class EvalService {
 
     @Transactional
     public EvalResultView rate(long resultId, RatingRequest r) {
-        EvalResult result = results.findById(resultId)
-                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "EVAL_RESULT_NOT_FOUND"));
+        EvalResult result =
+                results.findById(resultId).orElseThrow(() -> new ApiException(DialogueErrorCode.EVAL_RESULT_NOT_FOUND));
         result.rate(r.score(), r.note());
         String name = cases.findById(result.getCaseId()).map(EvalCase::getName).orElse(null);
         return view(result, name);
@@ -295,7 +295,7 @@ public class EvalService {
     }
 
     private EvalCase findCase(long id) {
-        return cases.findById(id).orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "EVAL_CASE_NOT_FOUND"));
+        return cases.findById(id).orElseThrow(() -> new ApiException(DialogueErrorCode.EVAL_CASE_NOT_FOUND));
     }
 
     private static EvalCaseView view(EvalCase c) {

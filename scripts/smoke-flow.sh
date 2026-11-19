@@ -21,7 +21,8 @@ FAILED=0
 
 uuid() { python3 -c 'import uuid; print(uuid.uuid4())'; }
 now() { python3 -c 'import datetime; print(datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="milliseconds").replace("+00:00","Z"))'; }
-field() { python3 -c 'import json,sys; d=json.load(open(sys.argv[1],encoding="utf-8")); print(eval(sys.argv[2]))' "$1" "$2"; }
+# 성공 응답은 {"success":true,"data":{...}} (api.md 공통 규칙). d는 data 안 (감싸지 않은 응답은 그대로)
+field() { python3 -c 'import json,sys; d=json.load(open(sys.argv[1],encoding="utf-8")); d=d.get("data",d) if isinstance(d,dict) else d; print(eval(sys.argv[2]))' "$1" "$2"; }
 
 # call <이름> <메서드> <경로> [본문] → 응답 파일 경로를 RES에, 상태 코드를 CODE에
 call() {
@@ -49,7 +50,9 @@ try:
     d = json.load(open(path, encoding="utf-8"))
 except Exception:
     d = {}
-c = (d.get("characters") or [d])[0] if isinstance(d, dict) else {}
+if isinstance(d, dict) and isinstance(d.get("data"), dict):
+    d = d["data"]
+c =(d.get("characters") or [d])[0] if isinstance(d, dict) else {}
 a = c.get("affinity") or d.get("relation") or {}
 name = lambda x: (x or {}).get("name") or (x or {}).get("group") or ""
 text = c.get("content") or d.get("closingLine") or ""

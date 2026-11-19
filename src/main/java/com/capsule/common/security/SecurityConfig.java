@@ -1,7 +1,8 @@
 package com.capsule.common.security;
 
+import com.capsule.common.error.CommonErrorCode;
+import com.capsule.common.error.ErrorResponse;
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
-import jakarta.servlet.http.HttpServletResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import javax.crypto.SecretKey;
@@ -11,7 +12,6 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
-import org.springframework.http.MediaType;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -88,13 +88,11 @@ public class SecurityConfig {
 
     /** 토큰이 있는데 안 맞으면 AUTH_TOKEN_EXPIRED(프론트가 갱신을 시도), 아예 없으면 UNAUTHORIZED */
     private static AuthenticationEntryPoint unauthorized() {
-        return (request, response, e) -> {
-            String code = request.getHeader(HttpHeaders.AUTHORIZATION) != null ? "AUTH_TOKEN_EXPIRED" : "UNAUTHORIZED";
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-            response.setCharacterEncoding(StandardCharsets.UTF_8.name());
-            response.getWriter().write("{\"code\":\"" + code + "\",\"message\":\"" + code + "\",\"detail\":{}}");
-        };
+        return (request, response, e) -> ErrorResponse.write(
+                response,
+                request.getHeader(HttpHeaders.AUTHORIZATION) != null
+                        ? CommonErrorCode.AUTH_TOKEN_EXPIRED
+                        : CommonErrorCode.UNAUTHORIZED);
     }
 
     @Bean

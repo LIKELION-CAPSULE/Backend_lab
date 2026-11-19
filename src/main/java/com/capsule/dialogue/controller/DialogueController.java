@@ -2,7 +2,9 @@ package com.capsule.dialogue.controller;
 
 import com.capsule.common.config.ApiTags;
 import com.capsule.common.error.ApiException;
+import com.capsule.common.error.CommonErrorCode;
 import com.capsule.common.error.ErrorResponse;
+import com.capsule.common.response.ApiResponse;
 import com.capsule.common.security.LoginUser;
 import com.capsule.dialogue.dto.MessageRequest;
 import com.capsule.dialogue.dto.MessageResponse;
@@ -43,19 +45,20 @@ public class DialogueController {
 
     @Operation(summary = "19. 상태 반응 받기", description = "eventId로 캐릭터 대사(LLM) + 감정 + 감정에 맞는 모션 · 표정 받기 (명세: api.md 19)")
     @PostMapping("/events/{eventId}/reaction")
-    public ReactionResponse react(
+    public ApiResponse<ReactionResponse> react(
             @LoginUser long userId,
             @PathVariable long sessionId,
             @PathVariable long eventId,
             @Valid @RequestBody ReactionRequest request) {
-        return dialogue.react(userId, sessionId, eventId, request.requestId(), request.intensity(), request.tts());
+        return ApiResponse.ok(
+                dialogue.react(userId, sessionId, eventId, request.requestId(), request.intensity(), request.tts()));
     }
 
     @Operation(summary = "20. 메시지 전송", description = "대화 → 캐릭터별 답장 + 감정 모션 · 표정 + 바뀐 호감도 (TTS 선택) (명세: api.md 20)")
     @PostMapping("/messages")
-    public MessageResponse send(
+    public ApiResponse<MessageResponse> send(
             @LoginUser long userId, @PathVariable long sessionId, @Valid @RequestBody MessageRequest request) {
-        return dialogue.send(userId, sessionId, request);
+        return ApiResponse.ok(dialogue.send(userId, sessionId, request));
     }
 
     @Operation(
@@ -75,10 +78,10 @@ public class DialogueController {
                         dialogue.reply(accepted, text -> send(emitter, "reply", Map.of("content", text)));
                 send(emitter, "done", done);
             } catch (ApiException e) {
-                send(emitter, "error", new ErrorResponse(e.code(), e.code(), e.detail()));
+                send(emitter, "error", ErrorResponse.of(e));
             } catch (RuntimeException e) {
                 log.error("스트리밍 답장 실패", e);
-                send(emitter, "error", ErrorResponse.of("INTERNAL_ERROR"));
+                send(emitter, "error", ErrorResponse.of(CommonErrorCode.INTERNAL_ERROR));
             } finally {
                 emitter.complete();
             }

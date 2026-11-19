@@ -1,9 +1,11 @@
 package com.capsule.user.service;
 
 import com.capsule.common.error.ApiException;
+import com.capsule.common.error.CommonErrorCode;
 import com.capsule.common.ratelimit.RateLimiter;
 import com.capsule.user.client.EmailSender;
 import com.capsule.user.domain.User;
+import com.capsule.user.domain.UserErrorCode;
 import com.capsule.user.repository.UserRepository;
 import java.time.Clock;
 import java.time.Duration;
@@ -16,7 +18,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -71,11 +72,11 @@ public class PasswordResetService {
     public void requestReset(String rawEmail) {
         String email = AuthService.normalize(rawEmail);
         if (!AuthService.isEmail(email)) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_EMAIL");
+            throw new ApiException(UserErrorCode.INVALID_EMAIL);
         }
         String rateKey = "rl:password-reset:" + email;
         if (!rateLimiter.tryAcquire(rateKey, 1, Duration.ofMinutes(1))) {
-            throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "TOO_MANY_REQUESTS");
+            throw new ApiException(CommonErrorCode.TOO_MANY_REQUESTS);
         }
         Optional<User> user = users.findByEmail(email).filter(u -> u.isActive() && u.passwordHash() != null);
         if (user.isEmpty()) {
@@ -110,11 +111,11 @@ public class PasswordResetService {
         AuthService.requireValidPassword(newPassword); // 비밀번호가 틀리면 토큰을 쓰지 않은 채로 400
         String userId = token == null ? null : redis.opsForValue().getAndDelete(tokenKey(token));
         if (userId == null) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "RESET_TOKEN_INVALID");
+            throw new ApiException(UserErrorCode.RESET_TOKEN_INVALID);
         }
         User user = users.findById(Long.parseLong(userId))
                 .filter(u -> u.isActive() && u.passwordHash() != null)
-                .orElseThrow(() -> new ApiException(HttpStatus.BAD_REQUEST, "RESET_TOKEN_INVALID"));
+                .orElseThrow(() -> new ApiException(UserErrorCode.RESET_TOKEN_INVALID));
         user.changePassword(passwordEncoder.encode(newPassword), Instant.now(clock));
         long id = user.getId();
         String email = user.getEmail();

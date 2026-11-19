@@ -4,6 +4,7 @@ import static com.capsule.dialogue.domain.ChatMessage.CHARACTER;
 import static com.capsule.dialogue.domain.ChatMessage.USER;
 
 import com.capsule.common.error.ApiException;
+import com.capsule.common.error.CommonErrorCode;
 import com.capsule.common.ratelimit.RateLimiter;
 import com.capsule.common.settings.RuntimeSettings;
 import com.capsule.common.time.ClockConfig;
@@ -15,6 +16,7 @@ import com.capsule.dialogue.config.DialogueProperties;
 import com.capsule.dialogue.domain.ChatMessage;
 import com.capsule.dialogue.domain.Conversation;
 import com.capsule.dialogue.domain.ConversationRecap;
+import com.capsule.dialogue.domain.DialogueErrorCode;
 import com.capsule.dialogue.dto.ChatInput;
 import com.capsule.dialogue.dto.ChatLine;
 import com.capsule.dialogue.dto.ChatOutcome;
@@ -64,7 +66,6 @@ import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
@@ -169,13 +170,13 @@ public class DialogueService {
             long userId, long sessionId, long eventId, UUID requestId, Integer requestedIntensity, Boolean tts) {
         SessionInfo session = openSession(userId, sessionId);
         SessionEventInfo event = sessions.findEvent(sessionId, eventId)
-                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "EVENT_NOT_FOUND"));
+                .orElseThrow(() -> new ApiException(DialogueErrorCode.EVENT_NOT_FOUND));
         long characterId = session.characterId();
         String trigger = triggerOf(event);
         // 강도는 AWAY에만 (없으면 1). 다른 trigger는 보내도 무시
         Integer intensity = trigger.equals("AWAY") ? (requestedIntensity == null ? 1 : requestedIntensity) : null;
         if (intensity != null && (intensity < 1 || intensity > props.current().awayIntensityMax())) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_REQUEST");
+            throw new ApiException(CommonErrorCode.INVALID_REQUEST);
         }
 
         // 호감도는 상태 변화 전송(18)이 반영하고 그 응답으로 돌려준다. 여기서는 관계 단계(호감도 구간)만 읽어 말투를 고른다
@@ -252,7 +253,7 @@ public class DialogueService {
     public Accepted accept(long userId, long sessionId, MessageRequest request) {
         SessionInfo session = openSession(userId, sessionId);
         if (request.characterId() != session.characterId()) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "CHARACTER_NOT_IN_SESSION");
+            throw new ApiException(DialogueErrorCode.CHARACTER_NOT_IN_SESSION);
         }
         Conversation conversation = conversation(userId, session.characterId());
 
@@ -281,7 +282,7 @@ public class DialogueService {
                 props.current().messageLimit(),
                 props.current().messageLimitWindow())) {
             messages.deleteQuestion(conversation.getId(), request.requestId());
-            throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "TOO_MANY_REQUESTS");
+            throw new ApiException(CommonErrorCode.TOO_MANY_REQUESTS);
         }
         return new Accepted(session, conversation, request, null, null);
     }
@@ -388,7 +389,7 @@ public class DialogueService {
         if (response == null) {
             // 종료가 이번 사용자 말을 요약 전에 읽지 못했으면 끝난 세션에 남는다. 요약에 들어갔으면 이미 지워져 있다
             messages.deleteQuestion(conversation.getId(), requestId);
-            throw new ApiException(HttpStatus.CONFLICT, "SESSION_ENDED");
+            throw new ApiException(DialogueErrorCode.SESSION_ENDED);
         }
         // 기억 ①: 답장을 저장한 뒤 이번 사용자 말에서 기억할 것을 정리한다 (답장을 늦추지 않게 따로, 마감 없음)
         Runnable remember = () -> memoryKeeper.afterTurn(
@@ -579,9 +580,9 @@ public class DialogueService {
     private SessionInfo openSession(long userId, long sessionId) {
         SessionInfo session = sessions.find(sessionId)
                 .filter(s -> s.userId() == userId)
-                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "SESSION_NOT_FOUND"));
+                .orElseThrow(() -> new ApiException(DialogueErrorCode.SESSION_NOT_FOUND));
         if (!session.inProgress()) {
-            throw new ApiException(HttpStatus.CONFLICT, "SESSION_ENDED");
+            throw new ApiException(DialogueErrorCode.SESSION_ENDED);
         }
         return session;
     }

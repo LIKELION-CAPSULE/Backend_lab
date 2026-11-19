@@ -183,24 +183,24 @@ class SessionApiTest {
         // 최소 3분 (api.md 16). 5분 단위가 아니어도 3분은 받는다
         startRequest(userId, 3)
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.targetMinutes").value(3));
+                .andExpect(jsonPath("$.data.targetMinutes").value(3));
     }
 
     @Test
     void startCreatesSessionWithScene() throws Exception {
         startRequest(userId, 50)
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.sessionId").isNumber())
-                .andExpect(jsonPath("$.startedAt").isString())
-                .andExpect(jsonPath("$.targetMinutes").value(50))
-                .andExpect(jsonPath("$.room.name").value(ROOM.name()))
-                .andExpect(jsonPath("$.room.backgroundImageUrl").value(BACKGROUND.imageUrl()))
-                .andExpect(jsonPath("$.character.modelJsonUrl").value(CHAERIN_MODEL.modelJsonUrl()))
-                .andExpect(jsonPath("$.character.offsetY").value(12))
-                .andExpect(jsonPath("$.avatar.profileImageUrl").value(AVATAR.thumbnailUrl()))
-                .andExpect(jsonPath("$.me.nickname").value("승희"))
-                .andExpect(jsonPath("$.me.profileImageUrl").value(AVATAR.thumbnailUrl()))
-                .andExpect(jsonPath("$.serverTime").isString());
+                .andExpect(jsonPath("$.data.sessionId").isNumber())
+                .andExpect(jsonPath("$.data.startedAt").isString())
+                .andExpect(jsonPath("$.data.targetMinutes").value(50))
+                .andExpect(jsonPath("$.data.room.name").value(ROOM.name()))
+                .andExpect(jsonPath("$.data.room.backgroundImageUrl").value(BACKGROUND.imageUrl()))
+                .andExpect(jsonPath("$.data.character.modelJsonUrl").value(CHAERIN_MODEL.modelJsonUrl()))
+                .andExpect(jsonPath("$.data.character.offsetY").value(12))
+                .andExpect(jsonPath("$.data.avatar.profileImageUrl").value(AVATAR.thumbnailUrl()))
+                .andExpect(jsonPath("$.data.me.nickname").value("승희"))
+                .andExpect(jsonPath("$.data.me.profileImageUrl").value(AVATAR.thumbnailUrl()))
+                .andExpect(jsonPath("$.data.serverTime").isString());
 
         verify(relationCommands).meet(userId, 1L);
         assertThat(jdbc.queryForObject(
@@ -249,22 +249,22 @@ class SessionApiTest {
 
         String first = postEvent(userId, sessionId, "FOCUS", t0)
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.characters.length()").value(1))
-                .andExpect(jsonPath("$.characters[0].characterId").value(1))
-                .andExpect(jsonPath("$.characters[0].motion.file").value("motions/wave.motion3.json"))
-                .andExpect(jsonPath("$.characters[0].expression.name").value("smile"))
-                .andExpect(jsonPath("$.characters[0].affinity.delta").value(5))
-                .andExpect(jsonPath("$.characters[0].affinity.points").value(5))
+                .andExpect(jsonPath("$.data.characters.length()").value(1))
+                .andExpect(jsonPath("$.data.characters[0].characterId").value(1))
+                .andExpect(jsonPath("$.data.characters[0].motion.file").value("motions/wave.motion3.json"))
+                .andExpect(jsonPath("$.data.characters[0].expression.name").value("smile"))
+                .andExpect(jsonPath("$.data.characters[0].affinity.delta").value(5))
+                .andExpect(jsonPath("$.data.characters[0].affinity.points").value(5))
                 .andReturn()
                 .getResponse()
                 .getContentAsString();
-        long focus = ((Number) JsonPath.read(first, "$.eventId")).longValue();
+        long focus = ((Number) JsonPath.read(first, "$.data.eventId")).longValue();
 
         // 재전송: 호감도는 다시 반영하지 않고 기록된 변화를 읽어서 같은 모양으로
         postEvent(userId, sessionId, "FOCUS", t0)
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.eventId").value(focus))
-                .andExpect(jsonPath("$.characters[0].affinity.delta").value(5));
+                .andExpect(jsonPath("$.data.eventId").value(focus))
+                .andExpect(jsonPath("$.data.characters[0].affinity.delta").value(5));
         SessionEventRef ref = new SessionEventRef(userId, 1, sessionId, focus, "FOCUS", true, null);
         verify(relationCommands, times(1)).applySessionEvent(any());
         verify(relationQuery).changeOf(ref);
@@ -289,8 +289,8 @@ class SessionApiTest {
         event(sessionId, "BREAK", t0.plusSeconds(60), 201);
         postEvent(userId, sessionId, "AWAY", t0.plusSeconds(70))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.eventId").value(nullValue()))
-                .andExpect(jsonPath("$.characters").isEmpty());
+                .andExpect(jsonPath("$.data.eventId").value(nullValue()))
+                .andExpect(jsonPath("$.data.characters").isEmpty());
         long focusAfterBreak = event(sessionId, "FOCUS", t0.plusSeconds(120), 201);
         verify(relationCommands, times(3)).applySessionEvent(any()); // 중복·휴식 중 무시는 반영 안 함
 
@@ -341,8 +341,8 @@ class SessionApiTest {
         // 같은 동작 1분 안 → 무시 (서버 쿨다운). 다른 동작은 따로 셈
         postEvent(userId, sessionId, "YAWN", t0.plusSeconds(60))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.eventId").value(nullValue()))
-                .andExpect(jsonPath("$.characters").isEmpty());
+                .andExpect(jsonPath("$.data.eventId").value(nullValue()))
+                .andExpect(jsonPath("$.data.characters").isEmpty());
         event(sessionId, "HEAD_TURN", t0.plusSeconds(60), 201);
         event(sessionId, "YAWN", t0.plusSeconds(90), 201); // 1분 지남
         assertThat(event(sessionId, "YAWN", t0.plusSeconds(30), 200)).isEqualTo(yawn); // 재전송은 쿨다운보다 먼저
@@ -351,7 +351,7 @@ class SessionApiTest {
         event(sessionId, "BREAK", t0.plusSeconds(120), 201);
         postEvent(userId, sessionId, "WAVE", t0.plusSeconds(130))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.eventId").value(nullValue()));
+                .andExpect(jsonPath("$.data.eventId").value(nullValue()));
         long focusAfterBreak = event(sessionId, "FOCUS", t0.plusSeconds(180), 201);
         assertThat(sessionQuery.findEvent(sessionId, focusAfterBreak))
                 .get()
@@ -377,12 +377,12 @@ class SessionApiTest {
 
         mvc.perform(post("/api/sessions/{id}/resume", sessionId).with(login(userId)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.sessionId").value(sessionId))
-                .andExpect(jsonPath("$.startedAt").doesNotExist())
-                .andExpect(jsonPath("$.character.name").value("채린"))
-                .andExpect(jsonPath("$.avatar.id").value(1))
-                .andExpect(jsonPath("$.studySeconds").value(600))
-                .andExpect(jsonPath("$.breakSeconds").value(greaterThanOrEqualTo(1200)));
+                .andExpect(jsonPath("$.data.sessionId").value(sessionId))
+                .andExpect(jsonPath("$.data.startedAt").doesNotExist())
+                .andExpect(jsonPath("$.data.character.name").value("채린"))
+                .andExpect(jsonPath("$.data.avatar.id").value(1))
+                .andExpect(jsonPath("$.data.studySeconds").value(600))
+                .andExpect(jsonPath("$.data.breakSeconds").value(greaterThanOrEqualTo(1200)));
 
         assertThat(jdbc.queryForList(
                         "SELECT type FROM session_events WHERE session_id = ? ORDER BY occurred_at, id",
@@ -450,7 +450,7 @@ class SessionApiTest {
                 sessionId);
 
         mvc.perform(post("/api/sessions/{id}/resume", sessionId).with(login(userId)))
-                .andExpect(jsonPath("$.studySeconds").value(600));
+                .andExpect(jsonPath("$.data.studySeconds").value(600));
 
         assertThat(jdbc.queryForMap(
                         "SELECT heartbeat_study_seconds, heartbeat_present_seconds FROM study_sessions WHERE id = ?",
@@ -528,19 +528,21 @@ class SessionApiTest {
     void homeShowsRoomsAndActiveSession() throws Exception {
         mvc.perform(get("/api/home").with(login(userId)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.activeSession").value(nullValue()))
-                .andExpect(jsonPath("$.rooms[0].thumbnailUrl").value(ROOM.thumbnailUrl()))
+                .andExpect(jsonPath("$.data.activeSession").value(nullValue()))
+                .andExpect(jsonPath("$.data.rooms[0].thumbnailUrl").value(ROOM.thumbnailUrl()))
                 // 홈 카드는 전신 그림(homeImageUrl)을 profileImageUrl 칸으로 (api.md 11, 2026-11-06)
-                .andExpect(jsonPath("$.rooms[0].characters[0].profileImageUrl").value(CHAERIN.homeImageUrl()))
-                .andExpect(jsonPath("$.rooms[0].characters[0].homeImageUrl").doesNotExist());
+                .andExpect(jsonPath("$.data.rooms[0].characters[0].profileImageUrl")
+                        .value(CHAERIN.homeImageUrl()))
+                .andExpect(
+                        jsonPath("$.data.rooms[0].characters[0].homeImageUrl").doesNotExist());
         assertThat(activeSessionLookup.find(userId)).isEmpty();
 
         long sessionId = start(userId);
 
         mvc.perform(get("/api/home").with(login(userId)))
-                .andExpect(jsonPath("$.activeSession.sessionId").value(sessionId))
-                .andExpect(jsonPath("$.activeSession.roomName").value(ROOM.name()))
-                .andExpect(jsonPath("$.activeSession.characterName").value("채린"));
+                .andExpect(jsonPath("$.data.activeSession.sessionId").value(sessionId))
+                .andExpect(jsonPath("$.data.activeSession.roomName").value(ROOM.name()))
+                .andExpect(jsonPath("$.data.activeSession.characterName").value("채린"));
         assertThat(activeSessionLookup.find(userId))
                 .get()
                 .extracting(ActiveSessionSummary::sessionId, ActiveSessionSummary::roomId)
@@ -551,20 +553,20 @@ class SessionApiTest {
     void roomDetailShowsCharacterRelationAndActiveSession() throws Exception {
         mvc.perform(get("/api/rooms/1").with(login(userId)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.description").value(ROOM.description()))
-                .andExpect(jsonPath("$.thumbnailUrl").value(ROOM.thumbnailUrl()))
-                .andExpect(jsonPath("$.bannerUrl").value(ROOM.bannerUrl()))
-                .andExpect(jsonPath("$.characters[0].personality[0]").value("츤데레"))
-                .andExpect(jsonPath("$.characters[0].relation.level").value(1))
-                .andExpect(jsonPath("$.characters[0].relation.levelName").value("아는 사이"))
-                .andExpect(
-                        jsonPath("$.characters[0].relation.totalStudySeconds").value(0))
-                .andExpect(jsonPath("$.activeSessionId").value(nullValue()));
+                .andExpect(jsonPath("$.data.description").value(ROOM.description()))
+                .andExpect(jsonPath("$.data.thumbnailUrl").value(ROOM.thumbnailUrl()))
+                .andExpect(jsonPath("$.data.bannerUrl").value(ROOM.bannerUrl()))
+                .andExpect(jsonPath("$.data.characters[0].personality[0]").value("츤데레"))
+                .andExpect(jsonPath("$.data.characters[0].relation.level").value(1))
+                .andExpect(jsonPath("$.data.characters[0].relation.levelName").value("아는 사이"))
+                .andExpect(jsonPath("$.data.characters[0].relation.totalStudySeconds")
+                        .value(0))
+                .andExpect(jsonPath("$.data.activeSessionId").value(nullValue()));
 
         long sessionId = start(userId);
 
         mvc.perform(get("/api/rooms/1").with(login(userId)))
-                .andExpect(jsonPath("$.activeSessionId").value(sessionId));
+                .andExpect(jsonPath("$.data.activeSessionId").value(sessionId));
         expectError(mvc.perform(get("/api/rooms/99").with(login(userId))), 404, "ROOM_NOT_FOUND");
     }
 
@@ -653,7 +655,7 @@ class SessionApiTest {
                 .andReturn()
                 .getResponse()
                 .getContentAsString();
-        return ((Number) JsonPath.read(body, "$.sessionId")).longValue();
+        return ((Number) JsonPath.read(body, "$.data.sessionId")).longValue();
     }
 
     Instant startedAt(long sessionId) {
@@ -673,7 +675,7 @@ class SessionApiTest {
                 .andReturn()
                 .getResponse()
                 .getContentAsString();
-        return ((Number) JsonPath.read(body, "$.eventId")).longValue();
+        return ((Number) JsonPath.read(body, "$.data.eventId")).longValue();
     }
 
     ResultActions heartbeat(long sessionId, int studySeconds, int presentSeconds) throws Exception {
@@ -691,20 +693,20 @@ class SessionApiTest {
     }
 
     static void expectReport(ResultActions result, long sessionId) throws Exception {
-        result.andExpect(jsonPath("$.sessionId").value(sessionId))
-                .andExpect(jsonPath("$.roomName").value(ROOM.name()))
-                .andExpect(jsonPath("$.startedAt").isString())
-                .andExpect(jsonPath("$.endedAt").isString())
-                .andExpect(jsonPath("$.endType").value("NORMAL"))
-                .andExpect(jsonPath("$.studySeconds").value(3300))
-                .andExpect(jsonPath("$.presentSeconds").value(2880))
-                .andExpect(jsonPath("$.awaySeconds").value(420))
-                .andExpect(jsonPath("$.returnCount").value(1))
-                .andExpect(jsonPath("$.character.id").value(1))
-                .andExpect(jsonPath("$.character.name").value("채린"))
-                .andExpect(jsonPath("$.relation.pointsAfter").value(55))
-                .andExpect(jsonPath("$.relation.levelName").value("아는 사이"))
-                .andExpect(jsonPath("$.closingLine").value(CLOSING_LINE));
+        result.andExpect(jsonPath("$.data.sessionId").value(sessionId))
+                .andExpect(jsonPath("$.data.roomName").value(ROOM.name()))
+                .andExpect(jsonPath("$.data.startedAt").isString())
+                .andExpect(jsonPath("$.data.endedAt").isString())
+                .andExpect(jsonPath("$.data.endType").value("NORMAL"))
+                .andExpect(jsonPath("$.data.studySeconds").value(3300))
+                .andExpect(jsonPath("$.data.presentSeconds").value(2880))
+                .andExpect(jsonPath("$.data.awaySeconds").value(420))
+                .andExpect(jsonPath("$.data.returnCount").value(1))
+                .andExpect(jsonPath("$.data.character.id").value(1))
+                .andExpect(jsonPath("$.data.character.name").value("채린"))
+                .andExpect(jsonPath("$.data.relation.pointsAfter").value(55))
+                .andExpect(jsonPath("$.data.relation.levelName").value("아는 사이"))
+                .andExpect(jsonPath("$.data.closingLine").value(CLOSING_LINE));
     }
 
     static ResultActions expectError(ResultActions result, int httpStatus, String code) throws Exception {

@@ -21,36 +21,40 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ApiException.class)
     public ResponseEntity<ErrorResponse> api(ApiException e) {
-        return ResponseEntity.status(e.status()).body(new ErrorResponse(e.code(), e.code(), e.detail()));
+        return ResponseEntity.status(e.status()).body(ErrorResponse.of(e));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> invalid(MethodArgumentNotValidException e) {
-        String message = e.getBindingResult().getAllErrors().stream()
+        String code = e.getBindingResult().getAllErrors().stream()
                 .map(error -> error.getDefaultMessage())
                 .filter(m -> m != null && ERROR_CODE.matcher(m).matches())
                 .findFirst()
-                .orElse("INVALID_REQUEST");
-        return ResponseEntity.badRequest().body(ErrorResponse.of(message));
+                .orElse(CommonErrorCode.INVALID_REQUEST.code());
+        return ResponseEntity.badRequest().body(ErrorResponse.of(code));
     }
 
     @ExceptionHandler({HttpMessageNotReadableException.class, MethodArgumentTypeMismatchException.class})
     public ResponseEntity<ErrorResponse> unreadable(Exception e) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorResponse.of("INVALID_REQUEST"));
+        return error(CommonErrorCode.INVALID_REQUEST);
     }
 
     /**
-     * 나머지도 B13 모양으로. 스프링이 상태를 정해 둔 예외(없는 경로 404, 메서드 405 등)는 그 상태 그대로,
+     * 나머지도 같은 모양으로. 스프링이 상태를 정해 둔 예외(없는 경로 404, 메서드 405 등)는 그 상태 그대로,
      * 그 밖은 500 INTERNAL_ERROR (내용은 로그에만).
      */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> unexpected(Exception e) {
         if (e instanceof org.springframework.web.ErrorResponse known) {
             HttpStatus status = HttpStatus.valueOf(known.getStatusCode().value());
-            String code = status == HttpStatus.BAD_REQUEST ? "INVALID_REQUEST" : status.name();
+            String code = status == HttpStatus.BAD_REQUEST ? CommonErrorCode.INVALID_REQUEST.code() : status.name();
             return ResponseEntity.status(status).body(ErrorResponse.of(code));
         }
         log.error("처리하지 못한 예외", e);
-        return ResponseEntity.internalServerError().body(ErrorResponse.of("INTERNAL_ERROR"));
+        return error(CommonErrorCode.INTERNAL_ERROR);
+    }
+
+    private static ResponseEntity<ErrorResponse> error(ErrorCode code) {
+        return ResponseEntity.status(code.status()).body(ErrorResponse.of(code));
     }
 }

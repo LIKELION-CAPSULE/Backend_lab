@@ -4,13 +4,9 @@ import static com.capsule.session.domain.SessionEvent.AWAY;
 import static com.capsule.session.domain.SessionEvent.BREAK;
 import static com.capsule.session.domain.SessionEvent.FOCUS;
 import static com.capsule.session.domain.SessionEvent.RETURN;
-import static org.springframework.http.HttpStatus.BAD_REQUEST;
-import static org.springframework.http.HttpStatus.CONFLICT;
-import static org.springframework.http.HttpStatus.FORBIDDEN;
-import static org.springframework.http.HttpStatus.NOT_FOUND;
-import static org.springframework.http.HttpStatus.UNAUTHORIZED;
 
 import com.capsule.common.error.ApiException;
+import com.capsule.common.error.CommonErrorCode;
 import com.capsule.common.time.ClockConfig;
 import com.capsule.content.api.AvatarQuery;
 import com.capsule.content.api.CharacterQuery;
@@ -30,6 +26,7 @@ import com.capsule.relation.api.RelationTypes.StudySettlement;
 import com.capsule.session.api.SessionClosingHandler;
 import com.capsule.session.api.SessionTypes.SessionClosing;
 import com.capsule.session.config.SessionProperties;
+import com.capsule.session.domain.SessionErrorCode;
 import com.capsule.session.domain.SessionEvent;
 import com.capsule.session.domain.StudySession;
 import com.capsule.session.dto.CharacterBrief;
@@ -157,7 +154,7 @@ public class SessionService {
 
     /** 16 · H18 팝업: 진행 중인 세션이 이미 있음 */
     public static ApiException alreadyInProgress(long sessionId) {
-        return new ApiException(CONFLICT, "SESSION_ALREADY_IN_PROGRESS", Map.of("sessionId", sessionId));
+        return new ApiException(SessionErrorCode.SESSION_ALREADY_IN_PROGRESS, Map.of("sessionId", sessionId));
     }
 
     /** 동시 시작이 유니크 인덱스에 막혔을 때 먼저 만들어진 세션 */
@@ -176,16 +173,16 @@ public class SessionService {
                                 && minutes <= props.targetMinutesMax()
                                 && minutes % props.targetMinutesStep() == 0));
         if (!valid) {
-            throw new ApiException(BAD_REQUEST, "INVALID_TARGET_MINUTES");
+            throw new ApiException(SessionErrorCode.INVALID_TARGET_MINUTES);
         }
         RoomInfo room = activeRoom(req.roomId());
         CharacterInfo character = room.characters().stream()
                 .filter(c -> c.id() == req.characterId())
                 .findFirst()
-                .orElseThrow(() -> new ApiException(BAD_REQUEST, "CHARACTER_NOT_IN_ROOM"));
+                .orElseThrow(() -> new ApiException(SessionErrorCode.CHARACTER_NOT_IN_ROOM));
         UserProfile user = user(userId);
         if (user.onboardingRequired()) {
-            throw new ApiException(FORBIDDEN, "ONBOARDING_REQUIRED");
+            throw new ApiException(SessionErrorCode.ONBOARDING_REQUIRED);
         }
         sessions.findByUserIdAndEndedAtIsNull(userId).ifPresent(s -> {
             throw alreadyInProgress(s.getId());
@@ -255,7 +252,7 @@ public class SessionService {
         StudySession s = inProgress(userId, sessionId);
         String type = req.type();
         if (type == null || !SessionEvent.TYPES.contains(type) || req.occurredAt() == null) {
-            throw new ApiException(BAD_REQUEST, "INVALID_EVENT");
+            throw new ApiException(SessionErrorCode.INVALID_EVENT);
         }
         // 프론트 시계가 서버보다 조금 늦으면 시작 직후 FOCUS가 세션 시작보다 앞설 수 있어서, 거절하지 않고 시작 시각으로 맞춘다
         Instant occurredAt = req.occurredAt().isBefore(s.getStartedAt()) ? s.getStartedAt() : req.occurredAt();
@@ -334,7 +331,7 @@ public class SessionService {
     }
 
     public static ApiException invalidStudyTime() {
-        return new ApiException(BAD_REQUEST, "INVALID_STUDY_TIME");
+        return new ApiException(SessionErrorCode.INVALID_STUDY_TIME);
     }
 
     // ---- 22 공부 종료 · 23 리포트 · 자동 마감
@@ -374,7 +371,7 @@ public class SessionService {
     public ReportResponse report(long userId, long sessionId) {
         StudySession s = owned(sessions.findById(sessionId), userId);
         if (s.inProgress()) {
-            throw new ApiException(CONFLICT, "SESSION_IN_PROGRESS");
+            throw new ApiException(SessionErrorCode.SESSION_IN_PROGRESS);
         }
         return toReport(s, relationQuery.settlementOf(s.getUserId(), s.characterId(), s.getId()));
     }
@@ -520,13 +517,13 @@ public class SessionService {
     /** 남의 세션도 없는 세션과 똑같이 404 */
     private static StudySession owned(Optional<StudySession> found, long userId) {
         return found.filter(s -> s.getUserId() == userId)
-                .orElseThrow(() -> new ApiException(NOT_FOUND, "SESSION_NOT_FOUND"));
+                .orElseThrow(() -> new ApiException(SessionErrorCode.SESSION_NOT_FOUND));
     }
 
     private StudySession inProgress(long userId, long sessionId) {
         StudySession s = owned(sessions.findWithLockById(sessionId), userId);
         if (!s.inProgress()) {
-            throw new ApiException(CONFLICT, "SESSION_ENDED");
+            throw new ApiException(SessionErrorCode.SESSION_ENDED);
         }
         return s;
     }
@@ -534,11 +531,11 @@ public class SessionService {
     private RoomInfo activeRoom(long roomId) {
         return rooms.find(roomId)
                 .filter(RoomInfo::active)
-                .orElseThrow(() -> new ApiException(NOT_FOUND, "ROOM_NOT_FOUND"));
+                .orElseThrow(() -> new ApiException(SessionErrorCode.ROOM_NOT_FOUND));
     }
 
     private UserProfile user(long userId) {
-        return users.find(userId).orElseThrow(() -> new ApiException(UNAUTHORIZED, "UNAUTHORIZED"));
+        return users.find(userId).orElseThrow(() -> new ApiException(CommonErrorCode.UNAUTHORIZED));
     }
 
     private AvatarInfo avatar(UserProfile user) {

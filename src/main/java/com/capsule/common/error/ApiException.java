@@ -3,30 +3,32 @@ package com.capsule.common.error;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
 
-/** 명세의 에러 코드(INVALID_EMAIL 등)를 그대로 내보내는 예외. 응답 형식은 {@link ErrorResponse}. */
+/** 명세의 에러 코드({@link ErrorCode})를 그대로 내보내는 예외. 응답 형식은 {@link ErrorResponse}. */
 public class ApiException extends RuntimeException {
 
-    private final HttpStatus status;
-    private final String code;
+    private final ErrorCode errorCode;
     private final Map<String, Object> detail;
 
-    public ApiException(HttpStatus status, String code) {
-        this(status, code, Map.of());
+    public ApiException(ErrorCode errorCode) {
+        this(errorCode, Map.of());
     }
 
-    public ApiException(HttpStatus status, String code, Map<String, Object> detail) {
-        super(code);
-        this.status = status;
-        this.code = code;
+    public ApiException(ErrorCode errorCode, Map<String, Object> detail) {
+        super(errorCode.code());
+        this.errorCode = errorCode;
         this.detail = detail;
     }
 
+    public ErrorCode errorCode() {
+        return errorCode;
+    }
+
     public HttpStatus status() {
-        return status;
+        return errorCode.status();
     }
 
     public String code() {
-        return code;
+        return errorCode.code();
     }
 
     public Map<String, Object> detail() {

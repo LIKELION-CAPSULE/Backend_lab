@@ -3,6 +3,7 @@ package com.capsule.relation.service;
 import com.capsule.common.error.ApiException;
 import com.capsule.relation.api.RelationQuery;
 import com.capsule.relation.domain.Relation;
+import com.capsule.relation.domain.RelationErrorCode;
 import com.capsule.relation.domain.RelationLog;
 import com.capsule.relation.dto.RelationLabView;
 import com.capsule.relation.dto.RelationLabView.LogLine;
@@ -14,7 +15,6 @@ import java.time.Instant;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -56,7 +56,7 @@ public class RelationLab {
      */
     public RelationLabView adjust(
             long userId, long characterId, Integer points, Integer presentSeconds, Long sessionId) {
-        if (points != null && sessionId == null) throw new ApiException(HttpStatus.BAD_REQUEST, "SESSION_REQUIRED");
+        if (points != null && sessionId == null) throw new ApiException(RelationErrorCode.SESSION_REQUIRED);
         Instant now = Instant.now(clock);
         relations.insertIfAbsent(userId, characterId, now);
         Relation rel = relations.findLockedByUserIdAndCharacterId(userId, characterId);

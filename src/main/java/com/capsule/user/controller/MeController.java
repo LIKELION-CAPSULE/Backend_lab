@@ -1,6 +1,7 @@
 package com.capsule.user.controller;
 
 import com.capsule.common.config.ApiTags;
+import com.capsule.common.response.ApiResponse;
 import com.capsule.common.security.LoginUser;
 import com.capsule.user.domain.UserMemory;
 import com.capsule.user.dto.CreateMemoryRequest;
@@ -46,14 +47,14 @@ public class MeController {
 
     @Operation(summary = "8. 내 정보 조회", description = "내 정보 + 온보딩 필요 여부 + 진행 중 세션(H18 판단) (명세: api.md 8)")
     @GetMapping
-    public MeResponse me(@LoginUser long userId) {
-        return profiles.me(userId);
+    public ApiResponse<MeResponse> me(@LoginUser long userId) {
+        return ApiResponse.ok(profiles.me(userId));
     }
 
     @Operation(summary = "10. 프로필 설정", description = "닉네임 · 아바타 저장 (온보딩 완료) (명세: api.md 10)")
     @PatchMapping
-    public MeResponse update(@LoginUser long userId, @RequestBody UpdateMeRequest req) {
-        return profiles.update(userId, req);
+    public ApiResponse<MeResponse> update(@LoginUser long userId, @RequestBody UpdateMeRequest req) {
+        return ApiResponse.ok(profiles.update(userId, req));
     }
 
     @Operation(
@@ -71,21 +72,21 @@ public class MeController {
     @Operation(summary = "13. 일정 저장", description = "시험 · 약속 · 목표 일정 저장 (명세: api.md 13)")
     @PostMapping("/memories")
     @ResponseStatus(HttpStatus.CREATED)
-    public MemoryResponse createMemory(@LoginUser long userId, @RequestBody CreateMemoryRequest req) {
-        return memories.create(userId, req);
+    public ApiResponse<MemoryResponse> createMemory(@LoginUser long userId, @RequestBody CreateMemoryRequest req) {
+        return ApiResponse.ok(memories.create(userId, req));
     }
 
     @Operation(
             summary = "14. 내 일정 조회",
             description = "내 일정(시험 · 약속 · 목표) 조회. 달력 점 · 날짜 클릭 · 예정/전체/지난 탭 (명세: api.md 14)")
     @GetMapping("/memories")
-    public MemoryList memories(
+    public ApiResponse<MemoryList> memories(
             @LoginUser long userId,
             @RequestParam(required = false) @DateTimeFormat(iso = ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = ISO.DATE) LocalDate to,
             @RequestParam(required = false) @DateTimeFormat(iso = ISO.DATE) LocalDate date,
             @RequestParam(defaultValue = "UPCOMING") MemoryStatus status,
             @RequestParam(required = false) UserMemory.Type type) {
-        return memories.list(userId, from, to, date, status, type);
+        return ApiResponse.ok(memories.list(userId, from, to, date, status, type));
     }
 }

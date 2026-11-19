@@ -47,19 +47,19 @@ class ProfileAndMemoryApiTest extends UserApiTestSupport {
         String email = uniqueEmail();
         MvcResult user = signedUp(email);
         String auth = bearer(user);
-        long userId = ((Number) read(user, "$.userId")).longValue();
+        long userId = ((Number) read(user, "$.data.userId")).longValue();
         given(avatarQuery.defaultAvatar()).willReturn(Optional.of(AVATAR));
         given(avatarQuery.find(1)).willReturn(Optional.of(AVATAR));
         given(avatarQuery.find(2)).willReturn(Optional.of(INACTIVE));
 
         mvc.perform(get("/api/me").header(HttpHeaders.AUTHORIZATION, auth))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.userId").value(userId))
-                .andExpect(jsonPath("$.nickname").value("승희"))
-                .andExpect(jsonPath("$.email").value(email))
-                .andExpect(jsonPath("$.onboardingRequired").value(true))
-                .andExpect(jsonPath("$.activeSession").value(nullValue()))
-                .andExpect(jsonPath("$.profileImage").value(nullValue()));
+                .andExpect(jsonPath("$.data.userId").value(userId))
+                .andExpect(jsonPath("$.data.nickname").value("승희"))
+                .andExpect(jsonPath("$.data.email").value(email))
+                .andExpect(jsonPath("$.data.onboardingRequired").value(true))
+                .andExpect(jsonPath("$.data.activeSession").value(nullValue()))
+                .andExpect(jsonPath("$.data.profileImage").value(nullValue()));
 
         patchMe(auth, "{\"nickname\":\"\"}").andExpect(jsonPath("$.code").value("INVALID_NICKNAME"));
         patchMe(auth, "{\"nickname\":\"새닉\",\"avatarId\":99}")
@@ -69,18 +69,18 @@ class ProfileAndMemoryApiTest extends UserApiTestSupport {
                 .andExpect(jsonPath("$.code").value("AVATAR_NOT_FOUND"));
         patchMe(auth, "{\"nickname\":\" 새닉 \"}")
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.nickname").value("새닉"))
-                .andExpect(jsonPath("$.onboardingRequired").value(false))
-                .andExpect(jsonPath("$.profileImage").value(AVATAR.thumbnailUrl()));
+                .andExpect(jsonPath("$.data.nickname").value("새닉"))
+                .andExpect(jsonPath("$.data.onboardingRequired").value(false))
+                .andExpect(jsonPath("$.data.profileImage").value(AVATAR.thumbnailUrl()));
 
         given(activeSessionLookup.find(userId))
                 .willReturn(Optional.of(new ActiveSessionSummary(
                         512, 1, "쌀쌀맞은 갸루짝꿍이 나에게만 친절하다!", "채린", Instant.parse("2026-11-07T05:00:02Z"))));
         mvc.perform(get("/api/me").header(HttpHeaders.AUTHORIZATION, auth))
-                .andExpect(jsonPath("$.activeSession.sessionId").value(512))
-                .andExpect(jsonPath("$.activeSession.characterName").value("채린"))
-                .andExpect(jsonPath("$.activeSession.startedAt").value("2026-11-07T05:00:02Z"))
-                .andExpect(jsonPath("$.profileImage").value(AVATAR.thumbnailUrl()));
+                .andExpect(jsonPath("$.data.activeSession.sessionId").value(512))
+                .andExpect(jsonPath("$.data.activeSession.characterName").value("채린"))
+                .andExpect(jsonPath("$.data.activeSession.startedAt").value("2026-11-07T05:00:02Z"))
+                .andExpect(jsonPath("$.data.profileImage").value(AVATAR.thumbnailUrl()));
 
         assertThat(userQuery.find(userId)).hasValueSatisfying(p -> {
             assertThat(p.nickname()).isEqualTo("새닉");
@@ -114,30 +114,30 @@ class ProfileAndMemoryApiTest extends UserApiTestSupport {
                         "{\"type\":\"PROMISE\",\"title\":\"\",\"dueDate\":\"%s\",\"dueTime\":\"20:00\"}"
                                 .formatted(today.plusDays(1)))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.memoryId").isNumber())
-                .andExpect(jsonPath("$.type").value("PROMISE"))
-                .andExpect(jsonPath("$.title").value("같이 공부하기"))
-                .andExpect(jsonPath("$.dueDate").value(today.plusDays(1).toString()))
-                .andExpect(jsonPath("$.dueTime").value("20:00"))
-                .andExpect(jsonPath("$.dDay").value(1));
+                .andExpect(jsonPath("$.data.memoryId").isNumber())
+                .andExpect(jsonPath("$.data.type").value("PROMISE"))
+                .andExpect(jsonPath("$.data.title").value("같이 공부하기"))
+                .andExpect(jsonPath("$.data.dueDate").value(today.plusDays(1).toString()))
+                .andExpect(jsonPath("$.data.dueTime").value("20:00"))
+                .andExpect(jsonPath("$.data.dDay").value(1));
         createMemory(auth, "{\"type\":\"GOAL\",\"title\":\"토익 900\"}")
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.dueDate").value(nullValue()))
-                .andExpect(jsonPath("$.dDay").value(nullValue()));
+                .andExpect(jsonPath("$.data.dueDate").value(nullValue()))
+                .andExpect(jsonPath("$.data.dDay").value(nullValue()));
         // 시간은 약속에서만: 시험에 시간이 와도 종일로 저장
         createMemory(
                         auth,
                         "{\"type\":\"EXAM\",\"title\":\"모의고사\",\"dueDate\":\"%s\",\"dueTime\":\"09:00\"}"
                                 .formatted(today.plusDays(2)))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.dueTime").value(nullValue()));
+                .andExpect(jsonPath("$.data.dueTime").value(nullValue()));
     }
 
     @Test
     void memoryListing() throws Exception {
         MvcResult user = signedUp(uniqueEmail());
         String auth = bearer(user);
-        long userId = ((Number) read(user, "$.userId")).longValue();
+        long userId = ((Number) read(user, "$.data.userId")).longValue();
         LocalDate today = LocalDate.now(ClockConfig.KST);
         createMemory(auth, "{\"type\":\"EXAM\",\"title\":\"영어 중간고사\",\"dueDate\":\"%s\"}".formatted(today.plusDays(5)))
                 .andExpect(status().isCreated());
@@ -156,26 +156,26 @@ class ProfileAndMemoryApiTest extends UserApiTestSupport {
                 today.minusDays(3));
 
         listMemories(auth)
-                .andExpect(jsonPath("$.memories[*].title").value(contains("같이 공부하기", "도서관", "영어 중간고사")))
-                .andExpect(jsonPath("$.memories[2].dDay").value(5))
-                .andExpect(jsonPath("$.datesWithMemories")
+                .andExpect(jsonPath("$.data.memories[*].title").value(contains("같이 공부하기", "도서관", "영어 중간고사")))
+                .andExpect(jsonPath("$.data.memories[2].dDay").value(5))
+                .andExpect(jsonPath("$.data.datesWithMemories")
                         .value(contains(
                                 today.minusDays(3).toString(),
                                 today.plusDays(1).toString(),
                                 today.plusDays(5).toString())));
         listMemories(auth, "status", "PAST")
-                .andExpect(jsonPath("$.memories[*].title").value(contains("지난 시험")))
-                .andExpect(jsonPath("$.memories[0].dDay").value(-3));
+                .andExpect(jsonPath("$.data.memories[*].title").value(contains("지난 시험")))
+                .andExpect(jsonPath("$.data.memories[0].dDay").value(-3));
         listMemories(auth, "status", "ALL")
-                .andExpect(jsonPath("$.memories[*].title")
+                .andExpect(jsonPath("$.data.memories[*].title")
                         .value(contains("지난 시험", "같이 공부하기", "도서관", "영어 중간고사", "토익 900")));
         listMemories(auth, "date", today.plusDays(5).toString())
-                .andExpect(jsonPath("$.memories[*].title").value(contains("영어 중간고사")));
+                .andExpect(jsonPath("$.data.memories[*].title").value(contains("영어 중간고사")));
         listMemories(auth, "type", "PROMISE")
-                .andExpect(jsonPath("$.memories[*].title").value(contains("같이 공부하기", "도서관")));
+                .andExpect(jsonPath("$.data.memories[*].title").value(contains("같이 공부하기", "도서관")));
         listMemories(auth, "from", today.toString(), "to", today.plusDays(3).toString())
-                .andExpect(jsonPath("$.memories[*].title").value(contains("같이 공부하기", "도서관")))
-                .andExpect(jsonPath("$.datesWithMemories")
+                .andExpect(jsonPath("$.data.memories[*].title").value(contains("같이 공부하기", "도서관")))
+                .andExpect(jsonPath("$.data.datesWithMemories")
                         .value(contains(today.plusDays(1).toString())));
         listMemories(
                         auth,
@@ -183,10 +183,10 @@ class ProfileAndMemoryApiTest extends UserApiTestSupport {
                         today.plusDays(10).toString(),
                         "to",
                         today.plusDays(20).toString())
-                .andExpect(jsonPath("$.memories").value(empty()));
+                .andExpect(jsonPath("$.data.memories").value(empty()));
         // 날짜 없는 목표는 기간과 상관없이 '전체'의 맨 아래
         listMemories(auth, "from", today.toString(), "to", today.plusDays(3).toString(), "status", "ALL")
-                .andExpect(jsonPath("$.memories[*].title").value(contains("같이 공부하기", "도서관", "토익 900")));
+                .andExpect(jsonPath("$.data.memories[*].title").value(contains("같이 공부하기", "도서관", "토익 900")));
 
         listMemories(auth, "from", today.toString(), "to", today.minusDays(1).toString())
                 .andExpect(status().isBadRequest())
@@ -208,17 +208,17 @@ class ProfileAndMemoryApiTest extends UserApiTestSupport {
         // H02 '나중에 바꿀게요': 빈 요청 → 기본 아바타, 닉네임은 가입 때 값 그대로
         patchMe(auth, "{}")
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.nickname").value("승희"))
-                .andExpect(jsonPath("$.onboardingRequired").value(false))
-                .andExpect(jsonPath("$.profileImage").value(AVATAR.thumbnailUrl()));
+                .andExpect(jsonPath("$.data.nickname").value("승희"))
+                .andExpect(jsonPath("$.data.onboardingRequired").value(false))
+                .andExpect(jsonPath("$.data.profileImage").value(AVATAR.thumbnailUrl()));
 
         // H14에서 닉네임만 바꾸면 아바타는 그대로. 기본 아바타를 다시 찾지 않으므로
         // 기본 아바타가 없어도(AVATAR_NOT_FOUND가 날 상황) 200
         given(avatarQuery.defaultAvatar()).willReturn(Optional.empty());
         patchMe(auth, "{\"nickname\":\"바꾼닉\"}")
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.nickname").value("바꾼닉"))
-                .andExpect(jsonPath("$.profileImage").value(AVATAR.thumbnailUrl()));
+                .andExpect(jsonPath("$.data.nickname").value("바꾼닉"))
+                .andExpect(jsonPath("$.data.profileImage").value(AVATAR.thumbnailUrl()));
     }
 
     private ResultActions patchMe(String auth, String body) throws Exception {
