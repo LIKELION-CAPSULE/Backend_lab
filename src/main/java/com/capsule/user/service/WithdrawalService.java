@@ -4,13 +4,13 @@ import com.capsule.common.error.ApiException;
 import com.capsule.user.api.ActiveSessionLookup;
 import com.capsule.user.api.UserWithdrawnEvent;
 import com.capsule.user.domain.User;
+import com.capsule.user.domain.UserErrorCode;
 import com.capsule.user.repository.UserMemoryRepository;
 import com.capsule.user.repository.UserRepository;
 import java.time.Clock;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -39,7 +39,7 @@ public class WithdrawalService {
             }
             // 세션이 남으면 자동 마감이 탈퇴 뒤에 정산 · 대화 카드를 다시 만든다
             if (activeSessions.find(userId).isPresent()) {
-                throw new ApiException(HttpStatus.CONFLICT, "SESSION_IN_PROGRESS");
+                throw new ApiException(UserErrorCode.SESSION_IN_PROGRESS);
             }
             user.withdraw(Instant.now(clock));
             users.deleteSocialAccounts(userId);

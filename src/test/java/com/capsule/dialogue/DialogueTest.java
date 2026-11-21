@@ -164,17 +164,18 @@ class DialogueTest {
 
         react(10, "{\"requestId\":\"" + requestId + "\",\"tts\":true}")
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.requestId").value(requestId.toString()))
-                .andExpect(jsonPath("$.trigger").doesNotExist())
-                .andExpect(jsonPath("$.characters.length()").value(1))
-                .andExpect(jsonPath("$.characters[0].characterId").value(CHARACTER_ID))
-                .andExpect(jsonPath("$.characters[0].content").value(in(List.of("왔구나. 오늘도 같이 해볼까?", "안녕. 오늘도 잘 부탁해."))))
-                .andExpect(jsonPath("$.characters[0].emotion").value("HAPPY"))
-                .andExpect(jsonPath("$.characters[0].motion.group").value("TapBody"))
-                .andExpect(jsonPath("$.characters[0].expression.file").value("exp/smile.exp3.json"))
-                .andExpect(jsonPath("$.characters[0].affinity").doesNotExist())
-                .andExpect(jsonPath("$.characters[0].fallback").value(false))
-                .andExpect(jsonPath("$.characters[0].audioBase64").value(nullValue()));
+                .andExpect(jsonPath("$.data.requestId").value(requestId.toString()))
+                .andExpect(jsonPath("$.data.trigger").doesNotExist())
+                .andExpect(jsonPath("$.data.characters.length()").value(1))
+                .andExpect(jsonPath("$.data.characters[0].characterId").value(CHARACTER_ID))
+                .andExpect(jsonPath("$.data.characters[0].content")
+                        .value(in(List.of("왔구나. 오늘도 같이 해볼까?", "안녕. 오늘도 잘 부탁해."))))
+                .andExpect(jsonPath("$.data.characters[0].emotion").value("HAPPY"))
+                .andExpect(jsonPath("$.data.characters[0].motion.group").value("TapBody"))
+                .andExpect(jsonPath("$.data.characters[0].expression.file").value("exp/smile.exp3.json"))
+                .andExpect(jsonPath("$.data.characters[0].affinity").doesNotExist())
+                .andExpect(jsonPath("$.data.characters[0].fallback").value(false))
+                .andExpect(jsonPath("$.data.characters[0].audioBase64").value(nullValue()));
         verify(reactionQuery).pick(CHARACTER_ID, "HAPPY", null); // 명세 19: trigger가 아니라 감정으로 고름
         verifyNoInteractions(relationCommands); // 호감도는 18이 맡는다 (여기선 단계만 읽음)
     }
@@ -185,9 +186,9 @@ class DialogueTest {
 
         react(11, "{\"requestId\":\"" + UUID.randomUUID() + "\",\"intensity\":2}")
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.characters[0].content").value(in(List.of("아직이야? 기다리고 있을게.", "언제 와?"))))
-                .andExpect(jsonPath("$.characters[0].emotion").value("SAD"))
-                .andExpect(jsonPath("$.characters[0].motion").value(nullValue()));
+                .andExpect(jsonPath("$.data.characters[0].content").value(in(List.of("아직이야? 기다리고 있을게.", "언제 와?"))))
+                .andExpect(jsonPath("$.data.characters[0].emotion").value("SAD"))
+                .andExpect(jsonPath("$.data.characters[0].motion").value(nullValue()));
         verify(reactionQuery).pick(CHARACTER_ID, "SAD", null);
     }
 
@@ -214,9 +215,9 @@ class DialogueTest {
             event(eventId, c[0], false, false);
             react(eventId++, "{\"requestId\":\"" + UUID.randomUUID() + "\"}")
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.characters[0].content").value(in(List.of(c[1], c[2]))))
-                    .andExpect(jsonPath("$.characters[0].emotion").value(c[3]))
-                    .andExpect(jsonPath("$.characters[0].fallback").value(false));
+                    .andExpect(jsonPath("$.data.characters[0].content").value(in(List.of(c[1], c[2]))))
+                    .andExpect(jsonPath("$.data.characters[0].emotion").value(c[3]))
+                    .andExpect(jsonPath("$.data.characters[0].fallback").value(false));
         }
     }
 
@@ -227,11 +228,11 @@ class DialogueTest {
 
         // Lv.3: AWAY의 3 이상 칸. 강도 2도 AWAY_2의 3 이상 칸
         react(15, "{\"requestId\":\"" + UUID.randomUUID() + "\"}")
-                .andExpect(jsonPath("$.characters[0].content")
+                .andExpect(jsonPath("$.data.characters[0].content")
                         .value(in(List.of("또 도망가는 거야~?", "빨리 와. 혼자 있으면 심심하단 말이야."))));
         react(15, "{\"requestId\":\"" + UUID.randomUUID() + "\",\"intensity\":2}")
-                .andExpect(
-                        jsonPath("$.characters[0].content").value(in(List.of("1분이나 지났어. 나 삐질 거야?", "어디서 뭐 해~ 빨리 와."))));
+                .andExpect(jsonPath("$.data.characters[0].content")
+                        .value(in(List.of("1분이나 지났어. 나 삐질 거야?", "어디서 뭐 해~ 빨리 와."))));
     }
 
     @Test
@@ -240,7 +241,7 @@ class DialogueTest {
 
         react(12, "{\"requestId\":\"" + UUID.randomUUID() + "\",\"intensity\":3}")
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.characters[0].content").value(in(List.of("다시 시작해볼까?", "좋아, 이어서 하자."))));
+                .andExpect(jsonPath("$.data.characters[0].content").value(in(List.of("다시 시작해볼까?", "좋아, 이어서 하자."))));
         verify(reactionQuery).pick(CHARACTER_ID, "NEUTRAL", null);
     }
 
@@ -250,9 +251,9 @@ class DialogueTest {
 
         react(14, "{\"requestId\":\"" + UUID.randomUUID() + "\"}")
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.characters[0].content").value(org.hamcrest.Matchers.startsWith("(가짜 반응)")))
-                .andExpect(jsonPath("$.characters[0].emotion").value("NEUTRAL"))
-                .andExpect(jsonPath("$.characters[0].fallback").value(false));
+                .andExpect(jsonPath("$.data.characters[0].content").value(org.hamcrest.Matchers.startsWith("(가짜 반응)")))
+                .andExpect(jsonPath("$.data.characters[0].emotion").value("NEUTRAL"))
+                .andExpect(jsonPath("$.data.characters[0].fallback").value(false));
         assertThat(jdbc.queryForObject(
                         "SELECT count(*) FROM llm_usages WHERE session_id = ? AND purpose = 'REACTION'"
                                 + " AND source = 'APP' AND status = 'OK' AND cardinality(prompt_version_ids) = 2",
@@ -273,10 +274,10 @@ class DialogueTest {
 
         react(13, "{\"requestId\":\"" + UUID.randomUUID() + "\"}")
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.characters[0].content").value(in(List.of("왔네. 이어서 하자.", "돌아왔구나. 다시 해볼까?"))))
-                .andExpect(jsonPath("$.characters[0].emotion").value(nullValue()))
-                .andExpect(jsonPath("$.characters[0].motion").value(nullValue()))
-                .andExpect(jsonPath("$.characters[0].fallback").value(true));
+                .andExpect(jsonPath("$.data.characters[0].content").value(in(List.of("왔네. 이어서 하자.", "돌아왔구나. 다시 해볼까?"))))
+                .andExpect(jsonPath("$.data.characters[0].emotion").value(nullValue()))
+                .andExpect(jsonPath("$.data.characters[0].motion").value(nullValue()))
+                .andExpect(jsonPath("$.data.characters[0].fallback").value(true));
         verify(reactionQuery, never()).pick(anyLong(), anyString(), any()); // 감정이 없으면 동작 없음
     }
 
@@ -314,16 +315,16 @@ class DialogueTest {
 
         send(requestId, "이거 너무 어려워")
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.requestId").value(requestId.toString()))
-                .andExpect(jsonPath("$.characterId").value(CHARACTER_ID))
-                .andExpect(jsonPath("$.content").value("「이거 너무 어려워」… 그렇구나. 한 문제만 더 해보자."))
-                .andExpect(jsonPath("$.emotion").value("NEUTRAL"))
-                .andExpect(jsonPath("$.motion").value(nullValue()))
-                .andExpect(jsonPath("$.expression").value(nullValue()))
-                .andExpect(jsonPath("$.affinity.delta").value(1))
-                .andExpect(jsonPath("$.affinity.points").value(81))
-                .andExpect(jsonPath("$.fallback").value(false))
-                .andExpect(jsonPath("$.audioBase64").value(nullValue()));
+                .andExpect(jsonPath("$.data.requestId").value(requestId.toString()))
+                .andExpect(jsonPath("$.data.characterId").value(CHARACTER_ID))
+                .andExpect(jsonPath("$.data.content").value("「이거 너무 어려워」… 그렇구나. 한 문제만 더 해보자."))
+                .andExpect(jsonPath("$.data.emotion").value("NEUTRAL"))
+                .andExpect(jsonPath("$.data.motion").value(nullValue()))
+                .andExpect(jsonPath("$.data.expression").value(nullValue()))
+                .andExpect(jsonPath("$.data.affinity.delta").value(1))
+                .andExpect(jsonPath("$.data.affinity.points").value(81))
+                .andExpect(jsonPath("$.data.fallback").value(false))
+                .andExpect(jsonPath("$.data.audioBase64").value(nullValue()));
         assertThat(rows(requestId)).isEqualTo(2);
         // 호출 기록: 서비스 호출은 원문을 남기지 않는다(log-content=false), 쓴 프롬프트 버전은 남긴다
         assertThat(jdbc.queryForObject(
@@ -507,7 +508,7 @@ class DialogueTest {
         UUID failed = UUID.randomUUID();
         send(failed, "섹드립 ㄱ")
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.fallback").value(false));
+                .andExpect(jsonPath("$.data.fallback").value(false));
         verify(relationCommands)
                 .applyChatScore(userId, CHARACTER_ID, sessionId, failed, new ChatScore(SignalType.NEUTRAL, 0, 0));
     }
@@ -559,9 +560,9 @@ class DialogueTest {
 
         send(UUID.randomUUID(), "이거 너무 어려워")
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.emotion").value("NEUTRAL"))
-                .andExpect(jsonPath("$.motion.file").value("motions/nod.motion3.json"))
-                .andExpect(jsonPath("$.expression.name").value("calm"));
+                .andExpect(jsonPath("$.data.emotion").value("NEUTRAL"))
+                .andExpect(jsonPath("$.data.motion.file").value("motions/nod.motion3.json"))
+                .andExpect(jsonPath("$.data.expression.name").value("calm"));
     }
 
     @Test
@@ -585,9 +586,9 @@ class DialogueTest {
 
         send(requestId, "졸려")
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.content").value("「졸려」… 그렇구나. 한 문제만 더 해보자."))
-                .andExpect(jsonPath("$.affinity.delta").value(0))
-                .andExpect(jsonPath("$.affinity.points").value(80));
+                .andExpect(jsonPath("$.data.content").value("「졸려」… 그렇구나. 한 문제만 더 해보자."))
+                .andExpect(jsonPath("$.data.affinity.delta").value(0))
+                .andExpect(jsonPath("$.data.affinity.points").value(80));
         verify(llm, times(1)).complete(eq(LlmPurpose.CHAT), any(), any(), any(), any());
         verify(relationCommands, times(1)).applyChatScore(anyLong(), anyLong(), anyLong(), any(), any());
         assertThat(rows(requestId)).isEqualTo(2);
@@ -642,7 +643,7 @@ class DialogueTest {
 
         send(requestId, "졸려")
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.content").value("「졸려」… 그렇구나. 한 문제만 더 해보자."));
+                .andExpect(jsonPath("$.data.content").value("「졸려」… 그렇구나. 한 문제만 더 해보자."));
         assertThat(first.get(10, TimeUnit.SECONDS).getResponse().getStatus()).isEqualTo(200);
         assertThat(rows(requestId)).isEqualTo(2);
     }
@@ -661,11 +662,11 @@ class DialogueTest {
 
         send(requestId, "이거 어려워")
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.content").value("미안, 잠깐 딴생각했어. 다시 말해줄래?"))
-                .andExpect(jsonPath("$.emotion").value(nullValue()))
-                .andExpect(jsonPath("$.fallback").value(true))
-                .andExpect(jsonPath("$.affinity.delta").value(0))
-                .andExpect(jsonPath("$.affinity.points").value(80));
+                .andExpect(jsonPath("$.data.content").value("미안, 잠깐 딴생각했어. 다시 말해줄래?"))
+                .andExpect(jsonPath("$.data.emotion").value(nullValue()))
+                .andExpect(jsonPath("$.data.fallback").value(true))
+                .andExpect(jsonPath("$.data.affinity.delta").value(0))
+                .andExpect(jsonPath("$.data.affinity.points").value(80));
         // 대체 대사면 0점으로만 부른다 (호감도 변화 없음, relation 잠금 순서만 지킴)
         verify(relationCommands).applyChatScore(userId, CHARACTER_ID, sessionId, requestId, ChatScore.none());
     }
@@ -696,8 +697,8 @@ class DialogueTest {
 
         send(requestId, "처리 중")
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.content").value("먼저 온 요청의 답"))
-                .andExpect(jsonPath("$.affinity.delta").value(0));
+                .andExpect(jsonPath("$.data.content").value("먼저 온 요청의 답"))
+                .andExpect(jsonPath("$.data.affinity.delta").value(0));
         verify(llm, times(1)).complete(eq(LlmPurpose.CHAT), any(), any(), any(), any()); // 대화방 만들기 한 번뿐
     }
 
@@ -717,7 +718,7 @@ class DialogueTest {
         long started = System.nanoTime();
         send(requestId, "졸려")
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.content").value("「졸려」… 그렇구나. 한 문제만 더 해보자."));
+                .andExpect(jsonPath("$.data.content").value("「졸려」… 그렇구나. 한 문제만 더 해보자."));
         assertThat((System.nanoTime() - started) / 1_000_000).isLessThan(3_000); // 8초를 기다리지 않는다
         assertThat(rows(requestId)).isEqualTo(2);
     }

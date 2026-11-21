@@ -1,10 +1,12 @@
 package com.capsule.user.service;
 
 import com.capsule.common.error.ApiException;
+import com.capsule.common.error.CommonErrorCode;
 import com.capsule.common.ratelimit.RateLimiter;
 import com.capsule.user.client.EmailSender;
 import com.capsule.user.client.KakaoClient;
 import com.capsule.user.domain.User;
+import com.capsule.user.domain.UserErrorCode;
 import com.capsule.user.dto.KakaoProfile;
 import com.capsule.user.dto.KakaoRequest;
 import com.capsule.user.dto.Login;
@@ -26,7 +28,6 @@ import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -66,14 +67,14 @@ public class AuthService {
     public int requestVerification(String rawEmail) {
         String email = normalize(rawEmail);
         if (!isEmail(email)) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_EMAIL");
+            throw new ApiException(UserErrorCode.INVALID_EMAIL);
         }
         if (users.existsByEmail(email)) {
-            throw new ApiException(HttpStatus.CONFLICT, "EMAIL_ALREADY_USED");
+            throw new ApiException(UserErrorCode.EMAIL_ALREADY_USED);
         }
         String rateKey = "rl:email-verification:" + email;
         if (!rateLimiter.tryAcquire(rateKey, 1, Duration.ofMinutes(1))) {
-            throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "TOO_MANY_REQUESTS");
+            throw new ApiException(CommonErrorCode.TOO_MANY_REQUESTS);
         }
         String code = "%06d".formatted(RANDOM.nextInt(1_000_000));
         redis.opsForValue().set(codeKey(email), code, CODE_TTL);
@@ -94,14 +95,14 @@ public class AuthService {
         String email = normalize(rawEmail);
         String saved = redis.opsForValue().get(codeKey(email));
         if (saved == null) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "CODE_EXPIRED");
+            throw new ApiException(UserErrorCode.CODE_EXPIRED);
         }
         if (!saved.equals(code)) {
             if (!rateLimiter.tryAcquire(codeFailKey(email), MAX_FAILURES - 1, CODE_TTL)) {
                 redis.delete(List.of(codeKey(email), codeFailKey(email)));
-                throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "TOO_MANY_ATTEMPTS");
+                throw new ApiException(UserErrorCode.TOO_MANY_ATTEMPTS);
             }
-            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_CODE");
+            throw new ApiException(UserErrorCode.INVALID_CODE);
         }
         redis.delete(List.of(codeKey(email), codeFailKey(email)));
         String token = "vt_" + TokenService.randomToken();
@@ -114,7 +115,7 @@ public class AuthService {
         String verifiedKey = req.verificationToken() == null ? null : verifiedKey(req.verificationToken());
         String email = verifiedKey == null ? null : redis.opsForValue().get(verifiedKey);
         if (email == null) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "VERIFICATION_EXPIRED");
+            throw new ApiException(UserErrorCode.VERIFICATION_EXPIRED);
         }
         String password = req.password();
         requireValidPassword(password);
@@ -122,7 +123,7 @@ public class AuthService {
         Instant now = Instant.now(clock);
         List<Long> agreed = agreedLatestTerms(req.agreedTermVersionIds(), now);
         if (users.existsByEmail(email)) {
-            throw new ApiException(HttpStatus.CONFLICT, "EMAIL_ALREADY_USED");
+            throw new ApiException(UserErrorCode.EMAIL_ALREADY_USED);
         }
         User user;
         try {
@@ -130,7 +131,7 @@ public class AuthService {
             // flush로 여기서 바로 부딪히게 해 500 대신 409로 (api.md 4, #40)
             user = users.saveAndFlush(User.emailUser(email, passwordEncoder.encode(password), nickname, now));
         } catch (DataIntegrityViolationException e) {
-            throw new ApiException(HttpStatus.CONFLICT, "EMAIL_ALREADY_USED");
+            throw new ApiException(UserErrorCode.EMAIL_ALREADY_USED);
         }
         terms.recordAgreements(user.getId(), agreed);
         redis.delete(verifiedKey);
@@ -144,7 +145,7 @@ public class AuthService {
         String lockKey = loginLockKeys(email).get(0);
         String failKey = loginLockKeys(email).get(1);
         if (Boolean.TRUE.equals(redis.hasKey(lockKey))) {
-            throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "LOGIN_LOCKED");
+            throw new ApiException(UserErrorCode.LOGIN_LOCKED);
         }
         Optional<User> user = users.findByEmail(email)
                 .filter(u -> u.isActive()
@@ -157,9 +158,9 @@ public class AuthService {
             if (!rateLimiter.tryAcquire(failKey, MAX_FAILURES - 1, LOGIN_LOCK)) {
                 rateLimiter.reset(failKey);
                 redis.opsForValue().set(lockKey, "1", LOGIN_LOCK);
-                throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "LOGIN_LOCKED");
+                throw new ApiException(UserErrorCode.LOGIN_LOCKED);
             }
-            throw new ApiException(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS");
+            throw new ApiException(UserErrorCode.INVALID_CREDENTIALS);
         }
         rateLimiter.reset(failKey);
         user.get().loggedIn(Instant.now(clock));
@@ -174,7 +175,7 @@ public class AuthService {
     public Login kakao(KakaoRequest req) {
         KakaoProfile profile = kakaoClient
                 .fetchProfile(req.code(), req.redirectUri())
-                .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "SOCIAL_AUTH_FAILED"));
+                .orElseThrow(() -> new ApiException(UserErrorCode.SOCIAL_AUTH_FAILED));
         return tx.execute(status -> loginOrSignUp(profile));
     }
 
@@ -184,7 +185,7 @@ public class AuthService {
         if (existingId.isPresent()) {
             User user = users.findById(existingId.get())
                     .filter(User::isActive)
-                    .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "SOCIAL_AUTH_FAILED"));
+                    .orElseThrow(() -> new ApiException(UserErrorCode.SOCIAL_AUTH_FAILED));
             user.loggedIn(now);
             return new Login(user.getId(), user.onboardingRequired(), false);
         }
@@ -211,7 +212,7 @@ public class AuthService {
         // 필수 약관이 하나도 없으면(약관 데이터를 아직 안 넣은 DB) 동의 없이 가입되지 않게 막는다
         if (latest.stream().noneMatch(TermVersion::required)
                 || latest.stream().anyMatch(t -> t.required() && !agreed.contains(t.termVersionId()))) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "TERMS_REQUIRED");
+            throw new ApiException(UserErrorCode.TERMS_REQUIRED);
         }
         return latest.stream()
                 .map(TermVersion::termVersionId)
@@ -224,7 +225,7 @@ public class AuthService {
         if (password == null
                 || password.length() < PASSWORD_MIN
                 || password.getBytes(StandardCharsets.UTF_8).length > BCRYPT_MAX_BYTES) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_PASSWORD");
+            throw new ApiException(UserErrorCode.INVALID_PASSWORD);
         }
     }
 

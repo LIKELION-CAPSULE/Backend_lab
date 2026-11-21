@@ -2,6 +2,7 @@ package com.capsule.dialogue.controller;
 
 import com.capsule.common.error.ApiException;
 import com.capsule.dialogue.config.CharacterContentSeeder;
+import com.capsule.dialogue.domain.DialogueErrorCode;
 import com.capsule.dialogue.domain.PromptKey;
 import com.capsule.dialogue.dto.CharacterContent;
 import com.capsule.dialogue.dto.EvalCaseRequest;
@@ -73,7 +74,7 @@ public class LlmLabController {
 
     @GetMapping("/api/characters/{id}/content")
     public CharacterContent content(@PathVariable long id) {
-        return contents.find(id).orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "CONTENT_NOT_FOUND"));
+        return contents.find(id).orElseThrow(() -> new ApiException(DialogueErrorCode.CONTENT_NOT_FOUND));
     }
 
     /**
@@ -98,7 +99,7 @@ public class LlmLabController {
     /** 설정 전체를 이 내용으로 바꾼다 (GET으로 받은 JSON을 고쳐서 보낸다). 바로 서비스 답장에 쓰인다 */
     @PutMapping("/api/characters/{id}/content")
     public CharacterContent replaceContent(@PathVariable long id, @RequestBody CharacterContent body) {
-        if (body.characterId() != id) throw new ApiException(HttpStatus.BAD_REQUEST, "CHARACTER_ID_MISMATCH");
+        if (body.characterId() != id) throw new ApiException(DialogueErrorCode.CHARACTER_ID_MISMATCH);
         contents.replace(body);
         return content(id);
     }
@@ -106,8 +107,7 @@ public class LlmLabController {
     /** git의 처음 값(classpath:characters/{code}/)으로 덮어쓴다 */
     @PostMapping("/api/characters/reseed/{code}")
     public CharacterContent reseed(@PathVariable String code) {
-        long id = seeder.seed(code, true)
-                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "CHARACTER_NOT_FOUND"));
+        long id = seeder.seed(code, true).orElseThrow(() -> new ApiException(DialogueErrorCode.CHARACTER_NOT_FOUND));
         contents.evict(id);
         return content(id);
     }
@@ -267,7 +267,7 @@ public class LlmLabController {
         try {
             return PromptKey.of(key);
         } catch (IllegalArgumentException e) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "UNKNOWN_PROMPT_KEY");
+            throw new ApiException(DialogueErrorCode.UNKNOWN_PROMPT_KEY);
         }
     }
 }

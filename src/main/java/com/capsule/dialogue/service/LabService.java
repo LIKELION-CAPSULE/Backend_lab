@@ -3,6 +3,7 @@ package com.capsule.dialogue.service;
 import static com.capsule.relation.api.RelationTypes.START_POINTS;
 
 import com.capsule.common.error.ApiException;
+import com.capsule.common.error.CommonErrorCode;
 import com.capsule.common.settings.RuntimeSettings;
 import com.capsule.common.time.ClockConfig;
 import com.capsule.content.api.CharacterQuery;
@@ -13,6 +14,7 @@ import com.capsule.dialogue.client.LlmJson;
 import com.capsule.dialogue.config.DialogueProperties;
 import com.capsule.dialogue.config.LlmProperties;
 import com.capsule.dialogue.domain.ChatMessage;
+import com.capsule.dialogue.domain.DialogueErrorCode;
 import com.capsule.dialogue.domain.LabSession;
 import com.capsule.dialogue.domain.LabTurn;
 import com.capsule.dialogue.domain.LlmUsage;
@@ -53,7 +55,6 @@ import java.util.concurrent.Executors;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
@@ -186,7 +187,7 @@ public class LabService {
     }
 
     public LabSessionView create(LabSessionRequest r) {
-        if (r.characterId() == null) throw new ApiException(HttpStatus.BAD_REQUEST, "CHARACTER_REQUIRED");
+        if (r.characterId() == null) throw new ApiException(DialogueErrorCode.CHARACTER_REQUIRED);
         character(r.characterId());
         String pipeline = pipeline(
                         r.pipeline() == null ? dialogueProps.current().chatPipeline() : r.pipeline())
@@ -260,8 +261,7 @@ public class LabService {
 
     @Transactional
     public LabTurnView rate(long turnId, RatingRequest r) {
-        LabTurn t =
-                turns.findById(turnId).orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "LAB_TURN_NOT_FOUND"));
+        LabTurn t = turns.findById(turnId).orElseThrow(() -> new ApiException(DialogueErrorCode.LAB_TURN_NOT_FOUND));
         t.rate(r.score(), r.note());
         return view(t);
     }
@@ -349,7 +349,7 @@ public class LabService {
                         message,
                         ctx);
             }
-            default -> throw new ApiException(HttpStatus.BAD_REQUEST, "UNKNOWN_KIND");
+            default -> throw new ApiException(DialogueErrorCode.UNKNOWN_KIND);
         };
         int n = Math.max(1, Math.min(10, r.repeat() == null ? 1 : r.repeat()));
         List<CompletableFuture<PlaygroundResult>> runs = IntStream.rangeClosed(1, n)
@@ -428,12 +428,12 @@ public class LabService {
 
     public ChatPipeline pipeline(String name) {
         ChatPipeline p = pipelines.get(name);
-        if (p == null) throw new ApiException(HttpStatus.BAD_REQUEST, "UNKNOWN_PIPELINE");
+        if (p == null) throw new ApiException(DialogueErrorCode.UNKNOWN_PIPELINE);
         return p;
     }
 
     public CharacterInfo character(long id) {
-        return characters.find(id).orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "CHARACTER_NOT_FOUND"));
+        return characters.find(id).orElseThrow(() -> new ApiException(DialogueErrorCode.CHARACTER_NOT_FOUND));
     }
 
     private PlaygroundResult once(int n, Function<LlmContext, Map<String, Object>> call, LabConfig config) {
@@ -459,7 +459,7 @@ public class LabService {
     }
 
     private LabSession find(long id) {
-        return sessions.findById(id).orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "LAB_SESSION_NOT_FOUND"));
+        return sessions.findById(id).orElseThrow(() -> new ApiException(DialogueErrorCode.LAB_SESSION_NOT_FOUND));
     }
 
     private LabSessionView view(LabSession s, List<LabTurnView> list, long count) {
@@ -513,7 +513,7 @@ public class LabService {
 
     private static String required(String value, String name) {
         if (value == null || value.isBlank())
-            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_REQUEST", Map.<String, Object>of("field", name));
+            throw new ApiException(CommonErrorCode.INVALID_REQUEST, Map.<String, Object>of("field", name));
         return value;
     }
 

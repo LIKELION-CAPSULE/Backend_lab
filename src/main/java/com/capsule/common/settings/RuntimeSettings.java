@@ -1,6 +1,7 @@
 package com.capsule.common.settings;
 
 import com.capsule.common.error.ApiException;
+import com.capsule.common.error.CommonErrorCode;
 import java.lang.reflect.RecordComponent;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -13,7 +14,6 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
@@ -35,7 +35,7 @@ public final class RuntimeSettings<T> {
 
     private static final Logger log = LoggerFactory.getLogger(RuntimeSettings.class);
     private static final long RELOAD_NANOS = 30_000_000_000L;
-    public static final String INVALID = "INVALID_SETTING";
+    public static final String INVALID = CommonErrorCode.INVALID_SETTING.code();
 
     private final String table;
     private final String section;
@@ -272,6 +272,6 @@ public final class RuntimeSettings<T> {
 
     private static ApiException invalid(String path, String reason) {
         return new ApiException(
-                HttpStatus.BAD_REQUEST, INVALID, Map.<String, Object>of("path", path, "reason", reason));
+                CommonErrorCode.INVALID_SETTING, Map.<String, Object>of("path", path, "reason", reason));
     }
 }

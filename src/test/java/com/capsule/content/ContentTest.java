@@ -56,24 +56,25 @@ class ContentTest {
     void avatars() throws Exception {
         mvc.perform(get("/api/avatars").with(jwt().jwt(j -> j.subject("7"))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.avatars[0].id").value(1))
-                .andExpect(jsonPath("$.avatars[0].name").value("기본 아바타"))
+                .andExpect(jsonPath("$.success").value(true)) // 공통 응답 모양 (api.md 공통 규칙)
+                .andExpect(jsonPath("$.data.avatars[0].id").value(1))
+                .andExpect(jsonPath("$.data.avatars[0].name").value("기본 아바타"))
                 // DB에는 상대 경로, 응답은 CDN 주소(테스트는 기본값 cdn.capsule.invalid)를 붙인 값
-                .andExpect(
-                        jsonPath("$.avatars[0].thumbnailUrl").value("https://cdn.capsule.invalid/haru/thumbnail.png"))
-                .andExpect(jsonPath("$.avatars[0].active").doesNotExist())
-                .andExpect(jsonPath("$.avatars[0].model.modelJsonUrl")
+                .andExpect(jsonPath("$.data.avatars[0].thumbnailUrl")
+                        .value("https://cdn.capsule.invalid/haru/thumbnail.png"))
+                .andExpect(jsonPath("$.data.avatars[0].active").doesNotExist())
+                .andExpect(jsonPath("$.data.avatars[0].model.modelJsonUrl")
                         .value("https://cdn.capsule.invalid/haru/v1/Haru.model3.json"))
-                .andExpect(jsonPath("$.avatars[0].model.scale").value(1.0))
-                .andExpect(jsonPath("$.avatars[0].model.offsetX").value(0))
-                .andExpect(jsonPath("$.avatars[0].model.offsetY").value(0))
+                .andExpect(jsonPath("$.data.avatars[0].model.scale").value(1.0))
+                .andExpect(jsonPath("$.data.avatars[0].model.offsetX").value(0))
+                .andExpect(jsonPath("$.data.avatars[0].model.offsetY").value(0))
                 // 공식 샘플 아바타 2개 추가 (2026-11-06), 정렬 순서대로
-                .andExpect(jsonPath("$.avatars.length()").value(3))
-                .andExpect(jsonPath("$.avatars[1].name").value("히요리"))
-                .andExpect(jsonPath("$.avatars[1].model.modelJsonUrl")
+                .andExpect(jsonPath("$.data.avatars.length()").value(3))
+                .andExpect(jsonPath("$.data.avatars[1].name").value("히요리"))
+                .andExpect(jsonPath("$.data.avatars[1].model.modelJsonUrl")
                         .value("https://cdn.capsule.invalid/hiyori/v1/hiyori_pro_t11.model3.json"))
-                .andExpect(jsonPath("$.avatars[2].name").value("나토리"))
-                .andExpect(jsonPath("$.avatars[2].model.modelJsonUrl")
+                .andExpect(jsonPath("$.data.avatars[2].name").value("나토리"))
+                .andExpect(jsonPath("$.data.avatars[2].model.modelJsonUrl")
                         .value("https://cdn.capsule.invalid/natori/v1/natori_pro_t06.model3.json"));
     }
 
@@ -81,7 +82,10 @@ class ContentTest {
     void avatarsNeedLogin() throws Exception {
         mvc.perform(get("/api/avatars"))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+                .andExpect(jsonPath("$.success").value(false)) // 보안 필터의 401도 같은 에러 모양
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"))
+                .andExpect(jsonPath("$.message").value("UNAUTHORIZED"))
+                .andExpect(jsonPath("$.detail").isMap());
     }
 
     @Test

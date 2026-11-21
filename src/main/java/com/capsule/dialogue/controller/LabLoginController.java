@@ -1,8 +1,10 @@
 package com.capsule.dialogue.controller;
 
 import com.capsule.common.error.ApiException;
+import com.capsule.common.error.CommonErrorCode;
 import com.capsule.common.ratelimit.RateLimiter;
 import com.capsule.dialogue.config.LabAdmins;
+import com.capsule.dialogue.domain.DialogueErrorCode;
 import io.swagger.v3.oas.annotations.Hidden;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Duration;
@@ -10,7 +12,6 @@ import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
@@ -41,12 +42,12 @@ public class LabLoginController {
         String from = request.getRemoteAddr(); // 프록시 뒤에서는 보내는 쪽이 정한 값: 로그 참고용
         if (!rateLimiter.tryAcquire("rate:lab-login:" + from, ATTEMPTS, WINDOW)
                 || !rateLimiter.tryAcquire("rate:lab-login", TOTAL_ATTEMPTS, WINDOW))
-            throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "TOO_MANY_REQUESTS");
+            throw new ApiException(CommonErrorCode.TOO_MANY_REQUESTS);
         LabAdmins.Session session = admins.login(body.username(), body.password())
                 .orElseThrow(() -> {
                     // 입력한 아이디는 남기지 않는다: 아이디 칸에 비밀번호를 잘못 치면 그대로 로그에 남아서
                     log.warn("실험실 관리자 로그인 실패 ({})", from);
-                    return new ApiException(HttpStatus.UNAUTHORIZED, "LOGIN_FAILED");
+                    return new ApiException(DialogueErrorCode.LOGIN_FAILED);
                 });
         log.info("실험실 관리자 로그인: {} ({})", session.username(), from);
         return session;

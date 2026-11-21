@@ -10,7 +10,6 @@ import java.time.Instant;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.springframework.http.HttpStatus;
 
 /** users 테이블. created_at은 DB 기본값, profile_image_url은 쓰지 않아서(B7) 매핑하지 않는다. */
 @Entity
@@ -58,7 +57,7 @@ public class User {
         String nickname = raw == null ? "" : raw.strip();
         int length = nickname.codePointCount(0, nickname.length());
         if (length < 1 || length > NICKNAME_MAX) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_NICKNAME");
+            throw new ApiException(UserErrorCode.INVALID_NICKNAME);
         }
         return nickname;
     }

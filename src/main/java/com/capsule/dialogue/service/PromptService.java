@@ -1,6 +1,7 @@
 package com.capsule.dialogue.service;
 
 import com.capsule.common.error.ApiException;
+import com.capsule.dialogue.domain.DialogueErrorCode;
 import com.capsule.dialogue.domain.PromptKey;
 import com.capsule.dialogue.domain.PromptVersion;
 import com.capsule.dialogue.repository.PromptVersionRepository;
@@ -13,7 +14,6 @@ import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.yaml.snakeyaml.Yaml;
@@ -37,7 +37,7 @@ public class PromptService {
         if (pin != null)
             return versions.findById(pin)
                     .filter(v -> v.getPromptKey().equals(key.key()))
-                    .orElseThrow(() -> new ApiException(HttpStatus.BAD_REQUEST, "PROMPT_VERSION_NOT_FOUND"));
+                    .orElseThrow(() -> new ApiException(DialogueErrorCode.PINNED_PROMPT_VERSION_NOT_FOUND));
         return find(key, characterId)
                 .orElseThrow(
                         () -> new IllegalStateException("ACTIVE 프롬프트 없음: " + key.key() + " (캐릭터 " + characterId + ")"));
@@ -59,14 +59,13 @@ public class PromptService {
     }
 
     public PromptVersion get(long id) {
-        return versions.findById(id)
-                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "PROMPT_VERSION_NOT_FOUND"));
+        return versions.findById(id).orElseThrow(() -> new ApiException(DialogueErrorCode.PROMPT_VERSION_NOT_FOUND));
     }
 
     /** 새 버전(DRAFT). activate면 바로 켠다 */
     @Transactional
     public PromptVersion create(PromptKey key, Long characterId, String body, String note, boolean activate) {
-        if (body == null || body.isBlank()) throw new ApiException(HttpStatus.BAD_REQUEST, "EMPTY_PROMPT");
+        if (body == null || body.isBlank()) throw new ApiException(DialogueErrorCode.EMPTY_PROMPT);
         if (key == PromptKey.FIXED_LINES) checkYaml(body);
         int next = versions.maxVersion(key.key(), characterId) + 1;
         PromptVersion v =
@@ -99,9 +98,7 @@ public class PromptService {
             new Yaml().load(body);
         } catch (RuntimeException e) {
             throw new ApiException(
-                    HttpStatus.BAD_REQUEST,
-                    "INVALID_YAML",
-                    Map.<String, Object>of("reason", String.valueOf(e.getMessage())));
+                    DialogueErrorCode.INVALID_YAML, Map.<String, Object>of("reason", String.valueOf(e.getMessage())));
         }
     }
 }

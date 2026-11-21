@@ -4,6 +4,7 @@ import com.capsule.common.error.ApiException;
 import com.capsule.common.settings.RuntimeSettings;
 import com.capsule.dialogue.config.LabAdmins;
 import com.capsule.dialogue.config.LlmProperties;
+import com.capsule.dialogue.domain.DialogueErrorCode;
 import io.swagger.v3.oas.annotations.Hidden;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -12,7 +13,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.env.Environment;
-import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -58,8 +58,8 @@ public class SettingsController {
             @RequestBody JsonNode overrides,
             @RequestAttribute(name = LabAdmins.REQUEST_ATTRIBUTE, required = false) String admin) {
         RuntimeSettings<?> s = sections.get(section);
-        if (s == null) throw new ApiException(HttpStatus.NOT_FOUND, "SETTING_NOT_FOUND");
-        if (readOnly) throw new ApiException(HttpStatus.FORBIDDEN, "SETTINGS_READ_ONLY");
+        if (s == null) throw new ApiException(DialogueErrorCode.SETTING_NOT_FOUND);
+        if (readOnly) throw new ApiException(DialogueErrorCode.SETTINGS_READ_ONLY);
         RuntimeSettings.View view = s.update(overrides);
         log.info("운영 설정 {}을 바꾼 사람: {}", section, admin != null ? admin : "(고정 토큰 · 이 컴퓨터)");
         return view;

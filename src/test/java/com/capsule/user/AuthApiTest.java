@@ -27,16 +27,16 @@ class AuthApiTest extends UserApiTestSupport {
     void emailSignupLoginRefreshLogout() throws Exception {
         mvc.perform(get("/api/terms"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.terms[0].termVersionId").value(3))
-                .andExpect(jsonPath("$.terms[0].code").value("SERVICE"))
-                .andExpect(jsonPath("$.terms[0].required").value(true))
-                .andExpect(jsonPath("$.terms[1].termVersionId").value(4))
-                .andExpect(jsonPath("$.terms[1].content").isString());
+                .andExpect(jsonPath("$.data.terms[0].termVersionId").value(3))
+                .andExpect(jsonPath("$.data.terms[0].code").value("SERVICE"))
+                .andExpect(jsonPath("$.data.terms[0].required").value(true))
+                .andExpect(jsonPath("$.data.terms[1].termVersionId").value(4))
+                .andExpect(jsonPath("$.data.terms[1].content").isString());
 
         String email = uniqueEmail();
         postJson("/api/auth/email/verification", "{\"email\":\"%s\"}".formatted(email.toUpperCase()))
                 .andExpect(status().isAccepted())
-                .andExpect(jsonPath("$.expiresInSeconds").value(300));
+                .andExpect(jsonPath("$.data.expiresInSeconds").value(300));
         postJson("/api/auth/email/verification", "{\"email\":\"%s\"}".formatted(email))
                 .andExpect(status().isTooManyRequests())
                 .andExpect(jsonPath("$.code").value("TOO_MANY_REQUESTS"));
@@ -50,19 +50,19 @@ class AuthApiTest extends UserApiTestSupport {
                         "/api/auth/email/verification/confirm",
                         "{\"email\":\"%s\",\"code\":\"%s\"}".formatted(email, code))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.verificationToken").value(startsWith("vt_")))
+                .andExpect(jsonPath("$.data.verificationToken").value(startsWith("vt_")))
                 .andReturn();
 
-        MvcResult signedUp = signup(read(confirmed, "$.verificationToken"), PASSWORD, "승희", "[3,4]")
+        MvcResult signedUp = signup(read(confirmed, "$.data.verificationToken"), PASSWORD, "승희", "[3,4]")
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.accessToken").isString())
-                .andExpect(jsonPath("$.userId").isNumber())
-                .andExpect(jsonPath("$.onboardingRequired").value(true))
+                .andExpect(jsonPath("$.data.accessToken").isString())
+                .andExpect(jsonPath("$.data.userId").isNumber())
+                .andExpect(jsonPath("$.data.onboardingRequired").value(true))
                 .andExpect(header().string(HttpHeaders.SET_COOKIE, containsString("refresh_token=")))
                 .andExpect(header().string(HttpHeaders.SET_COOKIE, containsString("HttpOnly")))
                 .andExpect(header().string(HttpHeaders.SET_COOKIE, containsString("Path=/api/auth")))
                 .andReturn();
-        int userId = read(signedUp, "$.userId");
+        int userId = read(signedUp, "$.data.userId");
 
         postJson("/api/auth/email/verification", "{\"email\":\"%s\"}".formatted(email))
                 .andExpect(status().isConflict())
@@ -71,14 +71,14 @@ class AuthApiTest extends UserApiTestSupport {
         MvcResult loggedIn = postJson(
                         "/api/auth/email/login", "{\"email\":\"%s\",\"password\":\"%s\"}".formatted(email, PASSWORD))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.userId").value(userId))
-                .andExpect(jsonPath("$.onboardingRequired").value(true))
+                .andExpect(jsonPath("$.data.userId").value(userId))
+                .andExpect(jsonPath("$.data.onboardingRequired").value(true))
                 .andReturn();
         Cookie oldRefresh = refreshCookie(loggedIn);
 
         MvcResult refreshed = mvc.perform(post("/api/auth/refresh").cookie(oldRefresh))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.accessToken").isString())
+                .andExpect(jsonPath("$.data.accessToken").isString())
                 .andReturn();
         Cookie newRefresh = refreshCookie(refreshed);
         assertThat(newRefresh.getValue()).isNotEqualTo(oldRefresh.getValue());
@@ -167,24 +167,24 @@ class AuthApiTest extends UserApiTestSupport {
         // 약관 체크 없이 가입되고, 최신 필수 약관(3·4)이 동의로 기록된다 (api.md 6)
         MvcResult created = postJson("/api/auth/social/KAKAO", kakaoBody(code))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.isNewUser").value(true))
-                .andExpect(jsonPath("$.onboardingRequired").value(true))
+                .andExpect(jsonPath("$.data.isNewUser").value(true))
+                .andExpect(jsonPath("$.data.onboardingRequired").value(true))
                 .andExpect(header().string(HttpHeaders.SET_COOKIE, containsString("refresh_token=")))
                 .andReturn();
-        int userId = read(created, "$.userId");
+        int userId = read(created, "$.data.userId");
         assertThat(jdbc.queryForList(
                         "SELECT term_version_id FROM user_terms WHERE user_id = ? ORDER BY term_version_id",
                         Long.class,
                         userId))
                 .containsExactly(3L, 4L);
         mvc.perform(get("/api/me").header(HttpHeaders.AUTHORIZATION, bearer(created)))
-                .andExpect(jsonPath("$.nickname").value("카카오닉네임"))
-                .andExpect(jsonPath("$.email").value(nullValue()));
+                .andExpect(jsonPath("$.data.nickname").value("카카오닉네임"))
+                .andExpect(jsonPath("$.data.email").value(nullValue()));
 
         postJson("/api/auth/social/KAKAO", kakaoBody(code))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.isNewUser").value(false))
-                .andExpect(jsonPath("$.userId").value(userId));
+                .andExpect(jsonPath("$.data.isNewUser").value(false))
+                .andExpect(jsonPath("$.data.userId").value(userId));
 
         postJson("/api/auth/social/KAKAO", kakaoBody("expired-code"))
                 .andExpect(status().isUnauthorized())
@@ -206,7 +206,7 @@ class AuthApiTest extends UserApiTestSupport {
                         {"code":"%s","redirectUri":"http://localhost/oauth/kakao","agreedTermVersionIds":[3,4]}
                         """.formatted(code))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.isNewUser").value(true));
+                .andExpect(jsonPath("$.data.isNewUser").value(true));
     }
 
     private static String kakaoBody(String code) {

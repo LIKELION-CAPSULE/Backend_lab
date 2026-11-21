@@ -38,7 +38,7 @@ class WithdrawalApiTest extends UserApiTestSupport {
         String email = uniqueEmail();
         MvcResult signedUp = signedUp(email);
         String auth = bearer(signedUp);
-        long userId = ((Number) read(signedUp, "$.userId")).longValue();
+        long userId = ((Number) read(signedUp, "$.data.userId")).longValue();
         Cookie refresh = refreshCookie(signedUp);
 
         mvc.perform(post("/api/me/memories")
@@ -102,17 +102,17 @@ class WithdrawalApiTest extends UserApiTestSupport {
     void kakaoAccountCanSignUpAgainAsNewUser() throws Exception {
         String code = "fake-kakao:%s:카카오닉네임".formatted(UUID.randomUUID());
         MvcResult first = postJson("/api/auth/social/KAKAO", kakaoBody(code))
-                .andExpect(jsonPath("$.isNewUser").value(true))
+                .andExpect(jsonPath("$.data.isNewUser").value(true))
                 .andReturn();
 
         mvc.perform(delete("/api/me").header("Authorization", bearer(first))).andExpect(status().isNoContent());
 
         MvcResult second = postJson("/api/auth/social/KAKAO", kakaoBody(code))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.isNewUser").value(true))
+                .andExpect(jsonPath("$.data.isNewUser").value(true))
                 .andReturn();
-        assertThat(((Number) read(second, "$.userId")).longValue())
-                .isNotEqualTo(((Number) read(first, "$.userId")).longValue());
+        assertThat(((Number) read(second, "$.data.userId")).longValue())
+                .isNotEqualTo(((Number) read(first, "$.data.userId")).longValue());
     }
 
     @Test

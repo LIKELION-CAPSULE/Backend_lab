@@ -3,6 +3,7 @@ package com.capsule.user.service;
 import com.capsule.common.error.ApiException;
 import com.capsule.common.security.AuthProperties;
 import com.capsule.user.domain.User;
+import com.capsule.user.domain.UserErrorCode;
 import com.capsule.user.dto.Issued;
 import com.capsule.user.repository.UserRepository;
 import java.security.SecureRandom;
@@ -12,7 +13,6 @@ import java.time.Instant;
 import java.util.Base64;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseCookie;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.JwsHeader;
@@ -58,18 +58,18 @@ public class TokenService {
     public Issued rotate(String refreshToken) {
         String saved = refreshToken == null ? null : redis.opsForValue().getAndDelete(refreshKey(refreshToken));
         if (saved == null) {
-            throw new ApiException(HttpStatus.UNAUTHORIZED, "REFRESH_TOKEN_INVALID");
+            throw new ApiException(UserErrorCode.REFRESH_TOKEN_INVALID);
         }
         long userId = Long.parseLong(saved);
         String issued = redis.opsForValue().getAndDelete(issuedAtKey(refreshToken));
         long issuedAt = issued == null ? 0 : Long.parseLong(issued); // 발급 시각이 없는 옛 토큰은 가장 오래된 것으로
         String revokedAt = redis.opsForValue().get(revokedAtKey(userId));
         if (revokedAt != null && issuedAt <= Long.parseLong(revokedAt)) {
-            throw new ApiException(HttpStatus.UNAUTHORIZED, "REFRESH_TOKEN_INVALID");
+            throw new ApiException(UserErrorCode.REFRESH_TOKEN_INVALID);
         }
         // 탈퇴(api.md 27) 뒤 폐기가 빠졌어도 새 토큰을 주지 않는다
         if (users.findById(userId).filter(User::isActive).isEmpty()) {
-            throw new ApiException(HttpStatus.UNAUTHORIZED, "REFRESH_TOKEN_INVALID");
+            throw new ApiException(UserErrorCode.REFRESH_TOKEN_INVALID);
         }
         return issue(userId);
     }

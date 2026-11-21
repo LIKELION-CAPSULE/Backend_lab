@@ -1,0 +1,21 @@
+# 0030 공통 응답 처리: 성공은 `{success, data}`, 에러 코드는 enum
+
+- 결정
+  - 본문이 있는 성공 응답은 모두 `{"success": true, "data": {...}}`. 컨트롤러가 `ApiResponse.ok(dto)`(`common/response`)를 직접 반환하고, 쿠키를 붙일 때는 `ResponseEntity<ApiResponse<T>>`
+  - 에러 응답은 기존 `{code, message, detail}`(2026-11-03)에 `success: false`만 더한다. `ErrorResponse` 하나만 에러 JSON을 만든다: `GlobalExceptionHandler`, 보안 필터 401(`SecurityConfig`, `LabSecurityConfig`), 28번 스트리밍의 `error` 이벤트
+  - 에러 코드는 `ErrorCode` 인터페이스(`status()`, `code()`)의 enum. 모든 모듈이 쓰는 것은 `common/error/CommonErrorCode`, 나머지는 모듈마다 `<모듈>/domain/<모듈>ErrorCode`. `throw new ApiException(SessionErrorCode.SESSION_ENDED)`. 문자열 코드로 던지는 생성자는 없앴다
+  - 여러 모듈이 같은 코드(`SESSION_ENDED` 등)를 내면 각 모듈 enum에 같은 이름으로 둔다(다른 모듈 enum을 참조하지 않음). 상태가 다른 같은 코드는 enum 이름을 달리하고 code를 지정한다(`PINNED_PROMPT_VERSION_NOT_FOUND` → 400 `PROMPT_VERSION_NOT_FOUND`)
+  - 감싸지 않는 것: 204 · 202 '본문 없음', 28번 SSE의 `reply` · `done`, 실험실(`/internal/llm-lab/**`, 명세 밖 내부 도구)의 성공 응답
+  - `message`는 지금처럼 `code`와 같은 값. 화면용 한국어 문구는 기획 판단(확정 필요)
+- 이유
+  - 코드 정리 목적(2026-11-19 성욱): 응답 생성과 에러 코드가 74곳 문자열 · 3곳 손으로 쓴 JSON으로 흩어져 있었다. 오타가 컴파일에서 안 잡히고, 한 코드의 상태가 곳마다 달라질 수 있었다
+  - 성공도 한 모양이면 프론트가 interceptor 한 곳에서 `success`로 나누고 `data`만 꺼낸다(국내 Spring 실무에서 흔한 모양)
+  - 에러에 `success`만 더해서 프론트가 이미 쓰는 `code` · `detail.sessionId` 분기는 그대로 동작한다
+- 버린 대안
+  - envelope 없이 에러 enum만(Stripe · GitHub 같은 글로벌 API 방식): HTTP 상태가 이미 성공 여부를 말하고 깨지는 변경이 없지만, 팀이 공통 응답 모양을 원했다
+  - `{success, data, error:{code, message, detail}}` 완전 대칭: 깔끔하지만 프론트 에러 처리까지 다 깨진다
+  - `ResponseBodyAdvice`로 자동으로 감싸기: 컨트롤러를 안 고쳐도 되지만 Swagger 스키마가 실제 응답과 달라지고, `String` · SSE · 실험실을 예외로 빼야 해서 응답 모양이 코드에 안 보인다
+  - Spring `ProblemDetail`(RFC 9457): 에러 모양이 `{type, title, status, ...}`로 바뀌어 프론트가 깨진다
+- 대가
+  - 모든 성공 응답이 `data` 안으로 들어가는 깨지는 변경. 프론트와 머지 날짜를 맞춘다
+  - 새 에러 코드를 만들 때 enum에 한 줄 추가가 필요하다

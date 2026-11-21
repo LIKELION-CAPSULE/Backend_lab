@@ -58,7 +58,7 @@ abstract class UserApiTestSupport {
                         "{\"email\":\"%s\",\"code\":\"%s\"}".formatted(email, code))
                 .andExpect(status().isOk())
                 .andReturn();
-        return read(result, "$.verificationToken");
+        return read(result, "$.data.verificationToken");
     }
 
     ResultActions signup(String verificationToken, String password, String nickname, String termIds) throws Exception {
@@ -79,6 +79,6 @@ abstract class UserApiTestSupport {
     }
 
     static String bearer(MvcResult loginResult) throws Exception {
-        return "Bearer " + read(loginResult, "$.accessToken");
+        return "Bearer " + read(loginResult, "$.data.accessToken");
     }
 }

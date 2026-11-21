@@ -1,9 +1,11 @@
 package com.capsule.user.service;
 
 import com.capsule.common.error.ApiException;
+import com.capsule.common.error.CommonErrorCode;
 import com.capsule.common.time.ClockConfig;
 import com.capsule.user.api.UserTypes.MemoryInfo;
 import com.capsule.user.domain.User;
+import com.capsule.user.domain.UserErrorCode;
 import com.capsule.user.domain.UserMemory;
 import com.capsule.user.domain.UserMemory.Type;
 import com.capsule.user.dto.CreateMemoryRequest;
@@ -23,7 +25,6 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.function.Function;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -61,7 +62,7 @@ public class MemoryService {
     public MemoryResponse create(long userId, CreateMemoryRequest req) {
         // 탈퇴(api.md 27) 뒤 남은 액세스 토큰으로 일정이 다시 생기지 않게
         if (users.findById(userId).filter(User::isActive).isEmpty()) {
-            throw new ApiException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
+            throw new ApiException(CommonErrorCode.UNAUTHORIZED);
         }
         Type type = parse(req.type(), Type::valueOf);
         LocalDate dueDate = parse(req.dueDate(), LocalDate::parse);
@@ -87,7 +88,7 @@ public class MemoryService {
     @Transactional(readOnly = true)
     public MemoryList list(long userId, LocalDate from, LocalDate to, LocalDate date, MemoryStatus status, Type type) {
         if (from != null && to != null && (to.isBefore(from) || ChronoUnit.DAYS.between(from, to) >= MAX_RANGE_DAYS)) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_DATE_RANGE");
+            throw new ApiException(UserErrorCode.INVALID_DATE_RANGE);
         }
         LocalDate today = today();
         // ponytail: 사용자 일정을 전부 읽어 메모리에서 거른다. 일정이 수천 개가 되면 SQL 조건으로
@@ -164,6 +165,6 @@ public class MemoryService {
     }
 
     private static ApiException invalidMemory() {
-        return new ApiException(HttpStatus.BAD_REQUEST, "INVALID_MEMORY");
+        return new ApiException(UserErrorCode.INVALID_MEMORY);
     }
 }

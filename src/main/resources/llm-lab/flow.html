@@ -185,7 +185,8 @@ async function call(method, path, body, {lab = false, retry = true} = {}) {
   // 액세스 토큰은 30분: 만료되면 같은 회원번호로 다시 로그인하고 한 번만 다시 보낸다
   if (res.status === 401 && !lab && retry && S.member) { await login(S.member); return call(method, path, body, {retry: false}); }
   if (!res.ok) { const e = new Error((data && data.code) || 'HTTP ' + res.status); e.status = res.status; e.data = data; throw e; }
-  return data;
+  // 공개 API 성공 응답은 {success, data} (api.md 공통 규칙, ADR 0030). 실험실 API는 감싸지 않아 그대로
+  return data && data.success === true && 'data' in data ? data.data : data;
 }
 
 function record(method, path, status, ms, req, res) {

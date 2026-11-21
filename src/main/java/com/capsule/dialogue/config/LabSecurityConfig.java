@@ -1,5 +1,6 @@
 package com.capsule.dialogue.config;
 
+import com.capsule.common.error.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.net.InetAddress;
@@ -11,7 +12,6 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpMethod;
-import org.springframework.http.MediaType;
 import org.springframework.security.authorization.AuthorizationDecision;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -55,13 +55,8 @@ public class LabSecurityConfig {
                         .permitAll()
                         .anyRequest()
                         .access((auth, ctx) -> new AuthorizationDecision(allowed(ctx.getRequest(), token, admins))))
-                .exceptionHandling(e -> e.authenticationEntryPoint((request, response, ex) -> {
-                    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-                    response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-                    response.setCharacterEncoding(StandardCharsets.UTF_8.name());
-                    response.getWriter()
-                            .write("{\"code\":\"" + required + "\",\"message\":\"" + required + "\",\"detail\":{}}");
-                }));
+                .exceptionHandling(e -> e.authenticationEntryPoint((request, response, ex) ->
+                        ErrorResponse.write(response, HttpServletResponse.SC_UNAUTHORIZED, required)));
         return http.build();
     }
 
