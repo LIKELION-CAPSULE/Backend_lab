@@ -35,7 +35,7 @@ def main() -> int:
     if phase == "skeleton":
         lines.append("- 단계: skeleton (얇은 뼈대 만드는 중. 구역 제한 완화, skeleton 스킬 절차를 따를 것)")
     else:
-        lines.append("- 단계: domain (도메인 분리 개발. 내 모듈 밖 수정은 사람 확인을 거침)")
+        lines.append("- 단계: domain (도메인 분리 개발. 내 모듈 밖 수정은 PR 본문에 적고 담당자에게 공유)")
     lines.append(f"- 브랜치: {branch}")
     if branch in zones.PROTECTED_BRANCHES:
         lines.append(f"- ⚠ {branch}에서는 코드를 고치지 않는다. 작업 전에 feature/<모듈>-<설명> 브랜치를 만들 것.")

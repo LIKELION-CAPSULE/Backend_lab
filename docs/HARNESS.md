@@ -236,7 +236,7 @@ skeleton 스킬이 하는 일:
 ```
 [캡슐 하네스 상태]
 - 나: seunghee | 내 모듈: relation, dialogue
-- 단계: domain (도메인 분리 개발. 내 모듈 밖 수정은 사람 확인을 거침)
+- 단계: domain (도메인 분리 개발. 내 모듈 밖 수정은 PR 본문에 적고 담당자에게 공유)
 - 브랜치: feature/dialogue-reply
 - 명세: 원본은 docs/specs (고칠 때는 명세 PR 먼저) | 노션 사본 반영: 2026-11-04 `0a8df11` (명세 PR 머지 뒤 spec-sync)
 - 미구현 판단 목록: docs/specs/judgment-backlog.md (내 담당 항목부터)
@@ -271,7 +271,7 @@ skeleton 스킬이 하는 일:
 
 판정 종류
 - **허용**: 아무 일 없음
-- **확인 질문(ask)**: Claude Code가 멈추고 사람에게 승인 여부를 물음. 사유는 사람 화면에만 보임
+- **확인 질문(ask)**: 2026-11-19부터 **묻지 않고 통과**한다(수정마다 멈춰서 작업이 끊겨 두 사람이 없애기로 함). 위 표와 6장의 '확인 질문'은 이제 통과로 읽는다. 판정 사유는 훅 stderr에만 남고, 남의 모듈 · 계약 · 하네스 수정은 PR 본문 '리뷰 요구사항'(pr-write의 `zones.py classify`)으로 알린다
 - **차단(deny)**: 실행 안 됨. 사유가 Claude에게 전달돼 Claude가 다른 방법을 찾음
 
 셸 명령 차단 (`bash_guard`): 마이그레이션 삭제·이동, `.env` 읽기, develop/main으로 push(대상이 develop/main이거나 지금 develop/main 브랜치일 때). push 차단은 원래 GitHub 브랜치 보호의 일이라 그걸 못 쓰는 동안만 둠(2-3장, ADR 0010 예외). 그 밖의 위험한 명령은 Claude Code 기본 권한 확인이 물어봄
