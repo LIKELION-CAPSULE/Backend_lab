@@ -40,11 +40,21 @@
 
 - 인증: `Authorization: Bearer <accessToken>`. '인증: 불필요' API는 이 헤더를 보지 않음
 - 시각(`startedAt` 등)은 UTC ISO-8601 (예: `2026-11-07T05:00:02Z`). 날짜 · 시간(`dueDate` · `dueTime`)은 한국 날짜 · 시간 그대로
-- 에러 응답 모양 (2026-11-03 결정). `code`로 분기하고, `detail`은 보통 `{}` (409 SESSION_ALREADY_IN_PROGRESS는 `detail.sessionId`)
+- 성공 응답 모양 (2026-11-19 결정). 본문이 있는 성공 응답은 모두 `data`로 감싼다. **각 API의 🛬 Response 표와 예시는 `data` 안의 내용**이다 (예: 1번 `terms[]` → `data.terms[]`)
 
 ```json
-{ "code": "SESSION_ENDED", "message": "SESSION_ENDED", "detail": {} }
+{ "success": true, "data": { "terms": [ ... ] } }
 ```
+
+  - 본문 없는 응답(204 No Content, 202 Accepted '본문 없음')은 그대로 본문 없음 (감싸지 않음)
+  - 28번 스트리밍의 이벤트 `data`(`reply` · `done`)는 감싸지 않음. `error` 이벤트만 아래 에러 모양
+- 에러 응답 모양 (2026-11-03 결정, 2026-11-19 `success: false` 추가). `success`로 성공 · 실패를 나누고 `code`로 분기하며, `detail`은 보통 `{}` (409 SESSION_ALREADY_IN_PROGRESS는 `detail.sessionId`). `message`는 지금 `code`와 같은 값 (화면용 한국어 문구는 확정 필요)
+
+```json
+{ "success": false, "code": "SESSION_ENDED", "message": "SESSION_ENDED", "detail": {} }
+```
+
+> 2026-11-19: 성공 응답을 `{success, data}`로 감싸고 에러 응답에 `success: false` 추가 (공통 응답 처리)
 
 | 상태 | code | 언제 |
 | --- | --- | --- |
@@ -1709,7 +1719,7 @@ json
 | --- | --- | --- |
 | `reply` | 0번 이상 | `{"content": "지금까지 만들어진 답장"}`. **지금까지의 글 전체**(조각이 아님). 받을 때마다 말풍선 글을 이 값으로 바꿈 |
 | `done` | 마지막 1번 | 20번 응답과 같은 JSON. `content`가 최종 답장이라 말풍선을 이 값으로 확정 (마지막 `reply`와 조금 다를 수 있음: 앞뒤 공백 · 따옴표 정리). 표정 · 호감도도 여기서 |
-| `error` | `done` 대신 1번 | 공통 에러 모양 `{"code", "message", "detail"}`. 스트림을 연 뒤에 생긴 오류만 (예: 답하는 사이 공부가 끝남 → `SESSION_ENDED`) |
+| `error` | `done` 대신 1번 | 공통 에러 모양 `{"success": false, "code", "message", "detail"}`. 스트림을 연 뒤에 생긴 오류만 (예: 답하는 사이 공부가 끝남 → `SESSION_ENDED`) |
 
 ```
 event: reply
