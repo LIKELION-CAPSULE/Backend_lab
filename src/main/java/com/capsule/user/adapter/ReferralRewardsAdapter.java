@@ -3,7 +3,6 @@ package com.capsule.user.adapter;
 import com.capsule.user.api.ReferralRewards;
 import com.capsule.user.api.UserTypes.ReferralReward;
 import com.capsule.user.service.ReferralService;
-import java.time.Instant;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -16,8 +15,8 @@ public class ReferralRewardsAdapter implements ReferralRewards {
     private final ReferralService referrals;
 
     @Override
-    public Optional<ReferralReward> qualify(long userId, long connectionId, Instant endedAt) {
-        return referrals.qualify(userId, connectionId, endedAt);
+    public Optional<ReferralReward> qualify(long userId, long connectionId) {
+        return referrals.qualify(userId, connectionId);
     }
 
     @Override

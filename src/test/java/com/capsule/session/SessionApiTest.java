@@ -426,6 +426,8 @@ class SessionApiTest {
                 .andExpect(jsonPath("$.data.referralReward.amount").value(1000));
         mvc.perform(get("/api/connections/{id}", id).with(login(userId)))
                 .andExpect(jsonPath("$.data.referralReward.amount").value(1000)); // 다시 읽어도 같은 값
+        end(id, 600, 600, 600, 0, null)
+                .andExpect(jsonPath("$.data.referralReward.amount").value(1000)); // 22 다시
         assertThat(jdbc.queryForMap(
                         "SELECT qualified_connection_id, inviter_rewarded, invitee_rewarded FROM referrals"
                                 + " WHERE invitee_id = ?",

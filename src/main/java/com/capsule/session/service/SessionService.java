@@ -391,7 +391,7 @@ public class SessionService {
         }
         s.recordClosingLine(closingHandler.close(closingOf(s, endType, t.connected()), draft));
         // 초대 보상 (22 '서버가 하는 일' 7): 코드를 입력한 뒤 처음 끝나는 연결. 크레딧 잠금이라 맨 끝에
-        Optional<ReferralReward> reward = referralRewards.qualify(s.getUserId(), s.getId(), endedAt);
+        Optional<ReferralReward> reward = referralRewards.qualify(s.getUserId(), s.getId());
         return toReport(s, settlement, reward);
     }
 

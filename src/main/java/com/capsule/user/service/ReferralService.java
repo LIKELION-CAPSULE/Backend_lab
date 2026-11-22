@@ -136,7 +136,7 @@ public class ReferralService {
      * 크레딧은 user id가 작은 쪽부터 준다: 서로 코드를 넣은 두 사람이 동시에 끝내도 크레딧 잠금이 엇갈리지 않게
      */
     @Transactional
-    public Optional<ReferralReward> qualify(long userId, long connectionId, Instant endedAt) {
+    public Optional<ReferralReward> qualify(long userId, long connectionId) {
         Optional<Referral> found = referrals.findForUpdateByInviteeId(userId).filter(r -> !r.isQualified());
         if (found.isEmpty()) return Optional.empty();
         Referral r = found.get();
@@ -146,7 +146,7 @@ public class ReferralService {
         // 확정 필요(36): 11번째부터 받은 사람에게도 안 줄지. 지금은 받은 사람 몫은 준다. 탈퇴한 초대한 사람에게는 주지 않는다
         boolean inviterReward =
                 inviterActive && referrals.countByInviterIdAndInviterRewardedTrue(inviterId) < MAX_INVITER_REWARDS;
-        r.qualify(connectionId, endedAt, inviterReward);
+        r.qualify(connectionId, Instant.now(clock), inviterReward);
         long id = r.getId();
         if (inviterReward && inviterId < userId) {
             credits.grantInvite(inviterId, REWARD, id, true, CREDIT_TITLE);

@@ -9,7 +9,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.capsule.user.api.ReferralRewards;
 import com.capsule.user.api.UserTypes.ReferralReward;
-import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 import org.hamcrest.Matchers;
@@ -28,6 +27,9 @@ class ReferralApiTest extends UserApiTestSupport {
 
     @Autowired
     ReferralRewards rewards;
+
+    @Autowired
+    com.capsule.credit.api.CreditQuery creditQuery;
 
     @Test
     void enterCodeThenFirstConnectionRewardsBoth() throws Exception {
@@ -57,8 +59,8 @@ class ReferralApiTest extends UserApiTestSupport {
                 .andExpect(jsonPath("$.data.canEnterCode").value(false))
                 .andExpect(jsonPath("$.data.codeInputDeadline").value(Matchers.nullValue()));
 
-        assertThat(rewards.qualify(invitee, 501L, Instant.now())).contains(new ReferralReward(1000));
-        assertThat(rewards.qualify(invitee, 502L, Instant.now())).isEmpty(); // 한 번만
+        assertThat(rewards.qualify(invitee, 501L)).contains(new ReferralReward(1000));
+        assertThat(rewards.qualify(invitee, 502L)).isEmpty(); // 한 번만
         assertThat(rewards.rewardOf(invitee, 501L)).contains(new ReferralReward(1000));
         assertThat(rewards.rewardOf(invitee, 502L)).isEmpty();
         assertThat(inviteCredits(inviter)).isEqualTo(1000);
@@ -107,7 +109,7 @@ class ReferralApiTest extends UserApiTestSupport {
         for (int i = 0; i < 11; i++) {
             long friend = user("친구" + i, "dev-f" + i);
             enter(friend, codeOf(inviter), "dev-g" + i).andExpect(status().isCreated());
-            assertThat(rewards.qualify(friend, 600L + i, Instant.now())).isPresent(); // 받은 사람 몫은 11번째도
+            assertThat(rewards.qualify(friend, 600L + i)).isPresent(); // 받은 사람 몫은 11번째도
         }
         assertThat(inviteCredits(inviter)).isEqualTo(10_000);
         mvc.perform(get("/api/referrals/me").with(login(inviter)))
@@ -124,7 +126,65 @@ class ReferralApiTest extends UserApiTestSupport {
         jdbc.update("UPDATE users SET withdrawn_at = now(), nickname = '탈퇴한 사용자' WHERE id = ?", friend);
         mvc.perform(get("/api/referrals/me").with(login(inviter)))
                 .andExpect(jsonPath("$.data.friends[0].nickname").value(Matchers.nullValue()));
-        assertThat(rewards.qualify(inviter, 1L, Instant.now())).isEqualTo(Optional.empty()); // 입력 안 한 사람
+        assertThat(rewards.qualify(inviter, 1L)).isEqualTo(Optional.empty()); // 입력 안 한 사람
+    }
+
+    @Test
+    void rejectsTooLongValuesAndSkipsWithdrawnInviter() throws Exception {
+        long inviter = user("성욱", "dev-l1");
+        long friend = user("민지", "dev-l2");
+        expectError(enter(friend, "C".repeat(21), "dev-l3"), 400, "INVALID_REQUEST");
+        expectError(
+                mvc.perform(post("/api/referrals")
+                        .with(login(friend))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"%s\",\"deviceHash\":\"%s\"}".formatted(codeOf(inviter), "d".repeat(65)))),
+                400,
+                "INVALID_REQUEST");
+        enter(friend, codeOf(inviter), "dev-l3").andExpect(status().isCreated());
+        jdbc.update("UPDATE users SET withdrawn_at = now() WHERE id = ?", inviter);
+        assertThat(rewards.qualify(friend, 700L)).isPresent(); // 받은 사람 몫은 준다
+        assertThat(inviteCredits(inviter)).isZero(); // 탈퇴한 초대한 사람에게는 안 줌
+    }
+
+    /** 서로 코드를 넣은 두 사람이 동시에 끝내도, 초대한 사람이 그날 처음 크레딧을 읽는 중이어도 교착 없이 끝난다 */
+    @Test
+    void concurrentRewardsDoNotDeadlock() throws Exception {
+        for (int round = 0; round < 5; round++) {
+            long a = user("가" + round, "dev-ca" + round);
+            long b = user("나" + round, "dev-cb" + round);
+            long c = user("다" + round, "dev-cc" + round);
+            enter(a, codeOf(b), "dev-ia" + round).andExpect(status().isCreated());
+            enter(b, codeOf(a), "dev-ib" + round).andExpect(status().isCreated());
+            enter(c, codeOf(b), "dev-ic" + round).andExpect(status().isCreated());
+            runTogether(
+                    () -> rewards.qualify(a, 800L),
+                    () -> rewards.qualify(b, 801L),
+                    () -> rewards.qualify(c, 802L),
+                    () -> creditQuery.current(b));
+            assertThat(inviteCredits(a)).isEqualTo(2000); // 받은 몫 + b를 초대한 몫
+            assertThat(inviteCredits(b)).isEqualTo(3000); // 받은 몫 + a · c를 초대한 몫
+            assertThat(inviteCredits(c)).isEqualTo(1000);
+        }
+    }
+
+    static void runTogether(Runnable... tasks) throws Exception {
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(tasks.length);
+        try {
+            var start = new java.util.concurrent.CountDownLatch(1);
+            var futures = new java.util.ArrayList<java.util.concurrent.Future<?>>();
+            for (Runnable t : tasks) {
+                futures.add(pool.submit(() -> {
+                    start.await();
+                    t.run();
+                    return null;
+                }));
+            }
+            start.countDown();
+            for (var f : futures) f.get(30, java.util.concurrent.TimeUnit.SECONDS); // 교착 · 실패면 여기서 예외
+        } finally {
+            pool.shutdownNow();
+        }
     }
 
     // ---- 도우미

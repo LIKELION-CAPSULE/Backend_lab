@@ -41,7 +41,11 @@ public interface ReferralRepository extends JpaRepository<Referral, Long> {
             nativeQuery = true)
     boolean sharesDevice(long inviterId, long inviteeId, String deviceHash);
 
-    /** 초대한 사람 보상 10명 한도를 지키려고 그 사람 기준으로 한 줄로 세운다 (users 행 잠금) */
-    @Query(value = "SELECT id FROM users WHERE id = :userId FOR UPDATE", nativeQuery = true)
+    /**
+     * 초대한 사람 보상 10명 한도를 지키려고 그 사람 기준으로 한 줄로 세운다 (users 행 잠금).
+     * FOR UPDATE가 아니라 NO KEY UPDATE: credit_grants · credit_ledger INSERT가 FK로 users 행에 KEY SHARE를 거는데,
+     * FOR UPDATE는 그것과 부딪혀 크레딧 advisory lock과 순서가 엇갈리면 교착이 난다. NO KEY UPDATE끼리는 서로 막힌다
+     */
+    @Query(value = "SELECT id FROM users WHERE id = :userId FOR NO KEY UPDATE", nativeQuery = true)
     Optional<Long> lockUser(long userId);
 }
