@@ -4,7 +4,7 @@ import com.capsule.content.api.ContentTypes.MateInfo;
 import com.capsule.content.api.ContentTypes.ModelInfo;
 import java.util.List;
 
-/** 메이트 상세 (api.md 31). hasConversation은 대화방 단계에서 추가 */
+/** 메이트 상세 (api.md 31). hasConversation = 이 메이트와 나눈 대화가 있는지 (2026-11-23 6단계) */
 public record MateDetailResponse(
         long id,
         String name,
@@ -17,9 +17,10 @@ public record MateDetailResponse(
         String myRole,
         String intro,
         ModelInfo model,
-        boolean comingSoon) {
+        boolean comingSoon,
+        boolean hasConversation) {
 
-    public static MateDetailResponse of(MateInfo m) {
+    public static MateDetailResponse of(MateInfo m, boolean hasConversation) {
         return new MateDetailResponse(
                 m.id(),
                 m.name(),
@@ -32,6 +33,7 @@ public record MateDetailResponse(
                 m.myRole(),
                 m.intro(),
                 m.model(),
-                m.comingSoon());
+                m.comingSoon(),
+                hasConversation);
     }
 }

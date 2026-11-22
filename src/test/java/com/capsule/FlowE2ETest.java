@@ -102,6 +102,8 @@ class FlowE2ETest {
                 .isZero();
         MvcResult mate = call(get("/api/mates/1"), token, null, 200);
         assertThat((String) JsonPath.read(body(mate), "$.data.model.format")).isEqualTo("CUBISM");
+        assertThat((Boolean) JsonPath.read(body(mate), "$.data.hasConversation"))
+                .isFalse();
         String examDate = LocalDate.now().plusDays(10).toString();
         call(
                 post("/api/me/memories"),
@@ -199,8 +201,30 @@ class FlowE2ETest {
         // 목표 시간이 없어져(2026-11-23) 공부 포기 대사는 안 나오고 완료 대사: 관계 단계 2 묶음의 첫 줄 (이 사용자의 첫 종료)
         assertThat((String) JsonPath.read(body(end), "$.data.closingLine"))
                 .isEqualTo("오늘은 봐줄게 꽤 했으니까, 내일도 와 내가 이기는 거 구경해야지");
+        // 대화방 (2026-11-23 6단계): 답장 한 번 = 대화 1, 재전송은 안 셈
+        assertThat((Integer) JsonPath.read(body(end), "$.data.messageCount")).isEqualTo(1);
         MvcResult endAgain = call(post(s + "/end"), token, endBody, 200);
         assertThat(body(endAgain)).isEqualTo(body(end));
+        // 끊어도 메시지가 남아 대화방 기록으로 보인다 (최신순: 답장 → 사용자 말), 카드에 넣은 표시만
+        MvcResult room = call(get("/api/mates/1/messages?size=1"), token, null, 200);
+        assertThat((String) JsonPath.read(body(room), "$.data.messages[0].sender"))
+                .isEqualTo("MATE");
+        assertThat((String) JsonPath.read(body(room), "$.data.messages[0].content"))
+                .isEqualTo(replyContent);
+        String cursor = JsonPath.read(body(room), "$.data.nextCursor");
+        MvcResult older = call(get("/api/mates/1/messages?size=1&cursor=" + cursor), token, null, 200);
+        assertThat((String) JsonPath.read(body(older), "$.data.messages[0].content"))
+                .isEqualTo("너 설명 진짜 멋있다");
+        assertThat((Object) JsonPath.read(body(older), "$.data.nextCursor")).isNull();
+        call(get("/api/mates/1/messages?size=51"), token, null, 400);
+        call(get("/api/mates/999/messages"), token, null, 404);
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM chat_messages WHERE connection_id = ? AND recapped_at IS NOT NULL",
+                        Integer.class,
+                        sessionId))
+                .isEqualTo(2);
+        assertThat((Boolean) JsonPath.read(body(call(get("/api/mates/1"), token, null, 200)), "$.data.hasConversation"))
+                .isTrue();
         MvcResult report = call(get(s), token, null, 200);
         assertThat(body(report)).isEqualTo(body(end));
         MvcResult homeAfter = call(get("/api/home"), token, null, 200);

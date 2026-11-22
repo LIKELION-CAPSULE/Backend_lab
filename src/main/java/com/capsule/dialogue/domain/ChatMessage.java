@@ -12,7 +12,7 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-/** 진행 중 세션의 메시지. 세션이 끝나면 요약에 합치고 지운다 */
+/** 대화방 메시지. 연결이 끝나면 흐름 카드에 넣고 recappedAt만 채운다 (32 대화방 기록으로 남음) */
 @Entity
 @Table(name = "chat_messages")
 @Getter
@@ -36,6 +36,9 @@ public class ChatMessage {
     private String content;
     private String signal; // 사용자 말의 종류 (SignalType 이름). 답장을 저장할 때 채운다
     private Instant createdAt;
+
+    /** 흐름 카드에 넣은 시각. null이면 아직 (2026-11-23: 지우지 않고 대화방 기록으로 남김) */
+    private Instant recappedAt;
 
     public ChatMessage(
             long conversationId, long sessionId, UUID requestId, String sender, String content, Instant now) {

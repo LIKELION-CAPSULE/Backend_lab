@@ -7,9 +7,17 @@ import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 
 public interface StudySessionRepository extends JpaRepository<StudySession, Long> {
+
+    /** 진행 중인 연결만 (끝난 연결이면 0행) */
+    @Modifying
+    @Query(
+            value = "UPDATE connections SET message_count = message_count + 1 WHERE id = :id AND ended_at IS NULL",
+            nativeQuery = true)
+    int incrementMessageCount(long id);
 
     Optional<StudySession> findByUserIdAndEndedAtIsNull(long userId);
 

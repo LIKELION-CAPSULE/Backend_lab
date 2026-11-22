@@ -11,6 +11,8 @@ public enum DialogueErrorCode implements ErrorCode {
     CONNECTION_ENDED(HttpStatus.CONFLICT),
     EVENT_NOT_FOUND(HttpStatus.NOT_FOUND),
     CHARACTER_NOT_IN_SESSION(HttpStatus.BAD_REQUEST),
+    // 대화방 기록 (api.md 32, 2026-11-23)
+    MATE_NOT_FOUND(HttpStatus.NOT_FOUND),
     // 실험실 (/internal/llm-lab)
     LOGIN_FAILED(HttpStatus.UNAUTHORIZED),
     CHARACTER_NOT_FOUND(HttpStatus.NOT_FOUND),
