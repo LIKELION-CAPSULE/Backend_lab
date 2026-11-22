@@ -110,7 +110,9 @@ class FlowE2ETest {
                 "{\"type\":\"EXAM\",\"title\":\"영어 중간고사\",\"dueDate\":\"" + examDate + "\",\"dueTime\":null}",
                 201);
 
-        // 10~11 연결 시작 → FOCUS → 인사 반응
+        // 10~11 연결 시작 → FOCUS → 인사 반응. 시드의 준비 중 메이트(2, 모델 없음)는 연결할 수 없다
+        MvcResult comingSoon = call(post("/api/connections"), token, "{\"mateId\":2}", 409);
+        assertThat((String) JsonPath.read(body(comingSoon), "$.code")).isEqualTo("MATE_COMING_SOON");
         MvcResult start = call(post("/api/connections"), token, "{\"mateId\":1}", 201);
         long sessionId = ((Number) JsonPath.read(body(start), "$.data.connectionId")).longValue();
         String s = "/api/connections/" + sessionId;

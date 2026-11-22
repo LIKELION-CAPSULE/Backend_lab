@@ -6,10 +6,10 @@
 -- 다른 모듈 테이블(chat_messages · llm_usages · conversation_recaps · relation_logs · relation_settlements)은
 -- 칸 이름만 바꾼다 (FK가 이 테이블을 가리켜서 같은 파일에서 한 번에)
 
--- 1) 세션 캐릭터 → connections.character_id (세션마다 1행이라 그대로 옮김)
+-- 1) 세션 캐릭터 → connections.character_id (시작 때 세션마다 1행. 여럿이면 id가 가장 작은 캐릭터로)
 ALTER TABLE study_sessions ADD COLUMN character_id bigint REFERENCES characters (id);
-UPDATE study_sessions s SET character_id = sc.character_id
-FROM session_characters sc WHERE sc.session_id = s.id;
+UPDATE study_sessions s SET character_id = (
+    SELECT min(sc.character_id) FROM session_characters sc WHERE sc.session_id = s.id);
 ALTER TABLE study_sessions ALTER COLUMN character_id SET NOT NULL;
 DROP TABLE session_characters;
 

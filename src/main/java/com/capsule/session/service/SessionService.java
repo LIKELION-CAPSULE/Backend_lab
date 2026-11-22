@@ -99,6 +99,7 @@ public class SessionService {
                 .toList();
         HomeResponse.LastMate lastMate = sessions.findFirstByUserIdOrderByStartedAtDescIdDesc(userId)
                 .flatMap(s -> mates.find(s.characterId()))
+                .filter(MateInfo::active) // 비활성이 된 메이트로 '다시 연결하기'를 띄우지 않게
                 .map(m -> new HomeResponse.LastMate(m.id(), m.name(), m.illustrationUrl()))
                 .orElse(null);
         LocalDate today = LocalDate.ofInstant(now(), ClockConfig.KST);
@@ -125,16 +126,14 @@ public class SessionService {
     @Transactional
     public StartResponse start(long userId, StartRequest req) {
         // 연결 시간 제한은 없다 (2026-11-23, 목표 시간 삭제)
-        CharacterInfo character = characters
-                .find(req.mateId())
-                .filter(CharacterInfo::active)
+        MateInfo mate = mates.find(req.mateId())
+                .filter(MateInfo::active)
                 .orElseThrow(() -> new ApiException(SessionErrorCode.MATE_NOT_FOUND));
-        if (character.model() == null) { // 준비 중 메이트 (model은 준비 중일 때만 비어 있다, schema CHECK)
+        // 준비 중이면 막는다. 모델 없는 메이트는 준비 중일 때만 있다(schema CHECK)지만 화면을 못 그리니 같이 막음
+        if (mate.comingSoon() || mate.model() == null) {
             throw new ApiException(SessionErrorCode.MATE_COMING_SOON);
         }
-        if (mates.find(character.id()).map(MateInfo::comingSoon).orElse(false)) {
-            throw new ApiException(SessionErrorCode.MATE_COMING_SOON);
-        }
+        CharacterInfo character = character(mate.id());
         UserProfile user = user(userId);
         if (user.onboardingRequired()) {
             throw new ApiException(SessionErrorCode.ONBOARDING_REQUIRED);
