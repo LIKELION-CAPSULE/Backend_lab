@@ -64,7 +64,10 @@ class CreditServiceTest {
         assertThat(first.inviteBalance()).isZero();
         assertThat(first.low()).isFalse();
         assertThat(first.attendanceExpiresAt()).isAfter(java.time.Instant.now());
-        assertThat(query.current(userId)).isEqualTo(first); // 같은 날 다시 불러도 한 번만
+        assertThat(first.attendanceGrantedNow()).isTrue(); // 방금 지급 → 출석 토스트
+        Credits again = query.current(userId);
+        assertThat(again.attendanceGrantedNow()).isFalse(); // 같은 날 두 번째부터는 false
+        assertThat(again.todayRemaining()).isEqualTo(first.todayRemaining()); // 같은 날 다시 불러도 한 번만
         assertThat(types()).containsExactly("ATTENDANCE");
     }
 

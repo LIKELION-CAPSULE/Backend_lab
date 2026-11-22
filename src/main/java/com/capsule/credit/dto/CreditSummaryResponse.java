@@ -11,6 +11,7 @@ public record CreditSummaryResponse(
         int inviteBalance,
         boolean low,
         boolean exhausted,
+        boolean attendanceGrantedNow,
         int todayUsed,
         int invitedFriends) {
 
@@ -22,6 +23,7 @@ public record CreditSummaryResponse(
                 c.inviteBalance(),
                 c.low(),
                 c.exhausted(),
+                c.attendanceGrantedNow(),
                 todayUsed,
                 invitedFriends);
     }

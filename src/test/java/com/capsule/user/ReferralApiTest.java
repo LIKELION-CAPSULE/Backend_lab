@@ -82,6 +82,23 @@ class ReferralApiTest extends UserApiTestSupport {
                 .andExpect(jsonPath("$.data.invitedFriends").value(0)); // 받은 사람 몫은 친구 초대가 아님
     }
 
+    /** 39: 로그인 없이 누구 코드인지만. 35 /me는 그대로 로그인 필요 */
+    @Test
+    void lookupWorksWithoutLogin() throws Exception {
+        long inviter = user("성욱", "dev-lk");
+        String code = codeOf(inviter);
+        mvc.perform(get("/api/referrals/{code}", code.toLowerCase()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.inviterNickname").value("성욱"))
+                .andExpect(jsonPath("$.data.rewardOnFirstConnection").value(1000));
+        mvc.perform(get("/api/referrals/{code}", "CAP-NONE"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("REFERRAL_CODE_NOT_FOUND"));
+        mvc.perform(get("/api/referrals/me")).andExpect(status().isUnauthorized());
+        jdbc.update("UPDATE users SET withdrawn_at = now() WHERE id = ?", inviter);
+        mvc.perform(get("/api/referrals/{code}", code)).andExpect(status().isNotFound());
+    }
+
     @Test
     void rejectsInvalidCodes() throws Exception {
         long inviter = user("성욱", "dev-a");

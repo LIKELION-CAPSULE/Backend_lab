@@ -642,6 +642,7 @@ class SessionApiTest {
                         jsonPath("$.data.relation.unlocked[0].expressionName").value("shy"))
                 .andExpect(jsonPath("$.data.relation.pointsAfter").doesNotExist())
                 .andExpect(jsonPath("$.data.closingLine").value(CLOSING_LINE))
+                .andExpect(jsonPath("$.data.betaFeedbackAvailable").value(true)) // 오늘 평가 전
                 .andExpect(jsonPath("$.data.referralReward").value(org.hamcrest.Matchers.nullValue()));
     }
 
