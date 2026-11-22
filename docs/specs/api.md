@@ -481,8 +481,11 @@
 | honorific | String | 호칭 (메이트가 나를 부르는 이름). 없으면 null → 메이트는 닉네임으로 부름 |
 | aboutMe | String | 나에 대해 한 줄. 없으면 null |
 | referralCode | String | 내 초대 코드 (예: `CAP-7K2Q`) |
+| credits | Object | 크레딧 요약 (33의 `Credits`와 같은 모양, GNB) |
 
-> 2026-11-23 (12/1 베타): `birthDate` · `isMinor` · `honorific` · `aboutMe` · `referralCode` 추가, `onboardingRequired`에 생년월일 조건 추가. `credits`는 크레딧 단계에서
+> 2026-11-23 (12/1 베타): `birthDate` · `isMinor` · `honorific` · `aboutMe` · `referralCode` 추가, `onboardingRequired`에 생년월일 조건 추가
+
+> 2026-11-23 (12/1 베타 7단계): `credits` 추가. 이 조회에서 그날 출석 크레딧이 지급된다 (33 '크레딧 규칙')
 
 > 2026-11-23 (12/1 베타 3단계): `activeSession` → `activeConnection` (`roomId` · `roomName` 삭제, `characterName` → `mateName`, `mateId` 추가)
 
@@ -498,7 +501,8 @@
   "isMinor": false,
   "honorific": "승희야",
   "aboutMe": "백엔드 개발 공부 중",
-  "referralCode": "CAP-7K2Q"
+  "referralCode": "CAP-7K2Q",
+  "credits": { "todayRemaining": 2500, "attendanceRemaining": 1500, "attendanceExpiresAt": "2026-12-01T20:00:00Z", "inviteBalance": 1000, "low": false, "exhausted": false }
 }
 ```
 
@@ -861,8 +865,9 @@ GET /api/me/memories?date=2026-11-12
 | relation | Object | 친밀도 `stage`(1~5) · `stageName` (상단 바, 5단계 · 2026-11-23) |
 | greeting | Object | 인사 반응 `trigger`(`GREETING`) · `intensity`(null) · `line` · `expression` · `audio`. `line`은 대사 생성 전이라 지금은 null, `expression`은 반응표의 표정 이름 (없으면 null), `audio`는 음성 단계 전이라 null |
 | minorRemainingSeconds | Integer | 만 19세 미만이면 오늘(오전 5시 기준) 남은 연결 시간(초), 아니면 null |
+| credits | Object | 상단 바 '오늘 남은 크레딧' (33의 `Credits`, 7단계 · 2026-11-23) |
 
-> 2026-11-23 (12/1 베타 4단계): `firstMeet` · `greeting` · `minorRemainingSeconds` 추가. 만 19세 미만이 오늘 3시간을 다 쓰면 403 MINOR_DAILY_LIMIT. `relation` · `credits` · `settings`는 친밀도 · 크레딧 단계에서
+> 2026-11-23 (12/1 베타 4단계): `firstMeet` · `greeting` · `minorRemainingSeconds` 추가. 만 19세 미만이 오늘 3시간을 다 쓰면 403 MINOR_DAILY_LIMIT. `settings`는 29를 따로 부름 (확정 필요: 여기에 합칠지)
 
 ```json
 {
@@ -875,7 +880,8 @@ GET /api/me/memories?date=2026-11-12
   "firstMeet": false,
   "relation": { "stage": 3, "stageName": "친구" },
   "greeting": { "trigger": "GREETING", "intensity": null, "line": null, "expression": "웃음", "audio": null },
-  "minorRemainingSeconds": null
+  "minorRemainingSeconds": null,
+  "credits": { "todayRemaining": 1320, "attendanceRemaining": 1320, "attendanceExpiresAt": "2026-11-07T20:00:00Z", "inviteBalance": 0, "low": false, "exhausted": false }
 }
 ```
 
@@ -1962,3 +1968,95 @@ data: {"requestId":"9c3a...","characterId":1,"content":"알지. 그리핀도르 
 > ✅ **200 OK** (대화가 없으면 `messages: []`)
 
 > ❌ **400** INVALID_REQUEST (size · cursor 형식) · **404** MATE_NOT_FOUND (없거나 비활성 메이트)
+
+## 33. GET /api/credits — 내 크레딧
+- 분류: 크레딧
+- 설명: 크레딧 화면 위쪽 요약 (오늘 남은 · 오늘 쓴 · 초대로 받은)
+- 와이어프레임: SCR-30 크레딧
+- 백엔드: Not started
+- 프론트: Not started
+
+> 2026-11-23 (12/1 베타 7단계): 크레딧 추가 (ADR 0031)
+
+#### 크레딧 규칙 (PRD · 노션 '기능 추가')
+
+- 두 종류: **출석분**(하루 1,500, 다음 오전 5시에 남은 만큼 사라짐) · **초대분**(친구 초대 보상 1,000, 사라지지 않음)
+- 출석 지급과 지난 출석분 소멸은 배치 없이, 그날 그 사용자의 크레딧을 처음 읽거나 쓸 때 처리한다 (8 내 정보 · 16 연결 시작 · 33 · 34 · 차감). 하루 = 오전 5시 KST
+- 쓸 때는 출석분부터 (사라지는 것 먼저)
+- 차감: 보이스 대화 20 · 고급 대화 30 · 둘 다 50. 답장이 성공한 뒤에만, 같은 요청(`requestId`)은 한 번만. 모자라면 차감하지 않고 그 기능만 멈춤(기본 채팅은 계속). 메시지 전송에 보이스 · 고급 모드가 생기면 연결 (확정 필요: 모드 이름 · 요청 칸)
+- 탈퇴해도 크레딧 행은 남김 (지표)
+
+#### 설명
+
+- 테이블: `credit_grants`, `credit_ledger` · 인증: 필요
+
+#### [GET] /api/credits
+
+#### 🛬 Response — `Credits` + 아래
+
+`Credits` (8 · 16 · 33이 같은 모양)
+
+| 이름 | 타입 | 설명 |
+| --- | --- | --- |
+| todayRemaining | Integer | 지금 쓸 수 있는 양 = 출석분 + 초대분 |
+| attendanceRemaining | Integer | 오늘 출석분 남은 양 |
+| attendanceExpiresAt | String | 출석분이 사라지는 시각 (다음 오전 5시) |
+| inviteBalance | Integer | 초대분 남은 양 |
+| low | Boolean | `todayRemaining` < 100 (SCR-34) |
+| exhausted | Boolean | `todayRemaining` = 0 (SCR-33) |
+
+| 이름 | 타입 | 설명 |
+| --- | --- | --- |
+| todayUsed | Integer | 오늘(오전 5시부터) 쓴 크레딧 |
+| invitedFriends | Integer | 초대 보상을 받은 횟수 ('2,000 · 친구 2명 초대') |
+
+```json
+{ "todayRemaining": 3450, "attendanceRemaining": 1450, "attendanceExpiresAt": "2026-12-01T20:00:00Z", "inviteBalance": 2000, "low": false, "exhausted": false, "todayUsed": 50, "invitedFriends": 2 }
+```
+
+> ✅ **200 OK**
+
+## 34. GET /api/credits/transactions — 크레딧 내역
+- 분류: 크레딧
+- 설명: 크레딧 화면 내역 표. 최신순
+- 와이어프레임: SCR-30 크레딧
+- 백엔드: Not started
+- 프론트: Not started
+
+> 2026-11-23 (12/1 베타 7단계): 크레딧 내역 추가
+
+- 테이블: `credit_ledger` · 인증: 필요
+
+#### [GET] /api/credits/transactions?filter=&cursor=&size=
+
+#### 🛫 Query
+
+| 이름 | 타입 | 필수 | 설명 |
+| --- | --- | --- | --- |
+| filter | String | X | `ALL`(기본) · `ATTENDANCE`(출석 지급 · 소멸) · `USE` · `INVITE` |
+| cursor | String | X | 앞 응답의 `nextCursor` |
+| size | Integer | X | 기본 20, 최대 50 |
+
+#### 🛬 Response
+
+| 이름 | 타입 | 설명 |
+| --- | --- | --- |
+| items | Array | `id` · `type`(`ATTENDANCE` · `INVITE` · `USE` · `EXPIRE`) · `title` · `change`(지급 +, 사용 · 소멸 −) · `balanceAfter`(이 변동 뒤 전체 잔액) · `createdAt` |
+| nextCursor | String | 더 이전 내역. 없으면 null |
+
+- `title`: 출석 "출석" · 소멸 "출석분 소멸" · 초대 "친구 초대" · 사용은 차감하는 쪽이 정함 (예: "보이스 대화 · 채린"). 문구는 확정 필요
+
+```json
+{
+  "items": [
+    { "id": 931, "type": "USE", "title": "보이스 대화 · 채린", "change": -20, "balanceAfter": 3450, "createdAt": "2026-12-01T03:00:00Z" },
+    { "id": 930, "type": "ATTENDANCE", "title": "출석", "change": 1500, "balanceAfter": 3470, "createdAt": "2026-11-30T20:00:05Z" },
+    { "id": 929, "type": "EXPIRE", "title": "출석분 소멸", "change": -320, "balanceAfter": 1970, "createdAt": "2026-11-30T20:00:05Z" }
+  ],
+  "nextCursor": null
+}
+```
+
+> ✅ **200 OK**
+
+> ❌ **400** INVALID_REQUEST (filter · size · cursor)
