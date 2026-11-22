@@ -22,7 +22,7 @@ public class User {
 
     private static final int NICKNAME_MAX = 20;
     private static final int HONORIFIC_MAX = 10;
-    private static final int ABOUT_ME_MAX = 60;
+    private static final int ABOUT_ME_MAX = 50; // 2026-11-23 60 → 50 (피그마 SCR-27 P-3 초안)
     public static final String WITHDRAWN_NICKNAME = "탈퇴한 사용자";
 
     @Id

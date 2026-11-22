@@ -2,6 +2,7 @@ package com.capsule.user.service;
 
 import com.capsule.common.error.ApiException;
 import com.capsule.common.error.CommonErrorCode;
+import com.capsule.common.ratelimit.RateLimiter;
 import com.capsule.credit.api.CreditCommands;
 import com.capsule.user.api.UserTypes.ReferralReward;
 import com.capsule.user.domain.Referral;
@@ -45,9 +46,12 @@ public class ReferralService {
         return CREDIT_TITLE + " · " + inviterNickname + "님 초대";
     }
 
+    private static final int LOOKUP_PER_MINUTE = 30;
+
     private final ReferralRepository referrals;
     private final UserRepository users;
     private final CreditCommands credits;
+    private final RateLimiter rateLimiter;
     private final Clock clock;
     private final String linkBase;
 
@@ -55,13 +59,35 @@ public class ReferralService {
             ReferralRepository referrals,
             UserRepository users,
             CreditCommands credits,
+            RateLimiter rateLimiter,
             Clock clock,
             @Value("${capsule.referral.link-base:https://capsule.ai.kr/i/}") String linkBase) {
         this.referrals = referrals;
         this.users = users;
         this.credits = credits;
+        this.rateLimiter = rateLimiter;
         this.clock = clock;
         this.linkBase = linkBase;
+    }
+
+    // ---- 39 초대 코드 확인 (로그인 전)
+
+    /**
+     * 누구 코드인지만 알려 준다. 자기 코드 · 이미 입력 · 7일은 36에서 본다.
+     * 코드를 하나씩 넣어 보는 것을 막으려고 접속 주소마다 1분에 30번 (프록시 뒤에서는 주소를 꾸밀 수 있어 참고 수준)
+     */
+    @Transactional(readOnly = true)
+    public ReferralEntered lookup(String rawCode, String clientAddress) {
+        if (!rateLimiter.tryAcquire("rl:referral-lookup:" + clientAddress, LOOKUP_PER_MINUTE, Duration.ofMinutes(1))) {
+            throw new ApiException(CommonErrorCode.TOO_MANY_REQUESTS);
+        }
+        String code = rawCode == null ? "" : rawCode.strip();
+        if (code.isEmpty() || code.length() > CODE_MAX) {
+            throw new ApiException(UserErrorCode.REFERRAL_CODE_NOT_FOUND);
+        }
+        User inviter = users.findByReferralCodeAndWithdrawnAtIsNull(code.toUpperCase(Locale.ROOT))
+                .orElseThrow(() -> new ApiException(UserErrorCode.REFERRAL_CODE_NOT_FOUND));
+        return new ReferralEntered(inviter.getNickname(), REWARD);
     }
 
     // ---- 35 초대 현황

@@ -37,7 +37,9 @@ public enum UserErrorCode implements ErrorCode {
     REFERRAL_EXPIRED(HttpStatus.BAD_REQUEST),
     REFERRAL_SAME_DEVICE(HttpStatus.BAD_REQUEST),
     REFERRAL_CODE_NOT_FOUND(HttpStatus.NOT_FOUND),
-    REFERRAL_ALREADY_ENTERED(HttpStatus.CONFLICT);
+    REFERRAL_ALREADY_ENTERED(HttpStatus.CONFLICT),
+    // 베타 피드백 (42, 2026-11-23)
+    FEEDBACK_ALREADY_TODAY(HttpStatus.CONFLICT);
 
     private final HttpStatus status;
 

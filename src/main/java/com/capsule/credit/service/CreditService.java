@@ -137,7 +137,10 @@ public class CreditService implements CreditQuery, CreditCommands {
                 .mapToInt(CreditGrant::getRemaining)
                 .sum();
         int total = attendance + invite;
-        return new Credits(total, attendance, nextDayStart(now), invite, total < LOW_BELOW, total == 0);
+        // 이 요청의 refresh가 방금 만든 출석 건은 createdAt이 같은 now (SCR-39 출석 토스트)
+        boolean grantedNow =
+                open.stream().anyMatch(g -> CreditGrant.ATTENDANCE.equals(g.getKind()) && now.equals(g.getCreatedAt()));
+        return new Credits(total, attendance, nextDayStart(now), invite, total < LOW_BELOW, total == 0, grantedNow);
     }
 
     public static LocalDate dayOf(Instant at) {

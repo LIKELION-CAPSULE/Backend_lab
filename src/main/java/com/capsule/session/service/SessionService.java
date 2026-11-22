@@ -47,6 +47,7 @@ import com.capsule.session.dto.StartResponse;
 import com.capsule.session.repository.SessionEventRepository;
 import com.capsule.session.repository.StudySessionRepository;
 import com.capsule.user.api.ActiveSessionLookup;
+import com.capsule.user.api.BetaFeedbackQuery;
 import com.capsule.user.api.ReferralRewards;
 import com.capsule.user.api.UserQuery;
 import com.capsule.user.api.UserTypes.ReferralReward;
@@ -97,6 +98,7 @@ public class SessionService {
     private final SessionClosingHandler closingHandler;
     private final ActiveSessionLookup activeSessions;
     private final ReferralRewards referralRewards;
+    private final BetaFeedbackQuery betaFeedback;
     private final TransactionTemplate tx;
     private final Clock clock;
     private final SessionProperties props;
@@ -428,7 +430,8 @@ public class SessionService {
                         mate.map(MateInfo::myRole).orElse(null)),
                 intimacy(characterId, settlement),
                 s.getClosingLine(),
-                reward.map(r -> new ReferralRewardView(r.amount())).orElse(null));
+                reward.map(r -> new ReferralRewardView(r.amount())).orElse(null),
+                betaFeedback.ratingAvailableToday(s.getUserId())); // 23 SCR-55 평가 카드
     }
 
     // ---- 도우미

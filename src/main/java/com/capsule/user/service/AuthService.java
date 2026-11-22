@@ -43,7 +43,7 @@ public class AuthService {
     private static final Pattern EMAIL = Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
     private static final Duration CODE_TTL = Duration.ofMinutes(5);
     private static final Duration VERIFICATION_TTL = Duration.ofMinutes(10);
-    private static final Duration LOGIN_LOCK = Duration.ofMinutes(5);
+    private static final Duration LOGIN_LOCK = Duration.ofMinutes(10); // 2026-11-23 5 → 10분 (피그마 SCR-51 AU-1 초안)
     private static final int MAX_FAILURES = 5;
     private static final int PASSWORD_MIN = 8;
     private static final int BCRYPT_MAX_BYTES = 72; // 넘으면 BCryptPasswordEncoder가 예외를 던진다

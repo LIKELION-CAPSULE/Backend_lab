@@ -131,9 +131,8 @@ class BetaProfileApiTest extends UserApiTestSupport {
 
         patchMe(auth, "{\"honorific\":\"%s\"}".formatted("가".repeat(11)))
                 .andExpect(jsonPath("$.code").value("INVALID_HONORIFIC"));
-        patchMe(auth, "{\"aboutMe\":\"%s\"}".formatted("가".repeat(61)))
-                .andExpect(jsonPath("$.code").value("INVALID_ABOUT_ME"));
-        // 하나라도 틀리면 다른 칸도 저장하지 않는다
+        patchMe(auth, "{\"aboutMe\":\"%s\"}".formatted("가".repeat(51))) // 50자까지 (2026-11-23)
+                .andExpect(jsonPath("$.code").value("INVALID_ABOUT_ME")); // 하나라도 틀리면 다른 칸도 저장하지 않는다
         patchMe(auth, "{\"aboutMe\":\"바뀌면 안 됨\",\"honorific\":\"%s\"}".formatted("가".repeat(11)))
                 .andExpect(status().isBadRequest());
         // 안 보낸 칸은 그대로, 빈 문자열은 지움
