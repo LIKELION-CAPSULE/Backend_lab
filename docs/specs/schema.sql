@@ -65,6 +65,15 @@
 --   - characters: 메이트 화면 칸 one_liner · hashtags · age_rating · world · my_role · illustration_url · card_image_url
 --     · voice_sample_url · stage_names · coming_soon 추가 (추가만. room_id · personality는 스터디룸 정리 때 지움)
 --   - live2d_models.format (CUBISM · ALIVING2D_V2), live2d_motions · live2d_expressions.label 추가
+--
+-- 2026-11-23 변경 (12/1 베타 3단계: 세션 → 연결)
+--   - study_sessions → connections (character_id 추가, room_id · background_id · target_minutes 삭제), session_characters 삭제
+--   - session_events → connection_events (session_id → connection_id)
+--   - 다른 테이블 session_id → connection_id: chat_messages · llm_usages · conversation_recaps · relation_logs · relation_settlements,
+--     relation_logs.session_event_id → connection_event_id
+--   - 스터디룸 삭제: study_rooms · room_backgrounds · user_unlocked_backgrounds, characters.room_id · personality 삭제,
+--     characters.model_id NULL 허용(준비 중 메이트)
+--   - 시간 칸(focus · distract · break · heartbeat_study)과 이벤트 종류는 다음 단계(연결 새 기능)에서
 -- =====================================================================
 
 BEGIN;
@@ -216,54 +225,23 @@ ALTER TABLE users
     ADD FOREIGN KEY (avatar_id) REFERENCES avatars (id);
 
 -- ---------------------------------------------------------------------
--- 5. 스터디룸 / 배경 / 캐릭터 (S03, S04)
+-- 5. 캐릭터(메이트) (S03, S04)
 -- ---------------------------------------------------------------------
--- 1:1 / 1:3 구분은 저장하지 않음: 룸에 속한 캐릭터 수로 계산
-CREATE TABLE study_rooms (
-    id            bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    name          text        NOT NULL,
-    description   text,
-    thumbnail_url text,                                  -- 홈 포스터 카드. CDN 상대 경로 또는 전체 URL (avatars.thumbnail_url과 같은 규칙)
-    banner_url    text,                                  -- 룸 상세(H04) 가로 배너. 같은 규칙. NULL이면 프론트가 thumbnail_url (2026-11-05)
-    sort_order    int         NOT NULL DEFAULT 0,
-    is_active     boolean     NOT NULL DEFAULT true,
-    created_at    timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE TABLE room_backgrounds (
-    id           bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    room_id      bigint  NOT NULL REFERENCES study_rooms (id) ON DELETE CASCADE,
-    name         text    NOT NULL,
-    image_url    text    NOT NULL,                          -- CDN 상대 경로 또는 전체 URL (avatars.thumbnail_url과 같은 규칙)
-    is_default   boolean NOT NULL DEFAULT false,
-    unlock_type  text    CHECK (unlock_type IN ('LEVEL')),  -- NULL이면 처음부터 열림 (구매는 BM 확정 후 추가)
-    unlock_value int,                                       -- LEVEL이면 이 룸 캐릭터와의 필요 관계 단계
-    sort_order   int     NOT NULL DEFAULT 0,
-    is_active    boolean NOT NULL DEFAULT true,
-    UNIQUE (id, room_id),                                   -- 세션의 복합 FK용
-    CHECK ((unlock_type IS NULL) = (unlock_value IS NULL)),
-    CHECK (NOT is_default OR unlock_type IS NULL)           -- 기본 배경은 항상 열려 있어야 함
-);
-CREATE INDEX idx_room_backgrounds_room ON room_backgrounds (room_id, sort_order);
-CREATE UNIQUE INDEX uq_room_backgrounds_default
-    ON room_backgrounds (room_id) WHERE is_default;         -- 룸당 기본 배경 하나
-
--- 캐릭터는 한 룸에만 속하고, 모델은 하나
+-- 2026-11-23: 스터디룸 · 배경(study_rooms · room_backgrounds · user_unlocked_backgrounds)을 지움. 메이트 = 캐릭터 1명
+-- 모델은 하나. 준비 중 메이트는 모델이 없을 수 있음 (model_id NULL)
 CREATE TABLE characters (
     id                bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    room_id           bigint      NOT NULL REFERENCES study_rooms (id),
-    model_id          bigint      NOT NULL UNIQUE REFERENCES live2d_models (id),
+    model_id          bigint      UNIQUE REFERENCES live2d_models (id),  -- 준비 중 메이트(coming_soon)는 NULL 가능
     name              text        NOT NULL,
-    personality       text[]      NOT NULL DEFAULT '{}',   -- 성격 태그 (예: {츤데레, 슬리데린 5학년, 라이벌}), 순서대로 표시
     intro             text,
     profile_image_url text,                                -- CDN 상대 경로 또는 전체 URL (avatars.thumbnail_url과 같은 규칙)
     home_image_url    text,                                -- 홈 포스터 카드에 겹치는 캐릭터 전신(투명 배경). 홈(api.md 11)의 profileImageUrl로 나감, 없으면 profile_image_url (2026-11-06)
-    sort_order        int         NOT NULL DEFAULT 0,      -- 룸 안 표시 순서
+    sort_order        int         NOT NULL DEFAULT 0,      -- 홈 메이트 리스트 표시 순서
     is_active         boolean     NOT NULL DEFAULT true,
     created_at        timestamptz NOT NULL DEFAULT now(),
     -- 메이트 화면 칸 (12/1 베타, api.md 31). 이미지 · 소리는 CDN 상대 경로 또는 전체 URL
     one_liner         text,                                -- 한 줄 소개 (30자 안팎)
-    hashtags          text[]      NOT NULL DEFAULT '{}',   -- 해시태그, 순서대로 표시 (personality를 대체할 칸. personality는 스터디룸 정리 때 지움)
+    hashtags          text[]      NOT NULL DEFAULT '{}',   -- 해시태그, 순서대로 표시 (옛 personality를 대체)
     age_rating        text        NOT NULL DEFAULT 'ALL' CHECK (age_rating IN ('ALL', 'ADULT')),
     world             text,                                -- 캐릭터 · 세계관 설명 (1,000자 안팎)
     my_role           text,                                -- 내 역할
@@ -272,17 +250,9 @@ CREATE TABLE characters (
     voice_sample_url  text,                                -- '목소리 듣기' mp3
     stage_names       text[]      NOT NULL DEFAULT '{}',   -- 친밀도 단계 이름 5개 (친밀도 단계에서 씀)
     coming_soon       boolean     NOT NULL DEFAULT false,  -- 준비 중 메이트 (조회는 되고 연결은 막음)
-    UNIQUE (id, room_id)                                   -- session_characters 복합 FK용
+    CHECK (coming_soon OR model_id IS NOT NULL)            -- 연결할 수 있는 메이트는 모델이 있어야 함
 );
-CREATE INDEX idx_characters_room ON characters (room_id, sort_order);
-
--- 사용자가 연 배경 (해금 판정 규칙은 서버: 한 명이라도 / 모두 / 합계 중 미정)
-CREATE TABLE user_unlocked_backgrounds (
-    user_id       bigint      NOT NULL REFERENCES users (id),
-    background_id bigint      NOT NULL REFERENCES room_backgrounds (id) ON DELETE CASCADE,
-    unlocked_at   timestamptz NOT NULL DEFAULT now(),
-    PRIMARY KEY (user_id, background_id)
-);
+CREATE INDEX idx_characters_sort ON characters (sort_order);
 
 -- ---------------------------------------------------------------------
 -- 6. 캐릭터 콘텐츠 / 관계 / 해금 / 기억 (S04, S09, S11)
@@ -350,16 +320,15 @@ CREATE TABLE user_memories (
 CREATE INDEX idx_user_memories_user ON user_memories (user_id, type);
 
 -- ---------------------------------------------------------------------
--- 7. 공부 세션 (S05, S06, S09, S10)
+-- 7. 연결 (S05, S06, S09, S10)
 -- ---------------------------------------------------------------------
--- 공부 시간 = focus_seconds + distract_seconds (쉬는 시간 제외)
--- 세션은 사용자가 종료를 누를 때만 끝남. 탭이 닫히면 heartbeat 기준으로 자동 마감
-CREATE TABLE study_sessions (
+-- 2026-11-23: study_sessions → connections, session_events → connection_events, session_characters 삭제(character_id 칸으로)
+-- 공부 시간 = focus_seconds + distract_seconds (쉬는 시간 제외). 시간 칸은 다음 단계(연결 새 기능)에서 바뀜
+-- 연결은 사용자가 끊을 때만 끝남. 탭이 닫히면 heartbeat 기준으로 자동 마감
+CREATE TABLE connections (
     id                bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     user_id           bigint      NOT NULL REFERENCES users (id),
-    room_id           bigint      NOT NULL REFERENCES study_rooms (id),
-    background_id     bigint      NOT NULL,               -- 미선택이면 서버가 룸 기본 배경을 채움
-    target_minutes    int         CHECK (target_minutes > 0),   -- 목표 시간 (건너뛸 수 있음, 달성해도 종료 안 함)
+    character_id      bigint      NOT NULL REFERENCES characters (id),  -- 연결한 메이트
     started_at        timestamptz NOT NULL DEFAULT now(),
     ended_at          timestamptz,                        -- NULL이면 진행 중
     end_type          text        CHECK (end_type IN ('NORMAL', 'AUTO_CLOSED')),
@@ -372,27 +341,14 @@ CREATE TABLE study_sessions (
     return_count      int         NOT NULL DEFAULT 0,
     closing_line      text,                               -- 완료 대사 (종료 때 저장, 리포트 · 카드 공용)
     CHECK (ended_at IS NULL OR ended_at >= started_at),
-    CHECK ((ended_at IS NULL) = (end_type IS NULL)),
-    UNIQUE (id, room_id),                                 -- session_characters 복합 FK용
-    FOREIGN KEY (background_id, room_id) REFERENCES room_backgrounds (id, room_id)  -- 그 룸의 배경만
+    CHECK ((ended_at IS NULL) = (end_type IS NULL))
 );
-CREATE INDEX idx_sessions_user_started ON study_sessions (user_id, started_at DESC);
-CREATE INDEX idx_sessions_room_started ON study_sessions (room_id, started_at DESC);
-CREATE UNIQUE INDEX uq_sessions_one_in_progress
-    ON study_sessions (user_id) WHERE ended_at IS NULL;   -- 사용자당 진행 중 세션 하나
-CREATE INDEX idx_sessions_in_progress
-    ON study_sessions (last_heartbeat_at) WHERE ended_at IS NULL;  -- 자동 마감 배치용
-
--- 이번 세션에서 고른 캐릭터 (그 룸의 캐릭터 중 1명 이상, 공부 중 변경 불가)
-CREATE TABLE session_characters (
-    session_id   bigint NOT NULL,
-    room_id      bigint NOT NULL,                     -- 세션의 룸과 같아야 함 (복합 FK로 강제)
-    character_id bigint NOT NULL,
-    PRIMARY KEY (session_id, character_id),
-    FOREIGN KEY (session_id, room_id)   REFERENCES study_sessions (id, room_id) ON DELETE CASCADE,
-    FOREIGN KEY (character_id, room_id) REFERENCES characters (id, room_id)
-);
-CREATE INDEX idx_session_characters_character ON session_characters (character_id);
+CREATE INDEX idx_connections_user_started ON connections (user_id, started_at DESC);
+CREATE INDEX idx_connections_character ON connections (character_id);
+CREATE UNIQUE INDEX uq_connections_one_in_progress
+    ON connections (user_id) WHERE ended_at IS NULL;      -- 사용자당 진행 중 연결 하나
+CREATE INDEX idx_connections_in_progress
+    ON connections (last_heartbeat_at) WHERE ended_at IS NULL;  -- 자동 마감 배치용
 
 -- 상태 이벤트는 상태가 바뀔 때만 한 줄씩. 각 상태는 다음 상태 이벤트가 올 때 끝남
 --   FOCUS: 시작·쉬는 시간 종료 / AWAY: 자리 비움 / RETURN: 딴짓에서 복귀 / BREAK: 쉬는 시간
@@ -400,14 +356,14 @@ CREATE INDEX idx_session_characters_character ON session_characters (character_i
 --   DROWSY: 졸음 / YAWN: 하품 / WAVE: 손 흔들기 / HEAD_TURN: 고개 돌림
 --   쉬는 시간 중에는 감지 이벤트(AWAY · RETURN · 동작 이벤트)를 남기지 않음 (서버가 무시)
 --   같은 동작 type이 1분 안에 다시 오면 남기지 않음 (서버 쿨다운)
-CREATE TABLE session_events (
+CREATE TABLE connection_events (
     id             bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    session_id     bigint      NOT NULL REFERENCES study_sessions (id) ON DELETE CASCADE,
+    connection_id  bigint      NOT NULL REFERENCES connections (id) ON DELETE CASCADE,
     type           text        NOT NULL CHECK (type IN ('FOCUS', 'AWAY', 'RETURN', 'BREAK', 'DROWSY', 'YAWN', 'WAVE', 'HEAD_TURN')),
     false_positive boolean     NOT NULL DEFAULT false,   -- '아니야' 버튼 (오탐이면 집중으로 계산)
     occurred_at    timestamptz NOT NULL DEFAULT now()
 );
-CREATE INDEX idx_session_events_session ON session_events (session_id, occurred_at);
+CREATE INDEX idx_connection_events_connection ON connection_events (connection_id, occurred_at);
 
 -- 호감도 변화 이력 (계속 남음). delta는 실제로 바뀐 만큼(0~100 밖으로 나간 몫은 잘림) → 50 + 기록의 합 = 지금 점수
 --   CHAT: 결정 모델이 고른 말의 종류(signal) → 캐릭터 점수표 → 오르는 쪽만 하루 상한. 심한 말은 지금 값의 %로 깎음
@@ -419,8 +375,8 @@ CREATE INDEX idx_session_events_session ON session_events (session_id, occurred_
 CREATE TABLE relation_logs (
     id               bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     relation_id      bigint      NOT NULL REFERENCES user_character_relations (id),
-    session_id       bigint      REFERENCES study_sessions (id),
-    session_event_id bigint      REFERENCES session_events (id),   -- SESSION_EVENT일 때 원인 이벤트
+    connection_id    bigint      REFERENCES connections (id),
+    connection_event_id bigint   REFERENCES connection_events (id),  -- SESSION_EVENT일 때 원인 이벤트 (2026-11-23 이름 변경)
     request_id       uuid,                                      -- CHAT일 때 메시지 전송 요청 id (메시지는 지워지므로 FK 아님)
     signal           text,                                      -- CHAT일 때 말의 종류 (COMPLIMENT, HATE_OR_SEXUAL 등). 그날 오름 멈춤 · 문의 대응
     delta            int         NOT NULL,                      -- 음수 가능
@@ -428,7 +384,7 @@ CREATE TABLE relation_logs (
                          'STUDY_TIME', 'STREAK', 'FOCUS_BONUS', 'FIRST_MEET', 'EVENT', 'CHAT', 'SESSION_EVENT', 'ADJUST')),
     created_at       timestamptz NOT NULL DEFAULT now(),
     CHECK ((reason = 'CHAT') = (request_id IS NOT NULL)),
-    CHECK ((reason = 'SESSION_EVENT') = (session_event_id IS NOT NULL)),
+    CHECK ((reason = 'SESSION_EVENT') = (connection_event_id IS NOT NULL)),
     CHECK (delta <> 0),                                        -- 0점이면 기록하지 않음
     CONSTRAINT relation_logs_chat_range
         CHECK (reason <> 'CHAT' OR delta BETWEEN -100 AND 5)   -- 대화 한 번: 오르는 쪽은 작게, 비율 감점은 크게
@@ -437,17 +393,17 @@ CREATE INDEX idx_relation_logs_relation ON relation_logs (relation_id, created_a
 CREATE UNIQUE INDEX uq_relation_logs_request
     ON relation_logs (relation_id, request_id) WHERE request_id IS NOT NULL;              -- 같은 요청은 한 번만 반영
 CREATE UNIQUE INDEX uq_relation_logs_session_event
-    ON relation_logs (relation_id, session_event_id) WHERE session_event_id IS NOT NULL;  -- 같은 이벤트는 캐릭터마다 한 번만
+    ON relation_logs (relation_id, connection_event_id) WHERE connection_event_id IS NOT NULL;  -- 같은 이벤트는 캐릭터마다 한 번만
 
 -- 공부 종료 정산 때의 레벨 (세션마다 한 번). 리포트를 다시 볼 때 같은 값을 주려고 남긴다 (레벨은 점수 기록으로 다시 계산할 수 없음)
 CREATE TABLE relation_settlements (
     relation_id     bigint      NOT NULL REFERENCES user_character_relations (id),
-    session_id      bigint      NOT NULL REFERENCES study_sessions (id),
+    connection_id   bigint      NOT NULL REFERENCES connections (id),
     present_seconds int         NOT NULL CHECK (present_seconds >= 0),
     level_before    int         NOT NULL,
     level_after     int         NOT NULL,
     created_at      timestamptz NOT NULL DEFAULT now(),
-    PRIMARY KEY (relation_id, session_id)
+    PRIMARY KEY (relation_id, connection_id)
 );
 
 -- 운영 설정 (ADR 0026): 호감도 숫자(capsule.relation.*) 중 실험실 '운영 설정'에서 바꾼 칸만. 없는 칸은 application.yml 값
@@ -474,10 +430,10 @@ CREATE TABLE conversations (
 CREATE TABLE conversation_recaps (
     id              bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     conversation_id bigint      NOT NULL REFERENCES conversations (id) ON DELETE CASCADE,
-    session_id      bigint      NOT NULL,                 -- 다른 모듈(session) 테이블이라 FK 아님
+    connection_id   bigint      NOT NULL,                 -- 다른 모듈(session) 테이블이라 FK 아님
     content         text        NOT NULL CHECK (char_length(content) BETWEEN 1 AND 200),
     created_at      timestamptz NOT NULL DEFAULT now(),
-    UNIQUE (conversation_id, session_id)
+    UNIQUE (conversation_id, connection_id)
 );
 
 -- 캐릭터가 사용자에 대해 아는 사실 한 줄씩 (최대 20개). 매 턴 결정 모델이 추가 · 고치기 · 지우기를 고르고, 넘치면 가장 덜 중요한 하나를 버림
@@ -499,7 +455,7 @@ CREATE INDEX idx_character_memories_owner ON character_memories (user_id, charac
 CREATE TABLE chat_messages (
     id              bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     conversation_id bigint      NOT NULL REFERENCES conversations (id) ON DELETE CASCADE,
-    session_id      bigint      NOT NULL REFERENCES study_sessions (id),
+    connection_id   bigint      NOT NULL REFERENCES connections (id),
     request_id      uuid        NOT NULL,                 -- 사용자 메시지와 그 답변이 같은 값
     sender          text        NOT NULL CHECK (sender IN ('USER', 'CHARACTER')),
     content         text        NOT NULL,
@@ -507,14 +463,14 @@ CREATE TABLE chat_messages (
     created_at      timestamptz NOT NULL DEFAULT now(),
     UNIQUE (conversation_id, request_id, sender)          -- 재전송돼도 질문·답변 각각 한 번만
 );
-CREATE INDEX idx_chat_messages_session ON chat_messages (session_id, id);
+CREATE INDEX idx_chat_messages_connection ON chat_messages (connection_id, id);
 
 -- LLM 호출 기록 (지우지 않고 계속 쌓임, 비용·크레딧 근거 + 품질·지연 분석). 호출 한 번 = 한 행, 실패도 기록
 -- 실험실·평가 호출은 사용자·세션이 없다 (source LAB · EVAL)
 CREATE TABLE llm_usages (
     id                 bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     user_id            bigint         REFERENCES users (id),
-    session_id         bigint         REFERENCES study_sessions (id),
+    connection_id      bigint         REFERENCES connections (id),
     purpose            text           NOT NULL CHECK (purpose IN (
                            'CHAT', 'DIRECTOR', 'ACTOR', 'JUDGE', 'REACTION', 'SUMMARY', 'CLOSING', 'EVAL_JUDGE', 'DECIDE', 'MEMORY')),
     source             text           NOT NULL CHECK (source IN ('APP', 'LAB', 'EVAL')),

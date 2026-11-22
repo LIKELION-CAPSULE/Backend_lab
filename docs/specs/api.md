@@ -16,22 +16,22 @@
 | 9 | 온보딩 · 홈 | GET | `/api/avatars` | 아바타 목록 조회 |
 | 10 | 온보딩 · 홈 | PATCH | `/api/me` | 프로필 설정 |
 | 11 | 온보딩 · 홈 | GET | `/api/home` | 홈 조회 |
-| 12 | 온보딩 · 홈 | GET | `/api/rooms/{roomId}` | 스터디룸 상세 조회 |
+| 12 | 온보딩 · 홈 | GET | ~~`/api/rooms/{roomId}`~~ | ~~스터디룸 상세 조회~~ (삭제, 2026-11-23) |
 | 13 | 온보딩 · 홈 | POST | `/api/me/memories` | 일정 저장 |
 | 14 | 온보딩 · 홈 | GET | `/api/me/memories` | 내 일정 조회 |
-| 16 | 공부 세션 | POST | `/api/sessions` | 공부 시작 |
-| 17 | 공부 세션 | POST | `/api/sessions/{sessionId}/resume` | 세션 이어하기 |
-| 18 | 공부 세션 | POST | `/api/sessions/{sessionId}/events` | 공부 상태 기록 |
-| 19 | 대화 | POST | `/api/sessions/{sessionId}/events/{eventId}/reaction` | 상태 반응 받기 |
-| 20 | 대화 | POST | `/api/sessions/{sessionId}/messages` | 메시지 전송 |
-| 21 | 공부 세션 | POST | `/api/sessions/{sessionId}/heartbeat` | heartbeat |
-| 22 | 리포트 | POST | `/api/sessions/{sessionId}/end` | 공부 종료 |
-| 23 | 리포트 | GET | `/api/sessions/{sessionId}/report` | 리포트 조회 |
+| 16 | 연결 | POST | `/api/connections` | 연결 시작 |
+| 17 | 연결 | POST | `/api/connections/{connectionId}/resume` | 연결 이어하기 |
+| 18 | 연결 | POST | `/api/connections/{connectionId}/events` | 상태 기록 |
+| 19 | 대화 | POST | `/api/connections/{connectionId}/events/{eventId}/reaction` | 상태 반응 받기 |
+| 20 | 대화 | POST | `/api/connections/{connectionId}/messages` | 메시지 전송 |
+| 21 | 연결 | POST | `/api/connections/{connectionId}/heartbeat` | heartbeat |
+| 22 | 연결 기록 | POST | `/api/connections/{connectionId}/end` | 연결 끊기 |
+| 23 | 연결 기록 | GET | `/api/connections/{connectionId}` | 연결 기록 조회 |
 | 24 | 인증 | POST | `/api/auth/logout` | 로그아웃 |
 | 25 | 인증 | POST | `/api/auth/password/reset-request` | 비밀번호 재설정 메일 요청 |
 | 26 | 인증 | POST | `/api/auth/password/reset` | 비밀번호 재설정 |
 | 27 | 인증 | DELETE | `/api/me` | 회원 탈퇴 |
-| 28 | 대화 | POST | `/api/sessions/{sessionId}/messages/stream` | 메시지 전송 (스트리밍) |
+| 28 | 대화 | POST | `/api/connections/{connectionId}/messages/stream` | 메시지 전송 (스트리밍) |
 | 29 | 온보딩 · 홈 | GET | `/api/me/settings` | 설정 조회 |
 | 30 | 온보딩 · 홈 | PATCH | `/api/me/settings` | 설정 변경 |
 | 31 | 온보딩 · 홈 | GET | `/api/mates/{mateId}` | 메이트 상세 조회 |
@@ -51,13 +51,15 @@
 
   - 본문 없는 응답(204 No Content, 202 Accepted '본문 없음')은 그대로 본문 없음 (감싸지 않음)
   - 28번 스트리밍의 이벤트 `data`(`reply` · `done`)는 감싸지 않음. `error` 이벤트만 아래 에러 모양
-- 에러 응답 모양 (2026-11-03 결정, 2026-11-19 `success: false` 추가). `success`로 성공 · 실패를 나누고 `code`로 분기하며, `detail`은 보통 `{}` (409 SESSION_ALREADY_IN_PROGRESS는 `detail.sessionId`). `message`는 지금 `code`와 같은 값 (화면용 한국어 문구는 확정 필요)
+- 에러 응답 모양 (2026-11-03 결정, 2026-11-19 `success: false` 추가). `success`로 성공 · 실패를 나누고 `code`로 분기하며, `detail`은 보통 `{}` (409 CONNECTION_ALREADY_IN_PROGRESS는 `detail.connectionId`). `message`는 지금 `code`와 같은 값 (화면용 한국어 문구는 확정 필요)
 
 ```json
-{ "success": false, "code": "SESSION_ENDED", "message": "SESSION_ENDED", "detail": {} }
+{ "success": false, "code": "CONNECTION_ENDED", "message": "CONNECTION_ENDED", "detail": {} }
 ```
 
 > 2026-11-19: 성공 응답을 `{success, data}`로 감싸고 에러 응답에 `success: false` 추가 (공통 응답 처리)
+
+> 2026-11-23 (12/1 베타 3단계): **공부 세션 → 연결**. 경로 `/api/sessions` → `/api/connections`, `sessionId` → `connectionId`, 에러 코드 `SESSION_*` → `CONNECTION_*`. 스터디룸이 없어져 12 룸 상세를 지우고, 공부 시작은 메이트(`mateId`)로 한다. 시간 칸 · 이벤트 종류 · 응답 모양의 나머지는 다음 단계(연결 새 기능)에서 바꾼다
 
 | 상태 | code | 언제 |
 | --- | --- | --- |
@@ -450,7 +452,7 @@
 로그인 직후 · 새로고침 때 부릅니다. 어느 화면으로 보낼지 정하는 기준입니다.
 
 - `onboardingRequired = true` → H02 아바타 만들기
-- `activeSession`이 있음 → H03 위에 **H18 '다시 공부를 시작할까요?'** 팝업
+- `activeConnection`이 있음 → **SCR-20 '○○과 다시 연결할까요?'** 팝업
 - 둘 다 아니면 → H03 홈
 
 #### 와이어프레임 대조
@@ -458,9 +460,9 @@
 | 화면 요소 | 이 API가 하는 일 |
 | --- | --- |
 | H03 헤더 오른쪽 프로필 · 닉네임 | `nickname`, `profileImage` |
-| H18 이어하기 팝업 '쌀쌀맞은 갸루짝꿍이…에서 하던 공부' | `activeSession.roomName` |
+| SCR-20 이어하기 팝업 '○○과 다시 연결할까요?' | `activeConnection.mateName` |
 
-- 테이블: `users`, `avatars`, `study_sessions` · 인증: 필요
+- 테이블: `users`, `avatars`, `connections` · 인증: 필요
 
 #### [GET] /api/me
 
@@ -472,7 +474,7 @@
 | nickname | String | 닉네임 (가입 때 받음) |
 | email | String | 이메일 |
 | onboardingRequired | Boolean | 아바타 **또는** 생년월일이 없으면 true (닉네임은 가입 때 받음. 카카오 가입자와 베타 전 가입자는 온보딩에서 생년월일을 받음) |
-| activeSession | Object | 진행 중 세션 `sessionId`, `roomId`, `roomName`, `characterName`, `startedAt`. 없으면 null |
+| activeConnection | Object | 진행 중 연결 `connectionId`, `mateId`, `mateName`, `startedAt`. 없으면 null |
 | profileImage | String | 프로필 이미지 = 아바타 썸네일. 아바타 설정 전이면 null |
 | birthDate | String | `YYYY-MM-DD`. 없으면 null |
 | isMinor | Boolean | 만 19세 미만이면 true (한국 날짜 기준). 생년월일이 없으면 false |
@@ -480,7 +482,9 @@
 | aboutMe | String | 나에 대해 한 줄. 없으면 null |
 | referralCode | String | 내 초대 코드 (예: `CAP-7K2Q`) |
 
-> 2026-11-23 (12/1 베타): `birthDate` · `isMinor` · `honorific` · `aboutMe` · `referralCode` 추가, `onboardingRequired`에 생년월일 조건 추가. `credits` · `activeSession` → `activeConnection`은 연결 · 크레딧 단계에서 바꿈
+> 2026-11-23 (12/1 베타): `birthDate` · `isMinor` · `honorific` · `aboutMe` · `referralCode` 추가, `onboardingRequired`에 생년월일 조건 추가. `credits`는 크레딧 단계에서
+
+> 2026-11-23 (12/1 베타 3단계): `activeSession` → `activeConnection` (`roomId` · `roomName` 삭제, `characterName` → `mateName`, `mateId` 추가)
 
 ```json
 {
@@ -488,7 +492,7 @@
   "nickname": "승희",
   "email": "name@example.com",
   "onboardingRequired": false,
-  "activeSession": { "sessionId": 512, "roomId": 1, "roomName": "밤의 호그와트 도서관", "characterName": "말포이", "startedAt": "2026-11-07T05:00:02Z" },
+  "activeConnection": { "connectionId": 512, "mateId": 1, "mateName": "채린", "startedAt": "2026-11-07T05:00:02Z" },
   "profileImage" : "profile_image_url.com",
   "birthDate": "2001-04-10",
   "isMinor": false,
@@ -612,25 +616,28 @@ H02에서 아바타를 저장하면 `onboardingRequired`가 false가 되고 H03 
 
 ## 11. GET /api/home — 홈 조회
 - 분류: 온보딩 · 홈
-- 설명: 오늘 공부 시간 · 이어하기 · 들어갈 수 있는 룸 1개
-- 와이어프레임: H03 홈
+- 설명: 오늘 함께한 시간 · 이어하기 · 마지막 메이트 · 메이트 리스트
+- 와이어프레임: SCR-08 첫 방문 · SCR-09 재방문
 - 백엔드: Not started
 - 프론트: Not started
 - 노션: https://app.notion.com/p/f66b9a07e592825d98d1015154dd556d
 
+> 2026-11-23 (12/1 베타 3단계): 스터디룸 목록(`rooms`) → 메이트 리스트(`mates`) · 마지막 메이트(`lastMate`), `activeSession` → `activeConnection`. `todayStudySeconds`는 다음 단계에서 `todayPresentSeconds` · `todayConnectedSeconds`로 나눔
+
 #### 설명
 
-홈 화면에 필요한 것을 한 번에 가져옵니다.
+홈 화면에 필요한 것을 한 번에 가져옵니다. `lastMate`가 있으면 재방문(SCR-09 '다시 연결하기'), 없으면 첫 방문(SCR-08 '메이트 둘러보기')입니다.
 
 #### 와이어프레임 대조
 
 | 화면 요소 | 이 API가 하는 일 |
 | --- | --- |
-| H03 환영 배너 '재방문 시 → 이어서 공부하기' | `activeSession`이 있으면 버튼 표시 |
-| H03 '오늘은 어디서 공부할까요?' 포스터 카드 | `rooms` (실제 1개) |
-| H03 헤더 크레딧 · 내 기록 · 친구, 저장한 스터디룸 · 검색 | 목업 (API 없음) |
+| SCR-09 마지막 메이트 이미지 · '다시 연결하기' | `lastMate` |
+| 이어하기 팝업 | `activeConnection`이 있으면 |
+| 메이트 카드 (이미지 · 이름 · 한 줄 소개 · 연령 등급 · 해시태그) | `mates[]` |
+| 준비 중 카드 | `mates[].comingSoon` |
 
-- 테이블: `study_sessions`, `study_rooms`, `characters` · 인증: 필요
+- 테이블: `connections`, `characters` · 인증: 필요
 
 #### [GET] /api/home
 
@@ -638,22 +645,19 @@ H02에서 아바타를 저장하면 `onboardingRequired`가 false가 되고 H03 
 
 | 이름 | 타입 | 설명 |
 | --- | --- | --- |
-| todayStudySeconds | Integer | 오늘(한국 날짜) 끝낸 세션의 공부 시간 합(초). 진행 중 세션은 빠짐 (2026-11-03 추가: 설명의 '오늘 공부 시간') |
-| activeSession | Object | 진행 중 세션 (내 정보 조회와 같은 형태). 없으면 null |
-| rooms[] | Array | 들어갈 수 있는 룸 (지금은 1개) |
-| rooms[].id · name · thumbnailUrl |  | 포스터 카드 |
-| rooms[].characters[] | Array | 포스터 카드의 캐릭터 `id` · `name` · `profileImageUrl` |
-| rooms[].characters[].profileImageUrl | String | 홈 포스터 카드에서 `thumbnailUrl`(배경) 위에 겹치는 캐릭터 전신 그림(투명 배경, DB `characters.home_image_url`). 전신 그림이 없으면 캐릭터 사진(`characters.profile_image_url`). **룸 상세(12) · 공부 화면(16 · 17)의 `profileImageUrl`과 다른 그림**일 수 있음 |
-
-> 2026-11-06: 홈 카드는 배경 + 캐릭터 전신. 처음엔 `homeImageUrl`을 따로 두었다가, 프론트가 칸 하나로 쓰도록 홈의 `profileImageUrl`에 전신 그림을 넣는 것으로 바꿈(`homeImageUrl` 삭제). 룸 상세 · 공부 화면의 캐릭터 그림은 그대로
+| todayStudySeconds | Integer | 오늘(한국 날짜) 끝낸 연결의 공부 시간 합(초). 진행 중 연결은 빠짐 |
+| activeConnection | Object | 진행 중 연결 (내 정보 조회와 같은 형태). 없으면 null |
+| lastMate | Object | 마지막으로 연결한 메이트 `id` · `name` · `illustrationUrl`. 연결한 적 없으면 null |
+| mates[] | Array | 활성 메이트 (정렬 순서) `id` · `name` · `oneLiner` · `ageRating` · `hashtags` · `cardImageUrl` · `comingSoon` |
 
 ```json
 {
   "todayStudySeconds": 3300,
-  "activeSession": null,
-  "rooms": [
-    { "id": 1, "name": "밤의 호그와트 도서관", "thumbnailUrl": "https://cdn.../room1.png",
-      "characters": [ { "id": 1, "name": "말포이", "profileImageUrl": "https://cdn.../malfoy-fullbody.webp" } ] }
+  "activeConnection": null,
+  "lastMate": { "id": 1, "name": "채린", "illustrationUrl": "https://cdn.../chaerin/full.png" },
+  "mates": [
+    { "id": 1, "name": "채린", "oneLiner": "시험기간 밤, 각자 공부하며 연결 중인 같은 반 친구", "ageRating": "ALL", "hashtags": ["같은반", "시험기간"], "cardImageUrl": "https://cdn.../chaerin/card.png", "comingSoon": false },
+    { "id": 2, "name": "준비 중", "oneLiner": null, "ageRating": "ALL", "hashtags": [], "cardImageUrl": null, "comingSoon": true }
   ]
 }
 ```
@@ -662,67 +666,13 @@ H02에서 아바타를 저장하면 `onboardingRequired`가 false가 되고 H03 
 
 ## 12. GET /api/rooms/{roomId} — 스터디룸 상세 조회
 - 분류: 온보딩 · 홈
-- 설명: 룸 정보 + 캐릭터 1명(성격 태그 배열) + 나와의 관계(함께 n분 · Lv)
-- 와이어프레임: H04 스터디룸 상세
-- 백엔드: Not started
-- 프론트: Not started
+- 설명: **삭제** (2026-11-23, 12/1 베타 3단계). 스터디룸이 없어져 31 메이트 상세가 대신한다
+- 와이어프레임: (없음)
+- 백엔드: 삭제
+- 프론트: 삭제
 - 노션: https://app.notion.com/p/f7eb9a07e59282779f7881792cb5f282
 
-#### 한 줄 요약
-
-스터디룸 상세와 함께할 캐릭터 1명, 그리고 **그 캐릭터와 나의 관계**를 가져옵니다. 캐릭터 성격은 **태그 배열**입니다.
-
-#### 와이어프레임 대조
-
-| 화면 요소 | 응답 필드 |
-| --- | --- |
-| H04 룸 배너 · 제목 · '[룸 소개 2~3줄]' | `bannerUrl`(가로 배너, 없으면 `thumbnailUrl`), `name`, `description` |
-| H04 '이곳에서 함께할 친구들' 카드 이름 · 사진 | `characters[].name`, `profileImageUrl` |
-| H04 친구 카드 '#태그' | `characters[].personality` (배열, 순서대로 표시) |
-| H04 친구 카드 '◷ 함께 0분 · ♡ Lv.1 아는 사이' | `characters[].relation` |
-| H04 '이곳에서 공부하기 →' | H06으로 이동 (API 없음). 캐릭터 모델 정보는 '공부 시작' 응답에 있음 (별도 조회 API 없음) |
-| H04 '진행 중인 공부로 돌아가기' | `activeSessionId`가 있으면 버튼 문구를 바꾸고 '세션 이어하기' |
-| H04 친구 카드 클릭 → H12, 나머지 캐릭터 | 목업 |
-
-- 테이블: `study_rooms`, `characters`, `user_character_relations` · 인증: 필요
-
-#### [GET] /api/rooms/{roomId}
-
-#### 🛬 Response
-
-| 이름 | 타입 | 설명 |
-| --- | --- | --- |
-| id · name · description · thumbnailUrl |  | 룸 정보 (`thumbnailUrl`은 홈 포스터 카드와 같은 그림) |
-| bannerUrl | String | 룸 상세 가로 배너. 없으면 null (그때 프론트는 `thumbnailUrl`) |
-| characters[].id · name · profileImageUrl |  | 캐릭터 (이번 시연은 1명) |
-| characters[].personality | Array | 성격 태그 (`characters.personality text[]`) |
-| characters[].relation | Object | `level`(함께 공부한 자리 지킴 시간 레벨), `totalStudySeconds`, `points`(호감도 0~100), `stage` · `stageName`(관계 단계 = 호감도 구간), `levelName`(옛 필드, `stageName`과 같은 값, 지울 예정). 아직 안 만났으면 Lv.1 · 0초 · 50 |
-| activeSessionId | Long | 이 룸에서 진행 중인 내 세션 id. 없거나 다른 룸에서 진행 중이면 null (그때 공부 시작을 누르면 409 → H18 팝업) |
-
-> 2026-11-05: `bannerUrl` 추가. 홈 포스터 카드(`thumbnailUrl`)와 상세 배너를 다른 그림으로
-
-> 2026-11-04 (호감도 최종안): 레벨과 관계 단계를 나눔. 레벨 = 이 캐릭터와 함께 공부한 자리 지킴 시간(60분당 1, 상한 없음), 관계 단계 = 호감도 구간(0 · 30 · 70 · 90). 단계 이름을 화면에 보일지는 확정 필요 (PM은 숨기기로 함)
-
-```json
-{
-  "id": 1,
-  "name": "밤의 호그와트 도서관",
-  "description": "지기 싫어하는 슬리데린 라이벌 말포이와 촛불 아래에서 같이 공부해요.",
-  "thumbnailUrl": "https://cdn.../room1.png",
-  "bannerUrl": "https://cdn.../room1-banner.webp",
-  "characters": [
-    { "id": 1, "name": "말포이", "profileImageUrl": "https://cdn.../chaerin.png",
-      "personality": ["츤데레", "슬리데린 5학년", "라이벌"],
-      "relation": { "level": 1, "levelName": "친한 사이", "totalStudySeconds": 0,
-                    "points": 50, "stage": 2, "stageName": "친한 사이" } }
-  ],
-  "activeSessionId": null
-}
-```
-
-> ✅ **200 OK**
-
-> ❌ **404** ROOM_NOT_FOUND (목업 룸 id로 호출한 경우)
+> 2026-11-23: 스터디룸(`study_rooms` · `room_backgrounds`)을 지우면서 이 API도 지움. 부르면 404 NOT_FOUND. 메이트 정보는 31, 친밀도는 친밀도 단계에서 31 · 내 메이트에 붙임
 
 ## 13. POST /api/me/memories — 일정 저장
 - 분류: 온보딩 · 홈
@@ -859,72 +809,60 @@ GET /api/me/memories?date=2026-11-12
 - 날짜 없는 목표는 '전체'(`status=ALL`)에만 나오고, `from` · `to`와 상관없이 포함됨. `date`를 보내면 빠짐
 - `date`와 `status`는 같이 적용됨. 지난 날짜를 누르면 `status=ALL`(또는 `PAST`)을 같이 보냄 (기본값 UPCOMING이면 빈 목록)
 
-## 16. POST /api/sessions — 공부 시작
+## 16. POST /api/connections — 연결 시작
 - 분류: 공부 세션
-- 설명: 룸 · 캐릭터 1명 · 목표 시간으로 세션 생성 + 캐릭터 · 내 프로필 이미지
+- 설명: 메이트 1명과 연결 생성 + 메이트 · 내 아바타 모델
 - 와이어프레임: H06 시작하기 → H07
 - 백엔드: Not started
 - 프론트: Not started
 - 노션: https://app.notion.com/p/515b9a07e59282da86b901b17c7c86fc
 
+> 2026-11-23 (12/1 베타 3단계): 룸 · 캐릭터 · 목표 시간 → 메이트(`mateId`) 하나. 목표 시간 · 룸 · 배경 삭제, `character` → `mate`, 모델에 `format`. 인사 · 첫 만남 · 크레딧 · 설정 · 청소년 남은 시간은 다음 단계
+
 #### 한 줄 요약
 
-룸 · 캐릭터 1명 · 목표 시간으로 **세션을 만듭니다**.
-
-세션에 들어갈 캐릭터가 이 시점에 확정되므로, 공부 화면(H07)을 그리는 데 필요한 **캐릭터 · 아바타 정보(이름 · 프로필 이미지)와 Live2D 모델 주소**를 함께 줍니다. 성격 태그는 룸 상세(12)에서만 줍니다 (2026-11-03 정리: 응답 표 기준).
-
-프론트는 이 응답을 받은 뒤 모델 로딩을 시작합니다.
+메이트 상세의 '연결하기'로 **연결을 만듭니다**. 연결 화면을 그리는 데 필요한 메이트 · 아바타(이름 · 이미지 · Live2D 모델)를 함께 줍니다. 연결 시간 제한은 없습니다.
 
 #### 와이어프레임 대조
 
 | 화면 요소 | 이 API가 하는 일 |
 | --- | --- |
-| H06 '오늘의 목표 시간' 슬라이더 (3분~3시간, 기본 50분. 3 → 5 → 10 → … → 180) | `targetMinutes` 검증 |
-| H06 '시작하기' | 세션 생성 → H07 |
-| H06 '대화 옵션' 등급 · 보유 크레딧 · 크레딧 부족 안내 | **제거** |
-| H07 상단 룸 제목 · 배경 | `room` |
-| H07 캐릭터 칸 이름 · 프로필 | `character` |
-| H07 내 칸 이름 · 아바타 (카메라를 켜도 영상 대신 아바타, 9번) | `me`(닉네임) · `avatar`(Live2D 모델. 프론트가 이 모델로 사용자 동작을 따라 함) |
-| H07 타이머 '00:17:23 / 00:50:00' | `startedAt`, `targetMinutes`, `serverTime` |
+| SCR-13 '연결하기' | 연결 생성 → 연결 화면 |
+| 연결 화면 메이트 칸 | `mate` |
+| 내 캠 타일 (카메라를 끄면 아바타) | `me`(닉네임) · `avatar`(Live2D 모델) |
+| 통화 시간 | `startedAt`, `serverTime` |
 
-- 테이블: `study_sessions`, `session_characters`(1행), `user_character_relations`(처음 만나면 생성) · 인증: 필요
-- 감지 방식(`detect_mode`)은 DB에서 빠져서 받지 않음
+- 테이블: `connections`, `user_character_relations`(처음 만나면 생성) · 인증: 필요
 
-#### [POST] /api/sessions
+#### [POST] /api/connections
 
 #### 🛫 Request
 
 | 이름 | 타입 | 필수 | 설명 |
 | --- | --- | --- | --- |
-| roomId | Long | O | 들어갈 수 있는 룸 (현재 1개) |
-| characterId | Long | O | 함께할 캐릭터 1명 (그 룸 캐릭터만 가능) |
-| targetMinutes | Integer | O | 3분, 또는 5~180분 5분 단위 (2026-11-05: 최소 5분 → 3분) |
+| mateId | Long | O | 연결할 메이트 (31 메이트 상세의 `id`) |
 
 ```json
-{ "roomId": 1, "characterId": 1, "targetMinutes": 50 }
+{ "mateId": 1 }
 ```
 
 #### 🛬 Response
 
 | 이름 | 타입 | 설명 |
 | --- | --- | --- |
-| sessionId | Long | 세션 id |
+| connectionId | Long | 연결 id |
 | startedAt | String | 시작 시각 (서버) |
-| targetMinutes | Integer | 목표 시간 |
-| room | Object | `id`, `name`, `backgroundImageUrl` |
-| character | Object | `id`, `name`, `profileImageUrl`, `modelJsonUrl`, `scale`, `offsetX`, `offsetY` |
-| avatar | Object | `id`, `name`, `profileImageUrl`, `modelJsonUrl`, `scale`, `offsetX`, `offsetY` |
+| mate | Object | `id`, `name`, `profileImageUrl`, `format`, `modelJsonUrl`, `scale`, `offsetX`, `offsetY` |
+| avatar | Object | `id`, `name`, `profileImageUrl`, `format`, `modelJsonUrl`, `scale`, `offsetX`, `offsetY` |
 | me | Object | `nickname`, `profileImageUrl`(아바타 썸네일) |
 | serverTime | String | 서버 시각 (타이머 보정) |
 
 ```json
 {
-  "sessionId": 512,
+  "connectionId": 512,
   "startedAt": "2026-11-07T05:00:02Z",
-  "targetMinutes": 50,
-  "room": { "id": 1, "name": "밤의 호그와트 도서관", "backgroundImageUrl": "https://cdn.../room1-bg.png" },
-  "character": { "id": 1, "name": "말포이", "profileImageUrl": "https://cdn.../chaerin.png", "modelJsonUrl": "https://cdn.../live2d/chaerin/v1/chaerin.model3.json", "scale": 1.0, "offsetX": 0, "offsetY": 12 },
-  "avatar": { "id": 1, "name": "기본 아바타", "profileImageUrl": "https://cdn.../avatar1.png", "modelJsonUrl": "https://cdn.../live2d/avatar1/v1/avatar1.model3.json", "scale": 1.0, "offsetX": 0, "offsetY": 12 },
+  "mate": { "id": 1, "name": "채린", "profileImageUrl": "https://cdn.../chaerin.png", "format": "CUBISM", "modelJsonUrl": "https://cdn.../chaerin/v3/chaerin.model3.json", "scale": 1.0, "offsetX": 0, "offsetY": 12 },
+  "avatar": { "id": 1, "name": "기본 아바타", "profileImageUrl": "https://cdn.../avatar1.png", "format": "CUBISM", "modelJsonUrl": "https://cdn.../haru/v1/Haru.model3.json", "scale": 1.0, "offsetX": 0, "offsetY": 0 },
   "me": { "nickname": "승희", "profileImageUrl": "https://cdn.../avatar1.png" },
   "serverTime": "2026-11-07T05:00:02Z"
 }
@@ -932,7 +870,7 @@ GET /api/me/memories?date=2026-11-12
 
 > ✅ **201 Created**
 
-> ❌ **400** INVALID_TARGET_MINUTES · CHARACTER_NOT_IN_ROOM · **403** ONBOARDING_REQUIRED · **404** ROOM_NOT_FOUND · **409** SESSION_ALREADY_IN_PROGRESS (`detail.sessionId`, 연타로 동시에 두 번 보내도 나중 것은 409) → H18 팝업
+> ❌ **403** ONBOARDING_REQUIRED · **404** MATE_NOT_FOUND (없거나 비활성) · **409** MATE_COMING_SOON (준비 중 메이트) · CONNECTION_ALREADY_IN_PROGRESS (`detail.connectionId`, 연타로 동시에 두 번 보내도 나중 것은 409) → 이어하기 팝업
 
 #### 이 API 다음에 할 일
 
@@ -940,7 +878,7 @@ GET /api/me/memories?date=2026-11-12
 2. '상태 반응 받기'에 그 `eventId` → 캐릭터 인사 (대사 + 모션 + 표정)
 3. 1분마다 heartbeat 시작
 
-## 17. POST /api/sessions/{sessionId}/resume — 세션 이어하기
+## 17. POST /api/connections/{connectionId}/resume — 연결 이어하기
 - 분류: 공부 세션
 - 설명: 비정상 종료된 세션 이어하기. 끊긴 구간은 자동 휴식 처리
 - 와이어프레임: H18 이어서 시작할게 · H04 진행 중인 공부로
@@ -956,29 +894,30 @@ GET /api/me/memories?date=2026-11-12
 
 | 화면 요소 | 이 API가 하는 일 |
 | --- | --- |
-| H18 '다시 공부를 시작할까요? …에서 하던 공부를 이어서 진행해요' | 내 정보 · 홈 조회의 `activeSession`이 있으면 팝업 |
+| SCR-20 '○○과 다시 연결할까요?' | 내 정보 · 홈 조회의 `activeConnection`이 있으면 팝업 |
 | H18 '이어서 시작할게' | 이 API → H07로 복귀 |
 | H18 '닫기' | 호출 안 함. 세션은 그대로 남음 |
 | H03 '이어서 공부하기' · H04 '진행 중인 공부로 돌아가기' | 이 API |
 
-- 테이블: `study_sessions`, `session_events` · 인증: 필요
+- 테이블: `connections`, `connection_events` · 인증: 필요
 
-#### [POST] /api/sessions/{sessionId}/resume
+#### [POST] /api/connections/{connectionId}/resume
 
 #### 🛬 Response
 
 | 이름 | 타입 | 설명 |
 | --- | --- | --- |
-| sessionId · targetMinutes · room · character · avatar · me · serverTime |  | '공부 시작' 응답과 같음 (`startedAt`은 없음. 타이머는 `studySeconds`로) |
+| connectionId · mate · avatar · me · serverTime |  | '연결 시작' 응답과 같음 (`startedAt`은 없음. 타이머는 `studySeconds`로) |
 | studySeconds | Integer | 지금까지 공부 시간 → H07 타이머를 여기서부터 이어서 표시 |
 | breakSeconds | Integer | 지금까지 휴식 시간 (끊긴 구간 포함) |
 
+> 2026-11-23 (12/1 베타 3단계): `sessionId` → `connectionId`, `targetMinutes` · `room` 삭제, `character` → `mate`
+
 ```json
 {
-  "sessionId": 512, "targetMinutes": 50,
-  "room": { "id": 1, "name": "밤의 호그와트 도서관", "backgroundImageUrl": "https://cdn.../room1-bg.png" },
-  "character": { "id": 1, "name": "말포이", "profileImageUrl": "https://cdn.../chaerin.png", "modelJsonUrl": "https://cdn.../live2d/chaerin/v1/chaerin.model3.json", "scale": 1.0, "offsetX": 0, "offsetY": 12 },
-  "avatar": { "id": 1, "name": "기본 아바타", "profileImageUrl": "https://cdn.../avatar1.png", "modelJsonUrl": "https://cdn.../live2d/avatar1/v1/avatar1.model3.json", "scale": 1.0, "offsetX": 0, "offsetY": 12 },
+  "connectionId": 512,
+  "mate": { "id": 1, "name": "채린", "profileImageUrl": "https://cdn.../chaerin.png", "format": "CUBISM", "modelJsonUrl": "https://cdn.../chaerin/v3/chaerin.model3.json", "scale": 1.0, "offsetX": 0, "offsetY": 12 },
+  "avatar": { "id": 1, "name": "기본 아바타", "profileImageUrl": "https://cdn.../avatar1.png", "format": "CUBISM", "modelJsonUrl": "https://cdn.../haru/v1/Haru.model3.json", "scale": 1.0, "offsetX": 0, "offsetY": 0 },
   "me": { "nickname": "승희", "profileImageUrl": "https://cdn.../avatar1.png" },
   "studySeconds": 1043, "breakSeconds": 420,
   "serverTime": "2026-11-07T05:31:10Z"
@@ -987,7 +926,7 @@ GET /api/me/memories?date=2026-11-12
 
 > ✅ **200 OK**
 
-> ❌ **404** SESSION_NOT_FOUND · **409** SESSION_ENDED (이미 자동 마감됨 → 리포트 조회로)
+> ❌ **404** CONNECTION_NOT_FOUND · **409** CONNECTION_ENDED (이미 자동 마감됨 → 리포트 조회로)
 
 #### 서버가 하는 일
 
@@ -1001,7 +940,7 @@ GET /api/me/memories?date=2026-11-12
 2. 이어하기 응답에는 `focusEventId`를 넣지 않음 (2026-11-03 결정). 이어하기 직후에는 반응 없이 바로 공부 재개. 프론트는 `FOCUS`를 따로 보내지 않음 (서버가 이미 넣음)
 3. heartbeat 재시작
 
-## 18. POST /api/sessions/{sessionId}/events — 공부 상태 기록
+## 18. POST /api/connections/{connectionId}/events — 상태 기록
 - 분류: 공부 세션
 - 설명: 상태가 바뀌거나 동작(졸음 · 하품 · 손 흔들기 · 고개 돌림)이 감지될 때마다 1건씩 전송 → 저장 + 호감도 반영 → eventId + 캐릭터별 '알아채는' 동작 · 호감도
 - 와이어프레임: H07 자리 감지 · 동작 감지 · H08 쉬는 시간 · H19 일시정지
@@ -1057,9 +996,9 @@ GET /api/me/memories?date=2026-11-12
 | H19 '일시정지' / '계속하기' | `BREAK` / `FOCUS` |
 | H07 졸음 · 하품 · 손 흔들기 · 고개 돌림 감지 (와이어프레임에 아직 없음) | `DROWSY` · `YAWN` · `WAVE` · `HEAD_TURN` |
 
-- 테이블: `session_events`, `relation_logs`(SESSION_EVENT · STREAK), `user_character_relations`, `live2d_reaction_maps`(모션 · 표정) · 인증: 필요
+- 테이블: `connection_events`, `relation_logs`(SESSION_EVENT · STREAK), `user_character_relations`, `live2d_reaction_maps`(모션 · 표정) · 인증: 필요
 
-#### [POST] /api/sessions/{sessionId}/events
+#### [POST] /api/connections/{connectionId}/events
 
 #### 🛫 Request (이벤트 1건)
 
@@ -1101,7 +1040,7 @@ GET /api/me/memories?date=2026-11-12
 
 > ✅ **201 Created** · 같은 (`type`, `occurredAt`)을 다시 보내면 **200 + 기존 응답** (재전송 안전. 호감도는 다시 바뀌지 않음)
 
-> ❌ **400** INVALID_EVENT · **404** SESSION_NOT_FOUND · **409** SESSION_ENDED
+> ❌ **400** INVALID_EVENT · **404** CONNECTION_NOT_FOUND · **409** CONNECTION_ENDED
 
 #### 규칙
 
@@ -1118,7 +1057,7 @@ GET /api/me/memories?date=2026-11-12
 - 카메라를 끄면 `AWAY` · 동작 이벤트를 보내지 않음 (끈 동안은 자리 지킴으로 계산). 영상 · 얼굴 좌표는 보내지 않음
 - 카메라를 켜면 내 칸에는 영상 대신 아바타를 보여주고 감지는 그대로 함 (2026-11-05 기획). 아바타가 사용자 동작을 따라 하는 것은 **프론트가 카메라 인식 결과로 매 프레임 직접** 처리하고 서버를 부르지 않음: 얼굴(고개 각도 · 눈 · 입)과 손(손목 위치 → 팔 · 손목 값)을 실시간으로 따라가서, 하품 · 졸음 · 손 흔들기가 시작하고 멈추는 순간도 사용자와 같음 (정해진 동작을 시간만큼 재생하지 않음). 그래서 위 1분 쿨다운과 상관없이 따라 하고, 얼굴 좌표도 서버로 보내지 않음. 이 API(동작 이벤트)는 지금처럼 캐릭터 반응 · 기록용으로만 보냄
 
-## 19. POST /api/sessions/{sessionId}/events/{eventId}/reaction — 상태 반응 받기
+## 19. POST /api/connections/{connectionId}/events/{eventId}/reaction — 상태 반응 받기
 - 분류: 대화
 - 설명: eventId로 캐릭터 대사(LLM) + 감정 + 감정에 맞는 모션 · 표정 받기
 - 와이어프레임: H07 말풍선 · 캐릭터 모션 · 표정
@@ -1164,7 +1103,7 @@ GET /api/me/memories?date=2026-11-12
 
 - 테이블: `live2d_reaction_maps`(서버가 하나 고름), `llm_usages` · 인증: 필요
 
-#### [POST] /api/sessions/{sessionId}/events/{eventId}/reaction
+#### [POST] /api/connections/{connectionId}/events/{eventId}/reaction
 
 #### 🛫 Request
 
@@ -1219,7 +1158,7 @@ GET /api/me/memories?date=2026-11-12
 
 > ✅ **200 OK**
 
-> ❌ **400** INVALID_REQUEST (`requestId`가 없음, `AWAY`인데 `intensity`가 1~3 밖) · **404** SESSION_NOT_FOUND · EVENT_NOT_FOUND · **409** SESSION_ENDED
+> ❌ **400** INVALID_REQUEST (`requestId`가 없음, `AWAY`인데 `intensity`가 1~3 밖) · **404** CONNECTION_NOT_FOUND · EVENT_NOT_FOUND · **409** CONNECTION_ENDED
 
 #### 서버가 하는 일
 
@@ -1238,7 +1177,7 @@ GET /api/me/memories?date=2026-11-12
 - `motion` 재생 → `expression` 적용 → `content`를 말풍선 · 채팅 로그에 표시 → 입 모션
 - `emotion`은 표시 · 기록용 문자열이다. 목록이 디자이너 에셋에 따라 바뀌므로 고정 enum으로 분기하지 말고, 화면은 서버가 준 `motion` · `expression` 파일로 그린다 (null이면 재생하지 않음)
 
-## 20. POST /api/sessions/{sessionId}/messages — 메시지 전송
+## 20. POST /api/connections/{connectionId}/messages — 메시지 전송
 - 분류: 대화
 - 설명: 대화 → 캐릭터별 답장 + 감정 모션 · 표정 + 바뀐 호감도 (TTS 선택)
 - 와이어프레임: H08 휴식 대화 · H20 공부 중 채팅
@@ -1248,7 +1187,7 @@ GET /api/me/memories?date=2026-11-12
 
 #### 한 줄 요약
 
-캐릭터 1명을 골라 대화합니다. **답장 · 감정 모션 · 호감도 변화**를 한 번에 받습니다. 응답은 그 캐릭터 1명의 답장이고(필드는 19번 `characters[]` 한 칸과 같음), 채팅으로 바뀐 호감도(`affinity`)가 추가됩니다. `eventId`는 없습니다 (채팅은 `session_events`에 저장되지 않음). 크레딧이 빠져서 횟수 제한은 없고, 남용 방지용 속도 제한만 있습니다.
+캐릭터 1명을 골라 대화합니다. **답장 · 감정 모션 · 호감도 변화**를 한 번에 받습니다. 응답은 그 캐릭터 1명의 답장이고(필드는 19번 `characters[]` 한 칸과 같음), 채팅으로 바뀐 호감도(`affinity`)가 추가됩니다. `eventId`는 없습니다 (채팅은 `connection_events`에 저장되지 않음). 크레딧이 빠져서 횟수 제한은 없고, 남용 방지용 속도 제한만 있습니다.
 
 #### 와이어프레임 대조
 
@@ -1263,7 +1202,7 @@ GET /api/me/memories?date=2026-11-12
 
 - 테이블: `conversations`, `chat_messages`, `relation_logs`(CHAT), `llm_usages` · 인증: 필요
 
-#### [POST] /api/sessions/{sessionId}/messages
+#### [POST] /api/connections/{connectionId}/messages
 
 #### 🛫 Request
 
@@ -1283,7 +1222,7 @@ GET /api/me/memories?date=2026-11-12
 
 #### 🛬 Response
 
-> 2026-11-03: 응답을 '상태 반응 받기'와 같은 모양으로 맞춤 (모션 · 표정 · 호감도 · fallback · 음성). `eventId`는 뺌 (채팅은 상태 이벤트가 아니라 DB `session_events`에 없음)
+> 2026-11-03: 응답을 '상태 반응 받기'와 같은 모양으로 맞춤 (모션 · 표정 · 호감도 · fallback · 음성). `eventId`는 뺌 (채팅은 상태 이벤트가 아니라 DB `connection_events`에 없음)
 
 > 2026-11-04: 19번과 같은 캐릭터별 배열 `characters[]`로 바꿈. 캐릭터마다 `emotion` 추가, `affinity`는 캐릭터 안으로
 
@@ -1338,7 +1277,7 @@ GET /api/me/memories?date=2026-11-12
 
 > ✅ **200 OK**
 
-> ❌ **400** EMPTY_MESSAGE · INVALID_REQUEST (300자 초과) · CHARACTER_NOT_IN_SESSION · **404** SESSION_NOT_FOUND · **409** SESSION_ENDED · **429** TOO_MANY_REQUESTS (1분에 30번)
+> ❌ **400** EMPTY_MESSAGE · INVALID_REQUEST (300자 초과) · CHARACTER_NOT_IN_SESSION · **404** CONNECTION_NOT_FOUND · **409** CONNECTION_ENDED · **429** TOO_MANY_REQUESTS (1분에 30번)
 
 #### 서버가 하는 일
 
@@ -1364,7 +1303,7 @@ GET /api/me/memories?date=2026-11-12
 
 > 2026-11-06 (2차): 답 길이 문장 수를 캐릭터 문구에서 운영 설정으로 뺌 (`reply-min-sentences` · `reply-max-sentences`, 기본 3 · 6, 승희 요청). 숫자를 바꿔 보며 정할 수 있게
 
-## 21. POST /api/sessions/{sessionId}/heartbeat — heartbeat
+## 21. POST /api/connections/{connectionId}/heartbeat — heartbeat
 - 분류: 공부 세션
 - 설명: 1분마다 생존 신호. 비정상 종료 판단 기준
 - 와이어프레임: H07 · H08 · H19 동안
@@ -1380,9 +1319,9 @@ GET /api/me/memories?date=2026-11-12
 
 화면 요소 없음. H07 · H08 · H19가 떠 있는 동안 계속.
 
-- 테이블: `study_sessions.last_heartbeat_at` · `heartbeat_study_seconds` · `heartbeat_present_seconds` · 인증: 필요
+- 테이블: `connections.last_heartbeat_at` · `heartbeat_study_seconds` · `heartbeat_present_seconds` · 인증: 필요
 
-#### [POST] /api/sessions/{sessionId}/heartbeat
+#### [POST] /api/connections/{connectionId}/heartbeat
 
 #### 🛫 Request
 
@@ -1399,7 +1338,7 @@ GET /api/me/memories?date=2026-11-12
 
 > ✅ **204 No Content**
 
-> ❌ **400** INVALID_STUDY_TIME (본문이 없거나 공부 종료와 같은 검사에 걸림: 0 ≤ `presentSeconds` ≤ `studySeconds` ≤ 시작부터 지난 시간) · **404** SESSION_NOT_FOUND · **409** SESSION_ENDED → 이미 끝난 세션. 리포트 조회로
+> ❌ **400** INVALID_STUDY_TIME (본문이 없거나 공부 종료와 같은 검사에 걸림: 0 ≤ `presentSeconds` ≤ `studySeconds` ≤ 시작부터 지난 시간) · **404** CONNECTION_NOT_FOUND · **409** CONNECTION_ENDED → 이미 끝난 세션. 리포트 조회로
 
 - 400이어도 **생존 신호(`last_heartbeat_at`)는 갱신**하고, 값만 저장하지 않음 (시계 차이로 1초 넘쳐도 끊긴 세션이 되지 않게)
 - 이어하기(17)를 하면 저장된 값을 이어하기 응답의 `studySeconds` 기준으로 맞춤 (다음 heartbeat 전에 또 끊겨도 옛 값으로 마감되지 않게)
@@ -1409,10 +1348,10 @@ GET /api/me/memories?date=2026-11-12
 | 상황 | 서버 처리 |
 | --- | --- |
 | heartbeat가 2분 넘게 없음 | '끊긴 상태'로 보고 기다림 (세션은 진행 중 유지) |
-| 다시 로그인 · 새로고침 | 내 정보 · 홈 조회에 `activeSession` → H18 → 세션 이어하기 |
-| 6시간 동안 이어하지 않음 | 배치가 자동 마감: `ended_at = last_heartbeat_at`, `end_type = AUTO_CLOSED`, 정산 · 관계 갱신까지. 공부 시간 · 자리 지킴은 마지막 heartbeat 값으로 저장 (받은 값이 없으면 `session_events`로 계산) |
+| 다시 로그인 · 새로고침 | 내 정보 · 홈 조회에 `activeConnection` → 이어하기 팝업 → 연결 이어하기 |
+| 6시간 동안 이어하지 않음 | 배치가 자동 마감: `ended_at = last_heartbeat_at`, `end_type = AUTO_CLOSED`, 정산 · 관계 갱신까지. 공부 시간 · 자리 지킴은 마지막 heartbeat 값으로 저장 (받은 값이 없으면 `connection_events`로 계산) |
 
-## 22. POST /api/sessions/{sessionId}/end — 공부 종료
+## 22. POST /api/connections/{connectionId}/end — 연결 끊기
 - 분류: 리포트
 - 설명: 공부 종료 + 정산 + 관계 갱신 → 공부 시간 · 자리 지킴률 · 달성률 · 호감도 변화
 - 와이어프레임: H17 · H08 오늘은 여기까지 → H09
@@ -1441,9 +1380,9 @@ GET /api/me/memories?date=2026-11-12
 | H09 ‘[완료 대사]’ · H10 ‘[카드 문구]’ | 응답 `closingLine` (같은 문장) |
 | H09 '대화 옵션 · 스탠다드', 다른 캐릭터 탭 | **제거** / 목업 |
 
-- 테이블: `study_sessions`, `user_character_relations`, `relation_settlements`, `conversation_recaps`, `chat_messages`(카드에 넣은 뒤 삭제), `llm_usages` · 인증: 필요
+- 테이블: `connections`, `user_character_relations`, `relation_settlements`, `conversation_recaps`, `chat_messages`(카드에 넣은 뒤 삭제), `llm_usages` · 인증: 필요
 
-##### [POST] /api/sessions/{sessionId}/end
+##### [POST] /api/connections/{connectionId}/end
 
 ##### 🛫 Request
 
@@ -1459,33 +1398,35 @@ json
 ```
 
 - 자리 비움(`distract_seconds`)은 서버가 `studySeconds − presentSeconds`로 저장
-- 주간 · 월간 통계는 `study_sessions`의 이 값들을 기간별로 더해서 계산
+- 주간 · 월간 통계는 `connections`의 이 값들을 기간별로 더해서 계산
 
 ##### 🛬 Response
 
 | 이름 | 타입 | 설명 |
 | --- | --- | --- |
-| sessionId · roomName |  |  |
+| connectionId | Long | 연결 id |
 | startedAt · endedAt · endType |  | `NORMAL` / `AUTO_CLOSED` |
 | studySeconds | Integer | 저장된 공부 시간 |
 | presentSeconds | Integer | 저장된 자리 지킴 시간 |
 | awaySeconds | Integer | 저장된 자리 비움 시간 (studySeconds − presentSeconds) |
 | returnCount | Integer | 자리 비운 뒤 돌아온 횟수 (`RETURN` 이벤트 수) |
-| character | Object | `id`, `name` |
+| mate | Object | `id`, `name` |
 | relation | Object | `levelBefore` · `levelAfter` · `levelUp`(공부 시간 레벨, 이 세션 자리 지킴 시간 반영) · `nextLevelSeconds`(다음 레벨이 되는 누적 자리 지킴 시간) · `pointsBefore`(공부 시작 때) · `pointsAfter`(이벤트 · 대화 반영 후) · `stage` · `stageName`(끝날 때 관계 단계) · `levelName`(옛 필드, `stageName`과 같은 값) · `nextLevelPoints`(옛 필드, 늘 null) |
 | closingLine | String | 완료 대사 (리포트 · 카드 공용). 캐릭터 설정에 완료 대사(`character_lines` CLOSING)가 있으면 지금 관계 단계의 그 문장(PM: 말포이는 고정. 단계별 문장은 확정 필요), 없으면 AI. 직접 끝냈는데 목표 시간의 절반도 못 채웠으면 공부 포기 대사(GIVE_UP, 임시 J-15, 문구 확정 필요). 기준 시간은 공부 시간 `studySeconds`(자리 지킴 + 자리 비움, 쉬는 시간 제외)로 확정, 목표 시간을 정하지 않은 세션은 포기로 보지 않음 (절반 · 직접 끝냄 조건은 확정 필요) |
 
 > 2026-11-04 (호감도 최종안): 공부 시간은 호감도를 올리지 않고 레벨에만 씀. 레벨 = 자리 지킴 60분당 1 (임시, PM 확인 필요)
 
+> 2026-11-23 (12/1 베타 3단계): `sessionId` → `connectionId`, `roomName` 삭제, `character` → `mate`. 목표 시간이 없어져 공부 포기 대사(GIVE_UP)는 나오지 않음
+
 json
 
 ```json
-{  "sessionId": 512, "roomName": "밤의 호그와트 도서관",  "startedAt": "2026-11-07T05:00:02Z", "endedAt": "2026-11-07T06:05:10Z", "endType": "NORMAL",  "studySeconds": 3300, "presentSeconds": 2880, "awaySeconds": 420,  "returnCount": 2,  "character": { "id": 1, "name": "채린" },  "relation": { "levelBefore": 1, "levelAfter": 2, "levelUp": true, "nextLevelSeconds": 7200, "pointsBefore": 50, "pointsAfter": 53, "stage": 2, "stageName": "친한 사이", "levelName": "친한 사이", "nextLevelPoints": null },  "closingLine": "오늘도 같이 공부해서 좋았어. 다음에도 함께하자."}
+{  "connectionId": 512,  "startedAt": "2026-11-07T05:00:02Z", "endedAt": "2026-11-07T06:05:10Z", "endType": "NORMAL",  "studySeconds": 3300, "presentSeconds": 2880, "awaySeconds": 420,  "returnCount": 2,  "mate": { "id": 1, "name": "채린" },  "relation": { "levelBefore": 1, "levelAfter": 2, "levelUp": true, "nextLevelSeconds": 7200, "pointsBefore": 50, "pointsAfter": 53, "stage": 2, "stageName": "친한 사이", "levelName": "친한 사이", "nextLevelPoints": null },  "closingLine": "오늘도 같이 공부해서 좋았어. 다음에도 함께하자."}
 ```
 
 > ✅ **200 OK** (이미 끝난 세션도 200 + 같은 결과)
 
-> ❌ **400** INVALID_STUDY_TIME (음수 · `presentSeconds > studySeconds` · 실제 경과 시간 초과) · **404** SESSION_NOT_FOUND
+> ❌ **400** INVALID_STUDY_TIME (음수 · `presentSeconds > studySeconds` · 실제 경과 시간 초과) · **404** CONNECTION_NOT_FOUND
 
 ##### 서버가 하는 일 (한 트랜잭션)
 
@@ -1493,7 +1434,7 @@ json
 2. 받은 값 검증: `0 ≤ presentSeconds ≤ studySeconds ≤ (종료 시각 − 시작 시각)` → 통과하면 `focus_seconds` · `distract_seconds` 저장, `RETURN` 이벤트 수로 `return_count` 저장
 3. 함께한 시간 누적(`total_study_seconds` · `total_present_seconds`) → 레벨 갱신, `relation_settlements`에 이 세션 레벨 전후 저장 (호감도는 바꾸지 않음)
 4. 이번 세션 대화를 흐름 카드 한 장으로 써서 `conversation_recaps`에 저장(최근 2장만 남김)하고 `chat_messages` 삭제. 카드 앞에 날짜 · 공부 시간을 붙임 (예: "11/03 55분, …")
-5. 완료 대사(`closingLine`)를 만들어 `study_sessions.closing_line`에 저장
+5. 완료 대사(`closingLine`)를 만들어 `connections.closing_line`에 저장
 6. LLM이 실패하거나 7초를 넘겨도 종료는 성공 (2026-11-06: 5초 → 7초): 카드를 못 쓰면 메시지를 지우지 않고 남김 → 다음 종료 때 그 세션 카드에 같이 들어감. 완료 대사는 고정 문구
 
 ---
@@ -1503,7 +1444,7 @@ json
 - **리포트 조회(새로고침)는 응답에 시간 값을 다시 넣어야 함**: 새로고침하면 프론트 계산값이 사라지니까, 리포트 조회는 저장된 `studySeconds` · `presentSeconds` · `awaySeconds`를 돌려줘야 H09를 다시 그릴 수 있음 → 2026-11-03 결정: 공부 종료 · 리포트 응답에 넣음
 - **자동 마감 · 비정상 종료는 프론트 값이 없음**: 6시간 방치로 배치가 닫을 땐 보내줄 프론트가 없어서, 그때는 **서버가 이벤트로 직접 계산**해야 함. 그래서 이벤트로 계산하는 로직은 서버에 계속 있어야 하고, 위 2번 검증에서도 그 계산값과 크게 차이 나면 서버 값으로 바꾸는 식으로 쓰면 조작도 같이 막을 수 있음
 
-## 23. GET /api/sessions/{sessionId}/report — 리포트 조회
+## 23. GET /api/connections/{connectionId} — 연결 기록 조회
 - 분류: 리포트
 - 설명: 리포트 · 카드 다시 불러오기 (공부 종료와 같은 응답)
 - 와이어프레임: H09 새로고침 · H10 캡슐 카드
@@ -1525,17 +1466,17 @@ json
 | H10 '이미지 저장' · '스토리 공유' · '링크 복사' · '카드 색' | 프론트 처리 (API 없음) |
 | H09 '홈으로' · H10 '저장하지 않고 홈으로' | H03으로 이동 |
 
-- 테이블: `study_sessions`, `relation_logs`, `relation_settlements` · 인증: 필요
+- 테이블: `connections`, `relation_logs`, `relation_settlements` · 인증: 필요
 
-#### [GET] /api/sessions/{sessionId}/report
+#### [GET] /api/connections/{connectionId}
 
 응답: '공부 종료'와 같음
 
 > ✅ **200 OK**
 
-> ❌ **404** SESSION_NOT_FOUND · **409** SESSION_IN_PROGRESS
+> ❌ **404** CONNECTION_NOT_FOUND · **409** CONNECTION_IN_PROGRESS
 
-> ⚠️ 새로고침해도 같은 `closingLine`이 나오려면 저장 자리가 필요함. DB 최종본에는 없으므로 `study_sessions.closing_line` 추가하기로 함 (2026-11-03 결정, 노션 DB 반영). 공부 종료 때 저장하고, 리포트 조회는 저장된 문장을 그대로 돌려줌
+> ⚠️ 새로고침해도 같은 `closingLine`이 나오려면 저장 자리가 필요함. DB 최종본에는 없으므로 `connections.closing_line` 추가하기로 함 (2026-11-03 결정, 노션 DB 반영). 공부 종료 때 저장하고, 리포트 조회는 저장된 문장을 그대로 돌려줌
 
 ## 24. POST /api/auth/logout — 로그아웃
 - 분류: 인증
@@ -1703,7 +1644,7 @@ json
 
 > ✅ **204 No Content** · 리프레시 토큰 쿠키를 비움 → 프론트는 토큰을 버리고 H01로. 이미 탈퇴한 계정이어도 204
 
-> ❌ **409** SESSION_IN_PROGRESS (진행 중 세션이 있음. "공부를 끝낸 뒤 탈퇴할 수 있어요" → 세션 이어하기 후 종료)
+> ❌ **409** CONNECTION_IN_PROGRESS (진행 중 세션이 있음. "공부를 끝낸 뒤 탈퇴할 수 있어요" → 세션 이어하기 후 종료)
 
 #### 서버가 하는 일 (한 트랜잭션)
 
@@ -1711,13 +1652,13 @@ json
 2. `users`: `withdrawn_at = now()`, `email` · `password` NULL, `nickname`은 '탈퇴한 사용자'(NOT NULL이라 고정 문구), `avatar_id` · `profile_image_url` NULL
 3. `user_social_accounts` 행 삭제 (같은 소셜 계정으로 재가입 가능)
 4. `user_memories` 삭제, `conversations`(대화 원문 · 세션 카드는 CASCADE) · `character_memories` 삭제
-5. 남기는 것: `user_terms`(동의 기록), `study_sessions` · `session_events`, `user_character_relations` · `relation_logs` · `relation_settlements` · `user_unlocked_*`, `llm_usages`. 모두 개인을 알아볼 내용이 없는 기록
+5. 남기는 것: `user_terms`(동의 기록), `connections` · `connection_events`, `user_character_relations` · `relation_logs` · `relation_settlements` · `user_unlocked_*`, `llm_usages`. 모두 개인을 알아볼 내용이 없는 기록
 6. 커밋 뒤 그 사용자의 리프레시 토큰을 모두 폐기 (비밀번호 재설정과 같은 방식)
 
 - 카카오 연결 끊기(카카오 unlink API)는 하지 않음. 카카오 토큰을 저장하지 않아서 서버가 부를 수 없음 (어드민 키 방식으로 할지 확정 필요)
 - 재가입 제한 기간 없음 (확정 필요)
 
-## 28. POST /api/sessions/{sessionId}/messages/stream — 메시지 전송 (스트리밍)
+## 28. POST /api/connections/{connectionId}/messages/stream — 메시지 전송 (스트리밍)
 - 분류: 대화
 - 설명: 20번과 같은 대화를 답장 글자가 만들어지는 대로 받음 (SSE). 마지막에 20번 응답 전체
 - 와이어프레임: H08 휴식 대화 · H20 공부 중 채팅
@@ -1740,7 +1681,7 @@ json
 
 - 테이블: 20번과 같음 · 인증: 필요
 
-#### [POST] /api/sessions/{sessionId}/messages/stream
+#### [POST] /api/connections/{connectionId}/messages/stream
 
 #### 🛫 Request
 
@@ -1754,7 +1695,7 @@ json
 | --- | --- | --- |
 | `reply` | 0번 이상 | `{"content": "지금까지 만들어진 답장"}`. **지금까지의 글 전체**(조각이 아님). 받을 때마다 말풍선 글을 이 값으로 바꿈 |
 | `done` | 마지막 1번 | 20번 응답과 같은 JSON. `content`가 최종 답장이라 말풍선을 이 값으로 확정 (마지막 `reply`와 조금 다를 수 있음: 앞뒤 공백 · 따옴표 정리). 표정 · 호감도도 여기서 |
-| `error` | `done` 대신 1번 | 공통 에러 모양 `{"success": false, "code", "message", "detail"}`. 스트림을 연 뒤에 생긴 오류만 (예: 답하는 사이 공부가 끝남 → `SESSION_ENDED`) |
+| `error` | `done` 대신 1번 | 공통 에러 모양 `{"success": false, "code", "message", "detail"}`. 스트림을 연 뒤에 생긴 오류만 (예: 답하는 사이 공부가 끝남 → `CONNECTION_ENDED`) |
 
 ```
 event: reply
@@ -1767,7 +1708,7 @@ event: done
 data: {"requestId":"9c3a...","characterId":1,"content":"알지. 그리핀도르 그 녀석, 퀴디치에서 맨날 나랑 붙는 애.","emotion":"경멸","motion":null,"expression":{"name":"경멸","file":"exp/expression3.exp3.json"},"affinity":{"delta":0,"points":50,"stage":2,"stageName":"친한 사이","level":1,"levelUp":false},"fallback":false,"audioBase64":null}
 ```
 
-> ❌ 스트림을 열기 전 오류는 20번과 같은 **보통 JSON 에러 응답**(HTTP 상태 그대로): **400** EMPTY_MESSAGE · INVALID_REQUEST · CHARACTER_NOT_IN_SESSION · **404** SESSION_NOT_FOUND · **409** SESSION_ENDED · **429** TOO_MANY_REQUESTS (20번과 횟수를 같이 셈)
+> ❌ 스트림을 열기 전 오류는 20번과 같은 **보통 JSON 에러 응답**(HTTP 상태 그대로): **400** EMPTY_MESSAGE · INVALID_REQUEST · CHARACTER_NOT_IN_SESSION · **404** CONNECTION_NOT_FOUND · **409** CONNECTION_ENDED · **429** TOO_MANY_REQUESTS (20번과 횟수를 같이 셈)
 
 #### 서버가 하는 일
 
