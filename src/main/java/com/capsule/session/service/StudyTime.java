@@ -5,36 +5,44 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 
-/** 이벤트로 계산한 시간 (이어하기·자동 마감·종료 공용). 각 상태는 다음 이벤트(또는 끝 시각)까지 이어진다 */
-public record StudyTime(int presentSeconds, int awaySeconds, int breakSeconds) {
+/**
+ * 이벤트로 계산하는 자리 비움 (api.md 22). AWAY부터 다음 PRESENT · RETURN(또는 끝 시각)까지.
+ * 함께한 시간 · 연결 시간은 프론트가 보내고, 자리 비움만 서버가 이벤트로 센다
+ */
+public final class StudyTime {
 
-    public int studySeconds() {
-        return presentSeconds + awaySeconds;
+    private StudyTime() {}
+
+    /** events는 시각 · id 순. 끝 시각 뒤 이벤트는 끝 시각에서 자른다 */
+    public static int awaySeconds(List<SessionEvent> events, Instant end) {
+        long millis = 0;
+        Instant awayFrom = null;
+        for (SessionEvent e : events) {
+            Instant at = e.getOccurredAt().isBefore(end) ? e.getOccurredAt() : end;
+            switch (e.getType()) {
+                case SessionEvent.AWAY -> {
+                    if (awayFrom == null && !e.isFalsePositive()) awayFrom = at;
+                }
+                case SessionEvent.PRESENT, SessionEvent.RETURN -> {
+                    if (awayFrom != null) {
+                        millis += Duration.between(awayFrom, at).toMillis();
+                        awayFrom = null;
+                    }
+                }
+                default -> {} // IDLE_TALK · 옛 이벤트는 구간을 끊지 않음
+            }
+        }
+        if (awayFrom != null && end.isAfter(awayFrom)) {
+            millis += Duration.between(awayFrom, end).toMillis();
+        }
+        return (int) (millis / 1000);
     }
 
-    /** events는 시각·id 순. 끝 시각 뒤의 이벤트는 끝 시각에서 자른다 */
-    public static StudyTime of(Instant startedAt, List<SessionEvent> events, Instant end) {
-        long[] millis = new long[3]; // 자리 지킴 · 자리 비움 · 휴식
-        int state = 0; // 첫 이벤트 전 구간은 자리 지킴
-        Instant from = startedAt;
-        for (SessionEvent e : events) {
-            if (!e.isState()) {
-                continue; // 동작 이벤트는 구간을 끊지 않는다 (api.md 18)
-            }
-            Instant to = e.getOccurredAt().isBefore(end) ? e.getOccurredAt() : end;
-            if (to.isAfter(from)) {
-                millis[state] += Duration.between(from, to).toMillis();
-                from = to;
-            }
-            state = switch (e.getType()) {
-                case SessionEvent.AWAY -> e.isFalsePositive() ? 0 : 1; // '아니야' 버튼이면 자리 지킴
-                case SessionEvent.BREAK -> 2;
-                default -> 0; // FOCUS · RETURN
-            };
-        }
-        if (end.isAfter(from)) {
-            millis[state] += Duration.between(from, end).toMillis();
-        }
-        return new StudyTime((int) (millis[0] / 1000), (int) (millis[1] / 1000), (int) (millis[2] / 1000));
+    /** 이 연결에서 몇 번째 자리 비움인지 → 반응 강도 1~3 (api.md 18) */
+    public static int awayIntensity(List<SessionEvent> events) {
+        long count = events.stream()
+                .filter(e -> SessionEvent.AWAY.equals(e.getType()))
+                .count();
+        return (int) Math.max(1, Math.min(3, count));
     }
 }

@@ -50,12 +50,12 @@ Content-Type: application/json
 
 > {% client.global.set("sessionId", response.body.data.connectionId); %}
 
-### 9. FOCUS (공부 시작 직후)
+### 9. PRESENT (얼굴 보임, 연결 시작 직후)
 POST {{host}}/api/connections/{{sessionId}}/events
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
-{ "type": "FOCUS", "occurredAt": "{{$isoTimestamp}}" }
+{ "type": "PRESENT", "occurredAt": "{{$isoTimestamp}}" }
 
 > {% client.global.set("eventId", response.body.eventId); %}
 
@@ -71,7 +71,7 @@ POST {{host}}/api/connections/{{sessionId}}/heartbeat
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
-{ "studySeconds": 0, "presentSeconds": 0 }
+{ "connectedSeconds": 0, "presentSeconds": 0, "cameraOnSeconds": 0, "pipSeconds": 0 }
 
 ### 12. 자리 비움 (H09)
 POST {{host}}/api/connections/{{sessionId}}/events
@@ -116,14 +116,14 @@ Content-Type: application/json
 GET {{host}}/api/me
 Authorization: Bearer {{token}}
 
-### 18. 공부 종료 (H17 → H09). studySeconds는 실제 경과 시간 이하
+### 18. 연결 끊기. connectedSeconds는 실제 경과 시간 이하
 POST {{host}}/api/connections/{{sessionId}}/end
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
-{ "studySeconds": 60, "presentSeconds": 50 }
+{ "connectedSeconds": 60, "presentSeconds": 50, "cameraOnSeconds": 55, "pipSeconds": 0, "endType": "NORMAL" }
 
-### 19. 리포트 (H09 새로고침 · H10 카드)
+### 19. 연결 기록
 GET {{host}}/api/connections/{{sessionId}}
 Authorization: Bearer {{token}}
 

@@ -1,8 +1,8 @@
 package com.capsule.session.service;
 
 import static com.capsule.session.domain.SessionEvent.AWAY;
-import static com.capsule.session.domain.SessionEvent.BREAK;
-import static com.capsule.session.domain.SessionEvent.FOCUS;
+import static com.capsule.session.domain.SessionEvent.IDLE_TALK;
+import static com.capsule.session.domain.SessionEvent.PRESENT;
 import static com.capsule.session.domain.SessionEvent.RETURN;
 
 import com.capsule.common.error.ApiException;
@@ -18,24 +18,23 @@ import com.capsule.content.api.MateQuery;
 import com.capsule.content.api.ReactionQuery;
 import com.capsule.relation.api.RelationCommands;
 import com.capsule.relation.api.RelationQuery;
-import com.capsule.relation.api.RelationTypes.AffinityChange;
-import com.capsule.relation.api.RelationTypes.SessionEventRef;
 import com.capsule.relation.api.RelationTypes.StudySettlement;
 import com.capsule.session.api.SessionClosingHandler;
 import com.capsule.session.api.SessionTypes.SessionClosing;
 import com.capsule.session.config.SessionProperties;
+import com.capsule.session.domain.ConnectionTimes;
 import com.capsule.session.domain.SessionErrorCode;
 import com.capsule.session.domain.SessionEvent;
 import com.capsule.session.domain.StudySession;
-import com.capsule.session.dto.CharacterRef;
 import com.capsule.session.dto.EndRequest;
-import com.capsule.session.dto.EventCharacter;
 import com.capsule.session.dto.EventRequest;
 import com.capsule.session.dto.EventResponse;
 import com.capsule.session.dto.Figure;
 import com.capsule.session.dto.HeartbeatRequest;
+import com.capsule.session.dto.HeartbeatResponse;
 import com.capsule.session.dto.HomeResponse;
 import com.capsule.session.dto.Me;
+import com.capsule.session.dto.ReactionView;
 import com.capsule.session.dto.ReportResponse;
 import com.capsule.session.dto.ResumeResponse;
 import com.capsule.session.dto.StartRequest;
@@ -49,11 +48,12 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -62,11 +62,19 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
+/** 연결 (api.md 11 · 16~18 · 21~23). 자바 이름(Session)은 정리 PR에서 Connection으로 바꾼다 */
 @Service
 @RequiredArgsConstructor
 public class SessionService {
 
     private static final Logger log = LoggerFactory.getLogger(SessionService.class);
+    /** 하루는 한국 시간 오전 5시에 바뀐다 (api.md 16 '하루 기준') */
+    private static final LocalTime DAY_STARTS_AT = LocalTime.of(5, 0);
+    /** 만 19세 미만 하루 연결 시간 (PRD 8장, 제타와 같은 기준) */
+    private static final int MINOR_DAILY_SECONDS = 3 * 60 * 60;
+    /** 프론트가 고를 수 있는 끝 종류. AUTO_CLOSED는 서버 배치만 (api.md 22) */
+    private static final Set<String> CLIENT_END_TYPES =
+            Set.of(StudySession.NORMAL, StudySession.AUTO_AWAY, StudySession.MINOR_LIMIT);
 
     private final StudySessionRepository sessions;
     private final SessionEventRepository events;
@@ -102,12 +110,13 @@ public class SessionService {
                 .filter(MateInfo::active) // 비활성이 된 메이트로 '다시 연결하기'를 띄우지 않게
                 .map(m -> new HomeResponse.LastMate(m.id(), m.name(), m.illustrationUrl()))
                 .orElse(null);
-        LocalDate today = LocalDate.ofInstant(now(), ClockConfig.KST);
-        int todayStudySeconds = sessions.studySecondsEndedBetween(
-                userId,
-                today.atStartOfDay(ClockConfig.KST).toInstant(),
-                today.plusDays(1).atStartOfDay(ClockConfig.KST).toInstant());
-        return new HomeResponse(todayStudySeconds, activeSessions.find(userId).orElse(null), lastMate, list);
+        Instant[] day = today();
+        return new HomeResponse(
+                sessions.presentSecondsEndedBetween(userId, day[0], day[1]),
+                sessions.connectedSecondsEndedBetween(userId, day[0], day[1]),
+                activeSessions.find(userId).orElse(null),
+                lastMate,
+                list);
     }
 
     // ---- 16 연결 시작 · 17 이어하기
@@ -117,7 +126,7 @@ public class SessionService {
         return new ApiException(SessionErrorCode.CONNECTION_ALREADY_IN_PROGRESS, Map.of("connectionId", connectionId));
     }
 
-    /** 동시 시작이 유니크 인덱스에 막혔을 때 먼저 만들어진 세션 */
+    /** 동시 시작이 유니크 인덱스에 막혔을 때 먼저 만들어진 연결 */
     @Transactional(readOnly = true)
     public Optional<Long> inProgressSessionId(long userId) {
         return sessions.findByUserIdAndEndedAtIsNull(userId).map(StudySession::getId);
@@ -125,7 +134,6 @@ public class SessionService {
 
     @Transactional
     public StartResponse start(long userId, StartRequest req) {
-        // 연결 시간 제한은 없다 (2026-11-23, 목표 시간 삭제)
         MateInfo mate = mates.find(req.mateId())
                 .filter(MateInfo::active)
                 .orElseThrow(() -> new ApiException(SessionErrorCode.MATE_NOT_FOUND));
@@ -141,52 +149,49 @@ public class SessionService {
         sessions.findByUserIdAndEndedAtIsNull(userId).ifPresent(s -> {
             throw alreadyInProgress(s.getId());
         });
+        Integer minorRemaining = minorRemaining(user, null);
+        if (minorRemaining != null && minorRemaining <= 0) {
+            throw new ApiException(SessionErrorCode.MINOR_DAILY_LIMIT);
+        }
         // 동시에 두 번 시작하면 부분 유니크 인덱스(사용자당 진행 중 연결 하나)가 막는다 → 컨트롤러가 409로 바꿈
         StudySession s = sessions.save(new StudySession(userId, character.id(), now()));
+        boolean firstMeet = !sessions.existsByUserIdAndCharacterIdAndIdNot(userId, character.id(), s.getId());
         relationCommands.meet(userId, character.id());
         AvatarInfo avatar = avatar(user);
         return new StartResponse(
-                s.getId(), s.getStartedAt(), figure(character), figure(avatar), me(user, avatar), now());
+                s.getId(),
+                s.getStartedAt(),
+                figure(character),
+                figure(avatar),
+                me(user, avatar),
+                now(),
+                firstMeet,
+                reaction(character.id(), "GREETING", null),
+                minorRemaining);
     }
 
     @Transactional
     public ResumeResponse resume(long userId, long sessionId) {
         StudySession s = inProgress(userId, sessionId);
-        Instant now = now();
-        List<SessionEvent> list = new ArrayList<>(events.findBySessionIdOrderByOccurredAtAscIdAsc(s.getId()));
-        // 동작 이벤트는 상태를 바꾸지 않으므로 마지막 '상태' 이벤트로 판단 (api.md 18)
-        SessionEvent last =
-                list.stream().filter(SessionEvent::isState).reduce((a, b) -> b).orElse(null);
-        if (last == null || !BREAK.equals(last.getType())) {
-            // 끊긴 구간 = 휴식. heartbeat 뒤에 온 이벤트가 있으면 그 뒤부터 (그 상태가 끊긴 동안 이어지지 않게)
-            Instant breakAt = s.getLastHeartbeatAt() != null ? s.getLastHeartbeatAt() : s.getStartedAt();
-            if (last != null && last.getOccurredAt().isAfter(breakAt)) {
-                breakAt = last.getOccurredAt();
-            }
-            if (breakAt.isAfter(now)) {
-                breakAt = now;
-            }
-            list.add(events.save(new SessionEvent(s.getId(), BREAK, breakAt)));
-        }
-        list.add(events.save(new SessionEvent(s.getId(), FOCUS, now)));
-        // 서버가 넣은 두 이벤트는 호감도에 반영하지 않는다 (api.md 17)
-        StudyTime time = StudyTime.of(s.getStartedAt(), list, now);
-        // 끊기기 전 heartbeat 값이 남아 있으면, 다음 heartbeat 전에 또 끊길 때 자동 마감이 옛 값으로 기록한다 → 이어하기 응답과 같은 값으로 맞춤
-        s.heartbeat(now, time.studySeconds(), time.presentSeconds());
-
+        // 쉬는 시간이 없어져 이벤트를 넣지 않는다 (2026-11-23). 생존 신호만 갱신해 자동 마감을 미룬다
+        s.heartbeat(now());
         UserProfile user = user(userId);
         AvatarInfo avatar = avatar(user);
+        ConnectionTimes t = s.lastHeartbeatTimes();
         return new ResumeResponse(
                 s.getId(),
                 figure(character(s.characterId())),
                 figure(avatar),
                 me(user, avatar),
-                time.studySeconds(),
-                time.breakSeconds(),
-                now);
+                t.connected(),
+                t.present(),
+                t.cameraOn(),
+                t.pip(),
+                minorRemaining(user, s),
+                now());
     }
 
-    // ---- 18 상태 변화 · 21 heartbeat
+    // ---- 18 상태 기록 · 21 heartbeat
 
     @Transactional
     public EventResponse recordEvent(long userId, long sessionId, EventRequest req) {
@@ -195,117 +200,80 @@ public class SessionService {
         if (type == null || !SessionEvent.TYPES.contains(type) || req.occurredAt() == null) {
             throw new ApiException(SessionErrorCode.INVALID_EVENT);
         }
-        // 프론트 시계가 서버보다 조금 늦으면 시작 직후 FOCUS가 세션 시작보다 앞설 수 있어서, 거절하지 않고 시작 시각으로 맞춘다
+        // 프론트 시계가 조금 늦으면 시작 직후 이벤트가 연결 시작보다 앞설 수 있어서, 거절하지 않고 시작 시각으로 맞춘다
         Instant occurredAt = req.occurredAt().isBefore(s.getStartedAt()) ? s.getStartedAt() : req.occurredAt();
         Instant at = occurredAt.truncatedTo(ChronoUnit.MICROS); // DB 정밀도와 맞춰야 재전송이 같은 값으로 걸린다
         List<SessionEvent> list = events.findBySessionIdOrderByOccurredAtAscIdAsc(s.getId());
-
         Optional<SessionEvent> duplicate = list.stream()
                 .filter(e -> e.getType().equals(type) && e.getOccurredAt().equals(at))
                 .findFirst();
         if (duplicate.isPresent()) {
-            // 재전송: 호감도는 다시 반영하지 않고 처음 반영된 변화를 돌려준다
+            // 재전송: 처음과 같은 반응 (강도는 그 이벤트까지의 자리 비움 횟수)
             SessionEvent e = duplicate.get();
-            SessionEventRef ref = eventRef(s, e.getId(), type, firstFocus(list, e.getId(), type, at));
-            return new EventResponse(e.getId(), eventCharacters(ref, relationQuery.changeOf(ref)), false);
+            List<SessionEvent> upTo =
+                    list.stream().filter(x -> x.getId() <= e.getId()).toList();
+            return new EventResponse(e.getId(), reactionOf(s, type, upTo), false);
         }
-        SessionEvent stateAt = null; // 이 이벤트 시각의 상태 (늦게 도착한 이벤트도 제자리에서 판단). 동작 이벤트는 상태가 아님
-        for (SessionEvent e : list) {
-            if (e.isState() && !e.getOccurredAt().isAfter(at)) {
-                stateAt = e;
-            }
-        }
-        boolean motion = SessionEvent.MOTION_TYPES.contains(type);
-        if (stateAt != null
-                && BREAK.equals(stateAt.getType())
-                && (AWAY.equals(type) || RETURN.equals(type) || motion)) {
-            // 명세는 "서버가 무시"뿐이라 저장하지 않고 eventId null로 돌려준다
-            return EventResponse.ignored();
-        }
-        // 동작 이벤트 쿨다운 (api.md 18): 같은 type이 motion-cooldown(1분) 안에 다시 오면 무시. 늦게 도착한 앞선 이벤트도 걸리게 앞뒤로 본다
-        if (motion
-                && list.stream()
-                        .anyMatch(e -> e.getType().equals(type)
-                                && Duration.between(e.getOccurredAt(), at).abs().compareTo(props.motionCooldown())
-                                        < 0)) {
-            return EventResponse.ignored();
-        }
-
         SessionEvent saved = events.save(new SessionEvent(s.getId(), type, at));
-        // 자리 비움을 끝낸 상태 이벤트면 비운 시간을 같이 넘긴다 (relation이 오래 비웠으면 감점).
-        // 늦게 도착한 이벤트가 이미 다른 상태 이벤트로 끝난 AWAY를 또 끝내지 않게, 그 AWAY 뒤에 상태 이벤트가 없을 때만
-        SessionEvent away = stateAt;
-        boolean closesAway = !motion
-                && away != null
-                && AWAY.equals(away.getType())
-                && !AWAY.equals(type)
-                && list.stream().noneMatch(e -> e.isState() && e.getOccurredAt().isAfter(away.getOccurredAt()));
-        Integer awaySeconds =
-                closesAway ? (int) Duration.between(away.getOccurredAt(), at).toSeconds() : null;
-        SessionEventRef ref = new SessionEventRef(
-                s.getUserId(),
-                s.characterId(),
-                s.getId(),
-                saved.getId(),
-                type,
-                firstFocus(list, saved.getId(), type, at),
-                awaySeconds);
-        return new EventResponse(saved.getId(), eventCharacters(ref, relationCommands.applySessionEvent(ref)), true);
+        List<SessionEvent> upTo = new java.util.ArrayList<>(list);
+        upTo.add(saved);
+        return new EventResponse(saved.getId(), reactionOf(s, type, upTo), true);
     }
 
     /**
-     * 생존 신호는 값이 잘못돼도 항상 갱신한다 (아니면 공부 중인데 끊긴 세션이 됨). 값은 맞을 때만 저장.
-     * 400을 여기서 던지면 갱신까지 롤백되므로, 값이 맞았는지만 돌려주고 컨트롤러가 400으로 바꾼다
+     * 생존 신호는 값이 잘못돼도 항상 갱신한다 (아니면 연결 중인데 끊긴 연결이 됨). 값은 맞을 때만 저장.
+     * 400을 여기서 던지면 갱신까지 롤백되므로, 맞으면 응답 · 틀리면 빈 값을 돌려주고 컨트롤러가 400으로 바꾼다
      */
     @Transactional
-    public boolean heartbeat(long userId, long sessionId, HeartbeatRequest req) {
+    public Optional<HeartbeatResponse> heartbeat(long userId, long sessionId, HeartbeatRequest req) {
         StudySession s = inProgress(userId, sessionId);
         Instant now = now();
-        Integer study = req == null ? null : req.studySeconds();
-        Integer present = req == null ? null : req.presentSeconds();
-        if (!validStudyTime(s, study, present, now)) {
+        Optional<ConnectionTimes> t = req == null
+                ? Optional.empty()
+                : times(s, req.connectedSeconds(), req.presentSeconds(), req.cameraOnSeconds(), req.pipSeconds(), now);
+        if (t.isEmpty()) {
             s.heartbeat(now);
-            return false;
+            return Optional.empty();
         }
-        s.heartbeat(now, study, present);
-        return true;
+        s.heartbeat(now, t.get());
+        return Optional.of(new HeartbeatResponse(minorRemaining(user(userId), s), now));
     }
 
-    public static ApiException invalidStudyTime() {
-        return new ApiException(SessionErrorCode.INVALID_STUDY_TIME);
+    public static ApiException invalidConnectionTime() {
+        return new ApiException(SessionErrorCode.INVALID_CONNECTION_TIME);
     }
 
-    // ---- 22 공부 종료 · 23 리포트 · 자동 마감
+    // ---- 22 연결 끊기 · 23 연결 기록 · 자동 마감
 
     /**
-     * 대화 마무리(LLM, 최대 5초)는 DB 연결을 잡지 않게 트랜잭션 밖에서 먼저 만들고, 잠금 · 검증 · 저장은 한 트랜잭션에서 한다.
-     * 그사이 다른 요청이 먼저 종료하면 초안은 버려지고 이미 끝난 세션의 리포트를 돌려준다.
+     * 대화 마무리(LLM)는 DB 연결을 잡지 않게 트랜잭션 밖에서 먼저 만들고, 잠금 · 검증 · 저장은 한 트랜잭션에서 한다.
+     * 그사이 다른 요청이 먼저 끊으면 초안은 버려지고 이미 끝난 연결의 기록을 돌려준다.
      */
     public ReportResponse end(long userId, long sessionId, EndRequest req) {
+        String endType = req.endType() == null ? StudySession.NORMAL : req.endType();
+        if (!CLIENT_END_TYPES.contains(endType)) {
+            throw new ApiException(CommonErrorCode.INVALID_REQUEST);
+        }
         // 짧은 트랜잭션으로 미리 읽고(잠금 없음) 바로 연결을 돌려준다. 틀린 요청에는 LLM을 부르지 않게 검증도 먼저
         SessionClosing closing = tx.execute(status -> {
             StudySession s = owned(sessions.findById(sessionId), userId);
             if (!s.inProgress()) return null;
-            validateStudyTime(s, req.studySeconds(), req.presentSeconds(), now());
-            return closingOf(s, "NORMAL", req.studySeconds()); // studySeconds = present + away
+            ConnectionTimes t = requireTimes(s, req, now());
+            return closingOf(s, endType, t.connected());
         });
         SessionClosingHandler.Draft draft = closing == null ? null : closingHandler.draft(closing);
-        return tx.execute(status -> endLocked(userId, sessionId, req, draft));
+        return tx.execute(status -> endLocked(userId, sessionId, req, endType, draft));
     }
 
-    private ReportResponse endLocked(long userId, long sessionId, EndRequest req, SessionClosingHandler.Draft draft) {
+    private ReportResponse endLocked(
+            long userId, long sessionId, EndRequest req, String endType, SessionClosingHandler.Draft draft) {
         StudySession s = owned(sessions.findWithLockById(sessionId), userId);
         if (!s.inProgress()) {
             return toReport(s, relationQuery.settlementOf(s.getUserId(), s.characterId(), s.getId()));
         }
         Instant now = now();
-        Integer study = req.studySeconds();
-        Integer present = req.presentSeconds();
-        validateStudyTime(s, study, present, now);
-        List<SessionEvent> list = events.findBySessionIdOrderByOccurredAtAscIdAsc(s.getId());
-        StudyTime time = StudyTime.of(s.getStartedAt(), list, now);
-        // TODO(judgment): J-11 프론트 값이 서버 계산값(time)과 "크게" 다를 때의 기준 미정. 지금은 부등식 검증만 하고 프론트 값을 그대로 씀
-        return close(s, now, "NORMAL", present, study - present, time.breakSeconds(), list, draft);
+        ConnectionTimes t = requireTimes(s, req, now);
+        return close(s, now, endType, t, draft);
     }
 
     @Transactional(readOnly = true)
@@ -317,141 +285,155 @@ public class SessionService {
         return toReport(s, relationQuery.settlementOf(s.getUserId(), s.characterId(), s.getId()));
     }
 
-    /** heartbeat가 auto-close-after(6h)보다 오래 없는 세션을 마지막 heartbeat 시각으로 닫는다 (api.md 21) */
+    /** heartbeat가 auto-close-after(6h)보다 오래 없는 연결을 마지막 heartbeat 시각 · 값으로 닫는다 (api.md 21) */
     // ponytail: 서버 1대 전제 (ADR 0011). 여러 대가 되면 ShedLock으로 한 대만 돌게
     @Scheduled(fixedDelayString = "${capsule.session.auto-close-interval:PT10M}")
     public void autoCloseStale() {
         Instant cutoff = now().minus(props.autoCloseAfter());
         for (long id : sessions.findStaleIds(cutoff)) {
             try {
-                // 공부 종료와 같이 대화 마무리(LLM)는 트랜잭션 밖에서 먼저
+                // 연결 끊기와 같이 대화 마무리(LLM)는 트랜잭션 밖에서 먼저
                 SessionClosing closing = tx.execute(status -> {
                     StudySession s = sessions.findById(id).orElseThrow();
-                    return autoClosePlan(s, cutoff)
-                            .map(p -> closingOf(s, "AUTO_CLOSED", p.present() + p.away()))
-                            .orElse(null);
+                    return stale(s, cutoff)
+                            ? closingOf(
+                                    s,
+                                    StudySession.AUTO_CLOSED,
+                                    s.lastHeartbeatTimes().connected())
+                            : null;
                 });
                 SessionClosingHandler.Draft draft = closing == null ? null : closingHandler.draft(closing);
-                tx.executeWithoutResult(status -> autoClose(id, cutoff, draft));
+                tx.executeWithoutResult(status -> {
+                    StudySession s = sessions.findWithLockById(id).orElseThrow();
+                    if (stale(s, cutoff)) {
+                        close(s, lastAlive(s), StudySession.AUTO_CLOSED, s.lastHeartbeatTimes(), draft);
+                    }
+                });
             } catch (RuntimeException e) {
-                log.warn("세션 {} 자동 마감 실패, 다음 배치에서 다시 시도", id, e); // 하나가 실패해도 나머지는 닫히게
+                log.warn("연결 {} 자동 마감 실패, 다음 배치에서 다시 시도", id, e); // 하나가 실패해도 나머지는 닫히게
             }
         }
     }
 
-    private record AutoClosePlan(Instant end, int present, int away, int breakSeconds, List<SessionEvent> list) {}
-
-    /** 자동 마감할 시각과 시간. 그 사이 종료됐거나 이어하기했으면 빈 값 */
-    private Optional<AutoClosePlan> autoClosePlan(StudySession s, Instant cutoff) {
-        Instant end = s.getLastHeartbeatAt() != null ? s.getLastHeartbeatAt() : s.getStartedAt();
-        if (!s.inProgress() || !end.isBefore(cutoff)) {
-            return Optional.empty();
-        }
-        List<SessionEvent> list = events.findBySessionIdOrderByOccurredAtAscIdAsc(s.getId());
-        StudyTime time = StudyTime.of(s.getStartedAt(), list, end);
-        // 마지막 heartbeat가 보낸 프론트 값으로 기록 (api.md 21). 값을 받은 적이 없으면 이벤트로 계산
-        Integer study = s.getHeartbeatStudySeconds();
-        Integer present = s.getHeartbeatPresentSeconds();
-        boolean sent = study != null && present != null;
-        return Optional.of(new AutoClosePlan(
-                end,
-                sent ? present : time.presentSeconds(),
-                sent ? study - present : time.awaySeconds(),
-                time.breakSeconds(),
-                list));
+    /** 그 사이 끊겼거나 이어하기했으면 false */
+    private static boolean stale(StudySession s, Instant cutoff) {
+        return s.inProgress() && lastAlive(s).isBefore(cutoff);
     }
 
-    private void autoClose(long sessionId, Instant cutoff, SessionClosingHandler.Draft draft) {
-        StudySession s = sessions.findWithLockById(sessionId).orElseThrow();
-        autoClosePlan(s, cutoff)
-                .ifPresent(p ->
-                        close(s, p.end(), "AUTO_CLOSED", p.present(), p.away(), p.breakSeconds(), p.list(), draft));
+    private static Instant lastAlive(StudySession s) {
+        return s.getLastHeartbeatAt() != null ? s.getLastHeartbeatAt() : s.getStartedAt();
     }
 
     private ReportResponse close(
-            StudySession s,
-            Instant endedAt,
-            String endType,
-            int present,
-            int away,
-            int breakSeconds,
-            List<SessionEvent> list,
-            SessionClosingHandler.Draft draft) {
-        s.close(endedAt, endType, present, away, breakSeconds, (int)
-                list.stream().filter(e -> RETURN.equals(e.getType())).count());
+            StudySession s, Instant endedAt, String endType, ConnectionTimes t, SessionClosingHandler.Draft draft) {
+        List<SessionEvent> list = events.findBySessionIdOrderByOccurredAtAscIdAsc(s.getId());
+        // 자리 비움은 이벤트로 세고, 카메라를 켰는데 얼굴이 안 보인 시간을 넘지 않게
+        int away = Math.min(StudyTime.awaySeconds(list, endedAt), t.cameraOn() - t.present());
+        int returns =
+                (int) list.stream().filter(e -> RETURN.equals(e.getType())).count();
+        s.close(endedAt, endType, t, Math.max(0, away), returns);
         long characterId = s.characterId();
         StudySettlement settlement =
-                relationCommands.settleStudy(s.getUserId(), characterId, s.getId(), present + away, present);
-        s.recordClosingLine(closingHandler.close(closingOf(s, endType, present + away), draft));
+                relationCommands.settleStudy(s.getUserId(), characterId, s.getId(), t.connected(), t.present());
+        s.recordClosingLine(closingHandler.close(closingOf(s, endType, t.connected()), draft));
         return toReport(s, settlement);
     }
 
-    /** 초안 · 저장 둘 다 이걸로 만든다. 목표 시간을 빠뜨리면 공부 포기(GIVE_UP) 판정이 꺼진다 */
-    private SessionClosing closingOf(StudySession s, String endType, int studySeconds) {
+    /** 초안 · 저장 둘 다 이걸로 만든다. studySeconds 자리에 연결 시간 (목표 시간이 없어 공부 포기 판정은 꺼짐) */
+    private SessionClosing closingOf(StudySession s, String endType, int connectedSeconds) {
         return new SessionClosing(
                 s.getId(),
                 s.getUserId(),
                 s.characterId(),
                 character(s.characterId()).name(),
                 endType,
-                studySeconds,
-                null); // 목표 시간 없음 (2026-11-23) → 공부 포기 판정 꺼짐
+                connectedSeconds,
+                null);
     }
 
     private ReportResponse toReport(StudySession s, StudySettlement settlement) {
         long characterId = s.characterId();
+        CharacterInfo c = character(characterId);
+        Optional<MateInfo> mate = mates.find(characterId);
         return new ReportResponse(
                 s.getId(),
                 s.getStartedAt(),
                 s.getEndedAt(),
                 s.getEndType(),
-                s.getFocusSeconds() + s.getDistractSeconds(),
-                s.getFocusSeconds(),
-                s.getDistractSeconds(),
+                s.getConnectedSeconds(),
+                s.getPresentSeconds(),
+                s.getAwaySeconds(),
+                s.getMessageCount(),
                 s.getReturnCount(),
-                new CharacterRef(characterId, character(characterId).name()),
+                new ReportResponse.MateRef(
+                        characterId,
+                        c.name(),
+                        mate.map(MateInfo::illustrationUrl).orElse(null),
+                        mate.map(MateInfo::myRole).orElse(null)),
                 settlement,
                 s.getClosingLine());
     }
 
     // ---- 도우미
 
-    /** 공부 종료(22)·heartbeat(21)의 프론트 공부 시간 검사: 0 ≤ present ≤ study ≤ 시작부터 지난 시간 */
-    private static void validateStudyTime(StudySession s, Integer study, Integer present, Instant now) {
-        if (!validStudyTime(s, study, present, now)) {
-            throw invalidStudyTime();
+    /** 22: 21과 같은 검사 */
+    private static ConnectionTimes requireTimes(StudySession s, EndRequest req, Instant now) {
+        return times(s, req.connectedSeconds(), req.presentSeconds(), req.cameraOnSeconds(), req.pipSeconds(), now)
+                .orElseThrow(SessionService::invalidConnectionTime);
+    }
+
+    /** 21 · 22: 0 ≤ present ≤ cameraOn ≤ connected ≤ 시작부터 지난 시간, pip ≤ connected */
+    private static Optional<ConnectionTimes> times(
+            StudySession s, Integer connected, Integer present, Integer cameraOn, Integer pip, Instant now) {
+        long elapsed = Duration.between(s.getStartedAt(), now).toSeconds();
+        return ConnectionTimes.valid(connected, present, cameraOn, pip, elapsed)
+                ? Optional.of(new ConnectionTimes(connected, present, cameraOn, pip))
+                : Optional.empty();
+    }
+
+    /** 18 반응: PRESENT는 없음, AWAY는 몇 번째 자리 비움인지가 강도, IDLE_TALK는 IDLE */
+    private ReactionView reactionOf(StudySession s, String type, List<SessionEvent> upTo) {
+        return switch (type) {
+            case AWAY -> reaction(s.characterId(), AWAY, StudyTime.awayIntensity(upTo));
+            case RETURN -> reaction(s.characterId(), RETURN, null);
+            case IDLE_TALK -> reaction(s.characterId(), "IDLE", null);
+            case PRESENT -> null;
+            default -> null;
+        };
+    }
+
+    private ReactionView reaction(long characterId, String trigger, Integer intensity) {
+        Reaction r = reactions.pick(characterId, trigger, intensity);
+        return ReactionView.of(
+                trigger,
+                intensity,
+                r.expression() == null ? null : r.expression().name());
+    }
+
+    /**
+     * 만 19세 미만이면 오늘 남은 연결 시간, 아니면 null (api.md 16 '청소년 3시간').
+     * = 3시간 − (오늘 끝난 연결의 연결 시간 + 진행 중 연결의 마지막 heartbeat 연결 시간)
+     */
+    private Integer minorRemaining(UserProfile user, StudySession current) {
+        if (!user.minor()) {
+            return null;
         }
+        Instant[] day = today();
+        int used = sessions.connectedSecondsEndedBetween(user.id(), day[0], day[1]);
+        if (current != null && current.inProgress()) {
+            used += current.lastHeartbeatTimes().connected();
+        }
+        return Math.max(0, MINOR_DAILY_SECONDS - used);
     }
 
-    private static boolean validStudyTime(StudySession s, Integer study, Integer present, Instant now) {
-        return study != null
-                && present != null
-                && present >= 0
-                && present <= study
-                && study <= Duration.between(s.getStartedAt(), now).toSeconds();
-    }
-
-    /** 이 이벤트 시각까지(자기 자신 빼고) FOCUS가 없으면 세션 첫 FOCUS */
-    private static boolean firstFocus(List<SessionEvent> list, long eventId, String type, Instant at) {
-        return FOCUS.equals(type)
-                && list.stream()
-                        .noneMatch(e -> e.getId() != eventId
-                                && FOCUS.equals(e.getType())
-                                && !e.getOccurredAt().isAfter(at));
-    }
-
-    /** 이미 반영된 이벤트를 다시 읽을 때 (changeOf는 비운 시간을 쓰지 않음) */
-    private static SessionEventRef eventRef(StudySession s, long eventId, String type, boolean firstFocus) {
-        return new SessionEventRef(s.getUserId(), s.characterId(), s.getId(), eventId, type, firstFocus, null);
-    }
-
-    /** 18 응답의 캐릭터별 모션·표정·호감도. 뼈대는 세션당 캐릭터 1명 */
-    private List<EventCharacter> eventCharacters(SessionEventRef ref, AffinityChange affinity) {
-        // 이벤트 반응 받기(19)와 같은 trigger 규칙. 여기서는 강도를 받지 않으므로 AWAY는 1
-        String type = ref.eventType();
-        String trigger = FOCUS.equals(type) ? (ref.firstFocusOfSession() ? "GREETING" : "BREAK_END") : type;
-        Reaction reaction = reactions.pick(ref.characterId(), trigger, AWAY.equals(trigger) ? 1 : null);
-        return List.of(new EventCharacter(ref.characterId(), reaction.motion(), reaction.expression(), affinity));
+    /** 오늘(오전 5시 기준)의 [시작, 끝) */
+    private Instant[] today() {
+        var local = now().atZone(ClockConfig.KST);
+        LocalDate day = local.toLocalTime().isBefore(DAY_STARTS_AT)
+                ? local.toLocalDate().minusDays(1)
+                : local.toLocalDate();
+        Instant from = day.atTime(DAY_STARTS_AT).atZone(ClockConfig.KST).toInstant();
+        return new Instant[] {from, from.plus(Duration.ofDays(1))};
     }
 
     /** 남의 연결도 없는 연결과 똑같이 404 */

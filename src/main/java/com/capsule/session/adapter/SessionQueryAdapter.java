@@ -3,10 +3,8 @@ package com.capsule.session.adapter;
 import com.capsule.session.api.SessionQuery;
 import com.capsule.session.api.SessionTypes.SessionEventInfo;
 import com.capsule.session.api.SessionTypes.SessionInfo;
-import com.capsule.session.domain.SessionEvent;
 import com.capsule.session.repository.SessionEventRepository;
 import com.capsule.session.repository.StudySessionRepository;
-import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -31,31 +29,15 @@ public class SessionQueryAdapter implements SessionQuery {
 
     @Override
     public Optional<SessionEventInfo> findEvent(long sessionId, long eventId) {
-        List<SessionEvent> list = events.findBySessionIdOrderByOccurredAtAscIdAsc(sessionId);
-        for (int i = 0; i < list.size(); i++) {
-            SessionEvent e = list.get(i);
-            if (e.getId() == eventId) {
-                boolean firstFocus = SessionEvent.FOCUS.equals(e.getType())
-                        && list.subList(0, i).stream().noneMatch(p -> SessionEvent.FOCUS.equals(p.getType()));
-                // 바로 앞 '상태' 이벤트가 BREAK인지 (사이에 낀 동작 이벤트는 건너뜀, api.md 18)
-                boolean afterBreak = list.subList(0, i).stream()
-                        .filter(SessionEvent::isState)
-                        .reduce((a, b) -> b)
-                        .map(p -> SessionEvent.BREAK.equals(p.getType()))
-                        .orElse(false);
-                return Optional.of(new SessionEventInfo(
-                        e.getId(), sessionId, e.getType(), e.getOccurredAt(), firstFocus, afterBreak));
-            }
-        }
-        return Optional.empty();
+        // 2026-11-23 베타 이벤트 4종: FOCUS · BREAK가 없어져 firstFocusOfSession · afterBreak는 늘 false
+        return events.findById(eventId)
+                .filter(e -> e.getSessionId() == sessionId)
+                .map(e -> new SessionEventInfo(e.getId(), sessionId, e.getType(), e.getOccurredAt(), false, false));
     }
 
+    /** 쉬는 시간이 없어져 늘 false (2026-11-23). dialogue가 답 길이를 고를 때 쓴다 */
     @Override
     public boolean onBreak(long sessionId) {
-        return events.findBySessionIdOrderByOccurredAtAscIdAsc(sessionId).stream()
-                .filter(SessionEvent::isState)
-                .reduce((a, b) -> b)
-                .map(e -> SessionEvent.BREAK.equals(e.getType()))
-                .orElse(false);
+        return false;
     }
 }

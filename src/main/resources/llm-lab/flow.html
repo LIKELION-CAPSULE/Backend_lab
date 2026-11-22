@@ -83,13 +83,9 @@ summary{cursor:pointer;font-size:12.5px}
       <button data-ev="RETURN">돌아옴</button>
     </div>
     <div class="row">
-      <button data-ev="BREAK">쉬기</button>
-      <button data-ev="FOCUS">다시 공부</button>
-      <span class="mut">동작</span>
-      <button data-ev="DROWSY">졸음</button>
-      <button data-ev="YAWN">하품</button>
-      <button data-ev="WAVE">손 흔들기</button>
-      <button data-ev="HEAD_TURN">고개 돌림</button>
+      <!-- 2026-11-23 베타 이벤트 4종: 쉬는 시간 · 동작 이벤트 삭제 (명세 18) -->
+      <button data-ev="PRESENT">얼굴 보임</button>
+      <button data-ev="IDLE_TALK">말 걸기 타이머</button>
       <span class="grow"></span>
       <button id="end" class="danger">공부 끝</button>
     </div>
@@ -158,8 +154,7 @@ const esc = v => String(v ?? '').replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&
 let LAB_TOKEN = '';
 try { LAB_TOKEN = localStorage.getItem('llmLabToken') || ''; } catch { /* 저장소가 막힘 */ }
 
-const EVENT = {FOCUS: '다시 공부', AWAY: '자리 비움', RETURN: '돌아옴', BREAK: '쉬기',
-  DROWSY: '졸음', YAWN: '하품', WAVE: '손 흔들기', HEAD_TURN: '고개 돌림'};
+const EVENT = {PRESENT: '얼굴 보임', AWAY: '자리 비움', RETURN: '돌아옴', IDLE_TALK: '말 걸기 타이머'};
 const REASON = {CHAT: '대화', SESSION_EVENT: '자리 비움', STREAK: '연속 출석', ADJUST: '손으로 맞춤', EVENT: '이벤트'};
 const SIGNAL = {AFFECTION: '애정 표현', COMPLIMENT: '칭찬', THANKS: '고마움', CONFIDE: '고민', SHARE: '근황 공유', CURIOUS: '관심',
   LOW_EFFORT: '단답', COMPLAINT: '불평', TEASE: '놀림', RUDE: '무례', HATE_OR_SEXUAL: '혐오 · 성적', NEUTRAL: '평범'};
@@ -303,7 +298,7 @@ async function start() {
     if (e.data && e.data.code === 'CONNECTION_ALREADY_IN_PROGRESS') {
       const old = e.data.detail.connectionId;
       note(`진행 중이던 연결 #${old}을 0분으로 끝내고 다시 시작합니다.`);
-      try { await call('POST', `/api/connections/${old}/end`, {studySeconds: 0, presentSeconds: 0}); r = await call('POST', '/api/connections', body); }
+      try { await call('POST', `/api/connections/${old}/end`, times({study: 0, present: 0, brk: 0})); r = await call('POST', '/api/connections', body); }
       catch (e2) { sync(); return fail('연결 시작', e2); }
     } else { sync(); return fail('연결 시작', e); }
   }
@@ -316,7 +311,13 @@ async function start() {
   clearInterval(S.timer);
   S.timer = setInterval(tick, 1000);
   sync();
-  await sendEvent('FOCUS', 0, '공부 시작');
+  await sendEvent('PRESENT', 0, '연결 시작 · 얼굴 보임');
+}
+
+/** 명세 21 · 22 누적값 4개. 화면 타이머의 공부(study) = 카메라 켬, 쉬기(brk)는 없어져 0 (2026-11-23) */
+function times(s) {
+  const connected = s.study + s.brk;
+  return {connectedSeconds: connected, presentSeconds: s.present, cameraOnSeconds: s.study, pipSeconds: 0};
 }
 
 async function sendEvent(type, ago = 0, label = EVENT[type]) {
@@ -328,8 +329,7 @@ async function sendEvent(type, ago = 0, label = EVENT[type]) {
     // 강도 2 · 3은 이 AWAY의 eventId를 받은 뒤에만 (응답 전 tick이 예전 id로 부르지 않게)
     s.mode = 'AWAY'; s.awayAt = Date.now() - back * 1000; s.awayLevel = 1; s.awayEventId = null;
   } else if (type === 'RETURN') { s.mode = 'FOCUS'; s.returns++; }
-  else if (type === 'BREAK') s.mode = 'BREAK';
-  else if (type === 'FOCUS') s.mode = 'FOCUS';
+  else if (type === 'PRESENT') s.mode = 'FOCUS'; // 화면 안 상태 이름은 그대로 (FOCUS = 얼굴 보임)
   sync();
   try {
     const occurredAt = new Date(type === 'AWAY' ? s.awayAt : Date.now()).toISOString();
@@ -388,7 +388,7 @@ function tick() {
 async function heartbeat() {
   const s = S.s;
   try {
-    await call('POST', `/api/connections/${s.id}/heartbeat`, {studySeconds: s.study, presentSeconds: s.present});
+    await call('POST', `/api/connections/${s.id}/heartbeat`, times(s));
     s.hb = new Date().toLocaleTimeString() + ' 204';
   } catch (e) { s.hb = '실패 ' + e.message; }
 }
@@ -407,14 +407,14 @@ async function end() {
   const s = S.s;
   clearInterval(S.timer);
   try {
-    const r = await call('POST', `/api/connections/${s.id}/end`, {studySeconds: s.study, presentSeconds: s.present});
+    const r = await call('POST', `/api/connections/${s.id}/end`, times(s));
     const adjusted = s.adjusted ? ' <span class="mut">(이 세션에서 손으로 맞춘 점수도 이번 변화로 셈)</span>' : '';
     S.s = null;
     const rel = r.relation;
     $('#report').hidden = false;
     $('#report').innerHTML = `<h3>3. 공부 끝 (22) · ${esc(r.endType)}</h3>
       <table>
-        <tr><td>공부 시간 · 자리 지킴 · 자리 비움</td><td class="n">${fmt(r.studySeconds)} · ${fmt(r.presentSeconds)} · ${fmt(r.awaySeconds)}</td></tr>
+        <tr><td>연결 시간 · 함께한 시간 · 자리 비움</td><td class="n">${fmt(r.connectedSeconds)} · ${fmt(r.presentSeconds)} · ${fmt(r.awaySeconds)}</td></tr>
         <tr><td>복귀</td><td class="n">${r.returnCount}회</td></tr>
         <tr><td>레벨 (자리 지킴 시간)</td><td class="n">Lv.${rel.levelBefore} → Lv.${rel.levelAfter}${rel.levelUp ? ' <b class="plus">레벨업</b>' : ''} · 다음 레벨은 누적 ${fmt(rel.nextLevelSeconds)}</td></tr>
         <tr><td>호감도 (시작 → 끝)</td><td class="n">${rel.pointsBefore} → ${rel.pointsAfter} · ${rel.stage}단계 ${esc(rel.stageName)}${adjusted}</td></tr>
@@ -441,7 +441,7 @@ function sync() {
   for (const b of $$('#login, #newUser')) b.disabled = !!s;
   $('#modeLabel').className = 'mode ' + (mode || '');
   $('#modeLabel').textContent = {FOCUS: '· 자리 지킴', AWAY: '· 자리 비움', BREAK: '· 쉬는 중'}[mode] || '';
-  const on = {AWAY: mode === 'FOCUS', RETURN: mode === 'AWAY', BREAK: mode === 'FOCUS' || mode === 'AWAY', FOCUS: mode === 'BREAK'};
+  const on = {AWAY: mode === 'FOCUS', RETURN: mode === 'AWAY', PRESENT: true, IDLE_TALK: true};
   for (const b of $$('[data-ev]')) b.disabled = !s || (b.dataset.ev in on ? !on[b.dataset.ev] : false);
   for (const b of $$('[data-int]')) b.disabled = mode !== 'AWAY' || !s.awayEventId;
   for (const b of $$('#chatForm button, [data-q], #end')) b.disabled = !s;
