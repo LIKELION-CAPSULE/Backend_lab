@@ -80,6 +80,12 @@
 --     heartbeat_connected_seconds, break_seconds 삭제. connected_seconds · camera_on_seconds · pip_seconds ·
 --     message_count · mood · heartbeat_camera_on_seconds · heartbeat_pip_seconds 추가. end_type에 AUTO_AWAY · MINOR_LIMIT
 --   - connection_events.type: 새 이벤트 PRESENT · IDLE_TALK 추가 (옛 FOCUS · BREAK · 동작 이벤트 행은 기록으로 남기고 API는 받지 않음)
+--
+-- 2026-11-23 변경 (12/1 베타 5단계: 친밀도 · 해금)
+--   - user_character_relations: stage · credited_seconds · total_connected_seconds 추가 (호감도 칸은 대화용으로 그대로)
+--   - relation_daily 추가 (하루 인정 시간), relation_settlements에 credited_seconds · stage_before · stage_after
+--   - character_contents: 해금 종류 EXPRESSION · VOICE_LINE, unlock_stage · expression_name. 옛 LINE · MOTION · STORY ·
+--     VOICE · 이벤트 기간 칸 삭제 (쓰는 코드 · 행 없음)
 -- =====================================================================
 
 BEGIN;
@@ -263,23 +269,18 @@ CREATE INDEX idx_characters_sort ON characters (sort_order);
 -- ---------------------------------------------------------------------
 -- 6. 캐릭터 콘텐츠 / 관계 / 해금 / 기억 (S04, S09, S11)
 -- ---------------------------------------------------------------------
+-- 친밀도 해금 콘텐츠 (2026-11-23 5단계): 단계가 오르면 새 표정 · 보이스 대사가 열림 (PRD 8장)
 CREATE TABLE character_contents (
-    id             bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    character_id   bigint  NOT NULL REFERENCES characters (id) ON DELETE CASCADE,
-    type           text    NOT NULL CHECK (type IN ('LINE', 'MOTION', 'STORY', 'VOICE')),
-    title          text    NOT NULL,
-    body           text,                                   -- 대사, 스토리 본문
-    asset_url      text,                                   -- 미리 녹음한 음성 파일 등
-    motion_id      bigint  REFERENCES live2d_motions (id), -- MOTION일 때 (그 캐릭터 모델의 모션인지는 서버가 검사)
-    unlock_type    text    NOT NULL DEFAULT 'LEVEL' CHECK (unlock_type IN ('LEVEL', 'EVENT')),  -- 구매는 BM 확정 후
-    unlock_value   int,                                    -- LEVEL이면 필요한 관계 단계
-    event_start_at timestamptz,                            -- EVENT면 기간
-    event_end_at   timestamptz,
-    is_active      boolean NOT NULL DEFAULT true,
-    CHECK ((type = 'MOTION') = (motion_id IS NOT NULL)),
-    CHECK ((unlock_type = 'LEVEL') = (unlock_value IS NOT NULL)),
-    CHECK ((unlock_type = 'EVENT') = (event_start_at IS NOT NULL)),
-    CHECK (event_end_at IS NULL OR event_end_at >= event_start_at)
+    id              bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    character_id    bigint  NOT NULL REFERENCES characters (id) ON DELETE CASCADE,
+    type            text    NOT NULL CHECK (type IN ('EXPRESSION', 'VOICE_LINE')),
+    title           text    NOT NULL,
+    body            text,                                   -- 보이스 대사 문구
+    asset_url       text,                                   -- 미리 녹음한 음성 파일 (CDN 상대 경로 또는 전체 URL)
+    expression_name text,                                   -- EXPRESSION이면 모델의 표정 이름
+    unlock_stage    int     NOT NULL CHECK (unlock_stage BETWEEN 2 AND 5),  -- 이 친밀도 단계가 되면 열림
+    is_active       boolean NOT NULL DEFAULT true,
+    CHECK ((type = 'EXPRESSION') = (expression_name IS NOT NULL))
 );
 CREATE INDEX idx_character_contents_character ON character_contents (character_id, type);
 
@@ -300,7 +301,19 @@ CREATE TABLE user_character_relations (
     last_severe_at        timestamptz,                       -- 심한 말(HATE_OR_SEXUAL)을 받은 마지막 시각. 그 한국 날짜에는 대화로 오르지 않음
     first_met_at          timestamptz NOT NULL DEFAULT now(),
     last_met_at           timestamptz NOT NULL DEFAULT now(),
+    -- 친밀도 (2026-11-23 5단계): 인정된 함께한 시간 누적으로 오르고 내려가지 않음. 호감도(relation_points)는 대화용으로 따로 남음
+    stage                 int         NOT NULL DEFAULT 1 CHECK (stage BETWEEN 1 AND 5),
+    credited_seconds      int         NOT NULL DEFAULT 0 CHECK (credited_seconds >= 0),  -- 인정된 시간 누적 (하루 2시간 한도)
+    total_connected_seconds int       NOT NULL DEFAULT 0 CHECK (total_connected_seconds >= 0),  -- 연결 시간 누적 (내 메이트 화면)
     UNIQUE (user_id, character_id)
+);
+
+-- 하루(오전 5시 기준) 인정된 시간. 하루 한도 2시간을 지키려고
+CREATE TABLE relation_daily (
+    relation_id      bigint NOT NULL REFERENCES user_character_relations (id),
+    day              date   NOT NULL,
+    credited_seconds int    NOT NULL DEFAULT 0 CHECK (credited_seconds BETWEEN 0 AND 7200),
+    PRIMARY KEY (relation_id, day)
 );
 CREATE INDEX idx_relations_character ON user_character_relations (character_id);
 
@@ -414,6 +427,9 @@ CREATE TABLE relation_settlements (
     present_seconds int         NOT NULL CHECK (present_seconds >= 0),
     level_before    int         NOT NULL,
     level_after     int         NOT NULL,
+    credited_seconds int        NOT NULL DEFAULT 0,     -- 이 연결에서 인정된 친밀도 시간 (2026-11-23)
+    stage_before    int         NOT NULL DEFAULT 1,     -- 친밀도 단계 전후
+    stage_after     int         NOT NULL DEFAULT 1,
     created_at      timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (relation_id, connection_id)
 );

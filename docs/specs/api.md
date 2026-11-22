@@ -858,6 +858,7 @@ GET /api/me/memories?date=2026-11-12
 | me | Object | `nickname`, `profileImageUrl`(아바타 썸네일) |
 | serverTime | String | 서버 시각 (타이머 보정) |
 | firstMeet | Boolean | 이 메이트와 처음 연결이면 true (SCR-49 첫 만남) |
+| relation | Object | 친밀도 `stage`(1~5) · `stageName` (상단 바, 5단계 · 2026-11-23) |
 | greeting | Object | 인사 반응 `trigger`(`GREETING`) · `intensity`(null) · `line` · `expression` · `audio`. `line`은 대사 생성 전이라 지금은 null, `expression`은 반응표의 표정 이름 (없으면 null), `audio`는 음성 단계 전이라 null |
 | minorRemainingSeconds | Integer | 만 19세 미만이면 오늘(오전 5시 기준) 남은 연결 시간(초), 아니면 null |
 
@@ -872,6 +873,7 @@ GET /api/me/memories?date=2026-11-12
   "me": { "nickname": "승희", "profileImageUrl": "https://cdn.../avatar1.png" },
   "serverTime": "2026-11-07T05:00:02Z",
   "firstMeet": false,
+  "relation": { "stage": 3, "stageName": "친구" },
   "greeting": { "trigger": "GREETING", "intensity": null, "line": null, "expression": "웃음", "audio": null },
   "minorRemainingSeconds": null
 }
@@ -1460,17 +1462,28 @@ GET /api/me/memories?date=2026-11-12
 | messageCount | Integer | 나눈 대화 수 (대화방 단계 전에는 0) |
 | returnCount | Integer | 자리 비운 뒤 돌아온 횟수 (`RETURN` 이벤트 수) |
 | mate | Object | `id`, `name`, `illustrationUrl`(전신), `myRole` |
-| relation | Object | `levelBefore` · `levelAfter` · `levelUp`(공부 시간 레벨, 이 세션 자리 지킴 시간 반영) · `nextLevelSeconds`(다음 레벨이 되는 누적 자리 지킴 시간) · `pointsBefore`(공부 시작 때) · `pointsAfter`(이벤트 · 대화 반영 후) · `stage` · `stageName`(끝날 때 관계 단계) · `levelName`(옛 필드, `stageName`과 같은 값) · `nextLevelPoints`(옛 필드, 늘 null) |
+| relation | Object | 친밀도 (5단계 · 2026-11-23): `stageBefore` · `stageAfter`(1~5) · `stageName`(끝난 뒤 단계 이름, 메이트마다 다름) · `stageUp` · `creditedSeconds`(이번에 인정된 시간) · `nextStageSeconds`(다음 단계까지 남은 인정 시간, 5단계면 null) · `unlocked[]`(이번에 열린 것 `type`(EXPRESSION · VOICE_LINE) · `title` · `unlockStage` · `expressionName` · `assetUrl`) |
 | closingLine | String | 완료 대사 (리포트 · 카드 공용). 캐릭터 설정에 완료 대사(`character_lines` CLOSING)가 있으면 지금 관계 단계의 그 문장(PM: 말포이는 고정. 단계별 문장은 확정 필요), 없으면 AI. 직접 끝냈는데 목표 시간의 절반도 못 채웠으면 공부 포기 대사(GIVE_UP, 임시 J-15, 문구 확정 필요). 기준 시간은 공부 시간 `studySeconds`(자리 지킴 + 자리 비움, 쉬는 시간 제외)로 확정, 목표 시간을 정하지 않은 세션은 포기로 보지 않음 (절반 · 직접 끝냄 조건은 확정 필요) |
 
 > 2026-11-04 (호감도 최종안): 공부 시간은 호감도를 올리지 않고 레벨에만 씀. 레벨 = 자리 지킴 60분당 1 (임시, PM 확인 필요)
 
 > 2026-11-23 (12/1 베타 3단계): `sessionId` → `connectionId`, `roomName` 삭제, `character` → `mate`. 목표 시간이 없어져 공부 포기 대사(GIVE_UP)는 나오지 않음
 
+> 2026-11-23 (12/1 베타 5단계): `relation`을 호감도 · 레벨 → **친밀도**로 바꿈. 호감도 점수는 대화(20 · 28 응답의 `affinity`)에만 남고 연결 기록에는 안 나옴
+
+#### 친밀도 규칙 (PRD 8장, 숫자는 추천값)
+
+- 인정 시간 = min(이번 `presentSeconds`, 오늘(오전 5시 기준) 남은 인정 한도). 하루 한도 2시간(7200초)
+- 오늘 대화가 한 턴도 없으면(오늘 연결의 `messageCount` 합이 0) 이번 인정 시간은 절반
+- 단계 = 누적 인정 시간 기준 1 (0) · 2 (1시간) · 3 (5시간) · 4 (15시간) · 5 (40시간). 내려가지 않고, 결제 · 확률로 오르지 않음
+- 단계가 오르면 그 사이 단계의 해금 콘텐츠(`character_contents`의 `unlock_stage`)가 열림 (`user_unlocked_contents`)
+- 단계 이름은 메이트의 `characters.stage_names` (없으면 null). 채린 해금 콘텐츠(표정 4 · 보이스 대사 8)는 확정 필요
+- 하루 한도 · 단계 기준은 확정 필요 (베타 데이터로 조정)
+
 json
 
 ```json
-{  "connectionId": 512,  "startedAt": "2026-11-07T05:00:02Z", "endedAt": "2026-11-07T06:05:10Z", "endType": "NORMAL",  "connectedSeconds": 3300, "presentSeconds": 2880, "awaySeconds": 300, "messageCount": 0,  "returnCount": 2,  "mate": { "id": 1, "name": "채린", "illustrationUrl": "https://cdn.../chaerin/full.png", "myRole": "같은 반 친구" },  "relation": { "levelBefore": 1, "levelAfter": 2, "levelUp": true, "nextLevelSeconds": 7200, "pointsBefore": 50, "pointsAfter": 53, "stage": 2, "stageName": "친한 사이", "levelName": "친한 사이", "nextLevelPoints": null },  "closingLine": "오늘도 같이 공부해서 좋았어. 다음에도 함께하자."}
+{  "connectionId": 512,  "startedAt": "2026-11-07T05:00:02Z", "endedAt": "2026-11-07T06:05:10Z", "endType": "NORMAL",  "connectedSeconds": 3300, "presentSeconds": 2880, "awaySeconds": 300, "messageCount": 18,  "returnCount": 2,  "mate": { "id": 1, "name": "채린", "illustrationUrl": "https://cdn.../chaerin/full.png", "myRole": "같은 반 친구" },  "relation": { "stageBefore": 2, "stageAfter": 3, "stageName": "친구", "stageUp": true, "creditedSeconds": 2880, "nextStageSeconds": 36000, "unlocked": [ { "type": "EXPRESSION", "title": "수줍은 웃음", "unlockStage": 3, "expressionName": "shy", "assetUrl": null } ] },  "closingLine": "오늘도 같이 공부해서 좋았어. 다음에도 함께하자."}
 ```
 
 > ✅ **200 OK** (이미 끝난 세션도 200 + 같은 결과)
@@ -1481,7 +1494,7 @@ json
 
 1. `ended_at IS NULL`일 때만 종료 (두 번 눌러도 한 번만 정산)
 2. 받은 값 검증 → 통과하면 시간 칸 저장, 이벤트로 `away_seconds`, `RETURN` 이벤트 수로 `return_count` 저장
-3. 함께한 시간 누적(`total_study_seconds` · `total_present_seconds`) → 레벨 갱신, `relation_settlements`에 이 세션 레벨 전후 저장 (호감도는 바꾸지 않음)
+3. 친밀도 정산(위 '친밀도 규칙') → `relation_daily` · `user_character_relations`(`credited_seconds` · `stage`) · `relation_settlements`(이 연결의 인정 시간 · 단계 전후) · 열린 해금 `user_unlocked_contents` (호감도는 바꾸지 않음)
 4. 이번 세션 대화를 흐름 카드 한 장으로 써서 `conversation_recaps`에 저장(최근 2장만 남김)하고 `chat_messages` 삭제. 카드 앞에 날짜 · 공부 시간을 붙임 (예: "11/03 55분, …")
 5. 완료 대사(`closingLine`)를 만들어 `connections.closing_line`에 저장
 6. LLM이 실패하거나 7초를 넘겨도 종료는 성공 (2026-11-06: 5초 → 7초): 카드를 못 쓰면 메시지를 지우지 않고 남김 → 다음 종료 때 그 세션 카드에 같이 들어감. 완료 대사는 고정 문구
