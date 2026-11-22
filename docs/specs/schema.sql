@@ -90,6 +90,9 @@
 -- 2026-11-23 변경 (12/1 베타 6단계: 대화방 이어가기)
 --   - chat_messages: 연결이 끝나도 지우지 않음. recapped_at 추가, 대화방 최신순 인덱스
 --   - connections.message_count: 답장을 저장할 때 +1
+--
+-- 2026-11-23 변경 (12/1 베타 7단계: 크레딧, ADR 0031)
+--   - credit_grants · credit_ledger 추가 (새 모듈 credit)
 -- =====================================================================
 
 BEGIN;
@@ -126,6 +129,43 @@ CREATE TABLE signup_devices (
     PRIMARY KEY (device_hash, user_id)
 );
 CREATE INDEX idx_signup_devices_user ON signup_devices (user_id);
+
+-- 크레딧 지급 건 (2026-11-23, ADR 0031). 잔액 = 소멸 전 지급 건의 remaining 합. 탈퇴해도 남김
+--   ATTENDANCE: 하루 1,500 (granted_on = 오전 5시 기준 그날), expires_at = 다음 오전 5시
+--   INVITE: 친구 초대 보상 1,000, 사라지지 않음 (source = 초대 id, 같은 보상은 한 번만)
+CREATE TABLE credit_grants (
+    id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id     bigint      NOT NULL REFERENCES users (id),
+    kind        text        NOT NULL CHECK (kind IN ('ATTENDANCE', 'INVITE')),
+    amount      int         NOT NULL CHECK (amount > 0),
+    remaining   int         NOT NULL,
+    granted_on  date,                                   -- ATTENDANCE만
+    source      text,                                   -- INVITE만 (중복 지급 방지)
+    expires_at  timestamptz,                            -- ATTENDANCE만
+    expired_at  timestamptz,                            -- 소멸 처리한 시각 (남은 양은 그대로 두고 표시)
+    created_at  timestamptz NOT NULL DEFAULT now(),
+    CHECK (remaining BETWEEN 0 AND amount),
+    CHECK ((kind = 'ATTENDANCE') = (granted_on IS NOT NULL AND expires_at IS NOT NULL)),
+    CHECK ((kind = 'INVITE') = (source IS NOT NULL))
+);
+CREATE UNIQUE INDEX uq_credit_grants_attendance ON credit_grants (user_id, granted_on) WHERE kind = 'ATTENDANCE';
+CREATE UNIQUE INDEX uq_credit_grants_invite ON credit_grants (user_id, source) WHERE kind = 'INVITE';
+
+-- 크레딧 내역 (34). 바뀔 때마다 한 행, balance_after = 그 뒤 전체 잔액
+CREATE TABLE credit_ledger (
+    id            bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id       bigint      NOT NULL REFERENCES users (id),
+    type          text        NOT NULL CHECK (type IN ('ATTENDANCE', 'INVITE', 'USE', 'EXPIRE')),
+    title         text        NOT NULL,
+    change        int         NOT NULL CHECK (change <> 0),
+    balance_after int         NOT NULL CHECK (balance_after >= 0),
+    request_id    uuid,                                 -- USE면 요청 id (같은 요청은 한 번만 차감)
+    created_at    timestamptz NOT NULL DEFAULT now(),
+    CHECK ((type = 'USE') = (request_id IS NOT NULL)),
+    CHECK ((change > 0) = (type IN ('ATTENDANCE', 'INVITE')))
+);
+CREATE INDEX idx_credit_ledger_user ON credit_ledger (user_id, id);
+CREATE UNIQUE INDEX uq_credit_ledger_request ON credit_ledger (user_id, request_id) WHERE request_id IS NOT NULL;
 
 -- 소셜 가입 계정 (지금은 계정당 하나, 탈퇴하면 행 삭제 → 같은 소셜 계정으로 재가입 가능)
 CREATE TABLE user_social_accounts (
