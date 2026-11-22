@@ -3,7 +3,7 @@ package com.capsule.dialogue.domain;
 import com.capsule.common.error.ErrorCode;
 import org.springframework.http.HttpStatus;
 
-/** dialogue 모듈 에러 코드 (api.md 19, 20, 28 + 실험실) */
+/** dialogue 모듈 에러 코드 (api.md 19, 20, 28, 32, 40, 41 + 실험실) */
 public enum DialogueErrorCode implements ErrorCode {
     // 대화 (api.md 19, 20, 28)
     // 2026-11-23 세션 → 연결 (api.md 19 · 20 · 28)
@@ -11,8 +11,15 @@ public enum DialogueErrorCode implements ErrorCode {
     CONNECTION_ENDED(HttpStatus.CONFLICT),
     EVENT_NOT_FOUND(HttpStatus.NOT_FOUND),
     CHARACTER_NOT_IN_SESSION(HttpStatus.BAD_REQUEST),
+    /** 안전 위반 반복으로 대화 정지 (api.md 20 · 28 '안전', detail.until) */
+    CHAT_SUSPENDED(HttpStatus.FORBIDDEN),
+    /** 고급 모드인데 크레딧이 모자람 (api.md 20 · 28, detail.credits) */
+    CREDIT_INSUFFICIENT(HttpStatus.CONFLICT),
     // 대화방 기록 (api.md 32, 2026-11-23)
     MATE_NOT_FOUND(HttpStatus.NOT_FOUND),
+    // 답변 평가 · 신고 (api.md 40 · 41, 2026-11-23)
+    MESSAGE_NOT_FOUND(HttpStatus.NOT_FOUND),
+    ALREADY_REPORTED(HttpStatus.CONFLICT),
     // 실험실 (/internal/llm-lab)
     LOGIN_FAILED(HttpStatus.UNAUTHORIZED),
     CHARACTER_NOT_FOUND(HttpStatus.NOT_FOUND),

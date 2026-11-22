@@ -2,12 +2,18 @@ package com.capsule.dialogue.dto;
 
 import com.capsule.content.api.ContentTypes.ExpressionRef;
 import com.capsule.content.api.ContentTypes.MotionRef;
+import com.capsule.credit.api.CreditTypes.Credits;
 import com.capsule.relation.api.RelationTypes.AffinityChange;
 import java.util.UUID;
 
 /**
  * 메시지 답장 (명세 20). 요청에서 고른 캐릭터 1명분. content ~ audioBase64는 19번 characters[] 한 칸과 같은 모양.
  * emotion은 LLM이 정하고, 고정 대사(fallback)·재전송이면 null
+ *
+ * @param mode 이 답장에 쓴 대화 모드 (2026-11-23)
+ * @param charged 이번에 깎인 크레딧 (기본 0 · 고급 30). fallback · 안전 경고 턴은 0
+ * @param credits 차감 뒤 크레딧 (33 Credits). 기본 모드는 크레딧을 보지 않으므로 null
+ * @param safety 안전 경고 턴이면 WARNING, 아니면 null
  */
 public record MessageResponse(
         UUID requestId,
@@ -18,4 +24,11 @@ public record MessageResponse(
         ExpressionRef expression,
         AffinityChange affinity,
         boolean fallback,
-        String audioBase64) {}
+        String audioBase64,
+        ChatMode mode,
+        int charged,
+        Credits credits,
+        String safety) {
+
+    public static final String SAFETY_WARNING = "WARNING";
+}

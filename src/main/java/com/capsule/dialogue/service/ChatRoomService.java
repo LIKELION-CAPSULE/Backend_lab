@@ -69,7 +69,14 @@ public class ChatRoomService {
     private static ChatRoomResponse.Message view(ChatMessage m) {
         // DB 값 CHARACTER는 화면 용어로 MATE (명세 32)
         String sender = ChatMessage.USER.equals(m.getSender()) ? "USER" : "MATE";
+        // inputType은 사용자 말에만, rating은 답장에만 (2026-11-23)
         return new ChatRoomResponse.Message(
-                m.getRequestId(), sender, m.getContent(), null, null, m.getCreatedAt(), m.getSessionId());
+                m.getRequestId(),
+                sender,
+                m.getContent(),
+                m.getInputType(),
+                m.getRating(),
+                m.getCreatedAt(),
+                m.getSessionId());
     }
 }
