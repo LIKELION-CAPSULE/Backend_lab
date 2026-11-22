@@ -15,4 +15,13 @@ public record MessageRequest(
         String content,
 
         @NotNull InputType inputType,
-        Boolean tts) {}
+
+        /** 대화 모드. 없으면 BASIC (명세 20, 2026-11-23) */
+        ChatMode mode,
+        Boolean tts) {
+
+    /** 요청의 대화 모드 (없으면 기본) */
+    public ChatMode modeOrBasic() {
+        return mode == null ? ChatMode.BASIC : mode;
+    }
+}

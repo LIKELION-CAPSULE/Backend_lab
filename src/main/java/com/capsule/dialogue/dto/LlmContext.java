@@ -13,6 +13,8 @@ import java.util.UUID;
  * @param provider · model · temperature · maxTokens 실험실·평가에서만 채운다. null이면 설정(capsule.llm) 값
  * @param deadline 서비스가 기다리는 마감(llm-budget, 명세 19·20·22). 지나면 게이트웨이가 새 호출(재시도·대체 공급자)을
  *     시작하지 않는다: 결과가 버려질 호출에 돈을 쓰지 않게. null이면 마감 없음(실험실은 늦어도 끝까지 받아 실제 지연을 본다)
+ * @param chatModel 답장(CHAT 용도)에만 쓸 모델 (고급 모드, capsule.llm.advanced-model, 2026-11-23). 그 용도의 첫 공급자에만 쓰고
+ *     결정 · 기억 등 다른 용도는 설정 그대로. null이면 설정 값. model(실험실 고정)이 있으면 그게 먼저
  */
 public record LlmContext(
         String source,
@@ -24,11 +26,38 @@ public record LlmContext(
         String model,
         Double temperature,
         Integer maxTokens,
-        Instant deadline) {
+        Instant deadline,
+        String chatModel) {
 
     public static final String APP = "APP";
     public static final String LAB = "LAB";
     public static final String EVAL = "EVAL";
+
+    /** 답장 모델을 따로 두지 않는 호출 (chatModel = null) */
+    public LlmContext(
+            String source,
+            UUID traceId,
+            Long userId,
+            Long sessionId,
+            List<Long> promptVersionIds,
+            String provider,
+            String model,
+            Double temperature,
+            Integer maxTokens,
+            Instant deadline) {
+        this(
+                source,
+                traceId,
+                userId,
+                sessionId,
+                promptVersionIds,
+                provider,
+                model,
+                temperature,
+                maxTokens,
+                deadline,
+                null);
+    }
 
     public static LlmContext app(long userId, long sessionId, Instant deadline) {
         return new LlmContext(APP, UUID.randomUUID(), userId, sessionId, List.of(), null, null, null, null, deadline);
@@ -50,12 +79,39 @@ public record LlmContext(
 
     public LlmContext withPrompts(List<Long> ids) {
         return new LlmContext(
-                source, traceId, userId, sessionId, ids, provider, model, temperature, maxTokens, deadline);
+                source, traceId, userId, sessionId, ids, provider, model, temperature, maxTokens, deadline, chatModel);
     }
 
     /** 마감만 바꾼 사본 (null이면 마감 없음: 부르는 쪽이 따로 기다리는 한도를 둘 때) */
     public LlmContext withDeadline(Instant d) {
         return new LlmContext(
-                source, traceId, userId, sessionId, promptVersionIds, provider, model, temperature, maxTokens, d);
+                source,
+                traceId,
+                userId,
+                sessionId,
+                promptVersionIds,
+                provider,
+                model,
+                temperature,
+                maxTokens,
+                d,
+                chatModel);
+    }
+
+    /** 답장 모델만 바꾼 사본 (고급 모드). 비어 있으면 그대로 */
+    public LlmContext withChatModel(String m) {
+        if (m == null || m.isBlank()) return this;
+        return new LlmContext(
+                source,
+                traceId,
+                userId,
+                sessionId,
+                promptVersionIds,
+                provider,
+                model,
+                temperature,
+                maxTokens,
+                deadline,
+                m);
     }
 }

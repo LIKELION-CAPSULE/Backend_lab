@@ -24,13 +24,23 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
     void markRecapped(List<Long> ids, Instant at);
 
     /**
-     * 32 대화방 기록: 최신순, beforeId보다 오래된 것 (커서). 사용자 말은 답장이 있는 것만 (답장 만드는 중 · 처리 중 서버가 죽어 남은 말은 뺌)
+     * 32 대화방 기록: 최신순, beforeId보다 오래된 것 (커서). 사용자 말은 답장이 있는 것만 (답장 만드는 중 · 처리 중 서버가 죽어 남은 말은 뺌).
+     * 신고로 가린 답장(hidden_at)은 뺀다 (41, 2026-11-23). 그 답장의 사용자 말은 남는다
      */
     @Query("select m from ChatMessage m where m.conversationId = :conversationId and m.id < :beforeId"
+            + " and m.hiddenAt is null"
             + " and (m.sender = 'CHARACTER' or exists (select 1 from ChatMessage r where r.conversationId = m.conversationId"
             + " and r.requestId = m.requestId and r.sender = 'CHARACTER'))"
             + " order by m.id desc")
     List<ChatMessage> findPage(long conversationId, long beforeId, Pageable page);
+
+    /**
+     * 40 · 41: 이 사용자 대화방의 답장 (없거나 남의 것이면 빈 목록). UNIQUE가 대화방 단위라 다른 메이트 대화방에
+     * 같은 requestId가 있을 수 있어 목록으로 받는다 (부르는 쪽이 가장 최근 것)
+     */
+    @Query("select m from ChatMessage m where m.requestId = :requestId and m.sender = 'CHARACTER'"
+            + " and m.conversationId in (select c.id from Conversation c where c.userId = :userId) order by m.id desc")
+    List<ChatMessage> findMyReplies(long userId, UUID requestId);
 
     /** 31 hasConversation: 답장까지 받은 대화가 하나라도 있는지 */
     boolean existsByConversationIdAndSender(long conversationId, String sender);

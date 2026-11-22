@@ -9,8 +9,8 @@ public record ChatRoomResponse(List<Message> messages, String nextCursor) {
 
     /**
      * @param sender USER · MATE
-     * @param inputType TEXT · QUICK · VOICE. 메시지 전송이 아직 받지 않아 늘 null
-     * @param rating UP · DOWN. 답변 평가(P1) 전까지 늘 null
+     * @param inputType TEXT · QUICK · VOICE. 사용자 말에만 (메이트 답장 · 2026-11-23 전 말은 null)
+     * @param rating UP · DOWN. 메이트 답장에 내가 남긴 평가(40). 사용자 말은 늘 null
      */
     public record Message(
             UUID requestId,

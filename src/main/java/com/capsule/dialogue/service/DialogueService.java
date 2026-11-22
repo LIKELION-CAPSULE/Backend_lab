@@ -12,6 +12,10 @@ import com.capsule.content.api.CharacterQuery;
 import com.capsule.content.api.ContentTypes.CharacterInfo;
 import com.capsule.content.api.ContentTypes.Reaction;
 import com.capsule.content.api.ReactionQuery;
+import com.capsule.credit.api.CreditCommands;
+import com.capsule.credit.api.CreditQuery;
+import com.capsule.credit.api.CreditTypes.Credits;
+import com.capsule.credit.api.CreditTypes.SpendResult;
 import com.capsule.dialogue.config.DialogueProperties;
 import com.capsule.dialogue.domain.ChatMessage;
 import com.capsule.dialogue.domain.Conversation;
@@ -19,6 +23,7 @@ import com.capsule.dialogue.domain.ConversationRecap;
 import com.capsule.dialogue.domain.DialogueErrorCode;
 import com.capsule.dialogue.dto.ChatInput;
 import com.capsule.dialogue.dto.ChatLine;
+import com.capsule.dialogue.dto.ChatMode;
 import com.capsule.dialogue.dto.ChatOutcome;
 import com.capsule.dialogue.dto.LlmContext;
 import com.capsule.dialogue.dto.MessageRequest;
@@ -66,6 +71,7 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -85,6 +91,8 @@ public class DialogueService {
     private static final ExecutorService LLM_THREADS = Executors.newVirtualThreadPerTaskExecutor();
     /** 세션 카드 머리말 날짜 (예: "11/03 52분") */
     private static final DateTimeFormatter CARD_DATE = DateTimeFormatter.ofPattern("MM/dd");
+    /** 고급 대화 1턴 크레딧 (api.md 33 '크레딧 규칙') */
+    public static final int ADVANCED_COST = 30;
 
     private final SessionQuery sessions;
     private final ConnectionMessageCounter messageCounter;
@@ -109,6 +117,11 @@ public class DialogueService {
     private final TransactionTemplate tx;
     private final RuntimeSettings<DialogueProperties> props;
     private final Clock clock;
+    private final CreditQuery creditQuery;
+    private final CreditCommands creditCommands;
+    private final SafetyGuard safety;
+    /** 고급 모드 답장 모델. 비어 있으면 기본 모드와 같은 모델 (api.md 20, 2026-11-23) */
+    private final String advancedModel;
 
     public DialogueService(
             SessionQuery sessions,
@@ -133,7 +146,12 @@ public class DialogueService {
             ChatMessageRepository messages,
             PlatformTransactionManager transactionManager,
             RuntimeSettings<DialogueProperties> props,
-            Clock clock) {
+            Clock clock,
+            CreditQuery creditQuery,
+            CreditCommands creditCommands,
+            SafetyGuard safety,
+            // TODO(judgment): J-16 고급 모드에 쓸 실제 모델 (운영 설정 capsule.llm.advanced-model). 정해지기 전까지 비워 두면 기본 모델
+            @Value("${capsule.llm.advanced-model:}") String advancedModel) {
         this.sessions = sessions;
         this.messageCounter = messageCounter;
         this.characters = characters;
@@ -157,6 +175,10 @@ public class DialogueService {
         this.tx = new TransactionTemplate(transactionManager);
         this.props = props;
         this.clock = clock;
+        this.creditQuery = creditQuery;
+        this.creditCommands = creditCommands;
+        this.safety = safety;
+        this.advancedModel = advancedModel;
     }
 
     /** 지금 설정의 답장 파이프라인. 운영 설정에서 바꾸면 다음 메시지부터 (이름은 저장할 때 검사함) */
@@ -196,7 +218,8 @@ public class DialogueService {
             Optional<Conversation> conv = conversations.findByUserIdAndCharacterId(userId, characterId);
             String summary = conv.map(c -> recaps(c.getId())).orElse(null);
             List<ChatLine> recent = conv.map(c -> PromptVars.tail(
-                            lines(messages.findByConversationIdAndSessionIdOrderById(c.getId(), sessionId)),
+                            promptLines(
+                                    userId, messages.findByConversationIdAndSessionIdOrderById(c.getId(), sessionId)),
                             props.current().reactionContextLines()))
                     .orElse(List.of());
             LlmContext ctx = LlmContext.app(userId, sessionId, deadline());
@@ -271,11 +294,29 @@ public class DialogueService {
             return new Accepted(
                     session, conversation, request, null, asked.get().getCreatedAt());
         }
+        // 안전 위반 반복이면 정지 중 (명세 20 '안전'). 재전송(이미 답함 · 처리 중)은 위에서 그대로 돌려준다
+        Optional<Instant> suspended = safety.suspendedUntil(userId);
+        if (suspended.isPresent()) {
+            throw new ApiException(DialogueErrorCode.CHAT_SUSPENDED, Map.of("until", suspended.get()));
+        }
+        // 고급 모드는 LLM 전에 잔액을 본다 (명세 20 '대화 모드 · 크레딧'). 모자라면 아무것도 저장하지 않고 409.
+        // 크레딧 조회는 그날 출석분 지급 · 소멸을 쓰므로 쓰기 트랜잭션 안에서 (CreditQuery.current)
+        if (request.modeOrBasic() == ChatMode.ADVANCED) {
+            Credits credits = tx.execute(s -> creditQuery.current(userId));
+            if (credits.todayRemaining() < ADVANCED_COST) {
+                throw new ApiException(DialogueErrorCode.CREDIT_INSUFFICIENT, Map.of("credits", credits));
+            }
+        }
         // 한도 검사보다 먼저 저장한다: 같은 requestId가 동시에 오면 늦은 쪽은 UNIQUE에 막혀 먼저 온 쪽의 답장을 기다린다.
         // 그래서 처리 중 재전송은 횟수에 세지 않는다(명세 20). 저장은 바로 커밋되므로 429면 이 사용자 말을 지운다
         try {
-            messages.saveAndFlush(new ChatMessage(
-                    conversation.getId(), sessionId, request.requestId(), USER, request.content(), Instant.now(clock)));
+            messages.saveAndFlush(ChatMessage.question(
+                    conversation.getId(),
+                    sessionId,
+                    request.requestId(),
+                    request.content(),
+                    request.inputType().name(),
+                    Instant.now(clock)));
         } catch (DataIntegrityViolationException e) {
             // 다른 쪽이 먼저 저장했으면 그 답을 기다린다. 다른 이유의 무결성 오류면 그대로 던진다
             ChatMessage other = question(conversation, request).orElseThrow(() -> e);
@@ -308,7 +349,8 @@ public class DialogueService {
      * 저장 트랜잭션은 연결의 대화 수(countReply)부터 올린다 (2026-11-23): 연결 행을 잠그고, 공부 종료(22)도 연결 행을 먼저 잠근 채
      * 커밋까지 간다. 그래서 종료와 겹치면 여기서 종료가 끝나길 기다린 뒤 끝난 연결이라 0행 → 아무것도 남기지 않는다.
      * 종료보다 먼저 잡으면 이 답장까지 커밋된 뒤에 종료가 정산·요약한다. 잠금 순서가 종료(연결 → relation → 대화)와 같아 교착이 없다
-     * (호감도 applyChat이 relation 행을 잠그므로 반드시 그 앞에서).
+     * (호감도 applyChat이 relation 행을 잠그므로 반드시 그 앞에서). 크레딧(사용자 잠금)은 트랜잭션 맨 끝에 잡는다 (2026-11-23).
+     * 안전 위반이면 LLM을 부르지 않고 거절 대사 · 0점 · 위반 기록 (명세 20 '안전')
      */
     private MessageResponse answer(
             SessionInfo session, Conversation conversation, MessageRequest request, Consumer<String> onReply) {
@@ -321,8 +363,10 @@ public class DialogueService {
                 messages.findByConversationIdAndSessionIdOrderById(conversation.getId(), sessionId).stream()
                         .filter(m -> !m.getRequestId().equals(requestId))
                         .toList();
-        List<ChatLine> history = lines(earlier);
+        // 신고로 가린 답장(41) · 안전 위반 턴은 이전 대화에서도 뺀다
+        List<ChatLine> history = promptLines(userId, earlier);
         CharacterInfo character = character(characterId);
+        ChatMode mode = request.modeOrBasic();
         ChatInput input = new ChatInput(
                 character,
                 nickname(userId),
@@ -336,20 +380,28 @@ public class DialogueService {
                 sessions.onBreak(sessionId),
                 chatty(earlier),
                 (int) Duration.between(session.startedAt(), Instant.now(clock)).toMinutes());
-        LlmContext ctx = LlmContext.app(userId, sessionId, deadline());
-        Optional<ChatOutcome> outcome =
-                onReply == null ? withinBudget(() -> replier.reply(chat(), input, ctx)) : streamed(input, ctx, onReply);
-        String reply = outcome.map(ChatOutcome::reply)
-                .orElseGet(() -> characterContents
-                        .next(
-                                characterId,
-                                "REPLY_FALLBACK",
-                                null,
-                                input.stage(),
-                                String.valueOf(sessionId),
-                                input.nickname())
-                        .map(ReactionLine::content)
-                        .orElseGet(() -> fixedLines.replyFallback(characterId)));
+        // 안전 (명세 20 '안전'): LLM에 넘기기 전에 판정. 위반이면 LLM을 부르지 않고 정해진 거절 대사
+        Optional<String> violation = safety.violation(request.content());
+        LlmContext ctx = LlmContext.app(userId, sessionId, deadline())
+                .withChatModel(mode == ChatMode.ADVANCED ? advancedModel : null);
+        Optional<ChatOutcome> outcome = violation.isPresent()
+                ? Optional.empty()
+                : onReply == null
+                        ? withinBudget(() -> replier.reply(chat(), input, ctx))
+                        : streamed(input, ctx, onReply);
+        String reply = violation.isPresent()
+                ? safety.refusalLine()
+                : outcome.map(ChatOutcome::reply)
+                        .orElseGet(() -> characterContents
+                                .next(
+                                        characterId,
+                                        "REPLY_FALLBACK",
+                                        null,
+                                        input.stage(),
+                                        String.valueOf(sessionId),
+                                        input.nickname())
+                                .map(ReactionLine::content)
+                                .orElseGet(() -> fixedLines.replyFallback(characterId)));
         // 명세 20: fallback이면 호감도 변화 없음 (0점이어도 applyChatScore를 불러 잠금 순서를 지킨다)
         SignalType signal = outcome.map(ChatOutcome::signal).orElse(null);
         ChatScore score = signal == null
@@ -363,6 +415,7 @@ public class DialogueService {
                                 .toList());
 
         MessageResponse response;
+        Credits[] shortOf = {null}; // 답하는 사이 크레딧이 모자라짐 → 409 (아래)
         try {
             response = tx.execute(status -> {
                 // 진행 중이면 연결의 대화 수 +1 (명세 22 messageCount, 2026-11-23). 끝났으면 0행.
@@ -374,8 +427,30 @@ public class DialogueService {
                 AffinityChange affinity =
                         relationCommands.applyChatScore(userId, characterId, sessionId, requestId, score);
                 if (signal != null) messages.markSignal(conversation.getId(), requestId, signal.name());
-                messages.save(new ChatMessage(
-                        conversation.getId(), sessionId, requestId, CHARACTER, reply, Instant.now(clock)));
+                messages.save(ChatMessage.reply(
+                        conversation.getId(), sessionId, requestId, reply, mode.name(), Instant.now(clock)));
+                violation.ifPresent(category -> safety.record(userId, sessionId, requestId, category));
+                // 크레딧은 맨 끝에 (사용자 잠금, 연결 → relation → 대화 → credit 순서라 종료와 교착이 없다).
+                // 고급 모드 답장이 성공했을 때만 깎는다 (fallback · 안전 경고 턴은 안 깎음, 같은 requestId는 한 번만)
+                int charged = 0;
+                Credits credits = null;
+                if (mode == ChatMode.ADVANCED) {
+                    if (outcome.isPresent()) {
+                        SpendResult spent =
+                                creditCommands.spend(userId, ADVANCED_COST, "고급 대화 · " + character.name(), requestId);
+                        if (!spent.spent()) {
+                            // 잔액을 확인한 뒤 다른 요청이 먼저 써서 모자라졌다: 409로 되돌린다 (아무것도 남기지 않음, 명세 20).
+                            // 그래서 저장된 고급 모드 LLM 답장은 늘 깎인 것이다 (재전송 charged의 근거)
+                            shortOf[0] = spent.credits();
+                            status.setRollbackOnly();
+                            return null;
+                        }
+                        charged = ADVANCED_COST;
+                        credits = spent.credits();
+                    } else {
+                        credits = creditQuery.current(userId);
+                    }
+                }
                 String emotion = outcome.map(ChatOutcome::emotion).orElse(null);
                 Reaction reaction = emotionReaction(characterId, emotion);
                 return new MessageResponse(
@@ -386,8 +461,12 @@ public class DialogueService {
                         reaction.motion(),
                         reaction.expression(),
                         affinity,
-                        outcome.isEmpty(),
-                        audio(request.tts()));
+                        violation.isEmpty() && outcome.isEmpty(),
+                        audio(request.tts()),
+                        mode,
+                        charged,
+                        credits,
+                        violation.isPresent() ? MessageResponse.SAFETY_WARNING : null);
             });
         } catch (DataIntegrityViolationException e) {
             // 기다리다 이어받은 요청과 먼저 온 요청이 둘 다 답했다: 먼저 저장된 답장으로
@@ -396,6 +475,9 @@ public class DialogueService {
         if (response == null) {
             // 답을 못 받은 사용자 말은 지운다 (대화방 기록에 남지 않게). 종료 카드에 이미 들어갔으면 카드에만 남는다
             messages.deleteQuestion(conversation.getId(), requestId);
+            if (shortOf[0] != null) {
+                throw new ApiException(DialogueErrorCode.CREDIT_INSUFFICIENT, Map.of("credits", shortOf[0]));
+            }
             throw new ApiException(DialogueErrorCode.CONNECTION_ENDED);
         }
         // 기억 ①: 답장을 저장한 뒤 이번 사용자 말에서 기억할 것을 정리한다 (답장을 늦추지 않게 따로, 마감 없음)
@@ -406,7 +488,7 @@ public class DialogueService {
                 request.content(),
                 PromptVars.tail(history, props.current().signalContextLines()),
                 LlmContext.app(userId, sessionId, null));
-        if (!props.current().memoryEnabled()) return response;
+        if (!props.current().memoryEnabled() || violation.isPresent()) return response; // 위반한 말은 기억하지 않는다
         if (props.current().memoryAsync()) LLM_THREADS.execute(remember);
         else remember.run();
         return response;
@@ -483,20 +565,43 @@ public class DialogueService {
         return reactions.pick(characterId, emotion, null);
     }
 
-    /** 이미 답한 requestId면 저장된 답장 */
+    /**
+     * 이미 답한 requestId면 저장된 답장. mode는 저장된 답장의 모드(요청 값이 아니라), safety는 위반 기록으로,
+     * charged는 처음 답할 때와 같게: 고급 모드이고 위반 턴이 아니고 LLM 답장이었으면(사용자 말에 종류가 남음 = fallback 아님) 30.
+     * credits는 고급 모드면 지금 크레딧 (재전송은 다시 깎지 않는다)
+     */
     private Optional<MessageResponse> answered(Conversation conversation, SessionInfo session, MessageRequest request) {
         // ponytail: 재전송 때 원래 delta(와 감정·모션·표정·fallback)는 다시 보여주지 않음 (명세 20). 필요하면 chat_messages에 같이 저장
         return messages.findByConversationIdAndRequestIdAndSender(conversation.getId(), request.requestId(), CHARACTER)
-                .map(m -> new MessageResponse(
-                        request.requestId(),
-                        session.characterId(),
-                        m.getContent(),
-                        null,
-                        null,
-                        null,
-                        unchanged(session.userId(), session.characterId()),
-                        false,
-                        audio(request.tts())));
+                .map(m -> {
+                    long userId = session.userId();
+                    ChatMode mode = m.getMode() == null ? ChatMode.BASIC : ChatMode.valueOf(m.getMode());
+                    boolean warned = safety.struck(userId, request.requestId());
+                    int charged = 0;
+                    Credits credits = null;
+                    if (mode == ChatMode.ADVANCED) {
+                        boolean llmReply = !warned
+                                && question(conversation, request)
+                                        .map(q -> q.getSignal() != null)
+                                        .orElse(false);
+                        charged = llmReply ? ADVANCED_COST : 0;
+                        credits = tx.execute(s -> creditQuery.current(userId));
+                    }
+                    return new MessageResponse(
+                            request.requestId(),
+                            session.characterId(),
+                            m.getContent(),
+                            null,
+                            null,
+                            null,
+                            unchanged(userId, session.characterId()),
+                            false,
+                            audio(request.tts()),
+                            mode,
+                            charged,
+                            credits,
+                            warned ? MessageResponse.SAFETY_WARNING : null);
+                });
     }
 
     // --- 22 공부 종료 ---
@@ -522,14 +627,16 @@ public class DialogueService {
         String header = LocalDate.now(clock.withZone(ClockConfig.KST)).format(CARD_DATE) + " "
                 + closing.studySeconds() / 60 + "분";
 
-        CompletableFuture<String> recap = pending.isEmpty()
+        // 가린 답장 · 안전 위반 턴은 카드에도 넣지 않는다 (2026-11-23). 카드에 넣었다는 표시(pendingIds)는 같이 한다
+        List<ChatLine> cardLines = promptLines(closing.userId(), pending);
+        CompletableFuture<String> recap = cardLines.isEmpty()
                 ? null
                 : start(() -> closingWriter.recap(
                         character,
                         nickname,
                         header,
                         memoryKeeper.facts(closing.userId(), closing.characterId()),
-                        lines(pending),
+                        cardLines,
                         Map.of(),
                         ctx));
         // 캐릭터 설정에 완료 대사가 있으면 그것 (PM: 말포이는 고정 문장, 관계 단계별), 없으면 LLM.
@@ -658,6 +765,18 @@ public class DialogueService {
                 && target != null
                 && target > 0
                 && closing.studySeconds() < target * 60 * ratio;
+    }
+
+    /**
+     * LLM 입력(답장 이전 대화 · 상태 반응 최근 대화 · 흐름 카드)에 넣을 줄. 신고로 가린 답장(41)과
+     * 안전 위반 턴(사용자 말 · 거절 대사, 20 '안전')은 뺀다 (2026-11-23)
+     */
+    private List<ChatLine> promptLines(long userId, List<ChatMessage> chat) {
+        java.util.Set<UUID> struck = safety.struckAmong(
+                userId, chat.stream().map(ChatMessage::getRequestId).distinct().toList());
+        return lines(chat.stream()
+                .filter(m -> !m.hidden() && !struck.contains(m.getRequestId()))
+                .toList());
     }
 
     private static List<ChatLine> lines(List<ChatMessage> chat) {

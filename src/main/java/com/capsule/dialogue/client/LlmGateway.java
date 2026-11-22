@@ -57,7 +57,13 @@ public class LlmGateway {
         LlmCallException last = null;
         for (String name : order(settings, ctx, route)) {
             LlmProvider provider = provider(name);
-            String model = ctx.model() != null && name.equals(primary) ? ctx.model() : settings.model(name, route);
+            String model = !name.equals(primary)
+                    ? settings.model(name, route)
+                    : ctx.model() != null
+                            ? ctx.model()
+                            : purpose == LlmPurpose.CHAT && ctx.chatModel() != null
+                                    ? ctx.chatModel() // 고급 모드 답장 (2026-11-23)
+                                    : settings.model(name, route);
             LlmProperties.Provider p = settings.providerSettings(name);
             ProviderRequest req = new ProviderRequest(
                     purpose,
