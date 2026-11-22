@@ -1,6 +1,7 @@
 package com.capsule.credit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -11,6 +12,9 @@ import com.capsule.credit.api.CreditCommands;
 import com.capsule.credit.api.CreditQuery;
 import com.capsule.credit.api.CreditTypes.Credits;
 import com.capsule.credit.api.CreditTypes.SpendResult;
+import com.capsule.credit.service.CreditService;
+import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -86,10 +90,8 @@ class CreditServiceTest {
 
     @Test
     void spendUsesAttendanceFirstOnceAndNeverGoesNegative() {
-        assertThat(commands.grantInvite(userId, 1000, "referral-1-inviter", "친구 초대"))
-                .isTrue();
-        assertThat(commands.grantInvite(userId, 1000, "referral-1-inviter", "친구 초대"))
-                .isFalse(); // 한 번만
+        assertThat(commands.grantInvite(userId, 1000, 1L, true, "친구 초대")).isTrue();
+        assertThat(commands.grantInvite(userId, 1000, 1L, true, "친구 초대")).isFalse(); // 한 번만
 
         UUID request = UUID.randomUUID();
         SpendResult spent = commands.spend(userId, 1600, "고급 대화 · 채린", request);
@@ -113,7 +115,7 @@ class CreditServiceTest {
 
     @Test
     void summaryAndTransactionsApi() throws Exception {
-        commands.grantInvite(userId, 1000, "referral-2-invitee", "친구 초대");
+        commands.grantInvite(userId, 1000, 2L, false, "친구 초대"); // 받은 사람 몫: 친구를 초대한 건 아님
         commands.spend(userId, 50, "보이스 · 고급 대화 · 채린", UUID.randomUUID());
         String sub = String.valueOf(userId);
 
@@ -123,7 +125,7 @@ class CreditServiceTest {
                 .andExpect(jsonPath("$.data.attendanceRemaining").value(1450))
                 .andExpect(jsonPath("$.data.inviteBalance").value(1000))
                 .andExpect(jsonPath("$.data.todayUsed").value(50))
-                .andExpect(jsonPath("$.data.invitedFriends").value(1))
+                .andExpect(jsonPath("$.data.invitedFriends").value(0))
                 .andExpect(jsonPath("$.data.attendanceExpiresAt").isString());
 
         // 최신순: 사용 → 초대 → 출석 (초대 지급 때 그날 출석이 먼저 들어감)
@@ -151,6 +153,37 @@ class CreditServiceTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
         mvc.perform(get("/api/credits")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void invitedFriendsCountsOnlyInviterRewards() throws Exception {
+        commands.grantInvite(userId, 1000, 7L, false, "친구 초대");
+        commands.grantInvite(userId, 1000, 8L, true, "친구 초대");
+        commands.grantInvite(userId, 1000, 9L, true, "친구 초대");
+        String sub = String.valueOf(userId);
+        mvc.perform(get("/api/credits").with(jwt().jwt(j -> j.subject(sub))))
+                .andExpect(jsonPath("$.data.inviteBalance").value(3000))
+                .andExpect(jsonPath("$.data.invitedFriends").value(2));
+    }
+
+    /** 하루는 오전 5시(KST) = 20:00Z에 바뀐다 */
+    @Test
+    void dayChangesAtFiveAmKst() {
+        assertThat(CreditService.dayOf(Instant.parse("2026-11-30T19:59:59Z"))).isEqualTo(LocalDate.of(2026, 11, 30));
+        assertThat(CreditService.dayOf(Instant.parse("2026-11-30T20:00:00Z"))).isEqualTo(LocalDate.of(2026, 12, 1));
+        assertThat(CreditService.nextDayStart(Instant.parse("2026-11-30T19:59:59Z")))
+                .isEqualTo(Instant.parse("2026-11-30T20:00:00Z"));
+        assertThat(CreditService.nextDayStart(Instant.parse("2026-11-30T20:00:00Z")))
+                .isEqualTo(Instant.parse("2026-12-01T20:00:00Z"));
+    }
+
+    @Test
+    void contractRejectsMissingInputs() {
+        assertThatThrownBy(() -> commands.spend(userId, 20, "보이스", null)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> commands.spend(userId, 20, null, UUID.randomUUID()))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> commands.grantInvite(userId, 0, 1L, true, "친구 초대"))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     private List<String> types() {

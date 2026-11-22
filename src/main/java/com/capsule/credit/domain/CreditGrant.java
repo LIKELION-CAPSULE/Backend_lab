@@ -51,6 +51,13 @@ public class CreditGrant {
         return new CreditGrant(userId, ATTENDANCE, amount, day, null, expiresAt, now);
     }
 
+    public static final String INVITER_SUFFIX = "-inviter";
+
+    /** 초대분 중복 방지 키: referral-<초대 id>-inviter | -invitee (33 invitedFriends는 -inviter만 센다) */
+    public static String inviteSource(long referralId, boolean inviter) {
+        return "referral-" + referralId + (inviter ? INVITER_SUFFIX : "-invitee");
+    }
+
     public static CreditGrant invite(long userId, int amount, String source, Instant now) {
         return new CreditGrant(userId, INVITE, amount, null, source, null, now);
     }

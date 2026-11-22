@@ -49,6 +49,8 @@ public class CreditService implements CreditQuery, CreditCommands {
     @Override
     public SpendResult spend(long userId, int amount, String title, UUID requestId) {
         if (amount <= 0) throw new IllegalArgumentException("amount must be positive");
+        if (title == null || title.isBlank()) throw new IllegalArgumentException("title is required");
+        if (requestId == null) throw new IllegalArgumentException("requestId is required");
         Instant now = Instant.now(clock);
         List<CreditGrant> open = refresh(userId, now);
         if (ledger.findByUserIdAndRequestId(userId, requestId).isPresent()) {
@@ -66,7 +68,10 @@ public class CreditService implements CreditQuery, CreditCommands {
     }
 
     @Override
-    public boolean grantInvite(long userId, int amount, String source, String title) {
+    public boolean grantInvite(long userId, int amount, long referralId, boolean inviter, String title) {
+        if (amount <= 0) throw new IllegalArgumentException("amount must be positive");
+        if (title == null || title.isBlank()) throw new IllegalArgumentException("title is required");
+        String source = CreditGrant.inviteSource(referralId, inviter);
         Instant now = Instant.now(clock);
         List<CreditGrant> open = refresh(userId, now);
         if (grants.existsByUserIdAndKindAndSource(userId, CreditGrant.INVITE, source)) return false;
@@ -82,7 +87,7 @@ public class CreditService implements CreditQuery, CreditCommands {
         Instant now = Instant.now(clock);
         Credits credits = summary(refresh(userId, now), now);
         int used = ledger.usedSince(userId, dayStart(now));
-        long invited = grants.countByUserIdAndKind(userId, CreditGrant.INVITE);
+        long invited = grants.countInviterRewards(userId);
         return new Summary(credits, used, (int) invited);
     }
 
@@ -135,7 +140,7 @@ public class CreditService implements CreditQuery, CreditCommands {
         return new Credits(total, attendance, nextDayStart(now), invite, total < LOW_BELOW, total == 0);
     }
 
-    static LocalDate dayOf(Instant at) {
+    public static LocalDate dayOf(Instant at) {
         ZonedDateTime local = at.atZone(ClockConfig.KST);
         return local.toLocalTime().isBefore(DAY_STARTS_AT) ? local.toLocalDate().minusDays(1) : local.toLocalDate();
     }
@@ -144,7 +149,7 @@ public class CreditService implements CreditQuery, CreditCommands {
         return dayOf(now).atTime(DAY_STARTS_AT).atZone(ClockConfig.KST).toInstant();
     }
 
-    private static Instant nextDayStart(Instant now) {
+    public static Instant nextDayStart(Instant now) {
         return dayOf(now)
                 .plusDays(1)
                 .atTime(DAY_STARTS_AT)

@@ -15,10 +15,12 @@ public interface CreditCommands {
     SpendResult spend(long userId, int amount, String title, UUID requestId);
 
     /**
-     * 초대분 지급 (사라지지 않음, 8단계 친구 초대 보상). 같은 source는 한 번만.
+     * 초대분 지급 (사라지지 않음, 8단계 친구 초대 보상). 같은 초대 · 같은 쪽은 한 번만.
+     * 33 invitedFriends는 초대한 사람 몫(inviter=true)만 센다
      *
-     * @param source 중복 방지 키 (예: "referral-12-inviter")
+     * @param referralId 초대 id (referrals.id)
+     * @param inviter 초대한 사람 몫이면 true, 코드를 입력한(받은) 사람 몫이면 false
      * @return 이번에 지급했으면 true, 이미 받았으면 false
      */
-    boolean grantInvite(long userId, int amount, String source, String title);
+    boolean grantInvite(long userId, int amount, long referralId, boolean inviter, String title);
 }
