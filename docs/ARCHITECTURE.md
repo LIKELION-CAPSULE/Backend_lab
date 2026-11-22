@@ -463,7 +463,6 @@ sequenceDiagram
 | `content-cache-ttl` | 30s | DB 캐릭터 설정 메모리 캐시 |
 | `capsule.relation.*` | 위 호감도 표 | 하루 상한, 자리 비움, 출석, 레벨, 단계 |
 | `capsule.session.auto-close-after` / `auto-close-interval` | 6h / PT10M | 자동 종료 |
-| `capsule.session.target-minutes-*` | 5~180, 5분 단위, 3 허용 | 목표 시간 검증 (16) |
 | `capsule.session.motion-cooldown` | 1m | 같은 동작 이벤트 무시 구간 (18) |
 
 `DialogueController.STREAM_TIMEOUT`(50초)은 설정이 아니라 상수다.

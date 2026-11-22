@@ -142,10 +142,6 @@ capsule:
   session:
     auto-close-after: 6h # 명세 21: heartbeat가 이보다 오래 없으면 자동 종료(AUTO_CLOSED)
     auto-close-interval: PT10M # 자동 종료 배치를 도는 간격
-    target-minutes-min: 5 # 명세 16: 목표 시간 3분, 또는 5~180분 5분 단위 (아니면 400 INVALID_TARGET_MINUTES)
-    target-minutes-max: 180
-    target-minutes-step: 5
-    target-minutes-extra: [3] # 범위 밖이어도 받는 값 (2026-11-05 최소 3분)
     motion-cooldown: 1m # 명세 18: 같은 동작 이벤트가 이 안에 다시 오면 무시
   beta:
     max-users: ${CAPSULE_BETA_MAX_USERS:100} # 12/1 베타 정원 (명세 4 · 6): 탈퇴하지 않은 가입자가 이 수 이상이면 가입 403 BETA_FULL
