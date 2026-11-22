@@ -34,6 +34,7 @@
 | 28 | 대화 | POST | `/api/sessions/{sessionId}/messages/stream` | 메시지 전송 (스트리밍) |
 | 29 | 온보딩 · 홈 | GET | `/api/me/settings` | 설정 조회 |
 | 30 | 온보딩 · 홈 | PATCH | `/api/me/settings` | 설정 변경 |
+| 31 | 온보딩 · 홈 | GET | `/api/mates/{mateId}` | 메이트 상세 조회 |
 
 순서 15는 노션에 없음 (번호 비어 있음).
 
@@ -538,16 +539,19 @@
 | avatars[].id | Long | 아바타 id |
 | avatars[].name | String | 이름 |
 | avatars[].thumbnailUrl | String | 썸네일 |
-| avatars[].model | Object | `modelJsonUrl`, `scale`, `offsetX`, `offsetY` |
+| avatars[].model | Object | `format`, `modelJsonUrl`, `scale`, `offsetX`, `offsetY` |
+| avatars[].model.format | String | `CUBISM`(Live2D Cubism `.model3.json`) / `ALIVING2D_V2`(Aliving2D 묶음 `model.json`). 프론트가 이 값으로 렌더러를 고름 |
 
 ```json
 {
   "avatars": [
     { "id": 1, "name": "기본 아바타", "thumbnailUrl": "https://cdn.../avatar1.png",
-      "model": { "modelJsonUrl": "https://cdn.../live2d/avatar1/v1/avatar1.model3.json", "scale": 1.0, "offsetX": 0, "offsetY": 0 } }
+      "model": { "format": "CUBISM", "modelJsonUrl": "https://cdn.../live2d/avatar1/v1/avatar1.model3.json", "scale": 1.0, "offsetX": 0, "offsetY": 0 } }
   ]
 }
 ```
+
+> 2026-11-23 (12/1 베타): `model.format` 추가. 지금 아바타는 모두 `CUBISM`. 내 아바타를 Aliving2D로 바꿀지는 확정 필요
 
 > ✅ **200 OK**
 
@@ -1842,3 +1846,64 @@ data: {"requestId":"9c3a...","characterId":1,"content":"알지. 그리핀도르 
 > ✅ **200 OK**
 
 > ❌ **400** INVALID_SETTINGS (모르는 키 · 허용 값 밖 · 타입 틀림)
+
+## 31. GET /api/mates/{mateId} — 메이트 상세 조회
+- 분류: 온보딩 · 홈
+- 설명: 메이트 상세 화면. 움직이는 미리보기 · 일러스트 · 세계관 · 내 역할 · 인트로 · 연결하기
+- 와이어프레임: SCR-13 메이트 상세
+- 백엔드: Not started
+- 프론트: Not started
+
+> 2026-11-23 (12/1 베타): 메이트 상세 추가 (12 스터디룸 상세를 대체할 화면). 메이트 = 캐릭터(`characters`), `mateId` = 캐릭터 id
+
+#### 설명
+
+왼쪽은 Live2D 미리보기, 오른쪽은 일러스트 · 세계관 · 내 역할 · 인트로와 '연결하기' 버튼입니다. 준비 중 메이트(`comingSoon`)도 조회는 되고, 프론트는 연결 버튼을 막습니다.
+
+#### 와이어프레임 대조
+
+| 화면 요소 | 응답 필드 |
+| --- | --- |
+| SCR-13 Live2D 미리보기 (마우스 따라보기) | `model` |
+| SCR-13 '목소리 듣기' | `voiceSampleUrl` |
+| SCR-13 이름 · 한 줄 소개 · 연령 등급 배지 · 해시태그 | `name`, `oneLiner`, `ageRating`, `hashtags` |
+| SCR-13 세로 일러스트 | `illustrationUrl` |
+| SCR-13 세계관 · 내 역할 · 인트로 | `world`, `myRole`, `intro` |
+| SCR-13 '연결하기' | `comingSoon`이면 막음. 이전 대화가 있으면 같은 대화방으로 이어짐 (`hasConversation`은 대화방 단계에서 추가) |
+
+- 테이블: `characters`, `live2d_models` · 인증: 필요
+
+#### [GET] /api/mates/{mateId}
+
+#### 🛬 Response
+
+| 이름 | 타입 | 설명 |
+| --- | --- | --- |
+| id | Long | 메이트 id (= 캐릭터 id) |
+| name | String | 이름 |
+| oneLiner | String | 한 줄 소개 (30자 안팎). 없으면 null |
+| ageRating | String | `ALL`(전연령) / `ADULT`(19세 이상) |
+| hashtags | Array | 해시태그 (순서대로 표시). 없으면 `[]` |
+| illustrationUrl | String | 세로 일러스트(원화). 없으면 null |
+| voiceSampleUrl | String | '목소리 듣기' mp3. 없으면 null |
+| world | String | 캐릭터 · 세계관 설명. 없으면 null |
+| myRole | String | 내 역할 (예: "당신은 채린의 같은 반 친구예요"). 없으면 null |
+| intro | String | 인트로 ('왜 지금 나랑 같이 있는지'가 드러나는 첫 상황). 없으면 null |
+| model | Object | `format`, `modelJsonUrl`, `scale`, `offsetX`, `offsetY` (9번 아바타 `model`과 같은 모양) |
+| comingSoon | Boolean | 준비 중 메이트면 true → 연결 버튼 막기 |
+
+```json
+{
+  "id": 1, "name": "채린", "oneLiner": "시험기간 밤, 각자 공부하며 연결 중인 같은 반 친구", "ageRating": "ALL", "hashtags": ["같은반", "시험기간"],
+  "illustrationUrl": "https://cdn.../chaerin/full.png", "voiceSampleUrl": "https://cdn.../chaerin/sample.mp3",
+  "world": "채린은 같은 반의 조용하지만 다정한 친구예요...", "myRole": "당신은 채린의 같은 반 친구예요", "intro": "시험기간 밤, 각자 책상에서 영상통화 중.",
+  "model": { "format": "CUBISM", "modelJsonUrl": "https://cdn.../chaerin/v3/chaerin.model3.json", "scale": 1.0, "offsetX": 0, "offsetY": 12 },
+  "comingSoon": false
+}
+```
+
+> ✅ **200 OK**
+
+> ❌ **404** MATE_NOT_FOUND (없거나 비활성 메이트)
+
+- 채린 · 남학생의 화면 문구(한 줄 소개 · 해시태그 · 세계관 · 내 역할 · 인트로 · 이미지 · 목소리)는 확정 필요 (PM · 디자이너가 전달). 위 예시는 노션 기획 초안

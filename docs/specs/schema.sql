@@ -60,6 +60,11 @@
 --   - users: birth_date · honorific · about_me · referral_code · settings 추가
 --   - signup_devices 추가 (가입 기기, 친구 초대 부정 방지)
 --   - user_memories(일정)는 대화 프롬프트가 아직 읽어서 이번에는 두고, 대화 단계에서 지운다
+--
+-- 2026-11-23 변경 (12/1 베타 2단계: 메이트 데이터)
+--   - characters: 메이트 화면 칸 one_liner · hashtags · age_rating · world · my_role · illustration_url · card_image_url
+--     · voice_sample_url · stage_names · coming_soon 추가 (추가만. room_id · personality는 스터디룸 정리 때 지움)
+--   - live2d_models.format (CUBISM · ALIVING2D_V2), live2d_motions · live2d_expressions.label 추가
 -- =====================================================================
 
 BEGIN;
@@ -151,7 +156,8 @@ CREATE TABLE live2d_models (
     scale           numeric(5,2) NOT NULL DEFAULT 1.00,   -- 칸 안에서의 기본 확대율
     offset_x        int          NOT NULL DEFAULT 0,      -- 칸 안에서의 위치 보정
     offset_y        int          NOT NULL DEFAULT 0,
-    created_at      timestamptz  NOT NULL DEFAULT now()
+    created_at      timestamptz  NOT NULL DEFAULT now(),
+    format          text         NOT NULL DEFAULT 'CUBISM' CHECK (format IN ('CUBISM', 'ALIVING2D_V2'))  -- 프론트 렌더러 (api.md 9 · 31)
 );
 
 CREATE TABLE live2d_motions (
@@ -159,6 +165,7 @@ CREATE TABLE live2d_motions (
     model_id   bigint NOT NULL REFERENCES live2d_models (id) ON DELETE CASCADE,
     group_name text   NOT NULL,                  -- model3.json의 Motions 그룹 (Idle, TapBody ...)
     name       text   NOT NULL,                  -- 사람이 알아볼 이름 (예: 손 흔들기)
+    label      text,                             -- 한국어 이름 (Aliving2D는 name이 영문 이름, 2026-11-23)
     file_path  text   NOT NULL,                  -- .motion3.json 상대 경로
     UNIQUE (model_id, file_path),
     UNIQUE (id, model_id)                        -- 반응 매핑의 복합 FK용
@@ -168,6 +175,7 @@ CREATE TABLE live2d_expressions (
     id        bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     model_id  bigint NOT NULL REFERENCES live2d_models (id) ON DELETE CASCADE,
     name      text   NOT NULL,                   -- 예: 삐짐, 웃음
+    label     text,                              -- 한국어 이름 (Aliving2D는 name이 영문 이름, 2026-11-23)
     file_path text   NOT NULL,                   -- .exp3.json 상대 경로
     UNIQUE (model_id, file_path),
     UNIQUE (id, model_id)
@@ -253,6 +261,17 @@ CREATE TABLE characters (
     sort_order        int         NOT NULL DEFAULT 0,      -- 룸 안 표시 순서
     is_active         boolean     NOT NULL DEFAULT true,
     created_at        timestamptz NOT NULL DEFAULT now(),
+    -- 메이트 화면 칸 (12/1 베타, api.md 31). 이미지 · 소리는 CDN 상대 경로 또는 전체 URL
+    one_liner         text,                                -- 한 줄 소개 (30자 안팎)
+    hashtags          text[]      NOT NULL DEFAULT '{}',   -- 해시태그, 순서대로 표시 (personality를 대체할 칸. personality는 스터디룸 정리 때 지움)
+    age_rating        text        NOT NULL DEFAULT 'ALL' CHECK (age_rating IN ('ALL', 'ADULT')),
+    world             text,                                -- 캐릭터 · 세계관 설명 (1,000자 안팎)
+    my_role           text,                                -- 내 역할
+    illustration_url  text,                                -- 세로 일러스트 (메이트 상세)
+    card_image_url    text,                                -- 홈 메이트 카드
+    voice_sample_url  text,                                -- '목소리 듣기' mp3
+    stage_names       text[]      NOT NULL DEFAULT '{}',   -- 친밀도 단계 이름 5개 (친밀도 단계에서 씀)
+    coming_soon       boolean     NOT NULL DEFAULT false,  -- 준비 중 메이트 (조회는 되고 연결은 막음)
     UNIQUE (id, room_id)                                   -- session_characters 복합 FK용
 );
 CREATE INDEX idx_characters_room ON characters (room_id, sort_order);
