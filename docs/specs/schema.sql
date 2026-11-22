@@ -74,6 +74,12 @@
 --   - 스터디룸 삭제: study_rooms · room_backgrounds · user_unlocked_backgrounds, characters.room_id · personality 삭제,
 --     characters.model_id NULL 허용(준비 중 메이트)
 --   - 시간 칸(focus · distract · break · heartbeat_study)과 이벤트 종류는 다음 단계(연결 새 기능)에서
+--
+-- 2026-11-23 변경 (12/1 베타 4단계: 연결 새 기능)
+--   - connections: focus_seconds → present_seconds, distract_seconds → away_seconds, heartbeat_study_seconds →
+--     heartbeat_connected_seconds, break_seconds 삭제. connected_seconds · camera_on_seconds · pip_seconds ·
+--     message_count · mood · heartbeat_camera_on_seconds · heartbeat_pip_seconds 추가. end_type에 AUTO_AWAY · MINOR_LIMIT
+--   - connection_events.type: 새 이벤트 PRESENT · IDLE_TALK 추가 (옛 FOCUS · BREAK · 동작 이벤트 행은 기록으로 남기고 API는 받지 않음)
 -- =====================================================================
 
 BEGIN;
@@ -331,17 +337,26 @@ CREATE TABLE connections (
     character_id      bigint      NOT NULL REFERENCES characters (id),  -- 연결한 메이트
     started_at        timestamptz NOT NULL DEFAULT now(),
     ended_at          timestamptz,                        -- NULL이면 진행 중
-    end_type          text        CHECK (end_type IN ('NORMAL', 'AUTO_CLOSED')),
+    end_type          text        CHECK (end_type IN ('NORMAL', 'AUTO_CLOSED', 'AUTO_AWAY', 'MINOR_LIMIT')),
     last_heartbeat_at timestamptz,                        -- 1분에 한 번 정도만 갱신
-    heartbeat_study_seconds   int,                        -- 마지막 heartbeat 때 프론트가 보낸 공부 시간 (API 21, 2026-11-04 추가). 자동 마감에 사용
-    heartbeat_present_seconds int,                        -- 위 값 중 자리 지킴
-    focus_seconds     int         NOT NULL DEFAULT 0,     -- 아래 넷은 종료 때 저장. focus · distract는 정상 종료면 프론트 값(API 22), 자동 마감이면 마지막 heartbeat 값(없으면 session_events로 계산). break · return_count는 항상 session_events로 계산
-    distract_seconds  int         NOT NULL DEFAULT 0,
-    break_seconds     int         NOT NULL DEFAULT 0,
+    -- 마지막 heartbeat 때 프론트가 보낸 누적값 (API 21). 자동 마감 · 이어하기 · 청소년 남은 시간에 사용
+    heartbeat_connected_seconds int,
+    heartbeat_present_seconds   int,
+    heartbeat_camera_on_seconds int,
+    heartbeat_pip_seconds       int,
+    -- 아래는 끊을 때 저장 (API 22). 정상 끊기면 프론트 값, 자동 마감이면 마지막 heartbeat 값(없으면 0)
+    connected_seconds int         NOT NULL DEFAULT 0 CHECK (connected_seconds >= 0),  -- 연결 시간
+    present_seconds   int         NOT NULL DEFAULT 0 CHECK (present_seconds >= 0),    -- 함께한 시간 (카메라 + 얼굴)
+    away_seconds      int         NOT NULL DEFAULT 0 CHECK (away_seconds >= 0),       -- 자리 비움 (이벤트로 계산)
+    camera_on_seconds int         NOT NULL DEFAULT 0 CHECK (camera_on_seconds >= 0),  -- 카메라 켠 시간 (지표)
+    pip_seconds       int         NOT NULL DEFAULT 0 CHECK (pip_seconds >= 0),        -- PIP 시간 (지표)
+    message_count     int         NOT NULL DEFAULT 0 CHECK (message_count >= 0),      -- 나눈 대화 수 (대화방 단계에서 채움)
     return_count      int         NOT NULL DEFAULT 0,
-    closing_line      text,                               -- 완료 대사 (종료 때 저장, 리포트 · 카드 공용)
+    mood              text,                               -- 그날의 분위기 (연결마다 새로, 확정 필요)
+    closing_line      text,                               -- 완료 대사 (종료 때 저장, 연결 기록 공용)
     CHECK (ended_at IS NULL OR ended_at >= started_at),
-    CHECK ((ended_at IS NULL) = (end_type IS NULL))
+    CHECK ((ended_at IS NULL) = (end_type IS NULL)),
+    CHECK (present_seconds <= camera_on_seconds AND camera_on_seconds <= connected_seconds AND pip_seconds <= connected_seconds)
 );
 CREATE INDEX idx_connections_user_started ON connections (user_id, started_at DESC);
 CREATE INDEX idx_connections_character ON connections (character_id);
@@ -350,16 +365,13 @@ CREATE UNIQUE INDEX uq_connections_one_in_progress
 CREATE INDEX idx_connections_in_progress
     ON connections (last_heartbeat_at) WHERE ended_at IS NULL;  -- 자동 마감 배치용
 
--- 상태 이벤트는 상태가 바뀔 때만 한 줄씩. 각 상태는 다음 상태 이벤트가 올 때 끝남
---   FOCUS: 시작·쉬는 시간 종료 / AWAY: 자리 비움 / RETURN: 딴짓에서 복귀 / BREAK: 쉬는 시간
--- 동작 이벤트는 감지된 순간 한 줄. 상태를 바꾸지 않고 시간 계산에 쓰지 않음 (캐릭터 반응 · 호감도용)
---   DROWSY: 졸음 / YAWN: 하품 / WAVE: 손 흔들기 / HEAD_TURN: 고개 돌림
---   쉬는 시간 중에는 감지 이벤트(AWAY · RETURN · 동작 이벤트)를 남기지 않음 (서버가 무시)
---   같은 동작 type이 1분 안에 다시 오면 남기지 않음 (서버 쿨다운)
+-- 2026-11-23 베타 이벤트 4종 (API 18): PRESENT 얼굴 감지 시작 / AWAY 자리 비움 / RETURN 복귀 / IDLE_TALK 말 걸기 타이머
+--   옛 FOCUS · BREAK · 동작 이벤트(DROWSY · YAWN · WAVE · HEAD_TURN)는 지난 기록이라 CHECK에만 남기고 API는 받지 않음
 CREATE TABLE connection_events (
     id             bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     connection_id  bigint      NOT NULL REFERENCES connections (id) ON DELETE CASCADE,
-    type           text        NOT NULL CHECK (type IN ('FOCUS', 'AWAY', 'RETURN', 'BREAK', 'DROWSY', 'YAWN', 'WAVE', 'HEAD_TURN')),
+    type           text        NOT NULL CHECK (type IN ('PRESENT', 'AWAY', 'RETURN', 'IDLE_TALK',
+                                   'FOCUS', 'BREAK', 'DROWSY', 'YAWN', 'WAVE', 'HEAD_TURN')),
     false_positive boolean     NOT NULL DEFAULT false,   -- '아니야' 버튼 (오탐이면 집중으로 계산)
     occurred_at    timestamptz NOT NULL DEFAULT now()
 );
