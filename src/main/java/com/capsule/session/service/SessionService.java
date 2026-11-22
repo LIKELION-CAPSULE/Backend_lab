@@ -7,7 +7,6 @@ import static com.capsule.session.domain.SessionEvent.RETURN;
 
 import com.capsule.common.error.ApiException;
 import com.capsule.common.error.CommonErrorCode;
-import com.capsule.common.time.ClockConfig;
 import com.capsule.content.api.AvatarQuery;
 import com.capsule.content.api.CharacterQuery;
 import com.capsule.content.api.ContentTypes.AvatarInfo;
@@ -50,13 +49,13 @@ import com.capsule.user.api.ActiveSessionLookup;
 import com.capsule.user.api.BetaFeedbackQuery;
 import com.capsule.user.api.ReferralRewards;
 import com.capsule.user.api.UserQuery;
+import com.capsule.user.api.UserSettingsQuery;
 import com.capsule.user.api.UserTypes.ReferralReward;
 import com.capsule.user.api.UserTypes.UserProfile;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
@@ -76,8 +75,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class SessionService {
 
     private static final Logger log = LoggerFactory.getLogger(SessionService.class);
-    /** 하루는 한국 시간 오전 5시에 바뀐다 (api.md 16 '하루 기준') */
-    private static final LocalTime DAY_STARTS_AT = LocalTime.of(5, 0);
     /** 만 19세 미만 하루 연결 시간 (PRD 8장, 제타와 같은 기준) */
     private static final int MINOR_DAILY_SECONDS = 3 * 60 * 60;
     /** 프론트가 고를 수 있는 끝 종류. AUTO_CLOSED는 서버 배치만 (api.md 22) */
@@ -87,6 +84,7 @@ public class SessionService {
     private final StudySessionRepository sessions;
     private final SessionEventRepository events;
     private final UserQuery users;
+    private final UserSettingsQuery userSettings;
     private final AvatarQuery avatars;
     private final MateQuery mates;
     private final CharacterQuery characters;
@@ -176,6 +174,7 @@ public class SessionService {
                 figure(character),
                 figure(avatar),
                 me(user, avatar),
+                userSettings.settings(userId),
                 now(),
                 firstMeet,
                 reaction(character.id(), "GREETING", null),
@@ -190,8 +189,8 @@ public class SessionService {
         return new IntimacyView.Now(stage, stageName(mate, stage));
     }
 
-    /** 단계 이름은 메이트마다 다름 (characters.stage_names). 없으면 null */
-    private static String stageName(MateInfo mate, int stage) {
+    /** 단계 이름은 메이트마다 다름 (characters.stage_names). 없으면 null. 내 메이트 · 내 기록(RecordService)도 쓴다 */
+    public static String stageName(MateInfo mate, int stage) {
         List<String> names = mate == null ? List.of() : mate.stageNames();
         return names != null && stage >= 1 && stage <= names.size() ? names.get(stage - 1) : null;
     }
@@ -493,12 +492,8 @@ public class SessionService {
 
     /** 오늘(오전 5시 기준)의 [시작, 끝) */
     private Instant[] today() {
-        var local = now().atZone(ClockConfig.KST);
-        LocalDate day = local.toLocalTime().isBefore(DAY_STARTS_AT)
-                ? local.toLocalDate().minusDays(1)
-                : local.toLocalDate();
-        Instant from = day.atTime(DAY_STARTS_AT).atZone(ClockConfig.KST).toInstant();
-        return new Instant[] {from, from.plus(Duration.ofDays(1))};
+        LocalDate day = ConnectionDay.dayOf(now());
+        return new Instant[] {ConnectionDay.startOf(day), ConnectionDay.startOf(day.plusDays(1))};
     }
 
     /** 남의 연결도 없는 연결과 똑같이 404 */
@@ -552,7 +547,7 @@ public class SessionService {
     }
 
     private static Me me(UserProfile user, AvatarInfo avatar) {
-        return new Me(user.nickname(), avatar.thumbnailUrl());
+        return new Me(user.nickname(), user.honorific(), avatar.thumbnailUrl());
     }
 
     /** DB(timestamptz) 정밀도에 맞춰 응답 값과 저장 값이 같게 */

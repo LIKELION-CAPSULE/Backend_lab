@@ -4,6 +4,7 @@ import com.capsule.relation.domain.Relation;
 import jakarta.persistence.LockModeType;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -82,6 +83,10 @@ public interface RelationRepository extends JpaRepository<Relation, Long> {
             INSERT INTO user_unlocked_contents (user_id, content_id) VALUES (:userId, :contentId)
             ON CONFLICT DO NOTHING""", nativeQuery = true)
     void unlock(long userId, long contentId);
+
+    /** 내 메이트(api.md 37)의 해금 여부 */
+    @Query(value = "SELECT content_id FROM user_unlocked_contents WHERE user_id = :userId", nativeQuery = true)
+    List<Long> unlockedContentIds(long userId);
 
     /** 깎인 점수가 0이어도(0점에서 심한 말) 그날 오름 멈춤이 걸리게 기록 대신 여기에 남긴다 */
     @Modifying(flushAutomatically = true)

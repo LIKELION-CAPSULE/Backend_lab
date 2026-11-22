@@ -47,4 +47,14 @@ public final class UserTypes {
 
     /** 연결로 받은 초대 보상 (받은 사람 몫, api.md 22 · 23 referralReward) */
     public record ReferralReward(int amount) {}
+
+    /** 설정 7개 (api.md 29와 같은 모양 · 기본값 포함). 16 연결 시작의 settings (2026-11-23) */
+    public record SettingsInfo(
+            String talkFrequency,
+            boolean voiceEnabled,
+            int voiceVolume,
+            String voiceSpeed,
+            boolean pipBubble,
+            String defaultMode,
+            String pipSize) {}
 }

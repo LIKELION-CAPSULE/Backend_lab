@@ -41,6 +41,23 @@ public interface StudySessionRepository extends JpaRepository<StudySession, Long
     /** 이 메이트와 연결한 적이 있는지 (첫 만남, api.md 16). 지금 만든 연결은 빼고 센다 */
     boolean existsByUserIdAndCharacterIdAndIdNot(long userId, long characterId, long id);
 
+    /** 내 메이트 (api.md 37): 끝난 연결을 메이트별로 모은 값, 마지막 연결 시작이 최근인 순 */
+    @Query("select s.characterId as mateId, min(s.startedAt) as firstMetAt, max(s.startedAt) as lastConnectedAt,"
+            + " count(s) as connectionCount, coalesce(sum(s.presentSeconds), 0) as presentSeconds,"
+            + " coalesce(sum(s.connectedSeconds), 0) as connectedSeconds"
+            + " from StudySession s where s.userId = :userId and s.endedAt is not null"
+            + " group by s.characterId order by max(s.startedAt) desc, s.characterId")
+    List<MateTotals> mateTotals(long userId);
+
+    /** 내 메이트 recent (api.md 37): 이 메이트와 최근 끝난 연결 5개 */
+    List<StudySession> findTop5ByUserIdAndCharacterIdAndEndedAtIsNotNullOrderByEndedAtDescIdDesc(
+            long userId, long characterId);
+
+    /** 내 기록 (api.md 38): 이 기간에 시작한 끝난 연결 */
+    @Query("select s from StudySession s where s.userId = :userId and s.endedAt is not null"
+            + " and s.startedAt >= :from and s.startedAt < :to order by s.startedAt, s.id")
+    List<StudySession> endedStartedBetween(long userId, Instant from, Instant to);
+
     @Query("select s.id from StudySession s where s.endedAt is null"
             + " and coalesce(s.lastHeartbeatAt, s.startedAt) < :cutoff")
     List<Long> findStaleIds(Instant cutoff);

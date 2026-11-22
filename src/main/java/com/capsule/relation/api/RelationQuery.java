@@ -1,10 +1,12 @@
 package com.capsule.relation.api;
 
 import com.capsule.relation.api.RelationTypes.AffinityChange;
+import com.capsule.relation.api.RelationTypes.IntimacyNow;
 import com.capsule.relation.api.RelationTypes.IntimacySettlement;
 import com.capsule.relation.api.RelationTypes.RelationView;
 import com.capsule.relation.api.RelationTypes.SessionEventRef;
 import com.capsule.relation.api.RelationTypes.StudySettlement;
+import java.util.Set;
 
 public interface RelationQuery {
 
@@ -24,4 +26,10 @@ public interface RelationQuery {
 
     /** 끝난 세션의 정산 결과를 기록에서 다시 읽는다 (공부 종료 재호출·리포트 조회, api.md 22·23) */
     StudySettlement settlementOf(long userId, long characterId, long sessionId);
+
+    /** 지금 친밀도: 단계 · 누적 인정 시간 · 다음 단계까지 남은 시간 (내 메이트, api.md 37). 안 만났으면 1단계 · 0초 */
+    IntimacyNow intimacyNow(long userId, long characterId);
+
+    /** 이 사용자에게 열린 해금 콘텐츠 id 전부 (user_unlocked_contents, 내 메이트 api.md 37 unlocks[].unlocked) */
+    Set<Long> unlockedContentIds(long userId);
 }
