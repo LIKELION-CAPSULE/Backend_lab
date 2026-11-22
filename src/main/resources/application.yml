@@ -147,3 +147,5 @@ capsule:
     target-minutes-step: 5
     target-minutes-extra: [3] # 범위 밖이어도 받는 값 (2026-11-05 최소 3분)
     motion-cooldown: 1m # 명세 18: 같은 동작 이벤트가 이 안에 다시 오면 무시
+  beta:
+    max-users: ${CAPSULE_BETA_MAX_USERS:100} # 12/1 베타 정원 (명세 4 · 6): 탈퇴하지 않은 가입자가 이 수 이상이면 가입 403 BETA_FULL
