@@ -1469,6 +1469,7 @@ GET /api/me/memories?date=2026-11-12
 | returnCount | Integer | 자리 비운 뒤 돌아온 횟수 (`RETURN` 이벤트 수) |
 | mate | Object | `id`, `name`, `illustrationUrl`(전신), `myRole` |
 | relation | Object | 친밀도 (5단계 · 2026-11-23): `stageBefore` · `stageAfter`(1~5) · `stageName`(끝난 뒤 단계 이름, 메이트마다 다름) · `stageUp` · `creditedSeconds`(이번에 인정된 시간) · `nextStageSeconds`(다음 단계까지 남은 인정 시간, 5단계면 null) · `unlocked[]`(이번에 열린 것 `type`(EXPRESSION · VOICE_LINE) · `title` · `unlockStage` · `expressionName` · `assetUrl`) |
+| referralReward | Object | 이 연결로 초대 보상(받은 사람 몫)을 받았으면 `{ "amount": 1000 }`, 아니면 null (8단계 · 2026-11-23) |
 | closingLine | String | 완료 대사 (리포트 · 카드 공용). 캐릭터 설정에 완료 대사(`character_lines` CLOSING)가 있으면 지금 관계 단계의 그 문장(PM: 말포이는 고정. 단계별 문장은 확정 필요), 없으면 AI. 직접 끝냈는데 목표 시간의 절반도 못 채웠으면 공부 포기 대사(GIVE_UP, 임시 J-15, 문구 확정 필요). 기준 시간은 공부 시간 `studySeconds`(자리 지킴 + 자리 비움, 쉬는 시간 제외)로 확정, 목표 시간을 정하지 않은 세션은 포기로 보지 않음 (절반 · 직접 끝냄 조건은 확정 필요) |
 
 > 2026-11-04 (호감도 최종안): 공부 시간은 호감도를 올리지 않고 레벨에만 씀. 레벨 = 자리 지킴 60분당 1 (임시, PM 확인 필요)
@@ -1476,6 +1477,8 @@ GET /api/me/memories?date=2026-11-12
 > 2026-11-23 (12/1 베타 3단계): `sessionId` → `connectionId`, `roomName` 삭제, `character` → `mate`. 목표 시간이 없어져 공부 포기 대사(GIVE_UP)는 나오지 않음
 
 > 2026-11-23 (12/1 베타 5단계): `relation`을 호감도 · 레벨 → **친밀도**로 바꿈. 호감도 점수는 대화(20 · 28 응답의 `affinity`)에만 남고 연결 기록에는 안 나옴
+
+> 2026-11-23 (12/1 베타 8단계): `referralReward` 추가 — 이 연결로 초대 보상을 받았으면 `{ "amount": 1000 }`, 아니면 null (다시 읽어도 같은 값)
 
 #### 친밀도 규칙 (PRD 8장, 숫자는 추천값)
 
@@ -1489,7 +1492,7 @@ GET /api/me/memories?date=2026-11-12
 json
 
 ```json
-{  "connectionId": 512,  "startedAt": "2026-11-07T05:00:02Z", "endedAt": "2026-11-07T06:05:10Z", "endType": "NORMAL",  "connectedSeconds": 3300, "presentSeconds": 2880, "awaySeconds": 300, "messageCount": 18,  "returnCount": 2,  "mate": { "id": 1, "name": "채린", "illustrationUrl": "https://cdn.../chaerin/full.png", "myRole": "같은 반 친구" },  "relation": { "stageBefore": 2, "stageAfter": 3, "stageName": "친구", "stageUp": true, "creditedSeconds": 2880, "nextStageSeconds": 36000, "unlocked": [ { "type": "EXPRESSION", "title": "수줍은 웃음", "unlockStage": 3, "expressionName": "shy", "assetUrl": null } ] },  "closingLine": "오늘도 같이 공부해서 좋았어. 다음에도 함께하자."}
+{  "connectionId": 512,  "startedAt": "2026-11-07T05:00:02Z", "endedAt": "2026-11-07T06:05:10Z", "endType": "NORMAL",  "connectedSeconds": 3300, "presentSeconds": 2880, "awaySeconds": 300, "messageCount": 18,  "returnCount": 2,  "mate": { "id": 1, "name": "채린", "illustrationUrl": "https://cdn.../chaerin/full.png", "myRole": "같은 반 친구" },  "relation": { "stageBefore": 2, "stageAfter": 3, "stageName": "친구", "stageUp": true, "creditedSeconds": 2880, "nextStageSeconds": 36000, "unlocked": [ { "type": "EXPRESSION", "title": "수줍은 웃음", "unlockStage": 3, "expressionName": "shy", "assetUrl": null } ] },  "closingLine": "오늘도 같이 공부해서 좋았어. 다음에도 함께하자.",  "referralReward": null}
 ```
 
 > ✅ **200 OK** (이미 끝난 세션도 200 + 같은 결과)
@@ -1501,9 +1504,10 @@ json
 1. `ended_at IS NULL`일 때만 종료 (두 번 눌러도 한 번만 정산)
 2. 받은 값 검증 → 통과하면 시간 칸 저장, 이벤트로 `away_seconds`, `RETURN` 이벤트 수로 `return_count` 저장
 3. 친밀도 정산(위 '친밀도 규칙') → `relation_daily` · `user_character_relations`(`credited_seconds` · `stage`) · `relation_settlements`(이 연결의 인정 시간 · 단계 전후) · 열린 해금 `user_unlocked_contents` (호감도는 바꾸지 않음)
-4. 이번 세션 대화를 흐름 카드 한 장으로 써서 `conversation_recaps`에 저장(최근 2장만 남김)하고 `chat_messages` 삭제. 카드 앞에 날짜 · 공부 시간을 붙임 (예: "11/03 55분, …")
+4. 이번 세션 대화를 흐름 카드 한 장으로 써서 `conversation_recaps`에 저장(최근 2장만 남김)하고 카드에 넣은 메시지에 `recapped_at` 표시 (2026-11-23부터 지우지 않음, 32). 카드 앞에 날짜 · 공부 시간을 붙임 (예: "11/03 55분, …")
 5. 완료 대사(`closingLine`)를 만들어 `connections.closing_line`에 저장
-6. LLM이 실패하거나 7초를 넘겨도 종료는 성공 (2026-11-06: 5초 → 7초): 카드를 못 쓰면 메시지를 지우지 않고 남김 → 다음 종료 때 그 세션 카드에 같이 들어감. 완료 대사는 고정 문구
+6. LLM이 실패하거나 7초를 넘겨도 종료는 성공 (2026-11-06: 5초 → 7초): 카드를 못 쓰면 표시하지 않고 남김 → 다음 종료 때 그 세션 카드에 같이 들어감. 완료 대사는 고정 문구
+7. **초대 보상** (2026-11-23 8단계, 36 '초대 규칙'): 이 사용자가 초대 코드를 입력했고 아직 보상 전이면, 이 연결로 조건 충족(`referrals.qualified_at` · `qualified_connection_id`) → 받은 사람 1,000 · 초대한 사람 1,000(초대한 사람 보상 10명까지)
 
 ---
 
@@ -2060,3 +2064,83 @@ data: {"requestId":"9c3a...","characterId":1,"content":"알지. 그리핀도르 
 > ✅ **200 OK**
 
 > ❌ **400** INVALID_REQUEST (filter · size · cursor)
+
+## 35. GET /api/referrals/me — 초대 현황
+- 분류: 크레딧
+- 설명: 친구 초대 화면. 내 코드 · 링크 · 보상 받은 수 · 초대한 친구 목록 · 내가 코드를 입력할 수 있는지
+- 와이어프레임: SCR-31 친구 초대
+- 백엔드: Not started
+- 프론트: Not started
+
+> 2026-11-23 (12/1 베타 8단계): 친구 초대 추가
+
+- 테이블: `referrals`, `users` · 인증: 필요
+
+#### [GET] /api/referrals/me
+
+#### 🛬 Response
+
+| 이름 | 타입 | 설명 |
+| --- | --- | --- |
+| code | String | 내 초대 코드 (`users.referral_code`) |
+| link | String | 초대 링크 (`https://capsule.ai.kr/i/<code>`, 주소는 서버 설정 `capsule.referral.link-base`) |
+| rewardedCount · maxRewards | Integer | 보상받은 초대 수 / 10 |
+| rewardedCredits | Integer | 초대로 받은 크레딧 (초대한 사람 몫 합) |
+| friends | Array | 내 코드를 입력한 친구, 최근 순. `nickname` · `status`(`JOINED` 코드 입력함 · `QUALIFIED` 첫 연결 완료) · `rewarded`(내가 보상을 받았는지) · `joinedAt`(친구 가입 시각). 탈퇴한 친구는 `nickname` null |
+| canEnterCode | Boolean | 받은 코드를 아직 입력할 수 있는지 (입력 안 함 + 가입 7일 안) |
+| codeInputDeadline | String | 입력 마감 시각 (가입 + 7일). 입력했거나 지났으면 null |
+
+```json
+{
+  "code": "CAP-7K2Q", "link": "https://capsule.ai.kr/i/CAP-7K2Q",
+  "rewardedCount": 2, "maxRewards": 10, "rewardedCredits": 2000,
+  "friends": [
+    { "nickname": "준호", "status": "JOINED", "rewarded": false, "joinedAt": "2026-12-02T10:00:00Z" },
+    { "nickname": "민지", "status": "QUALIFIED", "rewarded": true, "joinedAt": "2026-12-01T09:00:00Z" }
+  ],
+  "canEnterCode": true, "codeInputDeadline": "2026-12-08T09:00:00Z"
+}
+```
+
+> ✅ **200 OK**
+
+## 36. POST /api/referrals — 초대 코드 입력
+- 분류: 크레딧
+- 설명: 받은 초대 코드 입력. 가입 마지막 단계(링크로 오면 자동 입력)와 친구 초대 화면
+- 와이어프레임: SCR-64 · SCR-31
+- 백엔드: Not started
+- 프론트: Not started
+
+> 2026-11-23 (12/1 베타 8단계): 초대 코드 입력 추가
+
+#### 초대 규칙 (PRD · 노션 '기능 추가')
+
+- 코드 입력은 가입 후 7일 안에 한 번. 자기 코드 · 같은 기기(입력한 `deviceHash` 또는 내 가입 기기가 초대한 사람의 가입 기기와 같음)는 거절
+- 보상은 입력할 때 주지 않고, 입력한 뒤 **처음 끝나는 연결**(22)에서 준다: 받은 사람 1,000 · 초대한 사람 1,000 (초대분, 사라지지 않음)
+- 초대한 사람 보상은 10명까지. 11번째부터 초대한 사람 몫은 없고 받은 사람 몫은 준다 (확정 필요: 받은 사람에게도 안 줄지)
+- 코드는 대소문자를 가리지 않음. 탈퇴한 사람의 코드는 없는 코드
+
+- 테이블: `referrals`, `users`, `signup_devices` · 인증: 필요
+
+#### [POST] /api/referrals
+
+#### 🛫 Request
+
+| 이름 | 타입 | 필수 | 설명 |
+| --- | --- | --- | --- |
+| code | String | O | 받은 초대 코드 |
+| deviceHash | String | O | 기기 값 (64자 이하) |
+
+```json
+{ "code": "CAP-7K2Q", "deviceHash": "d1f0..." }
+```
+
+#### 🛬 Response
+
+```json
+{ "inviterNickname": "성욱", "rewardOnFirstConnection": 1000 }
+```
+
+> ✅ **201 Created**
+
+> ❌ **400** INVALID_REQUEST (빈 값 · 길이) · REFERRAL_SELF · REFERRAL_EXPIRED (가입 7일 지남) · REFERRAL_SAME_DEVICE · **404** REFERRAL_CODE_NOT_FOUND · **409** REFERRAL_ALREADY_ENTERED
