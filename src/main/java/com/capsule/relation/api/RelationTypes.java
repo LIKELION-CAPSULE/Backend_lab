@@ -123,6 +123,15 @@ public final class RelationTypes {
     }
 
     /**
+     * 지금 친밀도 (api.md 37 relation, 2026-11-23). 단계 이름은 session이 content에서 붙인다
+     *
+     * @param stage 친밀도 단계 1~5
+     * @param creditedSeconds 누적 인정 시간
+     * @param nextStageSeconds 다음 단계까지 남은 인정 시간, 5단계면 null
+     */
+    public record IntimacyNow(int stage, int creditedSeconds, Integer nextStageSeconds) {}
+
+    /**
      * 공부 종료 정산 결과 (api.md 22의 relation). pointsBefore = 이 세션 시작 때 점수.
      * 레벨은 공부 시간, 단계(stage)는 호감도에서 온다.
      *

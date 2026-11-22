@@ -8,6 +8,7 @@ import com.capsule.relation.api.RelationCommands;
 import com.capsule.relation.api.RelationQuery;
 import com.capsule.relation.api.RelationTypes.AffinityChange;
 import com.capsule.relation.api.RelationTypes.ChatScore;
+import com.capsule.relation.api.RelationTypes.IntimacyNow;
 import com.capsule.relation.api.RelationTypes.IntimacySettlement;
 import com.capsule.relation.api.RelationTypes.RelationView;
 import com.capsule.relation.api.RelationTypes.SessionEventRef;
@@ -232,6 +233,7 @@ class RelationServiceTest {
 
     @Test
     void intimacyCreditsPresentTimeWithDailyCap() {
+        assertThat(query.intimacyNow(userId, CHARACTER)).isEqualTo(new IntimacyNow(1, 0, 3600)); // 안 만났으면 1단계
         Instant now = Instant.now(clock);
         long first = newSession();
         chat(first, PLUS_ONE); // 그날 대화 있음 → 절반 아님
@@ -249,6 +251,8 @@ class RelationServiceTest {
         assertThat(query.intimacyOf(userId, CHARACTER, second)).isEqualTo(s2);
         assertThat(s2.totalCreditedSeconds()).isEqualTo(7200);
         assertThat(query.stage(userId, CHARACTER)).isEqualTo(2);
+        // 내 메이트(37): 지금 단계 · 누적 인정 · 다음 단계(5시간)까지
+        assertThat(query.intimacyNow(userId, CHARACTER)).isEqualTo(new IntimacyNow(2, 7200, 10800));
         assertThat(jdbc.queryForObject(
                         "SELECT total_connected_seconds FROM user_character_relations WHERE user_id = ?",
                         Integer.class,
@@ -286,6 +290,7 @@ class RelationServiceTest {
         assertThat(jdbc.queryForObject(
                         "SELECT count(*) FROM user_unlocked_contents WHERE user_id = ?", Integer.class, userId))
                 .isEqualTo(1);
+        assertThat(query.unlockedContentIds(userId)).containsExactly(content); // 내 메이트(37) unlocked
     }
 
     @Test

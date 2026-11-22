@@ -232,6 +232,45 @@ class SessionApiTest {
     }
 
     @Test
+    void startReturnsHonorificAndSettings() throws Exception {
+        given(userQuery.find(anyLong()))
+                .willAnswer(inv -> Optional.of(new UserProfile(
+                        inv.<Long>getArgument(0), "승희", null, 1L, AVATAR.thumbnailUrl(), false, "승희야", null, false)));
+        // 설정은 실제 user 모듈(29와 같은 값): 바꾼 키만 저장, 나머지는 기본값
+        jdbc.update(
+                "UPDATE users SET settings = '{\"voiceEnabled\": false, \"defaultMode\": \"ADVANCED\"}' WHERE id = ?",
+                userId);
+        long id = ((Number) JsonPath.read(
+                        startRequest(userId, 1)
+                                .andExpect(status().isCreated())
+                                .andExpect(jsonPath("$.data.me.nickname").value("승희"))
+                                .andExpect(jsonPath("$.data.me.honorific").value("승희야"))
+                                .andExpect(jsonPath("$.data.me.profileImageUrl").value(AVATAR.thumbnailUrl()))
+                                .andExpect(jsonPath("$.data.settings.talkFrequency")
+                                        .value("SOMETIMES"))
+                                .andExpect(
+                                        jsonPath("$.data.settings.voiceEnabled").value(false))
+                                .andExpect(
+                                        jsonPath("$.data.settings.voiceVolume").value(70))
+                                .andExpect(
+                                        jsonPath("$.data.settings.voiceSpeed").value("NORMAL"))
+                                .andExpect(jsonPath("$.data.settings.pipBubble").value(true))
+                                .andExpect(
+                                        jsonPath("$.data.settings.defaultMode").value("ADVANCED"))
+                                .andExpect(jsonPath("$.data.settings.pipSize").value("M"))
+                                .andReturn()
+                                .getResponse()
+                                .getContentAsString(),
+                        "$.data.connectionId"))
+                .longValue();
+        // 17 이어하기의 me도 같은 모양 (settings는 17 명세에 없음)
+        mvc.perform(post("/api/connections/{id}/resume", id).with(login(userId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.me.honorific").value("승희야"))
+                .andExpect(jsonPath("$.data.settings").doesNotExist());
+    }
+
+    @Test
     void startRejectsInvalidRequests() throws Exception {
         expectError(startRequest(userId, 99), 404, "MATE_NOT_FOUND");
         expectError(startRequest(userId, 2), 409, "MATE_COMING_SOON");

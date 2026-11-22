@@ -7,6 +7,7 @@ import com.capsule.relation.api.RelationCommands;
 import com.capsule.relation.api.RelationQuery;
 import com.capsule.relation.api.RelationTypes.AffinityChange;
 import com.capsule.relation.api.RelationTypes.ChatScore;
+import com.capsule.relation.api.RelationTypes.IntimacyNow;
 import com.capsule.relation.api.RelationTypes.IntimacySettlement;
 import com.capsule.relation.api.RelationTypes.RelationView;
 import com.capsule.relation.api.RelationTypes.SessionEventRef;
@@ -25,6 +26,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -259,6 +261,22 @@ public class RelationService implements RelationQuery, RelationCommands {
                 settled.map(RelationSettlement::getCreditedSeconds).orElse(0),
                 total,
                 IntimacyPolicy.secondsToNextStage(total));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public IntimacyNow intimacyNow(long userId, long characterId) {
+        Optional<Relation> found = relations.findByUserIdAndCharacterId(userId, characterId);
+        int credited = found.map(Relation::getCreditedSeconds).orElse(0);
+        // 저장된 stage = stageOf(누적 인정) 전제 (정산이 둘을 같이 올리고 내리지 않음). intimacyOf와 같은 계산
+        return new IntimacyNow(
+                found.map(Relation::getStage).orElse(1), credited, IntimacyPolicy.secondsToNextStage(credited));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Set<Long> unlockedContentIds(long userId) {
+        return Set.copyOf(relations.unlockedContentIds(userId));
     }
 
     /** 관계가 없으면 만들고 행을 잠근다 */
