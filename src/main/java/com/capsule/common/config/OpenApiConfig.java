@@ -42,7 +42,8 @@ public class OpenApiConfig {
                         new Tag().name(ApiTags.ONBOARDING_HOME),
                         new Tag().name(ApiTags.STUDY_SESSION),
                         new Tag().name(ApiTags.DIALOGUE),
-                        new Tag().name(ApiTags.REPORT)))
+                        new Tag().name(ApiTags.REPORT),
+                        new Tag().name(ApiTags.CREDIT)))
                 .components(new Components()
                         .addSecuritySchemes(
                                 BEARER,

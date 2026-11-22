@@ -13,6 +13,8 @@ public final class ApiTags {
     public static final String STUDY_SESSION = "공부 세션";
     public static final String DIALOGUE = "대화";
     public static final String REPORT = "리포트";
+    /** 12/1 베타 크레딧 (api.md 33 · 34, ADR 0031) */
+    public static final String CREDIT = "크레딧";
 
     private ApiTags() {}
 }

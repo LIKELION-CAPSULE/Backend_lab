@@ -70,7 +70,8 @@ class SwaggerTest {
         @Test
         void tagsInSpecOrder() throws Exception {
             mvc.perform(get("/v3/api-docs"))
-                    .andExpect(jsonPath("$.tags[*].name").value(contains("인증", "온보딩 · 홈", "공부 세션", "대화", "리포트")));
+                    .andExpect(
+                            jsonPath("$.tags[*].name").value(contains("인증", "온보딩 · 홈", "공부 세션", "대화", "리포트", "크레딧")));
         }
 
         @Test
@@ -84,7 +85,12 @@ class SwaggerTest {
             List<String> tags = JsonPath.read(json, "$.paths.*.*.tags[*]");
             List<String> summaries = JsonPath.read(json, "$.paths.*.*.summary");
             List<String> known = List.of(
-                    ApiTags.AUTH, ApiTags.ONBOARDING_HOME, ApiTags.STUDY_SESSION, ApiTags.DIALOGUE, ApiTags.REPORT);
+                    ApiTags.AUTH,
+                    ApiTags.ONBOARDING_HOME,
+                    ApiTags.STUDY_SESSION,
+                    ApiTags.DIALOGUE,
+                    ApiTags.REPORT,
+                    ApiTags.CREDIT);
 
             assertThat(tags).hasSize(operations).allMatch(known::contains);
             assertThat(summaries).hasSize(operations).allMatch(s -> s.matches("\\d+\\. .+")); // "명세 번호. 제목"
