@@ -313,6 +313,7 @@ CREATE TABLE relation_daily (
     relation_id      bigint NOT NULL REFERENCES user_character_relations (id),
     day              date   NOT NULL,
     credited_seconds int    NOT NULL DEFAULT 0 CHECK (credited_seconds BETWEEN 0 AND 7200),
+    chat_turns       int    NOT NULL DEFAULT 0 CHECK (chat_turns >= 0),  -- 그날 이 메이트와 대화 턴 수 (0이면 인정 절반)
     PRIMARY KEY (relation_id, day)
 );
 CREATE INDEX idx_relations_character ON user_character_relations (character_id);
