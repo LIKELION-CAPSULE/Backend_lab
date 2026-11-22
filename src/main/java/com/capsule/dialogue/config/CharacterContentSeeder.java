@@ -1,7 +1,7 @@
 package com.capsule.dialogue.config;
 
+import com.capsule.content.api.CharacterQuery;
 import com.capsule.content.api.ContentTypes.CharacterInfo;
-import com.capsule.content.api.RoomQuery;
 import com.capsule.dialogue.config.DialogueProperties.ScoreRule;
 import com.capsule.dialogue.dto.CharacterContent;
 import com.capsule.dialogue.dto.CharacterContent.Line;
@@ -71,7 +71,7 @@ public class CharacterContentSeeder implements ApplicationRunner {
     public record SampleFile(String user, String reply) {}
 
     private final CharacterContentRepository contents;
-    private final RoomQuery rooms;
+    private final CharacterQuery characters;
 
     @Override
     public void run(ApplicationArguments args) throws IOException {
@@ -137,10 +137,9 @@ public class CharacterContentSeeder implements ApplicationRunner {
         }
     }
 
-    /** 활성 룸의 활성 캐릭터 중 이름이 같은(앞뒤 공백 무시) 하나. 여럿이면 어느 쪽인지 모르므로 빈 값 */
+    /** 활성 캐릭터 중 이름이 같은(앞뒤 공백 무시) 하나. 여럿이면 어느 쪽인지 모르므로 빈 값 (2026-11-23 룸 삭제 뒤 전체에서) */
     private Optional<Long> characterIdOf(String name) {
-        List<Long> ids = rooms.activeRooms().stream()
-                .flatMap(r -> r.characters().stream())
+        List<Long> ids = characters.active().stream()
                 .filter(ch -> ch.name().strip().equals(name.strip()))
                 .map(CharacterInfo::id)
                 .distinct()

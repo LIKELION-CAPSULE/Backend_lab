@@ -47,8 +47,11 @@ public final class ContentTypes {
     public record AvatarInfo(long id, String name, String thumbnailUrl, boolean active, ModelInfo model) {}
 
     /**
-     * @param profileImageUrl 캐릭터 사진 (홈 · 룸 상세 · 공부 화면)
-     * @param homeImageUrl 홈 포스터 카드에 겹치는 전신 그림, 없으면 null (api.md 11, 2026-11-06 확장)
+     * 2026-11-23 스터디룸 삭제 뒤: roomId는 늘 0(룸이 없음, 생성자 모양을 지키려고 남김), personality는 해시태그 값.
+     * model은 준비 중 메이트면 null
+     *
+     * @param profileImageUrl 캐릭터 사진 (연결 화면)
+     * @param homeImageUrl 옛 홈 포스터 카드 전신 그림, 없으면 null
      */
     public record CharacterInfo(
             long id,
@@ -78,39 +81,6 @@ public final class ContentTypes {
             this(id, roomId, name, profileImageUrl, personality, intro, active, model, null);
         }
     }
-
-    /**
-     * characters는 활성 캐릭터만, 정렬 순서대로.
-     *
-     * @param thumbnailUrl 홈 포스터 카드
-     * @param bannerUrl 룸 상세 가로 배너, 없으면 null (api.md 12, 2026-11-05 확장)
-     */
-    public record RoomInfo(
-            long id,
-            String name,
-            String description,
-            String thumbnailUrl,
-            boolean active,
-            List<CharacterInfo> characters,
-            String bannerUrl) {
-
-        /**
-         * @deprecated 배너를 받는 생성자를 쓴다 (2026-11-05 확장).
-         *     제거 예정 PR: 남은 사용처(테스트)를 옮긴 뒤 content 정리 PR (성욱)
-         */
-        @Deprecated(forRemoval = true)
-        public RoomInfo(
-                long id,
-                String name,
-                String description,
-                String thumbnailUrl,
-                boolean active,
-                List<CharacterInfo> characters) {
-            this(id, name, description, thumbnailUrl, active, characters, null);
-        }
-    }
-
-    public record BackgroundInfo(long id, long roomId, String name, String imageUrl) {}
 
     public record MotionRef(String group, String file) {}
 

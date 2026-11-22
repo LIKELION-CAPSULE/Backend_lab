@@ -25,17 +25,12 @@ public class CharacterEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private long roomId;
-
+    /** 준비 중 메이트(comingSoon)는 모델이 없을 수 있음 */
     @ManyToOne
     @JoinColumn(name = "model_id")
     private Live2dModel model;
 
     private String name;
-
-    @JdbcTypeCode(SqlTypes.ARRAY)
-    private List<String> personality;
-
     private String intro;
     private String profileImageUrl;
     private String homeImageUrl;

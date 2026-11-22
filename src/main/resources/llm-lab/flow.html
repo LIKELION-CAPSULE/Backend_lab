@@ -165,7 +165,7 @@ const SIGNAL = {AFFECTION: '애정 표현', COMPLIMENT: '칭찬', THANKS: '고�
   LOW_EFFORT: '단답', COMPLAINT: '불평', TEASE: '놀림', RUDE: '무례', HATE_OR_SEXUAL: '혐오 · 성적', NEUTRAL: '평범'};
 
 // S.s = 진행 중 세션: {id, characterId, mode: FOCUS|AWAY|BREAK, study, present, away, brk, returns, awayEventId, awayAt, awayLevel, hb}
-const S = {token: null, userId: null, member: null, rooms: [], s: null, timer: null};
+const S = {token: null, userId: null, member: null, mates: [], s: null, timer: null};
 
 const fmt = sec => { sec = Math.max(0, sec | 0); const h = sec / 3600 | 0, m = (sec % 3600) / 60 | 0, x = sec % 60;
   return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(x).padStart(2, '0'); };
@@ -241,20 +241,20 @@ async function enter() {
     const r = await login();
     note(`로그인: 사용자 #${S.userId} (${r.isNewUser ? '새로 가입' : '기존 회원'})`);
     const home = await call('GET', '/api/home');
-    S.rooms = home.rooms;
-    $('#room').innerHTML = S.rooms.map(x => `<option value="${x.id}">${esc(x.name)}</option>`).join('');
-    $('#room').disabled = false;
-    if (home.activeSession) note(`진행 중인 세션 #${home.activeSession.sessionId}이 있습니다. 공부 시작을 누르면 그 세션을 먼저 끝냅니다.`);
+    // 2026-11-23 스터디룸 → 메이트: 룸 선택 칸은 숨기고, 연결할 수 있는(준비 중 아닌) 메이트만 캐릭터 칸에
+    S.mates = home.mates.filter(m => !m.comingSoon);
+    $('#room').innerHTML = '<option value="0">(룸 없음)</option>';
+    $('#character').innerHTML = S.mates.map(m => `<option value="${m.id}">${esc(m.name)}</option>`).join('');
+    $('#character').disabled = false;
+    if (home.activeConnection) note(`진행 중인 연결 #${home.activeConnection.connectionId}이 있습니다. 시작을 누르면 그 연결을 먼저 끝냅니다.`);
     await loadRoom();
   } catch (e) { fail('로그인', e); }
 }
 
 async function loadRoom() {
-  const room = await call('GET', '/api/rooms/' + $('#room').value);
-  $('#character').innerHTML = room.characters.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
-  $('#character').disabled = false;
-  const c = room.characters[0];
-  $('#roomInfo').innerHTML = c ? `${esc(room.description)}<br>성격 태그(12): ${c.personality.map(esc).join(', ')}` : '캐릭터 없음';
+  if (!characterId()) { $('#roomInfo').textContent = '메이트 없음'; sync(); return; }
+  const m = await call('GET', '/api/mates/' + characterId());
+  $('#roomInfo').innerHTML = `${esc(m.oneLiner || '')}<br>해시태그(31): ${(m.hashtags || []).map(esc).join(', ')}`;
   sync();
   await refreshRelation();
 }
@@ -295,21 +295,22 @@ const num = el => el.value === '' ? null : Number(el.value);
 
 async function start() {
   $('#start').disabled = true; // 연타로 세션이 두 번 만들어지지 않게
-  const body ={roomId: Number($('#room').value), characterId: characterId(), targetMinutes: Number($('#target').value)};
+  // 2026-11-23 연결 시작은 메이트만 (목표 시간 없음). 목표 시간 칸은 화면에만 남음
+  const body = {mateId: characterId()};
   let r;
-  try { r = await call('POST', '/api/sessions', body); }
+  try { r = await call('POST', '/api/connections', body); }
   catch (e) {
-    if (e.data && e.data.code === 'SESSION_ALREADY_IN_PROGRESS') {
-      const old = e.data.detail.sessionId;
-      note(`진행 중이던 세션 #${old}을 0분으로 끝내고 다시 시작합니다.`);
-      try { await call('POST', `/api/sessions/${old}/end`, {studySeconds: 0, presentSeconds: 0}); r = await call('POST', '/api/sessions', body); }
-      catch (e2) { sync(); return fail('공부 시작', e2); }
-    } else { sync(); return fail('공부 시작', e); }
+    if (e.data && e.data.code === 'CONNECTION_ALREADY_IN_PROGRESS') {
+      const old = e.data.detail.connectionId;
+      note(`진행 중이던 연결 #${old}을 0분으로 끝내고 다시 시작합니다.`);
+      try { await call('POST', `/api/connections/${old}/end`, {studySeconds: 0, presentSeconds: 0}); r = await call('POST', '/api/connections', body); }
+      catch (e2) { sync(); return fail('연결 시작', e2); }
+    } else { sync(); return fail('연결 시작', e); }
   }
-  S.s = {id: r.sessionId, characterId: body.characterId, mode: 'FOCUS', study: 0, present: 0, away: 0, brk: 0, returns: 0,
+  S.s = {id: r.connectionId, characterId: body.mateId, mode: 'FOCUS', study: 0, present: 0, away: 0, brk: 0, returns: 0,
     awayEventId: null, awayAt: 0, awayLevel: 0, hb: '아직', last: Date.now()};
   $('#report').hidden = true;
-  note(`공부 시작 (16): 세션 #${r.sessionId} · ${esc(r.character.name)} · 목표 ${r.targetMinutes}분`);
+  note(`연결 시작 (16): 연결 #${r.connectionId} · ${esc(r.mate.name)}`);
   const p = num($('#startPoints')), m = num($('#startPresent'));
   if (p != null || m != null) await adjust(p, m); // 인사(FOCUS) 전에 맞춰야 인사도 그 단계 말투로 나온다
   clearInterval(S.timer);
@@ -332,7 +333,7 @@ async function sendEvent(type, ago = 0, label = EVENT[type]) {
   sync();
   try {
     const occurredAt = new Date(type === 'AWAY' ? s.awayAt : Date.now()).toISOString();
-    const r = await call('POST', `/api/sessions/${s.id}/events`, {type, occurredAt});
+    const r = await call('POST', `/api/connections/${s.id}/events`, {type, occurredAt});
     if (r.eventId == null) return note(`${esc(label)} (18) → 무시됨: 쉬는 중이거나 같은 동작을 1분 안에 또 보냄`);
     const c = r.characters[0] || {};
     note(`${esc(label)} (18) · 알아채는 동작 ${c.motion ? esc(c.motion.file) : '없음'} · ${affinityText(c.affinity)}`);
@@ -347,7 +348,7 @@ async function react(eventId, intensity) {
   if (intensity) body.intensity = intensity;
   S.lastReact = body.requestId;
   try {
-    const r = await call('POST', `/api/sessions/${S.s.id}/events/${eventId}/reaction`, body);
+    const r = await call('POST', `/api/connections/${S.s.id}/events/${eventId}/reaction`, body);
     // 19 프론트 참고: 마지막으로 보낸 요청의 응답이 아니면 버린다 (돌아왔는데 늦게 온 '자리 비웠어?')
     if (r.requestId !== S.lastReact) return note('늦게 온 반응은 버림 (마지막 요청이 아님)');
     for (const c of r.characters) say('char', esc(c.content), (intensity ? `강도 ${intensity} · ` : '') + looks(c));
@@ -358,7 +359,7 @@ async function chat(content, inputType) {
   if (!S.s || !content.trim()) return;
   say('me', esc(content), inputType === 'QUICK' ? '빠른 답장' : '');
   try {
-    const r = await call('POST', `/api/sessions/${S.s.id}/messages`,
+    const r = await call('POST', `/api/connections/${S.s.id}/messages`,
       {requestId: crypto.randomUUID(), characterId: S.s.characterId, content, inputType, tts: false});
     say('char', esc(r.content), looks(r) + ' · ' + affinityText(r.affinity));
   } catch (e) { fail('메시지 (20)', e); }
@@ -387,7 +388,7 @@ function tick() {
 async function heartbeat() {
   const s = S.s;
   try {
-    await call('POST', `/api/sessions/${s.id}/heartbeat`, {studySeconds: s.study, presentSeconds: s.present});
+    await call('POST', `/api/connections/${s.id}/heartbeat`, {studySeconds: s.study, presentSeconds: s.present});
     s.hb = new Date().toLocaleTimeString() + ' 204';
   } catch (e) { s.hb = '실패 ' + e.message; }
 }
@@ -406,7 +407,7 @@ async function end() {
   const s = S.s;
   clearInterval(S.timer);
   try {
-    const r = await call('POST', `/api/sessions/${s.id}/end`, {studySeconds: s.study, presentSeconds: s.present});
+    const r = await call('POST', `/api/connections/${s.id}/end`, {studySeconds: s.study, presentSeconds: s.present});
     const adjusted = s.adjusted ? ' <span class="mut">(이 세션에서 손으로 맞춘 점수도 이번 변화로 셈)</span>' : '';
     S.s = null;
     const rel = r.relation;
@@ -419,7 +420,7 @@ async function end() {
         <tr><td>호감도 (시작 → 끝)</td><td class="n">${rel.pointsBefore} → ${rel.pointsAfter} · ${rel.stage}단계 ${esc(rel.stageName)}${adjusted}</td></tr>
       </table>
       <p>완료 대사: <b>${esc(r.closingLine)}</b></p>`;
-    const again = await call('GET', `/api/sessions/${r.sessionId}/report`);
+    const again = await call('GET', `/api/connections/${r.connectionId}`);
     note(`공부 끝 · 리포트 조회 (23)는 ${JSON.stringify(again) === JSON.stringify(r) ? '22 응답과 같음' : '<b>22 응답과 다름</b> (요청 기록 확인)'}`);
   } catch (e) {
     fail('공부 끝 (22)', e);
@@ -433,7 +434,8 @@ async function end() {
 function sync() {
   const s = S.s, mode = s ? s.mode : null;
   $('#start').disabled = !!s || !characterId();
-  $('#room').disabled = $('#character').disabled = !!s || !S.rooms.length;
+  $('#room').disabled = true; // 룸 없음 (2026-11-23)
+  $('#character').disabled = !!s || !(S.mates || []).length;
   // 점수는 세션 기록으로만 맞춘다 (시작 전에는 '시작할 때 호감도' 칸). 세션 중에는 사용자를 바꾸지 않는다
   for (const b of $$('#adjust, [data-p]')) b.disabled = !s;
   for (const b of $$('#login, #newUser')) b.disabled = !!s;
@@ -448,8 +450,7 @@ function sync() {
 
 $('#login').onclick = enter;
 $('#newUser').onclick = () => { $('#member').value = ''; enter(); };
-$('#room').onchange = () => loadRoom().catch(e => fail('룸 상세 (12)', e));
-$('#character').onchange = refreshRelation;
+$('#character').onchange = () => loadRoom().catch(e => fail('메이트 상세 (31)', e));
 $('#start').onclick = start;
 $('#end').onclick = end;
 for (const b of $$('[data-ev]')) b.onclick = () => sendEvent(b.dataset.ev, b.dataset.ev === 'AWAY' ? Number($('#awayAgo').value) || 0 : 0);

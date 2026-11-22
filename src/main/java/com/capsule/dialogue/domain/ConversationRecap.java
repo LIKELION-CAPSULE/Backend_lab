@@ -1,5 +1,6 @@
 package com.capsule.dialogue.domain;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -22,7 +23,10 @@ public class ConversationRecap {
     private Long id;
 
     private long conversationId;
+
+    @Column(name = "connection_id") // 2026-11-23 세션 → 연결. 자바 이름은 그대로
     private long sessionId;
+
     private String content;
     private Instant createdAt;
 

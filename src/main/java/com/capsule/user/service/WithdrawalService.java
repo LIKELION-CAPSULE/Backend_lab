@@ -39,7 +39,7 @@ public class WithdrawalService {
             }
             // 세션이 남으면 자동 마감이 탈퇴 뒤에 정산 · 대화 카드를 다시 만든다
             if (activeSessions.find(userId).isPresent()) {
-                throw new ApiException(UserErrorCode.SESSION_IN_PROGRESS);
+                throw new ApiException(UserErrorCode.CONNECTION_IN_PROGRESS);
             }
             user.withdraw(Instant.now(clock));
             users.deleteSocialAccounts(userId);

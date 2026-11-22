@@ -7,7 +7,10 @@ public final class SessionTypes {
 
     private SessionTypes() {}
 
-    /** endedAt이 null이면 진행 중. characterId = 이번 세션 캐릭터 (뼈대는 1명) */
+    /**
+     * endedAt이 null이면 진행 중. characterId = 이번 연결의 메이트.
+     * roomId는 2026-11-23 스터디룸 삭제 뒤 늘 0 (모양을 지키려고 남김, 연결 단계 정리 때 지움)
+     */
     public record SessionInfo(long id, long userId, long roomId, long characterId, Instant startedAt, Instant endedAt) {
 
         public boolean inProgress() {
@@ -33,7 +36,7 @@ public final class SessionTypes {
     /**
      * 공부 종료 정보. endType: NORMAL · AUTO_CLOSED
      *
-     * @param targetMinutes 공부 시작 때 정한 목표 시간 (공부 포기 판단, 없으면 null)
+     * @param targetMinutes 옛 목표 시간. 2026-11-23 목표 시간이 없어져 늘 null (공부 포기 판정 꺼짐)
      */
     public record SessionClosing(
             long sessionId,

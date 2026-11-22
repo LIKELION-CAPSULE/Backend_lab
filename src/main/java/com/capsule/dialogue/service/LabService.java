@@ -8,7 +8,6 @@ import com.capsule.common.settings.RuntimeSettings;
 import com.capsule.common.time.ClockConfig;
 import com.capsule.content.api.CharacterQuery;
 import com.capsule.content.api.ContentTypes.CharacterInfo;
-import com.capsule.content.api.RoomQuery;
 import com.capsule.dialogue.client.LlmGateway;
 import com.capsule.dialogue.client.LlmJson;
 import com.capsule.dialogue.config.DialogueProperties;
@@ -100,7 +99,6 @@ public class LabService {
     private final MemoryKeeper memoryKeeper;
     private final LlmGateway gateway;
     private final CharacterQuery characters;
-    private final RoomQuery rooms;
     private final RuntimeSettings<LlmProperties> llmProps;
     private final RuntimeSettings<DialogueProperties> dialogueProps;
     private final JdbcClient jdbc;
@@ -118,7 +116,6 @@ public class LabService {
             MemoryKeeper memoryKeeper,
             LlmGateway gateway,
             CharacterQuery characters,
-            RoomQuery rooms,
             RuntimeSettings<LlmProperties> llmProps,
             RuntimeSettings<DialogueProperties> dialogueProps,
             JdbcTemplate jdbcTemplate,
@@ -134,7 +131,6 @@ public class LabService {
         this.memoryKeeper = memoryKeeper;
         this.gateway = gateway;
         this.characters = characters;
-        this.rooms = rooms;
         this.llmProps = llmProps;
         this.dialogueProps = dialogueProps;
         this.jdbc = JdbcClient.create(jdbcTemplate);
@@ -162,8 +158,9 @@ public class LabService {
                 Arrays.stream(PromptKey.values())
                         .map(k -> new LabMeta.Key(k.key(), k.format(), k.description()))
                         .toList(),
-                rooms.activeRooms().stream()
-                        .flatMap(room -> room.characters().stream())
+                // 스터디룸이 없어져 활성 캐릭터 전부 (2026-11-23). 모델 없는 준비 중 메이트는 대화할 수 없어 뺀다
+                characters.active().stream()
+                        .filter(c -> c.model() != null)
                         .map(c -> new LabMeta.Character(c.id(), c.name()))
                         .toList(),
                 TRIGGERS,

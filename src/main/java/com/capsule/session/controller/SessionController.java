@@ -10,7 +10,6 @@ import com.capsule.session.dto.HeartbeatRequest;
 import com.capsule.session.dto.HomeResponse;
 import com.capsule.session.dto.ReportResponse;
 import com.capsule.session.dto.ResumeResponse;
-import com.capsule.session.dto.RoomDetail;
 import com.capsule.session.dto.StartRequest;
 import com.capsule.session.dto.StartResponse;
 import com.capsule.session.service.SessionService;
@@ -28,6 +27,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+/** 2026-11-23 /api/sessions → /api/connections, 12 스터디룸 상세 삭제 (api.md 공통 규칙) */
 @RestController
 @RequiredArgsConstructor
 public class SessionController {
@@ -35,22 +35,15 @@ public class SessionController {
     private final SessionService service;
 
     @Tag(name = ApiTags.ONBOARDING_HOME)
-    @Operation(summary = "11. 홈 조회", description = "오늘 공부 시간 · 이어하기 · 들어갈 수 있는 룸 1개 (명세: api.md 11)")
+    @Operation(summary = "11. 홈 조회", description = "오늘 공부 시간 · 이어하기 · 마지막 메이트 · 메이트 리스트 (명세: api.md 11)")
     @GetMapping("/api/home")
     public ApiResponse<HomeResponse> home(@LoginUser long userId) {
         return ApiResponse.ok(service.home(userId));
     }
 
-    @Tag(name = ApiTags.ONBOARDING_HOME)
-    @Operation(summary = "12. 스터디룸 상세 조회", description = "룸 정보 + 캐릭터 1명(성격 태그 배열) + 나와의 관계(함께 n분 · Lv) (명세: api.md 12)")
-    @GetMapping("/api/rooms/{roomId}")
-    public ApiResponse<RoomDetail> room(@LoginUser long userId, @PathVariable long roomId) {
-        return ApiResponse.ok(service.room(userId, roomId));
-    }
-
     @Tag(name = ApiTags.STUDY_SESSION)
-    @Operation(summary = "16. 공부 시작", description = "룸 · 캐릭터 1명 · 목표 시간으로 세션 생성 + 캐릭터 · 내 프로필 이미지 (명세: api.md 16)")
-    @PostMapping("/api/sessions")
+    @Operation(summary = "16. 연결 시작", description = "메이트 1명과 연결 생성 + 메이트 · 내 아바타 모델 (명세: api.md 16)")
+    @PostMapping("/api/connections")
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<StartResponse> start(@LoginUser long userId, @Valid @RequestBody StartRequest req) {
         try {
@@ -63,51 +56,51 @@ public class SessionController {
     }
 
     @Tag(name = ApiTags.STUDY_SESSION)
-    @Operation(summary = "17. 세션 이어하기", description = "비정상 종료된 세션 이어하기. 끊긴 구간은 자동 휴식 처리 (명세: api.md 17)")
-    @PostMapping("/api/sessions/{sessionId}/resume")
-    public ApiResponse<ResumeResponse> resume(@LoginUser long userId, @PathVariable long sessionId) {
-        return ApiResponse.ok(service.resume(userId, sessionId));
+    @Operation(summary = "17. 연결 이어하기", description = "비정상 종료된 연결 이어하기. 끊긴 구간은 자동 휴식 처리 (명세: api.md 17)")
+    @PostMapping("/api/connections/{connectionId}/resume")
+    public ApiResponse<ResumeResponse> resume(@LoginUser long userId, @PathVariable long connectionId) {
+        return ApiResponse.ok(service.resume(userId, connectionId));
     }
 
     @Tag(name = ApiTags.STUDY_SESSION)
     @Operation(
-            summary = "18. 공부 상태 기록",
+            summary = "18. 상태 기록",
             description = "상태가 바뀌거나 동작(졸음 · 하품 · 손 흔들기 · 고개 돌림)이 감지될 때마다 1건씩 전송"
                     + " → 저장 + 호감도 반영 → eventId + 캐릭터별 '알아채는' 동작 · 호감도 (명세: api.md 18)")
-    @PostMapping("/api/sessions/{sessionId}/events")
+    @PostMapping("/api/connections/{connectionId}/events")
     public ResponseEntity<ApiResponse<EventResponse>> event(
-            @LoginUser long userId, @PathVariable long sessionId, @RequestBody EventRequest req) {
-        EventResponse res = service.recordEvent(userId, sessionId, req);
+            @LoginUser long userId, @PathVariable long connectionId, @RequestBody EventRequest req) {
+        EventResponse res = service.recordEvent(userId, connectionId, req);
         return ResponseEntity.status(res.created() ? HttpStatus.CREATED : HttpStatus.OK)
                 .body(ApiResponse.ok(res));
     }
 
     @Tag(name = ApiTags.STUDY_SESSION)
     @Operation(summary = "21. heartbeat", description = "1분마다 생존 신호. 비정상 종료 판단 기준 (명세: api.md 21)")
-    @PostMapping("/api/sessions/{sessionId}/heartbeat")
+    @PostMapping("/api/connections/{connectionId}/heartbeat")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void heartbeat(
-            @LoginUser long userId, @PathVariable long sessionId, @RequestBody(required = false) HeartbeatRequest req) {
+            @LoginUser long userId,
+            @PathVariable long connectionId,
+            @RequestBody(required = false) HeartbeatRequest req) {
         // 본문이 없거나 값이 틀려도 생존 신호는 서비스가 갱신한 뒤라, 커밋 후에 400을 돌려준다
-        if (!service.heartbeat(userId, sessionId, req)) {
+        if (!service.heartbeat(userId, connectionId, req)) {
             throw SessionService.invalidStudyTime();
         }
     }
 
     @Tag(name = ApiTags.REPORT)
-    @Operation(
-            summary = "22. 공부 종료",
-            description = "공부 종료 + 정산 + 관계 갱신 → 공부 시간 · 자리 지킴률 · 달성률 · 호감도 변화 (명세: api.md 22)")
-    @PostMapping("/api/sessions/{sessionId}/end")
+    @Operation(summary = "22. 연결 끊기", description = "연결 끊기 + 정산 + 관계 갱신 → 시간 · 호감도 변화 (명세: api.md 22)")
+    @PostMapping("/api/connections/{connectionId}/end")
     public ApiResponse<ReportResponse> end(
-            @LoginUser long userId, @PathVariable long sessionId, @RequestBody EndRequest req) {
-        return ApiResponse.ok(service.end(userId, sessionId, req));
+            @LoginUser long userId, @PathVariable long connectionId, @RequestBody EndRequest req) {
+        return ApiResponse.ok(service.end(userId, connectionId, req));
     }
 
     @Tag(name = ApiTags.REPORT)
-    @Operation(summary = "23. 리포트 조회", description = "리포트 · 카드 다시 불러오기 (공부 종료와 같은 응답) (명세: api.md 23)")
-    @GetMapping("/api/sessions/{sessionId}/report")
-    public ApiResponse<ReportResponse> report(@LoginUser long userId, @PathVariable long sessionId) {
-        return ApiResponse.ok(service.report(userId, sessionId));
+    @Operation(summary = "23. 연결 기록 조회", description = "연결 기록 다시 불러오기 (연결 끊기와 같은 응답) (명세: api.md 23)")
+    @GetMapping("/api/connections/{connectionId}")
+    public ApiResponse<ReportResponse> report(@LoginUser long userId, @PathVariable long connectionId) {
+        return ApiResponse.ok(service.report(userId, connectionId));
     }
 }

@@ -3,19 +3,18 @@ package com.capsule.session.domain;
 import com.capsule.common.error.ErrorCode;
 import org.springframework.http.HttpStatus;
 
-/** session 모듈 에러 코드 (api.md 11, 12, 16~18, 21~23) */
+/** session 모듈 에러 코드 (api.md 11, 16~18, 21~23). 2026-11-23 SESSION_* → CONNECTION_*, 룸 · 목표 시간 코드 삭제 */
 public enum SessionErrorCode implements ErrorCode {
-    ROOM_NOT_FOUND(HttpStatus.NOT_FOUND),
-    SESSION_NOT_FOUND(HttpStatus.NOT_FOUND),
-    CHARACTER_NOT_IN_ROOM(HttpStatus.BAD_REQUEST),
+    MATE_NOT_FOUND(HttpStatus.NOT_FOUND),
+    MATE_COMING_SOON(HttpStatus.CONFLICT),
+    CONNECTION_NOT_FOUND(HttpStatus.NOT_FOUND),
     ONBOARDING_REQUIRED(HttpStatus.FORBIDDEN),
-    INVALID_TARGET_MINUTES(HttpStatus.BAD_REQUEST),
     INVALID_EVENT(HttpStatus.BAD_REQUEST),
     INVALID_STUDY_TIME(HttpStatus.BAD_REQUEST),
-    /** detail.sessionId = 진행 중 세션 */
-    SESSION_ALREADY_IN_PROGRESS(HttpStatus.CONFLICT),
-    SESSION_IN_PROGRESS(HttpStatus.CONFLICT),
-    SESSION_ENDED(HttpStatus.CONFLICT);
+    /** detail.connectionId = 진행 중 연결 */
+    CONNECTION_ALREADY_IN_PROGRESS(HttpStatus.CONFLICT),
+    CONNECTION_IN_PROGRESS(HttpStatus.CONFLICT),
+    CONNECTION_ENDED(HttpStatus.CONFLICT);
 
     private final HttpStatus status;
 

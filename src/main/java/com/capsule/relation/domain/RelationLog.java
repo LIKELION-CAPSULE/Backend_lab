@@ -1,5 +1,6 @@
 package com.capsule.relation.domain;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -22,8 +23,13 @@ public class RelationLog {
     private Long id;
 
     private long relationId;
+    // 2026-11-23 칸 이름이 connection_id · connection_event_id로 바뀜 (세션 → 연결). 자바 이름은 그대로
+    @Column(name = "connection_id")
     private Long sessionId;
+
+    @Column(name = "connection_event_id")
     private Long sessionEventId;
+
     private UUID requestId;
     private int delta;
     private String reason;

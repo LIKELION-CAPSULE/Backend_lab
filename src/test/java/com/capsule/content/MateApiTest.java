@@ -78,8 +78,8 @@ class MateApiTest {
                         + " RETURNING id",
                 Long.class);
         return jdbc.queryForObject(
-                "INSERT INTO characters (room_id, model_id, name, illustration_url, voice_sample_url, coming_soon)"
-                        + " VALUES (1, ?, '준비 중', ?, ?, true) RETURNING id",
+                "INSERT INTO characters (model_id, name, illustration_url, voice_sample_url, coming_soon)"
+                        + " VALUES (?, '준비 중', ?, ?, true) RETURNING id",
                 Long.class,
                 modelId,
                 illustration,

@@ -2,13 +2,6 @@ package com.capsule.session.dto;
 
 import java.time.Instant;
 
+/** api.md 17 연결 이어하기 */
 public record ResumeResponse(
-        long sessionId,
-        Integer targetMinutes,
-        RoomView room,
-        Figure character,
-        Figure avatar,
-        Me me,
-        int studySeconds,
-        int breakSeconds,
-        Instant serverTime) {}
+        long connectionId, Figure mate, Figure avatar, Me me, int studySeconds, int breakSeconds, Instant serverTime) {}

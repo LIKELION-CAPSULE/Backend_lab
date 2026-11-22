@@ -58,7 +58,7 @@ class ProfileAndMemoryApiTest extends UserApiTestSupport {
                 .andExpect(jsonPath("$.data.nickname").value("승희"))
                 .andExpect(jsonPath("$.data.email").value(email))
                 .andExpect(jsonPath("$.data.onboardingRequired").value(true))
-                .andExpect(jsonPath("$.data.activeSession").value(nullValue()))
+                .andExpect(jsonPath("$.data.activeConnection").value(nullValue()))
                 .andExpect(jsonPath("$.data.profileImage").value(nullValue()));
 
         patchMe(auth, "{\"nickname\":\"\"}").andExpect(jsonPath("$.code").value("INVALID_NICKNAME"));
@@ -74,12 +74,12 @@ class ProfileAndMemoryApiTest extends UserApiTestSupport {
                 .andExpect(jsonPath("$.data.profileImage").value(AVATAR.thumbnailUrl()));
 
         given(activeSessionLookup.find(userId))
-                .willReturn(Optional.of(new ActiveSessionSummary(
-                        512, 1, "쌀쌀맞은 갸루짝꿍이 나에게만 친절하다!", "채린", Instant.parse("2026-11-07T05:00:02Z"))));
+                .willReturn(Optional.of(new ActiveSessionSummary(512, 1, "채린", Instant.parse("2026-11-07T05:00:02Z"))));
         mvc.perform(get("/api/me").header(HttpHeaders.AUTHORIZATION, auth))
-                .andExpect(jsonPath("$.data.activeSession.sessionId").value(512))
-                .andExpect(jsonPath("$.data.activeSession.characterName").value("채린"))
-                .andExpect(jsonPath("$.data.activeSession.startedAt").value("2026-11-07T05:00:02Z"))
+                .andExpect(jsonPath("$.data.activeConnection.connectionId").value(512))
+                .andExpect(jsonPath("$.data.activeConnection.mateId").value(1))
+                .andExpect(jsonPath("$.data.activeConnection.mateName").value("채린"))
+                .andExpect(jsonPath("$.data.activeConnection.startedAt").value("2026-11-07T05:00:02Z"))
                 .andExpect(jsonPath("$.data.profileImage").value(AVATAR.thumbnailUrl()));
 
         assertThat(userQuery.find(userId)).hasValueSatisfying(p -> {

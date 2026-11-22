@@ -31,7 +31,7 @@ public enum UserErrorCode implements ErrorCode {
     INVALID_SETTINGS(HttpStatus.BAD_REQUEST),
     INVALID_MEMORY(HttpStatus.BAD_REQUEST),
     INVALID_DATE_RANGE(HttpStatus.BAD_REQUEST),
-    SESSION_IN_PROGRESS(HttpStatus.CONFLICT);
+    CONNECTION_IN_PROGRESS(HttpStatus.CONFLICT); // 2026-11-23 SESSION_IN_PROGRESS에서 이름 변경
 
     private final HttpStatus status;
 

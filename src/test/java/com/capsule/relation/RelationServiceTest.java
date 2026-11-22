@@ -53,15 +53,15 @@ class RelationServiceTest {
 
     long newSession() {
         return jdbc.queryForObject(
-                "INSERT INTO study_sessions (user_id, room_id, background_id, ended_at, end_type)"
-                        + " VALUES (?, 1, 1, now(), 'NORMAL') RETURNING id",
+                "INSERT INTO connections (user_id, character_id, ended_at, end_type)"
+                        + " VALUES (?, 1, now(), 'NORMAL') RETURNING id",
                 Long.class,
                 userId);
     }
 
     SessionEventRef event(long sessionId, String type, boolean firstFocus, Integer awaySeconds) {
         long eventId = jdbc.queryForObject(
-                "INSERT INTO session_events (session_id, type) VALUES (?, ?) RETURNING id",
+                "INSERT INTO connection_events (connection_id, type) VALUES (?, ?) RETURNING id",
                 Long.class,
                 sessionId,
                 type);

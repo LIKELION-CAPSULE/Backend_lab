@@ -30,8 +30,8 @@ Content-Type: application/json
 GET {{host}}/api/home
 Authorization: Bearer {{token}}
 
-### 6. 룸 상세 (H04)
-GET {{host}}/api/rooms/1
+### 6. 메이트 상세 (SCR-13)
+GET {{host}}/api/mates/1
 Authorization: Bearer {{token}}
 
 ### 7. 시험 일정 저장 (H06)
@@ -41,17 +41,17 @@ Content-Type: application/json
 
 { "type": "EXAM", "title": "영어 중간고사", "dueDate": "2026-12-12", "dueTime": null }
 
-### 8. 공부 시작 (H06 → H07)
-POST {{host}}/api/sessions
+### 8. 연결 시작 (SCR-13 연결하기)
+POST {{host}}/api/connections
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
-{ "roomId": 1, "characterId": 1, "targetMinutes": 50 }
+{ "mateId": 1 }
 
-> {% client.global.set("sessionId", response.body.sessionId); %}
+> {% client.global.set("sessionId", response.body.data.connectionId); %}
 
 ### 9. FOCUS (공부 시작 직후)
-POST {{host}}/api/sessions/{{sessionId}}/events
+POST {{host}}/api/connections/{{sessionId}}/events
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
@@ -60,21 +60,21 @@ Content-Type: application/json
 > {% client.global.set("eventId", response.body.eventId); %}
 
 ### 10. 인사 반응 (GREETING)
-POST {{host}}/api/sessions/{{sessionId}}/events/{{eventId}}/reaction
+POST {{host}}/api/connections/{{sessionId}}/events/{{eventId}}/reaction
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
 { "requestId": "{{$uuid}}" }
 
 ### 11. heartbeat (1분마다)
-POST {{host}}/api/sessions/{{sessionId}}/heartbeat
+POST {{host}}/api/connections/{{sessionId}}/heartbeat
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
 { "studySeconds": 0, "presentSeconds": 0 }
 
 ### 12. 자리 비움 (H09)
-POST {{host}}/api/sessions/{{sessionId}}/events
+POST {{host}}/api/connections/{{sessionId}}/events
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
@@ -83,14 +83,14 @@ Content-Type: application/json
 > {% client.global.set("eventId", response.body.eventId); %}
 
 ### 13. 자리 비움 반응 (1분 지나면 intensity 2, 5분이면 3)
-POST {{host}}/api/sessions/{{sessionId}}/events/{{eventId}}/reaction
+POST {{host}}/api/connections/{{sessionId}}/events/{{eventId}}/reaction
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
 { "requestId": "{{$uuid}}", "intensity": 1 }
 
 ### 14. 복귀
-POST {{host}}/api/sessions/{{sessionId}}/events
+POST {{host}}/api/connections/{{sessionId}}/events
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
@@ -99,32 +99,32 @@ Content-Type: application/json
 > {% client.global.set("eventId", response.body.eventId); %}
 
 ### 15. 복귀 반응
-POST {{host}}/api/sessions/{{sessionId}}/events/{{eventId}}/reaction
+POST {{host}}/api/connections/{{sessionId}}/events/{{eventId}}/reaction
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
 { "requestId": "{{$uuid}}" }
 
 ### 16. 채팅 (H20)
-POST {{host}}/api/sessions/{{sessionId}}/messages
+POST {{host}}/api/connections/{{sessionId}}/messages
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
 { "requestId": "{{$uuid}}", "characterId": 1, "content": "이거 너무 어려워", "inputType": "QUICK", "tts": false }
 
-### 17. 내 정보 (새로고침 → activeSession 있으면 H18)
+### 17. 내 정보 (새로고침 → activeConnection 있으면 이어하기 팝업)
 GET {{host}}/api/me
 Authorization: Bearer {{token}}
 
 ### 18. 공부 종료 (H17 → H09). studySeconds는 실제 경과 시간 이하
-POST {{host}}/api/sessions/{{sessionId}}/end
+POST {{host}}/api/connections/{{sessionId}}/end
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
 { "studySeconds": 60, "presentSeconds": 50 }
 
 ### 19. 리포트 (H09 새로고침 · H10 카드)
-GET {{host}}/api/sessions/{{sessionId}}/report
+GET {{host}}/api/connections/{{sessionId}}
 Authorization: Bearer {{token}}
 
 ### 20. 토큰 갱신 (리프레시 쿠키 사용)

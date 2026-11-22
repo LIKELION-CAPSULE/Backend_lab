@@ -31,7 +31,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @RestController
-@RequestMapping("/api/sessions/{sessionId}")
+@RequestMapping("/api/connections/{connectionId}") // 2026-11-23 /api/sessions → /api/connections
 @Tag(name = ApiTags.DIALOGUE)
 @RequiredArgsConstructor
 public class DialogueController {
@@ -47,7 +47,7 @@ public class DialogueController {
     @PostMapping("/events/{eventId}/reaction")
     public ApiResponse<ReactionResponse> react(
             @LoginUser long userId,
-            @PathVariable long sessionId,
+            @PathVariable("connectionId") long sessionId,
             @PathVariable long eventId,
             @Valid @RequestBody ReactionRequest request) {
         return ApiResponse.ok(
@@ -57,7 +57,9 @@ public class DialogueController {
     @Operation(summary = "20. 메시지 전송", description = "대화 → 캐릭터별 답장 + 감정 모션 · 표정 + 바뀐 호감도 (TTS 선택) (명세: api.md 20)")
     @PostMapping("/messages")
     public ApiResponse<MessageResponse> send(
-            @LoginUser long userId, @PathVariable long sessionId, @Valid @RequestBody MessageRequest request) {
+            @LoginUser long userId,
+            @PathVariable("connectionId") long sessionId,
+            @Valid @RequestBody MessageRequest request) {
         return ApiResponse.ok(dialogue.send(userId, sessionId, request));
     }
 
@@ -67,7 +69,9 @@ public class DialogueController {
                     "20과 같은 대화를 SSE로: 답장 글이 생길 때마다 reply {content}, 끝나면 done (20 응답 전체), 스트림 도중 오류는 error (명세: api.md 28)")
     @PostMapping("/messages/stream")
     public SseEmitter stream(
-            @LoginUser long userId, @PathVariable long sessionId, @Valid @RequestBody MessageRequest request) {
+            @LoginUser long userId,
+            @PathVariable("connectionId") long sessionId,
+            @Valid @RequestBody MessageRequest request) {
         // 검증 · 재전송 · 속도 제한은 스트림을 열기 전에: 여기서 난 오류는 보통 JSON 에러 응답 (명세 28)
         DialogueService.Accepted accepted = dialogue.accept(userId, sessionId, request);
         SseEmitter emitter = new SseEmitter(STREAM_TIMEOUT.toMillis());
