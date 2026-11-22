@@ -8,6 +8,8 @@ COPY gradlew settings.gradle build.gradle ./
 COPY gradle gradle
 RUN chmod +x gradlew && ./gradlew --no-daemon dependencies > /dev/null
 COPY src src
+# Lombok 설정(ADR 0029): 빠지면 @RequiredArgsConstructor가 @Value를 생성자로 옮기지 않아 앱이 안 뜬다 (2026-11-23 SafetyGuard)
+COPY lombok.config ./
 RUN ./gradlew --no-daemon bootJar && cp build/libs/*.jar app.jar
 
 FROM eclipse-temurin:21-jre
