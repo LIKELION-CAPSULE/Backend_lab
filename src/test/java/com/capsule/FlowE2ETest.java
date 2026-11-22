@@ -121,13 +121,9 @@ class FlowE2ETest {
         assertThat((String) JsonPath.read(body(start), "$.data.greeting.expression"))
                 .isEqualTo("웃음");
 
-        // 얼굴 감지 시작(PRESENT)은 반응 없음. 대사는 아직 19번 (LLM, 테스트는 가짜 AI)
+        // 얼굴 감지 시작(PRESENT)은 반응 없음 (명세 18) → 19번도 부르지 않는다
         MvcResult present = eventCall(token, s, "PRESENT", Instant.now().toString(), 201);
         assertThat((Object) JsonPath.read(body(present), "$.data.reaction")).isNull();
-        MvcResult greeting =
-                call(post(s + "/events/" + eventId(present) + "/reaction"), token, reactionBody(null), 200);
-        assertThat((String) JsonPath.read(body(greeting), "$.data.characters[0].content"))
-                .startsWith("(가짜 반응)");
 
         // 12 heartbeat → 청소년이 아니라 남은 시간 null
         MvcResult beat = call(
