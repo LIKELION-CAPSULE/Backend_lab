@@ -107,6 +107,22 @@ public final class RelationTypes {
             Integer awaySeconds) {}
 
     /**
+     * 친밀도 정산 결과 (api.md 22 · 23 relation, 2026-11-23 5단계). 단계 이름 · 해금 목록은 session이 content에서 붙인다
+     *
+     * @param stageBefore · stageAfter 친밀도 단계 1~5 (내려가지 않음)
+     * @param creditedSeconds 이 연결에서 인정된 시간
+     * @param totalCreditedSeconds 누적 인정 시간
+     * @param nextStageSeconds 다음 단계까지 남은 인정 시간, 5단계면 null
+     */
+    public record IntimacySettlement(
+            int stageBefore, int stageAfter, int creditedSeconds, int totalCreditedSeconds, Integer nextStageSeconds) {
+
+        public boolean stageUp() {
+            return stageAfter > stageBefore;
+        }
+    }
+
+    /**
      * 공부 종료 정산 결과 (api.md 22의 relation). pointsBefore = 이 세션 시작 때 점수.
      * 레벨은 공부 시간, 단계(stage)는 호감도에서 온다.
      *

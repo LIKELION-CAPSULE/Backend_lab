@@ -36,6 +36,11 @@ public class Relation {
     /** 심한 말을 받은 마지막 시각. 없으면 null */
     private Instant lastSevereAt;
 
+    // 친밀도 (2026-11-23 5단계). 갱신은 RelationRepository.addIntimacy
+    private int stage;
+    private int creditedSeconds;
+    private int totalConnectedSeconds;
+
     public int points() {
         return relationPoints;
     }

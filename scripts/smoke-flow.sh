@@ -56,11 +56,13 @@ c =(d.get("characters") or [d])[0] if isinstance(d, dict) else {}
 a = c.get("affinity") or d.get("relation") or {}
 name = lambda x: (x or {}).get("name") or (x or {}).get("group") or ""
 text = c.get("content") or d.get("closingLine") or ""
-delta = a.get("delta", (a.get("pointsAfter", 0) - a.get("pointsBefore", 0)) if "pointsAfter" in a else "")
-points = a.get("points", a.get("pointsAfter", ""))
-level = a.get("level", a.get("levelAfter", ""))
+# 대화(affinity)는 호감도, 끊기(relation)는 친밀도 (2026-11-23): 끊기 줄은 점수 칸에 인정 시간, 단계 칸에 끝난 단계
+delta = a.get("delta", "")
+points = a.get("points", a.get("creditedSeconds", ""))
+stage = a.get("stage", a.get("stageAfter", ""))
+level = a.get("level", "")
 cells = [step, code, text.replace("|", "/").replace("\n", " "), c.get("emotion") or "", name(c.get("expression")),
-         name(c.get("motion")), str(delta), str(points), str(a.get("stage", "")), str(level), str(c.get("fallback", "")), ms]
+         name(c.get("motion")), str(delta), str(points), str(stage), str(level), str(c.get("fallback", "")), ms]
 print("\t".join(x or "-" for x in cells))  # 빈 칸은 '-': read -a가 이어진 탭을 하나로 합친다
 PY
 }

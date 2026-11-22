@@ -8,11 +8,16 @@ import com.capsule.relation.api.RelationCommands;
 import com.capsule.relation.api.RelationQuery;
 import com.capsule.relation.api.RelationTypes.AffinityChange;
 import com.capsule.relation.api.RelationTypes.ChatScore;
+import com.capsule.relation.api.RelationTypes.IntimacySettlement;
 import com.capsule.relation.api.RelationTypes.RelationView;
 import com.capsule.relation.api.RelationTypes.SessionEventRef;
 import com.capsule.relation.api.RelationTypes.SignalType;
 import com.capsule.relation.api.RelationTypes.StudySettlement;
+import com.capsule.relation.service.IntimacyPolicy;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -39,6 +44,9 @@ class RelationServiceTest {
 
     @Autowired
     JdbcTemplate jdbc;
+
+    @Autowired
+    Clock clock;
 
     long userId;
 
@@ -218,6 +226,64 @@ class RelationServiceTest {
         assertThat(view.level()).isEqualTo(3);
         assertThat(view.totalStudySeconds()).isEqualTo(8000);
         assertThat(view.totalPresentSeconds()).isEqualTo(7300);
+    }
+
+    // ---- 친밀도 (2026-11-23 5단계): 하루 2시간, 대화 없으면 절반, 단계 0 · 1 · 5 · 15 · 40시간
+
+    @Test
+    void intimacyCreditsPresentTimeWithDailyCap() {
+        Instant now = Instant.now(clock);
+        long first = newSession();
+        chat(first, PLUS_ONE); // 그날 대화 있음 → 절반 아님
+        IntimacySettlement s1 = commands.settleIntimacy(userId, CHARACTER, first, now, 4000, 5000);
+        assertThat(s1).isEqualTo(new IntimacySettlement(1, 2, 4000, 4000, 14000)); // 1시간 넘어 2단계
+        assertThat(s1.stageUp()).isTrue();
+        assertThat(commands.settleIntimacy(userId, CHARACTER, first, now, 4000, 5000))
+                .isEqualTo(s1); // 같은 연결은 한 번만
+
+        long second = newSession();
+        IntimacySettlement s2 = commands.settleIntimacy(userId, CHARACTER, second, now, 5000, 5000);
+        assertThat(s2.creditedSeconds()).isEqualTo(3200); // 하루 한도 7200 − 4000
+        assertThat(s2.stageUp()).isFalse();
+        assertThat(query.intimacyOf(userId, CHARACTER, first).stageAfter()).isEqualTo(2); // 다시 읽어도 처음 정산
+        assertThat(query.stage(userId, CHARACTER)).isEqualTo(2);
+        assertThat(jdbc.queryForObject(
+                        "SELECT total_connected_seconds FROM user_character_relations WHERE user_id = ?",
+                        Integer.class,
+                        userId))
+                .isEqualTo(10000);
+    }
+
+    @Test
+    void intimacyIsHalfWithoutChatThatDay() {
+        IntimacySettlement s = commands.settleIntimacy(userId, CHARACTER, newSession(), Instant.now(clock), 3000, 3000);
+        assertThat(s).isEqualTo(new IntimacySettlement(1, 1, 1500, 1500, 2100));
+        assertThat(query.intimacyOf(userId, CHARACTER, 999_999).creditedSeconds())
+                .isZero(); // 정산 없는 연결
+    }
+
+    @Test
+    void intimacyPolicyStagesAndDay() {
+        assertThat(IntimacyPolicy.stageOf(3599)).isEqualTo(1);
+        assertThat(IntimacyPolicy.stageOf(18000)).isEqualTo(3);
+        assertThat(IntimacyPolicy.stageOf(144000)).isEqualTo(5);
+        assertThat(IntimacyPolicy.secondsToNextStage(144000)).isNull();
+        // 오전 5시 전은 전날
+        assertThat(IntimacyPolicy.dayOf(Instant.parse("2026-11-23T19:59:59Z"))).isEqualTo(LocalDate.of(2026, 11, 23));
+        assertThat(IntimacyPolicy.dayOf(Instant.parse("2026-11-23T20:00:00Z"))).isEqualTo(LocalDate.of(2026, 11, 24));
+    }
+
+    @Test
+    void unlocksAreRecordedOnce() {
+        long content = jdbc.queryForObject(
+                "INSERT INTO character_contents (character_id, type, title, expression_name, unlock_stage)"
+                        + " VALUES (1, 'EXPRESSION', '수줍은 웃음', 'shy', 2) RETURNING id",
+                Long.class);
+        commands.recordUnlocks(userId, List.of(content));
+        commands.recordUnlocks(userId, List.of(content));
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM user_unlocked_contents WHERE user_id = ?", Integer.class, userId))
+                .isEqualTo(1);
     }
 
     @Test

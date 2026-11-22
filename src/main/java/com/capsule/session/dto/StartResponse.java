@@ -12,4 +12,5 @@ public record StartResponse(
         Instant serverTime,
         boolean firstMeet,
         ReactionView greeting,
-        Integer minorRemainingSeconds) {}
+        Integer minorRemainingSeconds,
+        IntimacyView.Now relation) {}

@@ -82,6 +82,16 @@ public final class ContentTypes {
         }
     }
 
+    /**
+     * 친밀도 해금 콘텐츠 하나 (api.md 22 relation.unlocked).
+     *
+     * @param type EXPRESSION · VOICE_LINE
+     * @param expressionName EXPRESSION이면 모델의 표정 이름
+     * @param assetUrl 보이스 대사 음성 (CDN 주소를 붙인 값), 없으면 null
+     */
+    public record UnlockInfo(
+            long id, String type, String title, int unlockStage, String expressionName, String assetUrl) {}
+
     public record MotionRef(String group, String file) {}
 
     public record ExpressionRef(String name, String file) {}
