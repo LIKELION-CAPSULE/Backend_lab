@@ -65,6 +65,11 @@ class ReferralApiTest extends UserApiTestSupport {
         assertThat(rewards.rewardOf(invitee, 502L)).isEmpty();
         assertThat(inviteCredits(inviter)).isEqualTo(1000);
         assertThat(inviteCredits(invitee)).isEqualTo(1000);
+        // 34 내역 문구에 상대 닉네임 (피그마 SCR-30)
+        mvc.perform(get("/api/credits/transactions").param("filter", "INVITE").with(login(inviter)))
+                .andExpect(jsonPath("$.data.items[0].title").value("친구 초대 · 민지님 첫 연결"));
+        mvc.perform(get("/api/credits/transactions").param("filter", "INVITE").with(login(invitee)))
+                .andExpect(jsonPath("$.data.items[0].title").value("친구 초대 · 성욱님 초대"));
 
         mvc.perform(get("/api/referrals/me").with(login(inviter)))
                 .andExpect(jsonPath("$.data.rewardedCount").value(1))
@@ -145,6 +150,9 @@ class ReferralApiTest extends UserApiTestSupport {
         jdbc.update("UPDATE users SET withdrawn_at = now() WHERE id = ?", inviter);
         assertThat(rewards.qualify(friend, 700L)).isPresent(); // 받은 사람 몫은 준다
         assertThat(inviteCredits(inviter)).isZero(); // 탈퇴한 초대한 사람에게는 안 줌
+        assertThat(jdbc.queryForObject(
+                        "SELECT title FROM credit_ledger WHERE user_id = ? AND type = 'INVITE'", String.class, friend))
+                .isEqualTo("친구 초대"); // 탈퇴한 사람 이름은 넣지 않음
     }
 
     /** 서로 코드를 넣은 두 사람이 동시에 끝내도, 초대한 사람이 그날 처음 크레딧을 읽는 중이어도 교착 없이 끝난다 */

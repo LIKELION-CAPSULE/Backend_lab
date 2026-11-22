@@ -35,6 +35,16 @@ public class ReferralService {
     private static final int CODE_MAX = 20;
     private static final String CREDIT_TITLE = "친구 초대"; // api.md 34 title (문구 확정 필요)
 
+    /** 초대한 사람 몫: "친구 초대 · 민지님 첫 연결" (민지 = 코드를 입력하고 첫 연결을 마친 친구, 피그마 SCR-30) */
+    static String inviterTitle(String friendNickname) {
+        return CREDIT_TITLE + " · " + friendNickname + "님 첫 연결";
+    }
+
+    /** 받은 사람 몫: "친구 초대 · 성욱님 초대" (성욱 = 코드를 준 사람, 확정 필요) */
+    static String inviteeTitle(String inviterNickname) {
+        return CREDIT_TITLE + " · " + inviterNickname + "님 초대";
+    }
+
     private final ReferralRepository referrals;
     private final UserRepository users;
     private final CreditCommands credits;
@@ -142,18 +152,22 @@ public class ReferralService {
         Referral r = found.get();
         long inviterId = r.getInviterId();
         referrals.lockUser(inviterId);
-        boolean inviterActive = users.findById(inviterId).map(User::isActive).orElse(false);
+        Optional<User> inviter = users.findById(inviterId).filter(User::isActive);
         // 확정 필요(36): 11번째부터 받은 사람에게도 안 줄지. 지금은 받은 사람 몫은 준다. 탈퇴한 초대한 사람에게는 주지 않는다
-        boolean inviterReward =
-                inviterActive && referrals.countByInviterIdAndInviterRewardedTrue(inviterId) < MAX_INVITER_REWARDS;
+        boolean inviterReward = inviter.isPresent()
+                && referrals.countByInviterIdAndInviterRewardedTrue(inviterId) < MAX_INVITER_REWARDS;
         r.qualify(connectionId, Instant.now(clock), inviterReward);
         long id = r.getId();
+        // 34 title: 상대 닉네임을 지급할 때의 값으로 남긴다. 탈퇴한 초대한 사람이면 이름 없이
+        String inviteeTitle = inviter.map(u -> inviteeTitle(u.getNickname())).orElse(CREDIT_TITLE);
+        String inviterTitle =
+                users.findById(userId).map(u -> inviterTitle(u.getNickname())).orElse(CREDIT_TITLE);
         if (inviterReward && inviterId < userId) {
-            credits.grantInvite(inviterId, REWARD, id, true, CREDIT_TITLE);
-            credits.grantInvite(userId, REWARD, id, false, CREDIT_TITLE);
+            credits.grantInvite(inviterId, REWARD, id, true, inviterTitle);
+            credits.grantInvite(userId, REWARD, id, false, inviteeTitle);
         } else {
-            credits.grantInvite(userId, REWARD, id, false, CREDIT_TITLE);
-            if (inviterReward) credits.grantInvite(inviterId, REWARD, id, true, CREDIT_TITLE);
+            credits.grantInvite(userId, REWARD, id, false, inviteeTitle);
+            if (inviterReward) credits.grantInvite(inviterId, REWARD, id, true, inviterTitle);
         }
         return Optional.of(new ReferralReward(REWARD));
     }
