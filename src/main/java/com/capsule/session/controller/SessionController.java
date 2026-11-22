@@ -7,6 +7,7 @@ import com.capsule.session.dto.EndRequest;
 import com.capsule.session.dto.EventRequest;
 import com.capsule.session.dto.EventResponse;
 import com.capsule.session.dto.HeartbeatRequest;
+import com.capsule.session.dto.HeartbeatResponse;
 import com.capsule.session.dto.HomeResponse;
 import com.capsule.session.dto.ReportResponse;
 import com.capsule.session.dto.ResumeResponse;
@@ -76,17 +77,15 @@ public class SessionController {
     }
 
     @Tag(name = ApiTags.STUDY_SESSION)
-    @Operation(summary = "21. heartbeat", description = "1분마다 생존 신호. 비정상 종료 판단 기준 (명세: api.md 21)")
+    @Operation(summary = "21. heartbeat", description = "1분마다 생존 신호 + 누적 시간 4개 → 청소년 남은 시간 (명세: api.md 21)")
     @PostMapping("/api/connections/{connectionId}/heartbeat")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void heartbeat(
+    public ApiResponse<HeartbeatResponse> heartbeat(
             @LoginUser long userId,
             @PathVariable long connectionId,
             @RequestBody(required = false) HeartbeatRequest req) {
         // 본문이 없거나 값이 틀려도 생존 신호는 서비스가 갱신한 뒤라, 커밋 후에 400을 돌려준다
-        if (!service.heartbeat(userId, connectionId, req)) {
-            throw SessionService.invalidStudyTime();
-        }
+        return ApiResponse.ok(
+                service.heartbeat(userId, connectionId, req).orElseThrow(SessionService::invalidConnectionTime));
     }
 
     @Tag(name = ApiTags.REPORT)

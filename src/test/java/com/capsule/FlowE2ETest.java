@@ -1,7 +1,6 @@
 package com.capsule;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.within;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -99,7 +98,7 @@ class FlowE2ETest {
                 .isNull();
         assertThat((Object) JsonPath.read(body(home), "$.data.lastMate")).isNull();
         assertThat((Integer) JsonPath.read(body(home), "$.data.mates[0].id")).isEqualTo(1);
-        assertThat((Integer) JsonPath.read(body(home), "$.data.todayStudySeconds"))
+        assertThat((Integer) JsonPath.read(body(home), "$.data.todayConnectedSeconds"))
                 .isZero();
         MvcResult mate = call(get("/api/mates/1"), token, null, 200);
         assertThat((String) JsonPath.read(body(mate), "$.data.model.format")).isEqualTo("CUBISM");
@@ -117,46 +116,42 @@ class FlowE2ETest {
         long sessionId = ((Number) JsonPath.read(body(start), "$.data.connectionId")).longValue();
         String s = "/api/connections/" + sessionId;
 
-        MvcResult focus = eventCall(token, s, "FOCUS", Instant.now().toString(), 201);
-        assertThat(affinityDelta(focus)).isZero(); // 연속 출석 1일째는 점수 없음 (2일째부터)
-        assertThat((Integer) JsonPath.read(body(focus), "$.data.characters[0].affinity.points"))
-                .isEqualTo(50); // 50에서 시작
-        MvcResult greeting = call(post(s + "/events/" + eventId(focus) + "/reaction"), token, reactionBody(null), 200);
-        // 상태 변화 반응은 LLM이 대사 + 표정 (ADR 0022 결정 18. 테스트는 가짜 AI)
-        assertThat((String) JsonPath.read(body(greeting), "$.data.characters[0].content"))
-                .startsWith("(가짜 반응)");
-        assertThat((Boolean) JsonPath.read(body(greeting), "$.data.characters[0].fallback"))
-                .isFalse();
+        // 연결 시작 응답의 인사: 시드 반응표 GREETING → 웃음, 첫 만남
+        assertThat((Boolean) JsonPath.read(body(start), "$.data.firstMeet")).isTrue();
+        assertThat((String) JsonPath.read(body(start), "$.data.greeting.expression"))
+                .isEqualTo("웃음");
 
-        // 순간 동작은 캐릭터 설정(DB, 처음 값은 characters/malfoy/profile.yml)의 미리 쓴 대사 · 표정.
-        // 호감도 50 = 관계 단계 2의 대사
-        MvcResult drowsy = eventCall(token, s, "DROWSY", Instant.now().toString(), 201);
-        MvcResult drowsyLine =
-                call(post(s + "/events/" + eventId(drowsy) + "/reaction"), token, reactionBody(null), 200);
-        assertThat((String) JsonPath.read(body(drowsyLine), "$.data.characters[0].content"))
-                .isEqualTo("졸지 마, 너 졸면 내가 이겨도 이긴 게 아니잖아 정정당당하게 지라고");
-        assertThat((String) JsonPath.read(body(drowsyLine), "$.data.characters[0].emotion"))
-                .isEqualTo("경멸");
+        // 얼굴 감지 시작(PRESENT)은 반응 없음 (명세 18) → 19번도 부르지 않는다
+        MvcResult present = eventCall(token, s, "PRESENT", Instant.now().toString(), 201);
+        assertThat((Object) JsonPath.read(body(present), "$.data.reaction")).isNull();
 
-        // 12 heartbeat
-        call(post(s + "/heartbeat"), token, "{\"studySeconds\":0,\"presentSeconds\":0}", 204);
+        // 12 heartbeat → 청소년이 아니라 남은 시간 null
+        MvcResult beat = call(
+                post(s + "/heartbeat"),
+                token,
+                "{\"connectedSeconds\":0,\"presentSeconds\":0,\"cameraOnSeconds\":0,\"pipSeconds\":0}",
+                200);
+        assertThat((Object) JsonPath.read(body(beat), "$.data.minorRemainingSeconds"))
+                .isNull();
 
-        // 13~14 자리 비움 → 반응 → 같은 이벤트 재전송
+        // 13~14 자리 비움 → 반응(표정 · 강도 1) → 같은 이벤트 재전송
         String awayAt = Instant.now().toString();
         MvcResult awayEvent = eventCall(token, s, "AWAY", awayAt, 201);
-        assertThat(affinityDelta(awayEvent)).isZero(); // 자리 비움 감점은 끝날 때 1분 넘게 비웠으면
+        assertThat((Integer) JsonPath.read(body(awayEvent), "$.data.reaction.intensity"))
+                .isEqualTo(1);
         long awayId = eventId(awayEvent);
         MvcResult away = call(post(s + "/events/" + awayId + "/reaction"), token, reactionBody(1), 200);
         assertThat((String) JsonPath.read(body(away), "$.data.characters[0].content"))
                 .startsWith("(가짜 반응)");
         MvcResult awayAgain = eventCall(token, s, "AWAY", awayAt, 200);
         assertThat(eventId(awayAgain)).isEqualTo(awayId);
-        assertThat(affinityDelta(awayAgain)).isZero(); // 재전송은 다시 반영하지 않고 같은 변화
 
-        // 15 복귀: 1분 안에 돌아와서 감점 없음, 돌아옴 자체도 0점
+        // 15 복귀 · 말 걸기
         MvcResult returned = eventCall(token, s, "RETURN", Instant.now().toString(), 201);
-        assertThat(affinityDelta(returned)).isZero();
         call(post(s + "/events/" + eventId(returned) + "/reaction"), token, reactionBody(null), 200);
+        MvcResult idle = eventCall(token, s, "IDLE_TALK", Instant.now().toString(), 201);
+        assertThat((String) JsonPath.read(body(idle), "$.data.reaction.trigger"))
+                .isEqualTo("IDLE");
 
         // 16 채팅 → 같은 requestId 재전송은 한 번만
         org.mockito.Mockito.doAnswer(inv -> ((Map<?, ?>) inv.getArgument(1)).containsKey(ChatReplier.QUESTION)
@@ -185,11 +180,12 @@ class FlowE2ETest {
 
         // 18~20 끊기 → 멱등 → 연결 기록. 1분 공부한 것으로 보내려면 실제 경과 시간이 1분 이상이어야 해서 시작 시각을 당긴다
         jdbc.update("UPDATE connections SET started_at = started_at - interval '2 minutes' WHERE id = ?", sessionId);
-        String endBody = "{\"studySeconds\":60,\"presentSeconds\":60}";
+        String endBody = "{\"connectedSeconds\":60,\"presentSeconds\":60,\"cameraOnSeconds\":60,\"pipSeconds\":0}";
         MvcResult end = call(post(s + "/end"), token, endBody, 200);
         assertThat((Integer) JsonPath.read(body(end), "$.data.returnCount")).isEqualTo(1);
-        assertThat((Integer) JsonPath.read(body(end), "$.data.studySeconds")).isEqualTo(60);
-        // 호감도 0~100, 50에서 시작: 연속 출석 1일째 0, 짧은 자리 비움 0, 복귀 0, 칭찬 +2, 공부 시간은 레벨에만
+        assertThat((Integer) JsonPath.read(body(end), "$.data.connectedSeconds"))
+                .isEqualTo(60);
+        // 호감도 0~100, 50에서 시작: 이벤트는 호감도를 바꾸지 않음(2026-11-23), 칭찬 +2, 연결 시간은 레벨에만
         assertThat((Integer) JsonPath.read(body(end), "$.data.relation.pointsBefore"))
                 .isEqualTo(50);
         assertThat((Integer) JsonPath.read(body(end), "$.data.relation.pointsAfter"))
@@ -206,14 +202,18 @@ class FlowE2ETest {
         MvcResult report = call(get(s), token, null, 200);
         assertThat(body(report)).isEqualTo(body(end));
         MvcResult homeAfter = call(get("/api/home"), token, null, 200);
-        assertThat((Integer) JsonPath.read(body(homeAfter), "$.data.todayStudySeconds"))
+        assertThat((Integer) JsonPath.read(body(homeAfter), "$.data.todayConnectedSeconds"))
                 .isEqualTo(60);
         assertThat((Integer) JsonPath.read(body(homeAfter), "$.data.lastMate.id"))
                 .isEqualTo(1);
         // 같은 사용자의 다음 종료는 다음 줄: 완료 대사는 연결이 아니라 사용자 단위로 돌려 쓴다
         MvcResult second = call(post("/api/connections"), token, "{\"mateId\":1}", 201);
         String s2 = "/api/connections/" + ((Number) JsonPath.read(body(second), "$.data.connectionId")).longValue();
-        MvcResult end2 = call(post(s2 + "/end"), token, "{\"studySeconds\":0,\"presentSeconds\":0}", 200);
+        MvcResult end2 = call(
+                post(s2 + "/end"),
+                token,
+                "{\"connectedSeconds\":0,\"presentSeconds\":0,\"cameraOnSeconds\":0,\"pipSeconds\":0}",
+                200);
         assertThat((String) JsonPath.read(body(end2), "$.data.closingLine"))
                 .isEqualTo("오늘 기록 나쁘지 않네, 근데 내 에세이가 한 줄 더 길어 이건 꼭 적어 둬");
 
@@ -276,27 +276,22 @@ class FlowE2ETest {
         MvcResult start = call(post("/api/connections"), token, "{\"mateId\":1}", 201);
         long sessionId = ((Number) JsonPath.read(body(start), "$.data.connectionId")).longValue();
         String s = "/api/connections/" + sessionId;
-        event(token, s, "FOCUS", Instant.now().toString(), 201);
-        call(post(s + "/heartbeat"), token, "{\"studySeconds\":0,\"presentSeconds\":0}", 204);
+        event(token, s, "PRESENT", Instant.now().toString(), 201);
+        // 10분 전에 시작해 7분째 heartbeat를 보내고 탭이 닫힌 것으로 만든다
+        jdbc.update("UPDATE connections SET started_at = started_at - interval '10 minutes' WHERE id = ?", sessionId);
+        String sevenMinutes =
+                "{\"connectedSeconds\":420,\"presentSeconds\":400,\"cameraOnSeconds\":410,\"pipSeconds\":0}";
+        call(post(s + "/heartbeat"), token, sevenMinutes, 200);
+        jdbc.update("UPDATE connections SET last_heartbeat_at = now() - interval '3 minutes' WHERE id = ?", sessionId);
 
-        // 탭이 닫혀 3분 동안 heartbeat가 없었던 것으로 만든다
-        jdbc.update(
-                "UPDATE connections SET started_at = started_at - interval '10 minutes',"
-                        + " last_heartbeat_at = now() - interval '3 minutes' WHERE id = ?",
-                sessionId);
-        jdbc.update(
-                "UPDATE connection_events SET occurred_at = occurred_at - interval '10 minutes'"
-                        + " WHERE connection_id = ?",
-                sessionId);
-
-        // 시작~마지막 heartbeat 7분은 공부, 끊긴 3분은 휴식 (DB와 앱 시계 차이만큼 여유)
+        // 이어하기는 마지막 heartbeat 값으로 타이머를 잇는다 (끊긴 3분은 안 셈)
         MvcResult resumed = call(post(s + "/resume"), token, null, 200);
-        assertThat((Integer) JsonPath.read(body(resumed), "$.data.studySeconds"))
-                .isCloseTo(420, within(5));
-        assertThat((Integer) JsonPath.read(body(resumed), "$.data.breakSeconds"))
-                .isCloseTo(180, within(5));
+        assertThat((Integer) JsonPath.read(body(resumed), "$.data.connectedSeconds"))
+                .isEqualTo(420);
+        assertThat((Integer) JsonPath.read(body(resumed), "$.data.presentSeconds"))
+                .isEqualTo(400);
 
-        call(post(s + "/end"), token, "{\"studySeconds\":60,\"presentSeconds\":60}", 200);
+        call(post(s + "/end"), token, sevenMinutes, 200);
     }
 
     private long event(String token, String session, String type, String occurredAt, int status) throws Exception {
@@ -314,10 +309,6 @@ class FlowE2ETest {
 
     private static long eventId(MvcResult r) throws Exception {
         return ((Number) JsonPath.read(body(r), "$.data.eventId")).longValue();
-    }
-
-    private static int affinityDelta(MvcResult r) throws Exception {
-        return JsonPath.read(body(r), "$.data.characters[0].affinity.delta");
     }
 
     private static String reactionBody(Integer intensity) {

@@ -91,10 +91,8 @@ call session POST /api/connections '{"mateId":1}'
 SID=$(field "$RES" 'd["connectionId"]')
 START=$(date +%s)
 
-event "공부 시작 · 인사" FOCUS
-event "하품" YAWN
-event "손 흔들기" WAVE
-event "고개 돌림" HEAD_TURN
+# 베타 이벤트 4종 (명세 18, 2026-11-23): PRESENT · AWAY · RETURN · IDLE_TALK
+event "연결 시작 · 얼굴 보임" PRESENT
 message "채팅 · 칭찬" "너 머리 진짜 좋다"
 message "채팅 · 단답" "ㅇㅇ"
 message "채팅 · 무례" "닥쳐 좀"
@@ -102,14 +100,12 @@ message "채팅 · 공부 질문" "x^2-5x+6=0 근이 뭐야? 답만"
 event "자리 비움" AWAY 1
 echo "… 자리 비움 61초 기다림"
 sleep 61
-event "복귀 (61초 비움 → −1)" RETURN
-event "쉬는 시간 시작" BREAK
-message "채팅 · 쉬는 시간" "쉬는 시간이다 뭐 하지"
-event "쉬는 시간 끝" FOCUS
-message "같은 requestId 재전송" "쉬는 시간이다 뭐 하지" "$LAST_RID"
+event "복귀" RETURN
+event "말 걸기 타이머" IDLE_TALK
+message "같은 requestId 재전송" "x^2-5x+6=0 근이 뭐야? 답만" "$LAST_RID"
 
 ELAPSED=$(( $(date +%s) - START - 2 ))
-call end POST "/api/connections/$SID/end" "{\"studySeconds\":$ELAPSED,\"presentSeconds\":$(( ELAPSED - 61 ))}"
+call end POST "/api/connections/$SID/end" "{\"connectedSeconds\":$ELAPSED,\"presentSeconds\":$(( ELAPSED - 61 )),\"cameraOnSeconds\":$ELAPSED,\"pipSeconds\":0}"
 row "연결 끊기 (22)"
 call report GET "/api/connections/$SID"
 row "연결 기록 (23)"

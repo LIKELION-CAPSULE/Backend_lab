@@ -9,8 +9,9 @@ public enum SessionErrorCode implements ErrorCode {
     MATE_COMING_SOON(HttpStatus.CONFLICT),
     CONNECTION_NOT_FOUND(HttpStatus.NOT_FOUND),
     ONBOARDING_REQUIRED(HttpStatus.FORBIDDEN),
+    MINOR_DAILY_LIMIT(HttpStatus.FORBIDDEN),
     INVALID_EVENT(HttpStatus.BAD_REQUEST),
-    INVALID_STUDY_TIME(HttpStatus.BAD_REQUEST),
+    INVALID_CONNECTION_TIME(HttpStatus.BAD_REQUEST),
     /** detail.connectionId = 진행 중 연결 */
     CONNECTION_ALREADY_IN_PROGRESS(HttpStatus.CONFLICT),
     CONNECTION_IN_PROGRESS(HttpStatus.CONFLICT),

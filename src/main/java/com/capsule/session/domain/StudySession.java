@@ -17,6 +17,11 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class StudySession {
 
+    public static final String NORMAL = "NORMAL";
+    public static final String AUTO_CLOSED = "AUTO_CLOSED";
+    public static final String AUTO_AWAY = "AUTO_AWAY";
+    public static final String MINOR_LIMIT = "MINOR_LIMIT";
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -29,12 +34,20 @@ public class StudySession {
     private Instant endedAt;
     private String endType;
     private Instant lastHeartbeatAt;
-    private Integer heartbeatStudySeconds;
+    // 마지막 heartbeat 누적값 (api.md 21). 자동 마감 · 이어하기 · 청소년 남은 시간에 쓴다
+    private Integer heartbeatConnectedSeconds;
     private Integer heartbeatPresentSeconds;
-    private int focusSeconds;
-    private int distractSeconds;
-    private int breakSeconds;
+    private Integer heartbeatCameraOnSeconds;
+    private Integer heartbeatPipSeconds;
+    // 끊을 때 저장 (api.md 22)
+    private int connectedSeconds;
+    private int presentSeconds;
+    private int awaySeconds;
+    private int cameraOnSeconds;
+    private int pipSeconds;
+    private int messageCount;
     private int returnCount;
+    private String mood;
     private String closingLine;
 
     public StudySession(long userId, long characterId, Instant now) {
@@ -53,26 +66,41 @@ public class StudySession {
         return characterId;
     }
 
-    /** 생존 신호만. 공부 시간 값이 잘못된 heartbeat용 (저장된 값은 그대로 둠) */
+    /** 생존 신호만. 시간 값이 잘못된 heartbeat · 이어하기용 (저장된 값은 그대로 둠) */
     public void heartbeat(Instant now) {
         this.lastHeartbeatAt = now;
     }
 
-    /** heartbeat(api.md 21)가 보낸 그 시점까지의 공부 시간. 자동 마감 때 이 값으로 기록한다 */
-    public void heartbeat(Instant now, int studySeconds, int presentSeconds) {
+    /** heartbeat(api.md 21)가 보낸 그 시점까지의 누적값 */
+    public void heartbeat(Instant now, ConnectionTimes t) {
         heartbeat(now);
-        this.heartbeatStudySeconds = studySeconds;
-        this.heartbeatPresentSeconds = presentSeconds;
+        this.heartbeatConnectedSeconds = t.connected();
+        this.heartbeatPresentSeconds = t.present();
+        this.heartbeatCameraOnSeconds = t.cameraOn();
+        this.heartbeatPipSeconds = t.pip();
     }
 
-    /** 공부 종료 기록. 완료 대사는 대화 쪽 마무리가 끝난 뒤 {@link #recordClosingLine(String)}로 남긴다 */
-    public void close(
-            Instant endedAt, String endType, int focusSeconds, int distractSeconds, int breakSeconds, int returnCount) {
+    /** 마지막 heartbeat 값. 받은 적 없으면 0 */
+    public ConnectionTimes lastHeartbeatTimes() {
+        if (heartbeatConnectedSeconds == null) {
+            return ConnectionTimes.ZERO;
+        }
+        return new ConnectionTimes(
+                heartbeatConnectedSeconds,
+                heartbeatPresentSeconds,
+                heartbeatCameraOnSeconds == null ? heartbeatPresentSeconds : heartbeatCameraOnSeconds,
+                heartbeatPipSeconds == null ? 0 : heartbeatPipSeconds);
+    }
+
+    /** 끊기 기록. 완료 대사는 대화 쪽 마무리가 끝난 뒤 {@link #recordClosingLine(String)}로 남긴다 */
+    public void close(Instant endedAt, String endType, ConnectionTimes t, int awaySeconds, int returnCount) {
         this.endedAt = endedAt;
         this.endType = endType;
-        this.focusSeconds = focusSeconds;
-        this.distractSeconds = distractSeconds;
-        this.breakSeconds = breakSeconds;
+        this.connectedSeconds = t.connected();
+        this.presentSeconds = t.present();
+        this.cameraOnSeconds = t.cameraOn();
+        this.pipSeconds = t.pip();
+        this.awaySeconds = awaySeconds;
         this.returnCount = returnCount;
     }
 

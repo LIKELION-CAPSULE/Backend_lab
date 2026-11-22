@@ -569,12 +569,16 @@ public class DialogueService {
 
     // --- 공통 ---
 
-    /** 세션 첫 FOCUS는 GREETING, 그 밖의 FOCUS는 BREAK_END. 나머지(AWAY · RETURN · BREAK · 동작 이벤트)는 이벤트 타입 그대로 */
+    /**
+     * 베타 이벤트(2026-11-23): IDLE_TALK(말 걸기 타이머)는 IDLE, 나머지(PRESENT · AWAY · RETURN)는 그대로.
+     * 옛 FOCUS 기록은 세션 첫 FOCUS면 GREETING, 아니면 BREAK_END. IDLE 대사 콘텐츠는 아직 없음 (확정 필요)
+     */
     private static String triggerOf(SessionEventInfo event) {
-        if (!event.type().equals("FOCUS")) {
-            return event.type();
-        }
-        return event.firstFocusOfSession() ? "GREETING" : "BREAK_END";
+        return switch (event.type()) {
+            case "IDLE_TALK" -> "IDLE";
+            case "FOCUS" -> event.firstFocusOfSession() ? "GREETING" : "BREAK_END";
+            default -> event.type();
+        };
     }
 
     private SessionInfo openSession(long userId, long sessionId) {

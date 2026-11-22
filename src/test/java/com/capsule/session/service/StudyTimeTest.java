@@ -8,45 +8,40 @@ import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 자리 비움 계산 (api.md 22): AWAY부터 다음 PRESENT · RETURN(또는 끝)까지 */
 class StudyTimeTest {
 
     static final Instant T0 = Instant.parse("2026-11-07T05:00:00Z");
 
     @Test
-    void eachStateLastsUntilNextEvent() {
-        SessionEvent falseAway = event("AWAY", 20);
-        falseAway.markFalsePositive();
+    void awayLastsUntilPresentOrReturn() {
         List<SessionEvent> events = List.of(
-                event("FOCUS", 5),
+                event("PRESENT", 0),
                 event("AWAY", 10),
+                event("IDLE_TALK", 12), // 자리 비움을 끊지 않음
                 event("RETURN", 15),
-                falseAway,
-                event("BREAK", 30),
-                event("FOCUS", 40),
-                event("AWAY", 60)); // 끝 시각 뒤 → 무시
+                event("AWAY", 20),
+                event("AWAY", 22), // 이미 비운 중이면 처음 AWAY부터
+                event("PRESENT", 30),
+                event("AWAY", 45)); // 끝(50분)까지
 
-        StudyTime time = StudyTime.of(T0, events, T0.plus(50, MINUTES));
-
-        // 자리 지킴: 0~5(첫 이벤트 전) 5~10 15~20 20~30(오탐) 40~50 / 자리 비움: 10~15 / 휴식: 30~40
-        assertThat(time).isEqualTo(new StudyTime(35 * 60, 5 * 60, 10 * 60));
-        assertThat(time.studySeconds()).isEqualTo(40 * 60);
+        assertThat(StudyTime.awaySeconds(events, T0.plus(50, MINUTES))).isEqualTo((5 + 10 + 5) * 60);
     }
 
     @Test
-    void motionEventsDoNotChangeState() {
-        List<SessionEvent> events = List.of(
-                event("FOCUS", 0),
-                event("AWAY", 10),
-                event("HEAD_TURN", 12), // 자리 비움 중에 와도 자리 지킴으로 바뀌지 않음
-                event("RETURN", 15),
-                event("BREAK", 20),
-                event("YAWN", 25), // 휴식을 끊지 않음
-                event("FOCUS", 30));
+    void eventsAfterEndAreCut() {
+        List<SessionEvent> events = List.of(event("AWAY", 10), event("RETURN", 60));
+        assertThat(StudyTime.awaySeconds(events, T0.plus(40, MINUTES))).isEqualTo(30 * 60);
+    }
 
-        StudyTime time = StudyTime.of(T0, events, T0.plus(40, MINUTES));
-
-        // 자리 지킴: 0~10 15~20 30~40 / 자리 비움: 10~15 / 휴식: 20~30
-        assertThat(time).isEqualTo(new StudyTime(25 * 60, 5 * 60, 10 * 60));
+    @Test
+    void awayIntensityIsCountUpToThree() {
+        assertThat(StudyTime.awayIntensity(List.of(event("AWAY", 0)))).isEqualTo(1);
+        assertThat(StudyTime.awayIntensity(List.of(event("AWAY", 0), event("RETURN", 1), event("AWAY", 2))))
+                .isEqualTo(2);
+        assertThat(StudyTime.awayIntensity(
+                        List.of(event("AWAY", 0), event("AWAY", 1), event("AWAY", 2), event("AWAY", 3))))
+                .isEqualTo(3);
     }
 
     static SessionEvent event(String type, int minute) {

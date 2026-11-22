@@ -9,10 +9,14 @@ public record ReportResponse(
         Instant startedAt,
         Instant endedAt,
         String endType,
-        int studySeconds,
+        int connectedSeconds,
         int presentSeconds,
         int awaySeconds,
+        int messageCount,
         int returnCount,
-        CharacterRef mate,
+        MateRef mate,
         StudySettlement relation,
-        String closingLine) {}
+        String closingLine) {
+
+    public record MateRef(long id, String name, String illustrationUrl, String myRole) {}
+}

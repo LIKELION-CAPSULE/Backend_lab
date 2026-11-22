@@ -20,10 +20,18 @@ public interface StudySessionRepository extends JpaRepository<StudySession, Long
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<StudySession> findWithLockById(long id);
 
-    /** 이 기간에 끝난 세션의 공부 시간(자리 지킴 + 자리 비움) 합 */
-    @Query("select coalesce(sum(s.focusSeconds + s.distractSeconds), 0) from StudySession s"
+    /** 이 기간에 끝난 연결의 함께한 시간 합 (홈 오늘 시간, api.md 11) */
+    @Query("select coalesce(sum(s.presentSeconds), 0) from StudySession s"
             + " where s.userId = :userId and s.endedAt >= :from and s.endedAt < :to")
-    int studySecondsEndedBetween(long userId, Instant from, Instant to);
+    int presentSecondsEndedBetween(long userId, Instant from, Instant to);
+
+    /** 이 기간에 끝난 연결의 연결 시간 합 (홈 오늘 시간 · 청소년 3시간, api.md 11 · 16) */
+    @Query("select coalesce(sum(s.connectedSeconds), 0) from StudySession s"
+            + " where s.userId = :userId and s.endedAt >= :from and s.endedAt < :to")
+    int connectedSecondsEndedBetween(long userId, Instant from, Instant to);
+
+    /** 이 메이트와 연결한 적이 있는지 (첫 만남, api.md 16). 지금 만든 연결은 빼고 센다 */
+    boolean existsByUserIdAndCharacterIdAndIdNot(long userId, long characterId, long id);
 
     @Query("select s.id from StudySession s where s.endedAt is null"
             + " and coalesce(s.lastHeartbeatAt, s.startedAt) < :cutoff")
