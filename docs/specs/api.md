@@ -32,6 +32,8 @@
 | 26 | 인증 | POST | `/api/auth/password/reset` | 비밀번호 재설정 |
 | 27 | 인증 | DELETE | `/api/me` | 회원 탈퇴 |
 | 28 | 대화 | POST | `/api/sessions/{sessionId}/messages/stream` | 메시지 전송 (스트리밍) |
+| 29 | 온보딩 · 홈 | GET | `/api/me/settings` | 설정 조회 |
+| 30 | 온보딩 · 홈 | PATCH | `/api/me/settings` | 설정 변경 |
 
 순서 15는 노션에 없음 (번호 비어 있음).
 
@@ -231,10 +233,14 @@
 | password | String | O | 8자 이상, 72바이트 이하 (bcrypt 한계. 영문·숫자 72자, 한글 약 24자). 벗어나면 INVALID_PASSWORD |
 | nickname | String | O | 1~20자 (프로필 설정과 같은 규칙) |
 | agreedTermVersionIds | Array | O | 필수 약관이 빠지면 가입 불가 |
+| birthDate | String | O | `YYYY-MM-DD`. 만 14세 미만이면 UNDER_14, 형식이 틀리거나 미래 날짜면 INVALID_BIRTH_DATE |
+| deviceHash | String | O | 프론트가 만든 기기 값 (1~64자). `signup_devices`에 저장 (친구 초대 부정 방지용) |
 
 ```json
-{ "verificationToken": "vt_9f2...", "password": "capsule1234", "nickname": "승희", "agreedTermVersionIds": [3, 4] }
+{ "verificationToken": "vt_9f2...", "password": "capsule1234", "nickname": "승희", "agreedTermVersionIds": [3, 4], "birthDate": "2001-04-10", "deviceHash": "d1f0..." }
 ```
+
+> 2026-11-23 (12/1 베타): `birthDate` · `deviceHash` 추가, 만 14세 미만 거부, 베타 정원 초과 시 403 BETA_FULL. 가입할 때 내 초대 코드(`users.referral_code`)를 만든다
 
 #### 🛬 Response
 
@@ -250,7 +256,10 @@
 
 > ✅ **201 Created**
 
-> ❌ **400** INVALID_PASSWORD · INVALID_NICKNAME · TERMS_REQUIRED · VERIFICATION_EXPIRED · **409** EMAIL_ALREADY_USED
+> ❌ **400** INVALID_PASSWORD · INVALID_NICKNAME · TERMS_REQUIRED · VERIFICATION_EXPIRED · UNDER_14 · INVALID_BIRTH_DATE · **403** BETA_FULL · **409** EMAIL_ALREADY_USED
+
+- 나이는 한국 날짜 기준 만 나이. 만 14세 생일 당일부터 가입 가능
+- 베타 정원: 탈퇴하지 않은 가입자 수가 운영 설정 `betaMaxUsers`(기본 100) 이상이면 403 BETA_FULL. 탈퇴한 사람을 정원에서 뺄지는 확정 필요
 
 > ⚠️ 닉네임은 가입할 때 받기로 함 (2026-11-03 결정, DB `users.nickname` NOT NULL 유지). 현재 H01 회원가입 화면에 닉네임 칸 추가 필요
 
@@ -338,10 +347,13 @@
 | --- | --- | --- | --- |
 | code | String | O | 카카오가 리다이렉트로 준 인가 코드 |
 | redirectUri | String | O | 카카오 앱에 등록한 리다이렉트 주소 |
+| deviceHash | String | O | 프론트가 만든 기기 값 (1~64자). 새로 가입할 때만 `signup_devices`에 저장 |
 
 ```json
-{ "code": "Kx8...", "redirectUri": "https://capsule.app/oauth/kakao" }
+{ "code": "Kx8...", "redirectUri": "https://capsule.app/oauth/kakao", "deviceHash": "d1f0..." }
 ```
+
+> 2026-11-23 (12/1 베타): `deviceHash` 추가, 새 가입이면 정원 확인(403 BETA_FULL). 생년월일은 카카오에서 받지 않고 온보딩(10번 프로필 설정)에서 받음 → 생년월일이 없으면 `onboardingRequired = true`
 
 #### 🛬 Response
 
@@ -350,7 +362,7 @@
 | accessToken | String | 액세스 토큰 (30분). 리프레시 토큰은 HttpOnly 쿠키 |
 | userId | Long | 사용자 id |
 | isNewUser | Boolean | 이번에 가입했는지 |
-| onboardingRequired | Boolean | 아바타 설정 전이면 true → H02 |
+| onboardingRequired | Boolean | 아바타 **또는** 생년월일이 없으면 true → H02 |
 
 ```json
 { "accessToken": "eyJ...", "userId": 8, "isNewUser": true, "onboardingRequired": true }
@@ -358,13 +370,13 @@
 
 > ✅ **200 OK**
 
-> ❌ **401** SOCIAL_AUTH_FAILED (인가 코드 만료 · 오류)
+> ❌ **400** INVALID_REQUEST (`deviceHash` 없음) · **401** SOCIAL_AUTH_FAILED (인가 코드 만료 · 오류) · **403** BETA_FULL (새 가입일 때만. 이미 가입한 사람은 로그인됨)
 
 #### 서버가 하는 일
 
 1. 인가 코드를 카카오에 보내 카카오 회원번호와 닉네임을 받음
 2. `user_social_accounts`에서 (KAKAO, 회원번호) 조회
-3. 있으면 그 사용자로 로그인, 없으면 `users` + `user_social_accounts` + `user_terms`를 한 트랜잭션으로 생성. `user_terms`에는 가입 시점의 최신 필수 약관 버전을 동의로 기록. 닉네임은 카카오 프로필 닉네임으로 저장 (DB `users.nickname` NOT NULL, 프로필 설정에서 변경 가능). 카카오 닉네임이 비어 있으면 '카카오 사용자', 20자를 넘으면 앞 20자만 저장 (가입을 막지 않음)
+3. 있으면 그 사용자로 로그인, 없으면 정원을 확인하고 `users`(+ 초대 코드) + `user_social_accounts` + `user_terms` + `signup_devices`를 한 트랜잭션으로 생성. `user_terms`에는 가입 시점의 최신 필수 약관 버전을 동의로 기록. 닉네임은 카카오 프로필 닉네임으로 저장 (DB `users.nickname` NOT NULL, 프로필 설정에서 변경 가능). 카카오 닉네임이 비어 있으면 '카카오 사용자', 20자를 넘으면 앞 20자만 저장 (가입을 막지 않음)
 4. 이메일이 같아도 이메일 가입 계정과 자동으로 합치지 않음 (다른 계정으로 취급)
 
 #### 프론트 참고
@@ -458,9 +470,16 @@
 | userId | Long | 사용자 id |
 | nickname | String | 닉네임 (가입 때 받음) |
 | email | String | 이메일 |
-| onboardingRequired | Boolean | 아바타를 아직 안 골랐으면 true (닉네임은 가입 때 받음) |
+| onboardingRequired | Boolean | 아바타 **또는** 생년월일이 없으면 true (닉네임은 가입 때 받음. 카카오 가입자와 베타 전 가입자는 온보딩에서 생년월일을 받음) |
 | activeSession | Object | 진행 중 세션 `sessionId`, `roomId`, `roomName`, `characterName`, `startedAt`. 없으면 null |
 | profileImage | String | 프로필 이미지 = 아바타 썸네일. 아바타 설정 전이면 null |
+| birthDate | String | `YYYY-MM-DD`. 없으면 null |
+| isMinor | Boolean | 만 19세 미만이면 true (한국 날짜 기준). 생년월일이 없으면 false |
+| honorific | String | 호칭 (메이트가 나를 부르는 이름). 없으면 null → 메이트는 닉네임으로 부름 |
+| aboutMe | String | 나에 대해 한 줄. 없으면 null |
+| referralCode | String | 내 초대 코드 (예: `CAP-7K2Q`) |
+
+> 2026-11-23 (12/1 베타): `birthDate` · `isMinor` · `honorific` · `aboutMe` · `referralCode` 추가, `onboardingRequired`에 생년월일 조건 추가. `credits` · `activeSession` → `activeConnection`은 연결 · 크레딧 단계에서 바꿈
 
 ```json
 {
@@ -469,7 +488,12 @@
   "email": "name@example.com",
   "onboardingRequired": false,
   "activeSession": { "sessionId": 512, "roomId": 1, "roomName": "밤의 호그와트 도서관", "characterName": "말포이", "startedAt": "2026-11-07T05:00:02Z" },
-  "profileImage" : "profile_image_url.com"
+  "profileImage" : "profile_image_url.com",
+  "birthDate": "2001-04-10",
+  "isMinor": false,
+  "honorific": "승희야",
+  "aboutMe": "백엔드 개발 공부 중",
+  "referralCode": "CAP-7K2Q"
 }
 ```
 
@@ -562,10 +586,15 @@ H02에서 아바타를 저장하면 `onboardingRequired`가 false가 되고 H03 
 | --- | --- | --- | --- |
 | nickname | String | X | 1~20자. 없으면 그대로 (보냈는데 비었거나 20자 초과면 INVALID_NICKNAME) |
 | avatarId | Long | X | 없으면 그대로. 아직 아바타가 없으면 기본 아바타 |
+| birthDate | String | X | `YYYY-MM-DD`. 저장된 생년월일이 없을 때만 저장하고, 이미 있으면 무시 (한 번만). 만 14세 미만이면 UNDER_14 |
+| honorific | String | X | 1~10자. 빈 문자열이면 지움. 11자 이상이면 INVALID_HONORIFIC |
+| aboutMe | String | X | 0~60자. 빈 문자열이면 지움. 61자 이상이면 INVALID_ABOUT_ME |
 
 ```json
-{ "avatarId": 1 }
+{ "avatarId": 1, "birthDate": "2001-04-10", "honorific": "승희야" }
 ```
+
+> 2026-11-23 (12/1 베타): `birthDate`(온보딩에서 한 번) · `honorific` · `aboutMe` 추가
 
 #### 🛬 Response
 
@@ -573,7 +602,9 @@ H02에서 아바타를 저장하면 `onboardingRequired`가 false가 되고 H03 
 
 > ✅ **200 OK**
 
-> ❌ **400** INVALID_NICKNAME · AVATAR_NOT_FOUND
+> ❌ **400** INVALID_NICKNAME · AVATAR_NOT_FOUND · UNDER_14 · INVALID_BIRTH_DATE · INVALID_HONORIFIC · INVALID_ABOUT_ME
+
+- 만 14세 미만(UNDER_14)이면 생년월일을 저장하지 않고 400만 돌려준다. 계정을 탈퇴 처리할지, 카카오 연결 해제까지 할지는 확정 필요
 
 ## 11. GET /api/home — 홈 조회
 - 분류: 온보딩 · 홈
@@ -1747,3 +1778,67 @@ data: {"requestId":"9c3a...","characterId":1,"content":"알지. 그리핀도르 
 - 답 길이 · 수다 길어짐 · 일시정지 중 입력 막기는 20번과 같음
 - 프론트는 `EventSource`가 아니라 `fetch`로 부른다 (`EventSource`는 POST · 헤더를 못 보냄). 응답 본문을 읽으면서 빈 줄로 이벤트를 나눔
 - 연결이 끊기면 같은 `requestId`로 다시 보냄 (20번이든 28번이든). 이미 답했으면 `done`(28) 또는 보통 응답(20)으로 저장된 답장이 옴
+
+## 29. GET /api/me/settings — 설정 조회
+- 분류: 온보딩 · 홈
+- 설명: 계정 설정 모달의 설정 탭. 저장한 적 없는 값은 기본값으로 채움
+- 와이어프레임: SCR-28 설정 탭
+- 백엔드: Not started
+- 프론트: Not started
+
+> 2026-11-23 (12/1 베타): 설정 조회 추가
+
+#### 설명
+
+설정 탭에 띄울 값입니다. 서버에 저장하는 설정 7개만 돌려주고, 저장한 적 없는 키는 기본값으로 채웁니다. 마이크 · 카메라 기기와 단축키는 브라우저에 저장하므로 여기 없습니다.
+
+- 테이블: `users.settings` (jsonb) · 인증: 필요
+
+#### [GET] /api/me/settings
+
+#### 🛬 Response
+
+| 이름 | 타입 | 값 (기본값) |
+| --- | --- | --- |
+| talkFrequency | String | `QUIET` / `SOMETIMES` / `OFTEN` (`SOMETIMES`) — 말 걸기 빈도 |
+| voiceEnabled | Boolean | (true) — 메이트 음성. 끄면 크레딧이 들지 않음 |
+| voiceVolume | Integer | 0~100 (70) |
+| voiceSpeed | String | `SLOW` / `NORMAL` / `FAST` (`NORMAL`) |
+| pipBubble | Boolean | (true) — PIP 말풍선 |
+| defaultMode | String | `BASIC` / `ADVANCED` (`BASIC`) — 대화 모드 기본값 |
+| pipSize | String | `S` / `M` / `L` (`M`) |
+
+```json
+{ "talkFrequency": "SOMETIMES", "voiceEnabled": true, "voiceVolume": 70, "voiceSpeed": "NORMAL", "pipBubble": true, "defaultMode": "BASIC", "pipSize": "M" }
+```
+
+> ✅ **200 OK**
+
+## 30. PATCH /api/me/settings — 설정 변경
+- 분류: 온보딩 · 홈
+- 설명: 보낸 키만 바꾸고 전체 설정을 돌려줌
+- 와이어프레임: SCR-28 설정 탭
+- 백엔드: Not started
+- 프론트: Not started
+
+> 2026-11-23 (12/1 베타): 설정 변경 추가
+
+- 테이블: `users.settings` (jsonb) · 인증: 필요
+
+#### [PATCH] /api/me/settings
+
+#### 🛫 Request
+
+29번 Response의 키 중 바꿀 것만 보낸다. 모르는 키도 INVALID_SETTINGS (오타를 조용히 넘기지 않음). `null`은 기본값으로 되돌림
+
+```json
+{ "voiceEnabled": false }
+```
+
+#### 🛬 Response
+
+29번과 같은 형태 (바꾼 뒤 전체 설정)
+
+> ✅ **200 OK**
+
+> ❌ **400** INVALID_SETTINGS (모르는 키 · 허용 값 밖 · 타입 틀림)

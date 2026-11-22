@@ -55,6 +55,11 @@
 --     expression_guide 추가(표정마다 언제 쓰는지. 결정 모델 보기 설명)
 --   - character_profiles.lab_edited_at 추가: 실험실에서 고친 캐릭터 설정은 profile.yml 버전이 올라가도 시작할 때 덮지 않는다.
 --     실험실에 "파일에 새 버전"을 띄우고, 사람이 [파일 값으로 바꾸기]를 눌러야 파일 값이 들어간다
+--
+-- 2026-11-23 변경 (12/1 베타 1단계: 회원)
+--   - users: birth_date · honorific · about_me · referral_code · settings 추가
+--   - signup_devices 추가 (가입 기기, 친구 초대 부정 방지)
+--   - user_memories(일정)는 대화 프롬프트가 아직 읽어서 이번에는 두고, 대화 단계에서 지운다
 -- =====================================================================
 
 BEGIN;
@@ -75,8 +80,22 @@ CREATE TABLE users (
     created_at        timestamptz NOT NULL DEFAULT now(),
     updated_at        timestamptz NOT NULL DEFAULT now(),
     withdrawn_at      timestamptz,                                      -- NULL이면 활성 회원
+    birth_date        date,                                             -- 이메일은 가입 때, 카카오 · 베타 전 가입자는 온보딩에서. NULL이면 onboardingRequired
+    honorific         text CHECK (char_length(honorific) BETWEEN 1 AND 10),  -- 호칭 (메이트가 부르는 이름)
+    about_me          text CHECK (char_length(about_me) <= 60),         -- 나에 대해 한 줄
+    referral_code     text        UNIQUE,                               -- 내 초대 코드 (CAP-XXXX). 가입 때 만듦
+    settings          jsonb       NOT NULL DEFAULT '{}',                -- 설정 7개. 없는 키는 코드 기본값 (API 29 · 30)
     CHECK ((email IS NULL) = (password IS NULL))                        -- 둘 다 있거나 둘 다 없거나
 );
+
+-- 가입한 기기 (친구 초대 부정 방지: 같은 기기 반복 가입이면 초대 보상 없음). 탈퇴해도 남김
+CREATE TABLE signup_devices (
+    device_hash text        NOT NULL,             -- 프론트가 만든 기기 값 (64자 이하)
+    user_id     bigint      NOT NULL REFERENCES users (id),
+    created_at  timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (device_hash, user_id)
+);
+CREATE INDEX idx_signup_devices_user ON signup_devices (user_id);
 
 -- 소셜 가입 계정 (지금은 계정당 하나, 탈퇴하면 행 삭제 → 같은 소셜 계정으로 재가입 가능)
 CREATE TABLE user_social_accounts (
