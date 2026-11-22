@@ -7,6 +7,7 @@ import com.capsule.relation.api.RelationCommands;
 import com.capsule.relation.api.RelationQuery;
 import com.capsule.relation.api.RelationTypes.AffinityChange;
 import com.capsule.relation.api.RelationTypes.ChatScore;
+import com.capsule.relation.api.RelationTypes.IntimacySettlement;
 import com.capsule.relation.api.RelationTypes.RelationView;
 import com.capsule.relation.api.RelationTypes.SessionEventRef;
 import com.capsule.relation.api.RelationTypes.SignalType;
@@ -146,6 +147,9 @@ public class RelationService implements RelationQuery, RelationCommands {
         Relation rel = lock(userId, characterId);
         Optional<RelationLog> done = logs.findByRelationIdAndRequestId(rel.getId(), requestId);
         if (done.isPresent()) return change(rel, List.of(done.get()));
+        // 친밀도: 그날 대화 턴 수 (0이면 인정 절반). 재전송(위)은 세지 않는다.
+        // ponytail: 점수가 0이라 기록이 안 남은 턴을 다시 받으면 한 번 더 센다 (0인지 아닌지만 보므로 영향 없음)
+        relations.addChatTurn(rel.getId(), IntimacyPolicy.dayOf(Instant.now(clock)));
         int delta = AffinityPolicy.chatDelta(rel.points(), score);
         if (delta > 0) {
             Instant today = todayStart();
@@ -183,6 +187,78 @@ public class RelationService implements RelationQuery, RelationCommands {
             entityManager.refresh(rel);
         }
         return settlementOf(userId, characterId, sessionId);
+    }
+
+    // ---- 친밀도 (2026-11-23 5단계, api.md 22 '친밀도 규칙')
+
+    @Override
+    @Transactional(readOnly = true)
+    public int stage(long userId, long characterId) {
+        return relations
+                .findByUserIdAndCharacterId(userId, characterId)
+                .map(Relation::getStage)
+                .orElse(1);
+    }
+
+    @Override
+    public IntimacySettlement settleIntimacy(
+            long userId,
+            long characterId,
+            long connectionId,
+            Instant endedAt,
+            int presentSeconds,
+            int connectedSeconds) {
+        Relation rel = lock(userId, characterId);
+        if (settlements.findByRelationIdAndSessionId(rel.getId(), connectionId).isEmpty()) {
+            LocalDate day = IntimacyPolicy.dayOf(endedAt);
+            int creditedToday = relations.creditedOn(rel.getId(), day).orElse(0);
+            boolean chatted = relations.chatTurnsOn(rel.getId(), day).orElse(0) > 0;
+            int credited = IntimacyPolicy.credit(presentSeconds, creditedToday, chatted);
+            int stageBefore = rel.getStage();
+            int stageAfter = Math.max(stageBefore, IntimacyPolicy.stageOf(rel.getCreditedSeconds() + credited));
+            // 레벨 · 함께한 시간 누적은 호감도 화면(대화 · 실험실)이 아직 써서 같이 갱신한다
+            int levelBefore = policy.levelOf(rel.getTotalPresentSeconds());
+            int levelAfter = policy.levelOf(rel.getTotalPresentSeconds() + presentSeconds);
+            Instant now = Instant.now(clock);
+            relations.addStudy(rel.getId(), connectedSeconds, presentSeconds, levelAfter, now);
+            relations.addIntimacy(rel.getId(), credited, connectedSeconds, stageAfter);
+            if (credited > 0) relations.addDaily(rel.getId(), day, credited);
+            settlements.save(new RelationSettlement(
+                    rel.getId(),
+                    connectionId,
+                    presentSeconds,
+                    levelBefore,
+                    levelAfter,
+                    credited,
+                    stageBefore,
+                    stageAfter,
+                    now));
+            entityManager.refresh(rel);
+        }
+        return intimacyOf(userId, characterId, connectionId);
+    }
+
+    @Override
+    public void recordUnlocks(long userId, List<Long> contentIds) {
+        contentIds.forEach(id -> relations.unlock(userId, id));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public IntimacySettlement intimacyOf(long userId, long characterId, long connectionId) {
+        Optional<Relation> found = relations.findByUserIdAndCharacterId(userId, characterId);
+        int stageNow = found.map(Relation::getStage).orElse(1);
+        Optional<RelationSettlement> settled =
+                found.flatMap(rel -> settlements.findByRelationIdAndSessionId(rel.getId(), connectionId));
+        // 다시 읽을 때도 처음과 같게 (명세 22 · 23): 누적도 그 정산 직후 값. 정산이 없으면 지금 누적
+        int total = settled.map(s -> settlements.creditedUpTo(s.getRelationId(), s.getCreatedAt(), connectionId))
+                .orElseGet(() -> found.map(Relation::getCreditedSeconds).orElse(0));
+        return new IntimacySettlement(
+                settled.map(RelationSettlement::getStageBefore).orElse(stageNow),
+                settled.map(RelationSettlement::getStageAfter).orElse(stageNow),
+                settled.map(RelationSettlement::getCreditedSeconds).orElse(0),
+                total,
+                IntimacyPolicy.secondsToNextStage(total));
     }
 
     /** 관계가 없으면 만들고 행을 잠근다 */

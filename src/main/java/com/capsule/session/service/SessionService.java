@@ -14,11 +14,13 @@ import com.capsule.content.api.ContentTypes.AvatarInfo;
 import com.capsule.content.api.ContentTypes.CharacterInfo;
 import com.capsule.content.api.ContentTypes.MateInfo;
 import com.capsule.content.api.ContentTypes.Reaction;
+import com.capsule.content.api.ContentTypes.UnlockInfo;
 import com.capsule.content.api.MateQuery;
 import com.capsule.content.api.ReactionQuery;
+import com.capsule.content.api.UnlockQuery;
 import com.capsule.relation.api.RelationCommands;
 import com.capsule.relation.api.RelationQuery;
-import com.capsule.relation.api.RelationTypes.StudySettlement;
+import com.capsule.relation.api.RelationTypes.IntimacySettlement;
 import com.capsule.session.api.SessionClosingHandler;
 import com.capsule.session.api.SessionTypes.SessionClosing;
 import com.capsule.session.config.SessionProperties;
@@ -33,6 +35,7 @@ import com.capsule.session.dto.Figure;
 import com.capsule.session.dto.HeartbeatRequest;
 import com.capsule.session.dto.HeartbeatResponse;
 import com.capsule.session.dto.HomeResponse;
+import com.capsule.session.dto.IntimacyView;
 import com.capsule.session.dto.Me;
 import com.capsule.session.dto.ReactionView;
 import com.capsule.session.dto.ReportResponse;
@@ -83,6 +86,7 @@ public class SessionService {
     private final MateQuery mates;
     private final CharacterQuery characters;
     private final ReactionQuery reactions;
+    private final UnlockQuery unlocks;
     private final RelationQuery relationQuery;
     private final RelationCommands relationCommands;
     private final SessionClosingHandler closingHandler;
@@ -167,7 +171,36 @@ public class SessionService {
                 now(),
                 firstMeet,
                 reaction(character.id(), "GREETING", null),
-                minorRemaining);
+                minorRemaining,
+                stageNow(mate, relationQuery.stage(userId, character.id())));
+    }
+
+    // ---- 친밀도 (2026-11-23 5단계)
+
+    private static IntimacyView.Now stageNow(MateInfo mate, int stage) {
+        return new IntimacyView.Now(stage, stageName(mate, stage));
+    }
+
+    /** 단계 이름은 메이트마다 다름 (characters.stage_names). 없으면 null */
+    private static String stageName(MateInfo mate, int stage) {
+        List<String> names = mate == null ? List.of() : mate.stageNames();
+        return names != null && stage >= 1 && stage <= names.size() ? names.get(stage - 1) : null;
+    }
+
+    private IntimacyView intimacy(long characterId, IntimacySettlement r) {
+        MateInfo mate = mates.find(characterId).orElse(null);
+        List<IntimacyView.Unlocked> unlocked = unlocks.between(characterId, r.stageBefore(), r.stageAfter()).stream()
+                .map(u -> new IntimacyView.Unlocked(
+                        u.type(), u.title(), u.unlockStage(), u.expressionName(), u.assetUrl()))
+                .toList();
+        return new IntimacyView(
+                r.stageBefore(),
+                r.stageAfter(),
+                stageName(mate, r.stageAfter()),
+                r.stageUp(),
+                r.creditedSeconds(),
+                r.nextStageSeconds(),
+                unlocked);
     }
 
     @Transactional
@@ -269,7 +302,7 @@ public class SessionService {
             long userId, long sessionId, EndRequest req, String endType, SessionClosingHandler.Draft draft) {
         StudySession s = owned(sessions.findWithLockById(sessionId), userId);
         if (!s.inProgress()) {
-            return toReport(s, relationQuery.settlementOf(s.getUserId(), s.characterId(), s.getId()));
+            return toReport(s, relationQuery.intimacyOf(s.getUserId(), s.characterId(), s.getId()));
         }
         Instant now = now();
         ConnectionTimes t = requireTimes(s, req, now);
@@ -282,7 +315,7 @@ public class SessionService {
         if (s.inProgress()) {
             throw new ApiException(SessionErrorCode.CONNECTION_IN_PROGRESS);
         }
-        return toReport(s, relationQuery.settlementOf(s.getUserId(), s.characterId(), s.getId()));
+        return toReport(s, relationQuery.intimacyOf(s.getUserId(), s.characterId(), s.getId()));
     }
 
     /** heartbeat가 auto-close-after(6h)보다 오래 없는 연결을 마지막 heartbeat 시각 · 값으로 닫는다 (api.md 21) */
@@ -333,8 +366,14 @@ public class SessionService {
                 (int) list.stream().filter(e -> RETURN.equals(e.getType())).count();
         s.close(endedAt, endType, t, Math.max(0, away), returns);
         long characterId = s.characterId();
-        StudySettlement settlement =
-                relationCommands.settleStudy(s.getUserId(), characterId, s.getId(), t.connected(), t.present());
+        IntimacySettlement settlement = relationCommands.settleIntimacy(
+                s.getUserId(), characterId, s.getId(), endedAt, t.present(), t.connected());
+        if (settlement.stageUp()) {
+            List<Long> opened = unlocks.between(characterId, settlement.stageBefore(), settlement.stageAfter()).stream()
+                    .map(UnlockInfo::id)
+                    .toList();
+            relationCommands.recordUnlocks(s.getUserId(), opened);
+        }
         s.recordClosingLine(closingHandler.close(closingOf(s, endType, t.connected()), draft));
         return toReport(s, settlement);
     }
@@ -351,7 +390,7 @@ public class SessionService {
                 null);
     }
 
-    private ReportResponse toReport(StudySession s, StudySettlement settlement) {
+    private ReportResponse toReport(StudySession s, IntimacySettlement settlement) {
         long characterId = s.characterId();
         CharacterInfo c = character(characterId);
         Optional<MateInfo> mate = mates.find(characterId);
@@ -370,7 +409,7 @@ public class SessionService {
                         c.name(),
                         mate.map(MateInfo::illustrationUrl).orElse(null),
                         mate.map(MateInfo::myRole).orElse(null)),
-                settlement,
+                intimacy(characterId, settlement),
                 s.getClosingLine());
     }
 

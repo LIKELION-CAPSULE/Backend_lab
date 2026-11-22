@@ -35,15 +35,35 @@ public class RelationSettlement {
     private int presentSeconds;
     private int levelBefore;
     private int levelAfter;
+    // 친밀도 (2026-11-23 5단계)
+    private int creditedSeconds;
+    private int stageBefore;
+    private int stageAfter;
     private Instant createdAt;
 
     public RelationSettlement(
             long relationId, long sessionId, int presentSeconds, int levelBefore, int levelAfter, Instant createdAt) {
+        this(relationId, sessionId, presentSeconds, levelBefore, levelAfter, 0, 1, 1, createdAt);
+    }
+
+    public RelationSettlement(
+            long relationId,
+            long sessionId,
+            int presentSeconds,
+            int levelBefore,
+            int levelAfter,
+            int creditedSeconds,
+            int stageBefore,
+            int stageAfter,
+            Instant createdAt) {
         this.relationId = relationId;
         this.sessionId = sessionId;
         this.presentSeconds = presentSeconds;
         this.levelBefore = levelBefore;
         this.levelAfter = levelAfter;
+        this.creditedSeconds = creditedSeconds;
+        this.stageBefore = stageBefore;
+        this.stageAfter = stageAfter;
         this.createdAt = createdAt;
     }
 }

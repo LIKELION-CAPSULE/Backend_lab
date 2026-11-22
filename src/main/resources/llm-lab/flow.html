@@ -416,9 +416,11 @@ async function end() {
       <table>
         <tr><td>연결 시간 · 함께한 시간 · 자리 비움</td><td class="n">${fmt(r.connectedSeconds)} · ${fmt(r.presentSeconds)} · ${fmt(r.awaySeconds)}</td></tr>
         <tr><td>복귀</td><td class="n">${r.returnCount}회</td></tr>
-        <tr><td>레벨 (자리 지킴 시간)</td><td class="n">Lv.${rel.levelBefore} → Lv.${rel.levelAfter}${rel.levelUp ? ' <b class="plus">레벨업</b>' : ''} · 다음 레벨은 누적 ${fmt(rel.nextLevelSeconds)}</td></tr>
-        <tr><td>호감도 (시작 → 끝)</td><td class="n">${rel.pointsBefore} → ${rel.pointsAfter} · ${rel.stage}단계 ${esc(rel.stageName)}${adjusted}</td></tr>
+        <tr><td>친밀도 단계</td><td class="n">${rel.stageBefore} → ${rel.stageAfter} ${esc(rel.stageName || '')}${rel.stageUp ? ' <b class="plus">단계 오름</b>' : ''}</td></tr>
+        <tr><td>인정된 시간 · 다음 단계까지</td><td class="n">${fmt(rel.creditedSeconds)} · ${rel.nextStageSeconds == null ? '마지막 단계' : fmt(rel.nextStageSeconds)}</td></tr>
+        <tr><td>열린 콘텐츠</td><td>${rel.unlocked.length ? rel.unlocked.map(u => esc(u.title)).join(', ') : '<span class="mut">없음</span>'}</td></tr>
       </table>
+      <p class="mut">호감도는 대화(20) 응답에서 봅니다${adjusted}</p>
       <p>완료 대사: <b>${esc(r.closingLine)}</b></p>`;
     const again = await call('GET', `/api/connections/${r.connectionId}`);
     note(`공부 끝 · 리포트 조회 (23)는 ${JSON.stringify(again) === JSON.stringify(r) ? '22 응답과 같음' : '<b>22 응답과 다름</b> (요청 기록 확인)'}`);

@@ -26,11 +26,13 @@ import com.capsule.content.api.ContentTypes.ExpressionRef;
 import com.capsule.content.api.ContentTypes.MateInfo;
 import com.capsule.content.api.ContentTypes.ModelInfo;
 import com.capsule.content.api.ContentTypes.Reaction;
+import com.capsule.content.api.ContentTypes.UnlockInfo;
 import com.capsule.content.api.MateQuery;
 import com.capsule.content.api.ReactionQuery;
+import com.capsule.content.api.UnlockQuery;
 import com.capsule.relation.api.RelationCommands;
 import com.capsule.relation.api.RelationQuery;
-import com.capsule.relation.api.RelationTypes.StudySettlement;
+import com.capsule.relation.api.RelationTypes.IntimacySettlement;
 import com.capsule.session.api.SessionClosingHandler;
 import com.capsule.session.api.SessionQuery;
 import com.capsule.session.api.SessionTypes.SessionClosing;
@@ -91,7 +93,7 @@ class SessionApiTest {
             "같은 반 친구",
             null,
             CHAERIN_MODEL,
-            List.of(),
+            List.of("처음 본 사이", "아는 사이", "친구", "단짝", "특별한 사이"),
             false,
             true);
     static final MateInfo COMING_SOON = new MateInfo(
@@ -102,7 +104,10 @@ class SessionApiTest {
             "https://cdn.capsule.invalid/avatar1.png",
             true,
             new ModelInfo("https://cdn.capsule.invalid/live2d/avatar1/v1/avatar1.model3.json", 1.0, 0, 0));
-    static final StudySettlement SETTLEMENT = new StudySettlement(1, 1, "아는 사이", 0, 55, null, false, 1, "아는 사이", 3600);
+    /** 1단계 → 2단계, 이번 인정 2000초 */
+    static final IntimacySettlement SETTLEMENT = new IntimacySettlement(1, 2, 2000, 4000, 14000);
+
+    static final UnlockInfo SHY = new UnlockInfo(9, "EXPRESSION", "수줍은 웃음", 2, "shy", null);
     static final String CLOSING_LINE = "오늘도 같이 있어서 좋았어.";
     static final SessionClosingHandler.Draft DRAFT = new SessionClosingHandler.Draft() {};
     static final Reaction SMILE = new Reaction(null, new ExpressionRef("웃음", "exp/smile.exp3.json"));
@@ -145,6 +150,9 @@ class SessionApiTest {
     RelationCommands relationCommands;
 
     @MockitoBean
+    UnlockQuery unlockQuery;
+
+    @MockitoBean
     SessionClosingHandler closingHandler;
 
     long userId;
@@ -158,9 +166,11 @@ class SessionApiTest {
         given(mateQuery.find(2L)).willReturn(Optional.of(COMING_SOON));
         given(mateQuery.activeMates()).willReturn(List.of(CHAERIN_MATE, COMING_SOON));
         given(characterQuery.find(1L)).willReturn(Optional.of(CHAERIN));
-        given(relationQuery.settlementOf(anyLong(), anyLong(), anyLong())).willReturn(SETTLEMENT);
-        given(relationCommands.settleStudy(anyLong(), anyLong(), anyLong(), anyInt(), anyInt()))
+        given(relationQuery.intimacyOf(anyLong(), anyLong(), anyLong())).willReturn(SETTLEMENT);
+        given(relationQuery.stage(anyLong(), anyLong())).willReturn(2);
+        given(relationCommands.settleIntimacy(anyLong(), anyLong(), anyLong(), any(), anyInt(), anyInt()))
                 .willReturn(SETTLEMENT);
+        given(unlockQuery.between(1L, 1, 2)).willReturn(List.of(SHY));
         // 대화 마무리 초안(LLM)은 DB 트랜잭션 밖에서 만들고, 저장 쪽에 그대로 넘긴다 (개발 서버 풀 2)
         given(closingHandler.draft(any())).willAnswer(inv -> {
             assertThat(TransactionSynchronizationManager.isActualTransactionActive())
@@ -207,6 +217,8 @@ class SessionApiTest {
                                 .andExpect(jsonPath("$.data.greeting.line").value(nullValue()))
                                 .andExpect(
                                         jsonPath("$.data.minorRemainingSeconds").value(nullValue()))
+                                .andExpect(jsonPath("$.data.relation.stage").value(2))
+                                .andExpect(jsonPath("$.data.relation.stageName").value("아는 사이"))
                                 .andReturn()
                                 .getResponse()
                                 .getContentAsString(),
@@ -377,8 +389,9 @@ class SessionApiTest {
         expectReport(end(id, 10, 10, 10, 0, null).andExpect(status().isOk()), id); // 다시 불러도 같은 결과
         expectReport(mvc.perform(get("/api/connections/{id}", id).with(login(userId))), id);
 
-        verify(relationCommands, times(1)).settleStudy(anyLong(), anyLong(), anyLong(), anyInt(), anyInt());
-        verify(relationCommands).settleStudy(userId, 1L, id, 3000, 2000);
+        verify(relationCommands, times(1)).settleIntimacy(anyLong(), anyLong(), anyLong(), any(), anyInt(), anyInt());
+        verify(relationCommands).settleIntimacy(eq(userId), eq(1L), eq(id), any(), eq(2000), eq(3000));
+        verify(relationCommands, times(1)).recordUnlocks(userId, List.of(9L));
         SessionClosing closing = new SessionClosing(id, userId, 1L, "채린", "AUTO_AWAY", 3000, null);
         verify(closingHandler, times(1)).draft(any());
         verify(closingHandler).close(eq(closing), same(DRAFT));
@@ -471,7 +484,7 @@ class SessionApiTest {
                 .containsEntry("camera_on_seconds", 3300)
                 .containsEntry("pip_seconds", 100)
                 .containsEntry("closing_line", CLOSING_LINE);
-        verify(relationCommands).settleStudy(userId, 1L, id, 3600, 3000);
+        verify(relationCommands).settleIntimacy(eq(userId), eq(1L), eq(id), any(), eq(3000), eq(3600));
         verify(closingHandler)
                 .close(eq(new SessionClosing(id, userId, 1L, "채린", "AUTO_CLOSED", 3600, null)), same(DRAFT));
         assertThat(sessionQuery.find(fresh)).get().matches(SessionInfo::inProgress);
@@ -583,7 +596,15 @@ class SessionApiTest {
                 .andExpect(jsonPath("$.data.mate.id").value(1))
                 .andExpect(jsonPath("$.data.mate.illustrationUrl").value(CHAERIN_MATE.illustrationUrl()))
                 .andExpect(jsonPath("$.data.mate.myRole").value("같은 반 친구"))
-                .andExpect(jsonPath("$.data.relation.pointsAfter").value(55))
+                .andExpect(jsonPath("$.data.relation.stageBefore").value(1))
+                .andExpect(jsonPath("$.data.relation.stageAfter").value(2))
+                .andExpect(jsonPath("$.data.relation.stageUp").value(true))
+                .andExpect(jsonPath("$.data.relation.stageName").value("아는 사이"))
+                .andExpect(jsonPath("$.data.relation.creditedSeconds").value(2000))
+                .andExpect(jsonPath("$.data.relation.nextStageSeconds").value(14000))
+                .andExpect(
+                        jsonPath("$.data.relation.unlocked[0].expressionName").value("shy"))
+                .andExpect(jsonPath("$.data.relation.pointsAfter").doesNotExist())
                 .andExpect(jsonPath("$.data.closingLine").value(CLOSING_LINE));
     }
 

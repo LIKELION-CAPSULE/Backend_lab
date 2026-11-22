@@ -185,15 +185,17 @@ class FlowE2ETest {
         assertThat((Integer) JsonPath.read(body(end), "$.data.returnCount")).isEqualTo(1);
         assertThat((Integer) JsonPath.read(body(end), "$.data.connectedSeconds"))
                 .isEqualTo(60);
-        // 호감도 0~100, 50에서 시작: 이벤트는 호감도를 바꾸지 않음(2026-11-23), 칭찬 +2, 연결 시간은 레벨에만
-        assertThat((Integer) JsonPath.read(body(end), "$.data.relation.pointsBefore"))
-                .isEqualTo(50);
-        assertThat((Integer) JsonPath.read(body(end), "$.data.relation.pointsAfter"))
-                .isEqualTo(52);
-        assertThat((String) JsonPath.read(body(end), "$.data.relation.stageName"))
-                .isEqualTo("친한 사이");
-        assertThat((Integer) JsonPath.read(body(end), "$.data.relation.levelAfter"))
-                .isEqualTo(1); // 자리 지킴 1분
+        // 친밀도 (2026-11-23): 대화가 한 턴 있어서 함께한 1분이 그대로 인정, 1단계 그대로 (2단계는 1시간)
+        assertThat((Integer) JsonPath.read(body(end), "$.data.relation.stageBefore"))
+                .isEqualTo(1);
+        assertThat((Integer) JsonPath.read(body(end), "$.data.relation.stageAfter"))
+                .isEqualTo(1);
+        assertThat((Integer) JsonPath.read(body(end), "$.data.relation.creditedSeconds"))
+                .isEqualTo(60);
+        assertThat((Integer) JsonPath.read(body(end), "$.data.relation.nextStageSeconds"))
+                .isEqualTo(3540);
+        assertThat((Boolean) JsonPath.read(body(end), "$.data.relation.stageUp"))
+                .isFalse();
         // 목표 시간이 없어져(2026-11-23) 공부 포기 대사는 안 나오고 완료 대사: 관계 단계 2 묶음의 첫 줄 (이 사용자의 첫 종료)
         assertThat((String) JsonPath.read(body(end), "$.data.closingLine"))
                 .isEqualTo("오늘은 봐줄게 꽤 했으니까, 내일도 와 내가 이기는 거 구경해야지");

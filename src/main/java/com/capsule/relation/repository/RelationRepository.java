@@ -49,6 +49,40 @@ public interface RelationRepository extends JpaRepository<Relation, Long> {
     @Query("update Relation r set r.streakDays = :days, r.lastStudyDate = :date where r.id = :id")
     void updateStreak(long id, int days, LocalDate date);
 
+    /** 친밀도 누적 (2026-11-23). 단계는 계산값을 같이 저장 */
+    @Modifying(flushAutomatically = true)
+    @Query("update Relation r set r.creditedSeconds = r.creditedSeconds + :credited,"
+            + " r.totalConnectedSeconds = r.totalConnectedSeconds + :connected, r.stage = :stage where r.id = :id")
+    void addIntimacy(long id, int credited, int connected, int stage);
+
+    @Query(
+            value = "SELECT credited_seconds FROM relation_daily WHERE relation_id = :relationId AND day = :day",
+            nativeQuery = true)
+    Optional<Integer> creditedOn(long relationId, LocalDate day);
+
+    @Modifying
+    @Query(value = """
+            INSERT INTO relation_daily (relation_id, day, credited_seconds) VALUES (:relationId, :day, :credited)
+            ON CONFLICT (relation_id, day) DO UPDATE SET credited_seconds = relation_daily.credited_seconds + :credited""", nativeQuery = true)
+    void addDaily(long relationId, LocalDate day, int credited);
+
+    @Query(
+            value = "SELECT chat_turns FROM relation_daily WHERE relation_id = :relationId AND day = :day",
+            nativeQuery = true)
+    Optional<Integer> chatTurnsOn(long relationId, LocalDate day);
+
+    @Modifying
+    @Query(value = """
+            INSERT INTO relation_daily (relation_id, day, chat_turns) VALUES (:relationId, :day, 1)
+            ON CONFLICT (relation_id, day) DO UPDATE SET chat_turns = relation_daily.chat_turns + 1""", nativeQuery = true)
+    void addChatTurn(long relationId, LocalDate day);
+
+    @Modifying
+    @Query(value = """
+            INSERT INTO user_unlocked_contents (user_id, content_id) VALUES (:userId, :contentId)
+            ON CONFLICT DO NOTHING""", nativeQuery = true)
+    void unlock(long userId, long contentId);
+
     /** 깎인 점수가 0이어도(0점에서 심한 말) 그날 오름 멈춤이 걸리게 기록 대신 여기에 남긴다 */
     @Modifying(flushAutomatically = true)
     @Query("update Relation r set r.lastSevereAt = :at where r.id = :id")
