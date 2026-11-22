@@ -1474,7 +1474,7 @@ GET /api/me/memories?date=2026-11-12
 #### 친밀도 규칙 (PRD 8장, 숫자는 추천값)
 
 - 인정 시간 = min(이번 `presentSeconds`, 오늘(오전 5시 기준) 남은 인정 한도). 하루 한도 2시간(7200초)
-- 오늘 대화가 한 턴도 없으면(오늘 연결의 `messageCount` 합이 0) 이번 인정 시간은 절반
+- 그날(연결이 끝난 날, 오전 5시 기준) 이 메이트와 대화가 한 턴도 없으면(`relation_daily.chat_turns` = 0) 이번 인정 시간은 절반
 - 단계 = 누적 인정 시간 기준 1 (0) · 2 (1시간) · 3 (5시간) · 4 (15시간) · 5 (40시간). 내려가지 않고, 결제 · 확률로 오르지 않음
 - 단계가 오르면 그 사이 단계의 해금 콘텐츠(`character_contents`의 `unlock_stage`)가 열림 (`user_unlocked_contents`)
 - 단계 이름은 메이트의 `characters.stage_names` (없으면 null). 채린 해금 콘텐츠(표정 4 · 보이스 대사 8)는 확정 필요
