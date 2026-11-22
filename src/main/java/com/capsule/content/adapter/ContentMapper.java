@@ -2,6 +2,7 @@ package com.capsule.content.adapter;
 
 import com.capsule.content.api.ContentTypes.AvatarInfo;
 import com.capsule.content.api.ContentTypes.CharacterInfo;
+import com.capsule.content.api.ContentTypes.MateInfo;
 import com.capsule.content.api.ContentTypes.ModelInfo;
 import com.capsule.content.domain.Avatar;
 import com.capsule.content.domain.CharacterEntity;
@@ -31,6 +32,7 @@ public class ContentMapper {
 
     public ModelInfo model(Live2dModel m) {
         return new ModelInfo(
+                m.getFormat(),
                 cdnBaseUrl + "/" + m.getStoragePrefix() + m.getModelJsonPath(),
                 m.getScale().doubleValue(),
                 m.getOffsetX(),
@@ -39,6 +41,25 @@ public class ContentMapper {
 
     public AvatarInfo avatar(Avatar a) {
         return new AvatarInfo(a.getId(), a.getName(), asset(a.getThumbnailUrl()), a.isActive(), model(a.getModel()));
+    }
+
+    public MateInfo mate(CharacterEntity c) {
+        return new MateInfo(
+                c.getId(),
+                c.getName(),
+                c.getOneLiner(),
+                c.getAgeRating(),
+                c.getHashtags(),
+                asset(c.getIllustrationUrl()),
+                asset(c.getCardImageUrl()),
+                asset(c.getVoiceSampleUrl()),
+                c.getWorld(),
+                c.getMyRole(),
+                c.getIntro(),
+                model(c.getModel()),
+                c.getStageNames(),
+                c.isComingSoon(),
+                c.isActive());
     }
 
     public CharacterInfo character(CharacterEntity c) {

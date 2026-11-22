@@ -30,4 +30,7 @@ public class Live2dModel {
 
     @Column(name = "offset_y")
     private int offsetY;
+
+    /** CUBISM · ALIVING2D_V2 (api.md 9 · 31). 프론트가 렌더러를 고름 */
+    private String format;
 }
