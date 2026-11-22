@@ -86,6 +86,10 @@
 --   - relation_daily 추가 (하루 인정 시간), relation_settlements에 credited_seconds · stage_before · stage_after
 --   - character_contents: 해금 종류 EXPRESSION · VOICE_LINE, unlock_stage · expression_name. 옛 LINE · MOTION · STORY ·
 --     VOICE · 이벤트 기간 칸 삭제 (쓰는 코드 · 행 없음)
+--
+-- 2026-11-23 변경 (12/1 베타 6단계: 대화방 이어가기)
+--   - chat_messages: 연결이 끝나도 지우지 않음. recapped_at 추가, 대화방 최신순 인덱스
+--   - connections.message_count: 답장을 저장할 때 +1
 -- =====================================================================
 
 BEGIN;
@@ -364,7 +368,7 @@ CREATE TABLE connections (
     away_seconds      int         NOT NULL DEFAULT 0 CHECK (away_seconds >= 0),       -- 자리 비움 (이벤트로 계산)
     camera_on_seconds int         NOT NULL DEFAULT 0 CHECK (camera_on_seconds >= 0),  -- 카메라 켠 시간 (지표)
     pip_seconds       int         NOT NULL DEFAULT 0 CHECK (pip_seconds >= 0),        -- PIP 시간 (지표)
-    message_count     int         NOT NULL DEFAULT 0 CHECK (message_count >= 0),      -- 나눈 대화 수 (대화방 단계에서 채움)
+    message_count     int         NOT NULL DEFAULT 0 CHECK (message_count >= 0),      -- 답장까지 받은 대화 턴 수 (답장 저장 때 +1)
     return_count      int         NOT NULL DEFAULT 0,
     mood              text,                               -- 그날의 분위기 (연결마다 새로, 확정 필요)
     closing_line      text,                               -- 완료 대사 (종료 때 저장, 연결 기록 공용)
@@ -479,7 +483,8 @@ CREATE TABLE character_memories (
 );
 CREATE INDEX idx_character_memories_owner ON character_memories (user_id, character_id);
 
--- 이번 세션 원문. 세션이 끝나면 카드에 넣은 뒤 한 트랜잭션에서 삭제 (카드 쓰기에 실패하면 남겨 다음 종료 때 같이 넣음)
+-- 대화방 원문 (2026-11-23 6단계: 지우지 않음, 32 대화방 기록). 연결이 끝나면 카드에 넣고 recapped_at만 채운다
+-- (카드 쓰기에 실패하면 비워 둬서 다음 종료 때 같이 넣음). 답장 프롬프트는 지금처럼 이번 연결 메시지만 씀
 -- 음성(TTS)은 저장하지 않고 응답으로 바로 전달
 CREATE TABLE chat_messages (
     id              bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -490,9 +495,11 @@ CREATE TABLE chat_messages (
     content         text        NOT NULL,
     signal          text,                                 -- USER일 때 말의 종류 (같은 세션 안 반복 규칙: 고민 1번, 무례 반복, 칭찬 연타)
     created_at      timestamptz NOT NULL DEFAULT now(),
+    recapped_at     timestamptz,                          -- 흐름 카드에 넣은 시각. null이면 아직 (2026-11-23)
     UNIQUE (conversation_id, request_id, sender)          -- 재전송돼도 질문·답변 각각 한 번만
 );
 CREATE INDEX idx_chat_messages_connection ON chat_messages (connection_id, id);
+CREATE INDEX idx_chat_messages_room ON chat_messages (conversation_id, id);  -- 32 대화방 기록 (최신순 커서)
 
 -- LLM 호출 기록 (지우지 않고 계속 쌓임, 비용·크레딧 근거 + 품질·지연 분석). 호출 한 번 = 한 행, 실패도 기록
 -- 실험실·평가 호출은 사용자·세션이 없다 (source LAB · EVAL)
