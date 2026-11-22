@@ -6,6 +6,7 @@ import com.capsule.content.api.AvatarQuery;
 import com.capsule.content.api.ContentTypes.AvatarInfo;
 import com.capsule.user.api.ActiveSessionLookup;
 import com.capsule.user.api.UserTypes.UserProfile;
+import com.capsule.user.domain.Age;
 import com.capsule.user.domain.User;
 import com.capsule.user.domain.UserErrorCode;
 import com.capsule.user.dto.MeResponse;
@@ -13,6 +14,7 @@ import com.capsule.user.dto.UpdateMeRequest;
 import com.capsule.user.repository.UserRepository;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -45,6 +47,16 @@ public class ProfileService {
     public MeResponse update(long userId, UpdateMeRequest req) {
         User user = activeUser(userId);
         String nickname = req.nickname() == null ? user.getNickname() : User.validNickname(req.nickname());
+        // 칸 검사를 먼저 하고 바꾼다. 아래 아바타 검사가 실패해도 트랜잭션이 롤백돼 아무것도 저장되지 않는다
+        LocalDate birthDate = req.birthDate() == null || user.getBirthDate() != null
+                ? null
+                : Age.validBirthDate(req.birthDate(), Age.today(clock));
+        String honorific = req.honorific() == null ? null : User.validHonorific(req.honorific());
+        String aboutMe = req.aboutMe() == null ? null : User.validAboutMe(req.aboutMe());
+        Instant now = Instant.now(clock);
+        if (birthDate != null) user.fillBirthDate(birthDate, now);
+        if (req.honorific() != null) user.updateHonorific(honorific, now);
+        if (req.aboutMe() != null) user.updateAboutMe(aboutMe, now);
         if (req.avatarId() == null && user.getAvatarId() != null) {
             user.updateProfile(nickname, user.getAvatarId(), Instant.now(clock));
             return toMe(user, thumbnail(user));
@@ -66,7 +78,10 @@ public class ProfileService {
                         u.getEmail(),
                         u.getAvatarId(),
                         thumbnail(u),
-                        u.onboardingRequired()));
+                        u.onboardingRequired(),
+                        u.getHonorific(),
+                        u.getAboutMe(),
+                        u.isMinor(Age.today(clock))));
     }
 
     private MeResponse toMe(User user, String profileImage) {
@@ -76,7 +91,12 @@ public class ProfileService {
                 user.getEmail(),
                 user.onboardingRequired(),
                 activeSessions.find(user.getId()).orElse(null),
-                profileImage);
+                profileImage,
+                user.getBirthDate(),
+                user.isMinor(Age.today(clock)),
+                user.getHonorific(),
+                user.getAboutMe(),
+                user.getReferralCode());
     }
 
     private String thumbnail(User user) {

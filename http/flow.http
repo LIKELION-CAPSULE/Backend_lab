@@ -11,7 +11,7 @@ GET {{host}}/api/terms
 POST {{host}}/api/auth/social/KAKAO
 Content-Type: application/json
 
-{ "code": "fake-kakao:local-1:승희", "redirectUri": "http://localhost:5173/oauth/kakao" }
+{ "code": "fake-kakao:local-1:승희", "redirectUri": "http://localhost:5173/oauth/kakao", "deviceHash": "local-device" }
 
 > {% client.global.set("token", response.body.accessToken); %}
 
@@ -19,12 +19,12 @@ Content-Type: application/json
 GET {{host}}/api/avatars
 Authorization: Bearer {{token}}
 
-### 4. 프로필 설정 (H02 이 모습으로 시작하기)
+### 4. 프로필 설정 (H02 이 모습으로 시작하기). 카카오 가입은 생년월일도 여기서 (명세 10)
 PATCH {{host}}/api/me
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
-{ "avatarId": 1 }
+{ "avatarId": 1, "birthDate": "2001-04-10" }
 
 ### 5. 홈 (H03)
 GET {{host}}/api/home

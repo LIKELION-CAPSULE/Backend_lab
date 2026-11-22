@@ -75,7 +75,8 @@ class FlowE2ETest {
                 post("/api/auth/email/signup"),
                 null,
                 "{\"verificationToken\":\"" + verificationToken
-                        + "\",\"password\":\"capsule1234\",\"nickname\":\"승희\",\"agreedTermVersionIds\":[3,4]}",
+                        + "\",\"password\":\"capsule1234\",\"nickname\":\"승희\",\"agreedTermVersionIds\":[3,4],"
+                        + "\"birthDate\":\"2001-04-10\",\"deviceHash\":\"e2e-device\"}",
                 201);
         String token = JsonPath.read(body(signup), "$.data.accessToken");
         assertThat((Boolean) JsonPath.read(body(signup), "$.data.onboardingRequired"))
@@ -245,7 +246,7 @@ class FlowE2ETest {
     @Test
     void 흐름2_카카오_신규_가입() throws Exception {
         String code = "fake-kakao:e2e-" + UUID.randomUUID() + ":카카오닉";
-        String kakao = "{\"code\":\"" + code + "\",\"redirectUri\":\"http://localhost/oauth\"}";
+        String kakao = "{\"code\":\"" + code + "\",\"redirectUri\":\"http://localhost/oauth\",\"deviceHash\":\"e2e\"}";
 
         MvcResult first = call(post("/api/auth/social/KAKAO"), null, kakao, 200);
         assertThat((Boolean) JsonPath.read(body(first), "$.data.isNewUser")).isTrue();
@@ -266,10 +267,11 @@ class FlowE2ETest {
         MvcResult login = call(
                 post("/api/auth/social/KAKAO"),
                 null,
-                "{\"code\":\"" + code + "\",\"redirectUri\":\"http://localhost/oauth\"}",
+                "{\"code\":\"" + code + "\",\"redirectUri\":\"http://localhost/oauth\",\"deviceHash\":\"e2e\"}",
                 200);
         String token = JsonPath.read(body(login), "$.data.accessToken");
-        call(patch("/api/me"), token, "{\"nickname\":\"이어하기\"}", 200);
+        // 카카오 가입은 생년월일을 온보딩에서 받는다 (명세 10). 없으면 공부 시작이 막힌다
+        call(patch("/api/me"), token, "{\"nickname\":\"이어하기\",\"birthDate\":\"2001-04-10\"}", 200);
 
         MvcResult start =
                 call(post("/api/sessions"), token, "{\"roomId\":1,\"characterId\":1,\"targetMinutes\":30}", 201);

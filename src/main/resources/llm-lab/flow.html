@@ -227,10 +227,12 @@ async function login(member) {
   const terms = await call('GET', '/api/terms');
   const agreed = terms.terms.filter(t => t.required).map(t => t.termVersionId);
   const r = await call('POST', '/api/auth/social/KAKAO',
-    {code: `fake-kakao:${S.member}:${nick}`, redirectUri: 'http://localhost/flow', agreedTermVersionIds: agreed}, {retry: false});
+    {code: `fake-kakao:${S.member}:${nick}`, redirectUri: 'http://localhost/flow', agreedTermVersionIds: agreed,
+     deviceHash: 'flow-lab'}, {retry: false});
   S.token = r.accessToken;
   S.userId = r.userId;
-  if (r.onboardingRequired) await call('PATCH', '/api/me', {nickname: nick.slice(0, 20)});
+  // 카카오 가입은 생년월일을 온보딩에서 받는다 (명세 10). 실험실은 성인으로
+  if (r.onboardingRequired) await call('PATCH', '/api/me', {nickname: nick.slice(0, 20), birthDate: '2000-01-01'});
   return r;
 }
 
