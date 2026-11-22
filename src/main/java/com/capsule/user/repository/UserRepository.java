@@ -31,6 +31,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     boolean existsByReferralCode(String referralCode);
 
+    /** 36: 탈퇴한 사람의 코드는 없는 코드 */
+    Optional<User> findByReferralCodeAndWithdrawnAtIsNull(String referralCode);
+
     /** 가입 기기 (api.md 4 · 6). 같은 기기 · 같은 사용자는 한 행 */
     @Modifying
     @Query(

@@ -15,7 +15,8 @@ public record ReportResponse(
         int returnCount,
         MateRef mate,
         IntimacyView relation,
-        String closingLine) {
+        String closingLine,
+        ReferralRewardView referralReward) {
 
     public record MateRef(long id, String name, String illustrationUrl, String myRole) {}
 }

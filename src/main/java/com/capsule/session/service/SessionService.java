@@ -39,6 +39,7 @@ import com.capsule.session.dto.HomeResponse;
 import com.capsule.session.dto.IntimacyView;
 import com.capsule.session.dto.Me;
 import com.capsule.session.dto.ReactionView;
+import com.capsule.session.dto.ReferralRewardView;
 import com.capsule.session.dto.ReportResponse;
 import com.capsule.session.dto.ResumeResponse;
 import com.capsule.session.dto.StartRequest;
@@ -46,7 +47,9 @@ import com.capsule.session.dto.StartResponse;
 import com.capsule.session.repository.SessionEventRepository;
 import com.capsule.session.repository.StudySessionRepository;
 import com.capsule.user.api.ActiveSessionLookup;
+import com.capsule.user.api.ReferralRewards;
 import com.capsule.user.api.UserQuery;
+import com.capsule.user.api.UserTypes.ReferralReward;
 import com.capsule.user.api.UserTypes.UserProfile;
 import java.time.Clock;
 import java.time.Duration;
@@ -93,6 +96,7 @@ public class SessionService {
     private final RelationCommands relationCommands;
     private final SessionClosingHandler closingHandler;
     private final ActiveSessionLookup activeSessions;
+    private final ReferralRewards referralRewards;
     private final TransactionTemplate tx;
     private final Clock clock;
     private final SessionProperties props;
@@ -305,7 +309,7 @@ public class SessionService {
             long userId, long sessionId, EndRequest req, String endType, SessionClosingHandler.Draft draft) {
         StudySession s = owned(sessions.findWithLockById(sessionId), userId);
         if (!s.inProgress()) {
-            return toReport(s, relationQuery.intimacyOf(s.getUserId(), s.characterId(), s.getId()));
+            return reread(s);
         }
         Instant now = now();
         ConnectionTimes t = requireTimes(s, req, now);
@@ -318,7 +322,15 @@ public class SessionService {
         if (s.inProgress()) {
             throw new ApiException(SessionErrorCode.CONNECTION_IN_PROGRESS);
         }
-        return toReport(s, relationQuery.intimacyOf(s.getUserId(), s.characterId(), s.getId()));
+        return reread(s);
+    }
+
+    /** 이미 끝난 연결: 22를 다시 눌러도 23과 같은 결과 */
+    private ReportResponse reread(StudySession s) {
+        return toReport(
+                s,
+                relationQuery.intimacyOf(s.getUserId(), s.characterId(), s.getId()),
+                referralRewards.rewardOf(s.getUserId(), s.getId()));
     }
 
     /** heartbeat가 auto-close-after(6h)보다 오래 없는 연결을 마지막 heartbeat 시각 · 값으로 닫는다 (api.md 21) */
@@ -378,7 +390,9 @@ public class SessionService {
             relationCommands.recordUnlocks(s.getUserId(), opened);
         }
         s.recordClosingLine(closingHandler.close(closingOf(s, endType, t.connected()), draft));
-        return toReport(s, settlement);
+        // 초대 보상 (22 '서버가 하는 일' 7): 코드를 입력한 뒤 처음 끝나는 연결. 크레딧 잠금이라 맨 끝에
+        Optional<ReferralReward> reward = referralRewards.qualify(s.getUserId(), s.getId());
+        return toReport(s, settlement, reward);
     }
 
     /** 초안 · 저장 둘 다 이걸로 만든다. studySeconds 자리에 연결 시간 (목표 시간이 없어 공부 포기 판정은 꺼짐) */
@@ -393,7 +407,7 @@ public class SessionService {
                 null);
     }
 
-    private ReportResponse toReport(StudySession s, IntimacySettlement settlement) {
+    private ReportResponse toReport(StudySession s, IntimacySettlement settlement, Optional<ReferralReward> reward) {
         long characterId = s.characterId();
         CharacterInfo c = character(characterId);
         Optional<MateInfo> mate = mates.find(characterId);
@@ -413,7 +427,8 @@ public class SessionService {
                         mate.map(MateInfo::illustrationUrl).orElse(null),
                         mate.map(MateInfo::myRole).orElse(null)),
                 intimacy(characterId, settlement),
-                s.getClosingLine());
+                s.getClosingLine(),
+                reward.map(r -> new ReferralRewardView(r.amount())).orElse(null));
     }
 
     // ---- 도우미
