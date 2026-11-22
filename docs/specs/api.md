@@ -315,7 +315,9 @@
 
 > ✅ **200 OK**
 
-> ❌ **401** INVALID_CREDENTIALS (무엇이 틀렸는지는 알려주지 않음) · **429** LOGIN_LOCKED (5회 실패 시 5분 잠금)
+> ❌ **401** INVALID_CREDENTIALS (무엇이 틀렸는지는 알려주지 않음) · **429** LOGIN_LOCKED (5회 실패 시 10분 잠금)
+
+> 2026-11-23: 잠금 5분 → 10분 (피그마 WF K SCR-51 AU-1, 초안 값)
 
 ## 6. POST /api/auth/social/KAKAO — 카카오 로그인 · 가입
 - 분류: 인증
@@ -600,7 +602,7 @@ H02에서 아바타를 저장하면 `onboardingRequired`가 false가 되고 H03 
 | avatarId | Long | X | 없으면 그대로. 아직 아바타가 없으면 기본 아바타 |
 | birthDate | String | X | `YYYY-MM-DD`. 저장된 생년월일이 없을 때만 저장하고, 이미 있으면 무시 (한 번만). 만 14세 미만이면 UNDER_14 |
 | honorific | String | X | 1~10자. 빈 문자열이면 지움. 11자 이상이면 INVALID_HONORIFIC |
-| aboutMe | String | X | 0~60자. 빈 문자열이면 지움. 61자 이상이면 INVALID_ABOUT_ME |
+| aboutMe | String | X | 0~50자. 빈 문자열이면 지움. 51자 이상이면 INVALID_ABOUT_ME (2026-11-23: 60 → 50자, 피그마 SCR-27 P-3 초안 값) |
 
 ```json
 { "avatarId": 1, "birthDate": "2001-04-10", "honorific": "승희야" }
@@ -859,7 +861,8 @@ GET /api/me/memories?date=2026-11-12
 | startedAt | String | 시작 시각 (서버) |
 | mate | Object | `id`, `name`, `profileImageUrl`, `format`, `modelJsonUrl`, `scale`, `offsetX`, `offsetY` |
 | avatar | Object | `id`, `name`, `profileImageUrl`, `format`, `modelJsonUrl`, `scale`, `offsetX`, `offsetY` |
-| me | Object | `nickname`, `profileImageUrl`(아바타 썸네일) |
+| me | Object | `nickname`, `honorific`(메이트가 부르는 이름, 없으면 null), `profileImageUrl`(아바타 썸네일) |
+| settings | Object | 29의 설정 전체 (말 걸기 빈도 · 음성 · 대화 모드 기본값 등). 연결 화면이 29를 따로 부르지 않게 (2026-11-23) |
 | serverTime | String | 서버 시각 (타이머 보정) |
 | firstMeet | Boolean | 이 메이트와 처음 연결이면 true (SCR-49 첫 만남) |
 | relation | Object | 친밀도 `stage`(1~5) · `stageName` (상단 바, 5단계 · 2026-11-23) |
@@ -867,7 +870,9 @@ GET /api/me/memories?date=2026-11-12
 | minorRemainingSeconds | Integer | 만 19세 미만이면 오늘(오전 5시 기준) 남은 연결 시간(초), 아니면 null |
 | credits | Object | 상단 바 '오늘 남은 크레딧' (33의 `Credits`, 7단계 · 2026-11-23) |
 
-> 2026-11-23 (12/1 베타 4단계): `firstMeet` · `greeting` · `minorRemainingSeconds` 추가. 만 19세 미만이 오늘 3시간을 다 쓰면 403 MINOR_DAILY_LIMIT. `settings`는 29를 따로 부름 (확정 필요: 여기에 합칠지)
+> 2026-11-23 (12/1 베타 4단계): `firstMeet` · `greeting` · `minorRemainingSeconds` 추가. 만 19세 미만이 오늘 3시간을 다 쓰면 403 MINOR_DAILY_LIMIT
+
+> 2026-11-23: `me.honorific` · `settings` 추가 (노션 API 명세서 C1)
 
 ```json
 {
@@ -1255,11 +1260,14 @@ GET /api/me/memories?date=2026-11-12
 | requestId | String (UUID) | O | 재전송돼도 한 번만 처리 |
 | characterId | Long | O | 대화할 캐릭터 (그 세션 캐릭터만 가능) |
 | content | String | O | 1~300자 |
-| inputType | String | O | `TEXT` 직접 입력 / `QUICK` 빠른 답장 |
-| tts | Boolean | X | true면 답장 음성도 받음 (기본 false) |
+| inputType | String | O | `TEXT` 직접 입력 / `QUICK` 빠른 답장 / `VOICE` 누르고 말하기(STT 글자) |
+| mode | String | X | 대화 모드 `BASIC`(기본, 크레딧 없음) · `ADVANCED`(고급, 1턴 30). 없으면 `BASIC` |
+| tts | Boolean | X | true면 답장 음성도 받음 (기본 false). 음성 단계 전이라 지금은 무시 |
+
+> 2026-11-23 (12/1 베타): `inputType`에 `VOICE`, `mode` 추가. 고급 모드에 쓸 AI 모델은 운영 설정(`capsule.llm.advanced-model`)이고 정해지기 전까지는 기본 모드와 같은 모델 (확정 필요)
 
 ```json
-{ "requestId": "9c3a...", "characterId": 1, "content": "이거 너무 어려워", "inputType": "QUICK", "tts": false }
+{ "requestId": "9c3a...", "characterId": 1, "content": "이거 너무 어려워", "inputType": "QUICK", "mode": "ADVANCED", "tts": false }
 ```
 
 #### 🛬 Response
@@ -1276,6 +1284,12 @@ GET /api/me/memories?date=2026-11-12
 | characterId | Long | 요청의 `characterId` 그대로 |
 | content · emotion · motion · expression · fallback · audioBase64 | | 19번 `characters[]` 한 칸과 같음 |
 | affinity | Object | 이 대화로 바뀐 호감도: `delta`(0이면 변화 없음), `points`, `stage` · `stageName`, `level`, `levelUp`(옛 필드). 필드는 18번 `affinity`와 같음. `fallback`이면 `delta` 0 |
+| mode | String | 이 답장에 쓴 대화 모드 (`BASIC` · `ADVANCED`) |
+| charged | Integer | 이번에 깎인 크레딧 (기본 0 · 고급 30). `fallback`이면 0 |
+| credits | Object | 차감 뒤 크레딧 (33의 `Credits`). 상단 바 갱신용 |
+| safety | String | 안전 경고를 받은 턴이면 `WARNING`, 아니면 null. 이때 `content`는 정해진 거절 대사 |
+
+> 2026-11-23 (12/1 베타): `mode` · `charged` · `credits` · `safety` 추가
 
 > 2026-11-04 (호감도 최종안): 점수는 LLM이 주지 않음. 말의 종류를 고르고 캐릭터 점수표로 정함. 오르기는 어렵고 내려가기는 쉬움
 >
@@ -1319,7 +1333,19 @@ GET /api/me/memories?date=2026-11-12
 
 > ✅ **200 OK**
 
-> ❌ **400** EMPTY_MESSAGE · INVALID_REQUEST (300자 초과) · CHARACTER_NOT_IN_SESSION · **404** CONNECTION_NOT_FOUND · **409** CONNECTION_ENDED · **429** TOO_MANY_REQUESTS (1분에 30번)
+> ❌ **400** EMPTY_MESSAGE · INVALID_REQUEST (300자 초과 · 없는 `inputType` · `mode`) · CHARACTER_NOT_IN_SESSION · **403** CHAT_SUSPENDED (안전 위반 반복, `detail.until` = 풀리는 시각) · **404** CONNECTION_NOT_FOUND · **409** CONNECTION_ENDED · CREDIT_INSUFFICIENT (고급 모드인데 크레딧이 30보다 적음, `detail.credits`) · **429** TOO_MANY_REQUESTS (1분에 30번)
+
+#### 대화 모드 · 크레딧 (2026-11-23, 33 '크레딧 규칙')
+
+- 고급 모드는 LLM을 부르기 전에 잔액을 보고, 30보다 적으면 409 CREDIT_INSUFFICIENT (아무것도 저장하지 않음, SCR-34). 프론트는 기본 모드로 바꿔 다시 보냄
+- 답장이 성공한 뒤에 30을 깎는다 (`requestId`로 한 번만). 대체 대사(`fallback`) · 안전 경고 턴은 깎지 않음
+- 기본 모드는 크레딧을 보지도 깎지도 않음 (크레딧이 0이어도 기본 채팅은 계속)
+
+#### 안전 (2026-11-23, PRD 11.1 · 피그마 SCR-36)
+
+- 사용자 말을 LLM에 넘기기 전에 검사한다. 위반이면 LLM을 부르지 않고 정해진 거절 대사로 답하고 `safety: "WARNING"`, `safety_strikes`에 기록
+- 24시간 안에 위반이 3번이면 그때부터 24시간 대화 정지 → 그동안 20 · 28은 403 CHAT_SUSPENDED (확정 필요: 횟수 · 기간, 반복 시 늘릴지)
+- 무엇을 위반으로 볼지(탐지 기준)는 확정 필요: 지금은 판정 자리만 있고 아무것도 잡지 않음 (TODO judgment). 답변 쪽 검사도 기준이 정해지면
 
 #### 서버가 하는 일
 
@@ -1470,6 +1496,7 @@ GET /api/me/memories?date=2026-11-12
 | mate | Object | `id`, `name`, `illustrationUrl`(전신), `myRole` |
 | relation | Object | 친밀도 (5단계 · 2026-11-23): `stageBefore` · `stageAfter`(1~5) · `stageName`(끝난 뒤 단계 이름, 메이트마다 다름) · `stageUp` · `creditedSeconds`(이번에 인정된 시간) · `nextStageSeconds`(다음 단계까지 남은 인정 시간, 5단계면 null) · `unlocked[]`(이번에 열린 것 `type`(EXPRESSION · VOICE_LINE) · `title` · `unlockStage` · `expressionName` · `assetUrl`) |
 | referralReward | Object | 이 연결로 초대 보상(받은 사람 몫)을 받았으면 `{ "amount": 1000 }`, 아니면 null (8단계 · 2026-11-23) |
+| betaFeedbackAvailable | Boolean | 오늘(오전 5시 기준) 베타 평가(42 `RATING`)를 아직 안 했으면 true → 연결 기록 위에 평가 카드 (SCR-55, 2026-11-23) |
 | closingLine | String | 완료 대사 (리포트 · 카드 공용). 캐릭터 설정에 완료 대사(`character_lines` CLOSING)가 있으면 지금 관계 단계의 그 문장(PM: 말포이는 고정. 단계별 문장은 확정 필요), 없으면 AI. 직접 끝냈는데 목표 시간의 절반도 못 채웠으면 공부 포기 대사(GIVE_UP, 임시 J-15, 문구 확정 필요). 기준 시간은 공부 시간 `studySeconds`(자리 지킴 + 자리 비움, 쉬는 시간 제외)로 확정, 목표 시간을 정하지 않은 세션은 포기로 보지 않음 (절반 · 직접 끝냄 조건은 확정 필요) |
 
 > 2026-11-04 (호감도 최종안): 공부 시간은 호감도를 올리지 않고 레벨에만 씀. 레벨 = 자리 지킴 60분당 1 (임시, PM 확인 필요)
@@ -1757,7 +1784,7 @@ json
 
 #### 🛫 Request
 
-20번과 같음 (`requestId` · `characterId` · `content` · `inputType` · `tts`). `Accept: text/event-stream, application/json`을 보냄 (둘 다: 스트림을 열기 전 오류는 JSON이라 `text/event-stream`만 보내면 에러 응답을 못 받음).
+20번과 같음 (`requestId` · `characterId` · `content` · `inputType` · `mode` · `tts`). 대화 모드 · 크레딧 · 안전 규칙과 에러(403 CHAT_SUSPENDED · 409 CREDIT_INSUFFICIENT)도 20번과 같고, `done`에 `mode` · `charged` · `credits` · `safety`가 들어감 (2026-11-23). `Accept: text/event-stream, application/json`을 보냄 (둘 다: 스트림을 열기 전 오류는 JSON이라 `text/event-stream`만 보내면 에러 응답을 못 받음).
 
 #### 🛬 Response
 
@@ -1956,8 +1983,9 @@ data: {"requestId":"9c3a...","characterId":1,"content":"알지. 그리핀도르 
 | messages | Array | 최신순. `requestId`(사용자 말과 그 답장이 같은 값) · `sender`(`USER` · `MATE`) · `content` · `inputType` · `rating` · `createdAt` · `connectionId` |
 | nextCursor | String | 더 이전 대화가 있으면 다음 요청에 넣는 값. 없으면 null |
 
-- `inputType`(TEXT · QUICK · VOICE)은 메시지 전송이 아직 받지 않아 늘 null (음성 단계에서 채움)
-- `rating`(UP · DOWN)은 답변 평가(P1) 전까지 늘 null. 신고로 가린 답변을 빼는 것도 P1
+- `inputType`(TEXT · QUICK · VOICE): 사용자 말에만 있음(메이트 답장은 null). 2026-11-23 전에 저장된 말은 null
+- `rating`(UP · DOWN · null): 메이트 답장에 내가 남긴 평가(40). 사용자 말은 늘 null
+- 신고(41)한 답장은 빠진다 (2026-11-23)
 
 ```json
 {
@@ -1987,7 +2015,7 @@ data: {"requestId":"9c3a...","characterId":1,"content":"알지. 그리핀도르 
 - 두 종류: **출석분**(하루 1,500, 다음 오전 5시에 남은 만큼 사라짐) · **초대분**(친구 초대 보상 1,000, 사라지지 않음)
 - 출석 지급과 지난 출석분 소멸은 배치 없이, 그날 그 사용자의 크레딧을 처음 읽거나 쓸 때 처리한다 (8 내 정보 · 16 연결 시작 · 33 · 34 · 차감). 하루 = 오전 5시 KST
 - 쓸 때는 출석분부터 (사라지는 것 먼저)
-- 차감: 보이스 대화 20 · 고급 대화 30 · 둘 다 50. 답장이 성공한 뒤에만, 같은 요청(`requestId`)은 한 번만. 모자라면 차감하지 않고 그 기능만 멈춤(기본 채팅은 계속). 메시지 전송에 보이스 · 고급 모드가 생기면 연결 (확정 필요: 모드 이름 · 요청 칸)
+- 차감: 보이스 대화 20 · 고급 대화 30 · 둘 다 50. 답장이 성공한 뒤에만, 같은 요청(`requestId`)은 한 번만. 모자라면 차감하지 않고 그 기능만 멈춤(기본 채팅은 계속). 고급 모드는 20 · 28의 `mode: ADVANCED` (2026-11-23), 보이스는 음성 단계에서
 - 탈퇴해도 크레딧 행은 남김 (지표)
 
 #### 설명
@@ -2008,6 +2036,7 @@ data: {"requestId":"9c3a...","characterId":1,"content":"알지. 그리핀도르 
 | inviteBalance | Integer | 초대분 남은 양 |
 | low | Boolean | `todayRemaining` < 100 (SCR-34) |
 | exhausted | Boolean | `todayRemaining` = 0 (SCR-33) |
+| attendanceGrantedNow | Boolean | 이 요청에서 오늘 출석분을 방금 지급했으면 true (SCR-39 출석 토스트, 하루 한 번만 true. 2026-11-23) |
 
 | 이름 | 타입 | 설명 |
 | --- | --- | --- |
@@ -2149,3 +2178,207 @@ data: {"requestId":"9c3a...","characterId":1,"content":"알지. 그리핀도르 
 > ✅ **201 Created**
 
 > ❌ **400** INVALID_REQUEST (빈 값 · 길이) · REFERRAL_SELF · REFERRAL_EXPIRED (가입 7일 지남) · REFERRAL_SAME_DEVICE · **404** REFERRAL_CODE_NOT_FOUND · **409** REFERRAL_ALREADY_ENTERED
+
+## 37. GET /api/mates/me — 내 메이트
+- 분류: 연결
+- 설명: 한 번이라도 연결한 메이트와 메이트별 친밀도 · 표정 컬렉션 · 최근 기록
+- 와이어프레임: SCR-23 내 메이트
+- 백엔드: Not started
+- 프론트: Not started
+
+> 2026-11-23 (12/1 베타): 추가 (노션 API 명세서 B3, 피그마 M-1~M-3)
+
+- 테이블: `connections`, `user_character_relations`, `user_unlocked_contents`, `characters`, `character_contents` · 인증: 필요
+
+#### [GET] /api/mates/me
+
+#### 🛬 Response
+
+| 이름 | 타입 | 설명 |
+| --- | --- | --- |
+| mates | Array | 마지막 연결이 최근인 순. 끝난 연결이 하나도 없으면 `[]` |
+
+`mates[]`
+
+| 이름 | 타입 | 설명 |
+| --- | --- | --- |
+| id · name · cardImageUrl | | 메이트 (11 `mates[]`와 같음) |
+| firstMetAt · lastConnectedAt | String | 처음 · 마지막 연결 시작 시각 |
+| connectionCount | Integer | 끝난 연결 수 |
+| totalPresentSeconds · totalConnectedSeconds | Integer | 누적 함께한 시간 · 연결 시간 |
+| relation | Object | `stage` · `stageName` · `nextStageName`(5단계면 null) · `nextStageSeconds`(다음 단계까지 남은 인정 시간, 5단계면 null) |
+| unlocks | Array | 이 메이트의 해금 콘텐츠 전부, 열리는 단계 순. `id` · `type`(EXPRESSION · VOICE_LINE) · `title` · `unlockStage` · `unlockStageName` · `expressionName` · `assetUrl` · `unlocked` |
+| recent | Array | 최근 끝난 연결 5개 `connectionId` · `endedAt` · `presentSeconds` · `connectedSeconds` (누르면 23) |
+
+```json
+{
+  "mates": [
+    {
+      "id": 1, "name": "채린", "cardImageUrl": "https://cdn.../chaerin/card.png",
+      "firstMetAt": "2026-12-01T09:00:00Z", "lastConnectedAt": "2026-12-03T12:00:02Z", "connectionCount": 4,
+      "totalPresentSeconds": 25200, "totalConnectedSeconds": 30000,
+      "relation": { "stage": 3, "stageName": "친구", "nextStageName": "친한 친구", "nextStageSeconds": 10800 },
+      "unlocks": [ { "id": 9, "type": "EXPRESSION", "title": "수줍은 웃음", "unlockStage": 3, "unlockStageName": "친구", "expressionName": "shy", "assetUrl": null, "unlocked": true } ],
+      "recent": [ { "connectionId": 812, "endedAt": "2026-12-03T12:32:10Z", "presentSeconds": 1500, "connectedSeconds": 1920 } ]
+    }
+  ]
+}
+```
+
+> ✅ **200 OK**
+
+## 38. GET /api/records — 내 기록
+- 분류: 연결
+- 설명: 기간별 함께한 시간 · 연결 시간, 달력, 메이트별 요약, 최근 연결
+- 와이어프레임: SCR-24 주간 · SCR-25 월간 · SCR-26 메이트별
+- 백엔드: Not started
+- 프론트: Not started
+
+> 2026-11-23 (12/1 베타): 추가 (노션 API 명세서 B4, 피그마 H-1~H-7). 카메라를 끈 사용자도 기록이 보이게 연결 시간을 함께 준다
+
+- 테이블: `connections`, `characters` · 인증: 필요
+
+#### [GET] /api/records?range=WEEK&date=2026-12-03&mateId=
+
+#### 🛫 Query
+
+| 이름 | 타입 | 필수 | 설명 |
+| --- | --- | --- | --- |
+| range | String | O | `WEEK`(월~일) · `MONTH` · `YEAR` |
+| date | String | X | 기준 날짜 `YYYY-MM-DD` (한국, 오전 5시 기준 하루). 기본 오늘 |
+| mateId | Long | X | 주면 그 메이트 연결만 (SCR-26 메이트 선택) |
+
+#### 🛬 Response
+
+| 이름 | 타입 | 설명 |
+| --- | --- | --- |
+| from · to | String | 기간 첫날 · 마지막 날 |
+| totalPresentSeconds · totalConnectedSeconds | Integer | 기간 합 |
+| connectedDays · connectionCount | Integer | 연결한 날 수 · 연결 수 |
+| buckets | Array | WEEK · MONTH는 날짜별, YEAR는 월별(`YYYY-MM`) `key` · `presentSeconds` · `connectedSeconds`. 연결이 없는 칸도 0으로 |
+| mates | Array | 기간 안 메이트별 `mateId` · `name` · `presentSeconds` · `connectedSeconds` · `connectionCount` · `stage`(지금 친밀도) |
+| recent | Array | 기간 안 최근 끝난 연결 5개 `connectionId` · `mateId` · `mateName` · `endedAt` · `presentSeconds` · `connectedSeconds` |
+
+- 연결은 시작한 날(오전 5시 기준)에 센다. 끝난 연결만 (진행 중은 빠짐)
+
+```json
+{
+  "from": "2026-11-30", "to": "2026-12-06", "totalPresentSeconds": 18000, "totalConnectedSeconds": 21600,
+  "connectedDays": 4, "connectionCount": 6,
+  "buckets": [ { "key": "2026-11-30", "presentSeconds": 3600, "connectedSeconds": 4200 } ],
+  "mates": [ { "mateId": 1, "name": "채린", "presentSeconds": 18000, "connectedSeconds": 21600, "connectionCount": 6, "stage": 3 } ],
+  "recent": [ { "connectionId": 812, "mateId": 1, "mateName": "채린", "endedAt": "2026-12-03T12:32:10Z", "presentSeconds": 1500, "connectedSeconds": 1920 } ]
+}
+```
+
+> ✅ **200 OK**
+
+> ❌ **400** INVALID_REQUEST (`range` 없음 · 형식)
+
+## 39. GET /api/referrals/{code} — 초대 코드 확인
+- 분류: 크레딧
+- 설명: 초대 코드를 적용하기 전에 누구 코드인지 확인. 초대 링크 랜딩(로그인 전)과 가입 마지막 단계의 '확인'
+- 와이어프레임: SCR-41 초대 랜딩 · SCR-64 ③
+- 백엔드: Not started
+- 프론트: Not started
+
+> 2026-11-23 (12/1 베타): 추가 (노션 API 명세서 E3)
+
+- 테이블: `users` · 인증: **불필요**. 대소문자 무시, 탈퇴한 사람의 코드는 없는 코드. 자기 코드 · 이미 입력함 · 7일은 여기서 보지 않음 (36에서)
+
+#### 🛬 Response
+
+```json
+{ "inviterNickname": "성욱", "rewardOnFirstConnection": 1000 }
+```
+
+> ✅ **200 OK**
+
+> ❌ **404** REFERRAL_CODE_NOT_FOUND · **429** TOO_MANY_REQUESTS (같은 IP 1분에 30번)
+
+## 40. PUT /api/messages/{requestId}/rating — 답변 평가
+- 분류: 대화
+- 설명: 메이트 답장에 👍 · 👎. 다시 누르면 덮어쓰고 null이면 취소
+- 와이어프레임: SCR-54
+- 백엔드: Not started
+- 프론트: Not started
+
+> 2026-11-23 (12/1 베타): 추가 (노션 API 명세서 F1)
+
+- 테이블: `chat_messages.rating` · 인증: 필요. `requestId`는 32의 `requestId`(내 대화방의 답장)
+
+#### 🛫 Request
+
+```json
+{ "rating": "DOWN" }
+```
+
+> ✅ **204 No Content**
+
+> ❌ **400** INVALID_REQUEST (`UP` · `DOWN` · null 말고) · **404** MESSAGE_NOT_FOUND (없거나 내 답장이 아님)
+
+## 41. POST /api/messages/{requestId}/report — 답변 신고
+- 분류: 대화
+- 설명: 메이트 답장 신고. 신고한 답장은 대화방(32)과 다음 답장의 이전 대화에서 빠진다
+- 와이어프레임: SCR-54
+- 백엔드: Not started
+- 프론트: Not started
+
+> 2026-11-23 (12/1 베타): 추가 (노션 API 명세서 F2)
+
+- 테이블: `chat_reports`, `chat_messages.hidden_at` · 인증: 필요. 처리(`status` OPEN → RESOLVED · DISMISSED)는 베타 동안 운영자가 DB에서
+
+#### 🛫 Request
+
+| 이름 | 타입 | 필수 | 설명 |
+| --- | --- | --- | --- |
+| reason | String | O | `INAPPROPRIATE`(불쾌 · 선정적) · `VIOLENT`(폭력 · 위험) · `OUT_OF_CHARACTER`(캐릭터와 안 맞음) · `OTHER` |
+| detail | String | X | 300자 이하. `OTHER`면 필수 |
+
+```json
+{ "reason": "OTHER", "detail": "갑자기 말투가 바뀌었어요" }
+```
+
+#### 🛬 Response
+
+```json
+{ "reportId": 41 }
+```
+
+> ✅ **201 Created**
+
+> ❌ **400** INVALID_REQUEST · **404** MESSAGE_NOT_FOUND · **409** ALREADY_REPORTED
+
+## 42. POST /api/feedback — 베타 피드백
+- 분류: 리포트
+- 설명: 연결 기록 위 한 번 누르기 평가(하루 1번)와 설정의 '의견 보내기'
+- 와이어프레임: SCR-55
+- 백엔드: Not started
+- 프론트: Not started
+
+> 2026-11-23 (12/1 베타): 추가 (노션 API 명세서 F3). 스크린샷 첨부는 파일 저장소가 정해지면 (확정 필요)
+
+- 테이블: `beta_feedback` · 인증: 필요
+
+#### 🛫 Request
+
+| 이름 | 타입 | 필수 | 설명 |
+| --- | --- | --- | --- |
+| kind | String | O | `RATING` · `BUG` · `SUGGESTION` |
+| score | Integer | RATING이면 O | 1~4 |
+| text | String | BUG · SUGGESTION이면 O | 1,000자 이하 (RATING은 한 줄 의견, 선택) |
+| connectionId | Long | X | 연결 기록에서 보낼 때 (내 연결이어야 함) |
+
+```json
+{ "kind": "RATING", "score": 4, "text": "채린이 반응이 귀여워요", "connectionId": 812 }
+```
+
+#### 🛬 Response
+
+```json
+{ "feedbackId": 77 }
+```
+
+> ✅ **201 Created**
+
+> ❌ **400** INVALID_REQUEST · **409** FEEDBACK_ALREADY_TODAY (오늘 RATING을 이미 함, 오전 5시 기준)

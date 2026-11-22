@@ -96,6 +96,10 @@
 --
 -- 2026-11-23 변경 (12/1 베타 8단계: 친구 초대)
 --   - referrals 추가 (받은 사람당 한 행, 첫 연결 끝날 때 보상)
+--
+-- 2026-11-23 변경 (12/1 베타 남은 것: 대화 모드 · 안전 · 평가 · 신고 · 베타 피드백)
+--   - chat_messages: input_type · mode · rating · hidden_at
+--   - chat_reports · safety_strikes (dialogue), beta_feedback (user) 추가
 -- =====================================================================
 
 BEGIN;
@@ -149,6 +153,21 @@ CREATE TABLE referrals (
     CHECK (qualified_at IS NOT NULL OR NOT (inviter_rewarded OR invitee_rewarded))
 );
 CREATE INDEX idx_referrals_inviter ON referrals (inviter_id, id);
+
+-- 베타 피드백 (2026-11-23, api.md 42). RATING은 사용자당 하루(오전 5시 기준) 1번. 탈퇴해도 남김
+CREATE TABLE beta_feedback (
+    id            bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id       bigint      NOT NULL REFERENCES users (id),
+    kind          text        NOT NULL CHECK (kind IN ('RATING', 'BUG', 'SUGGESTION')),
+    score         int         CHECK (score BETWEEN 1 AND 4),
+    text          text        CHECK (char_length(text) <= 1000),
+    connection_id bigint,                                 -- 다른 모듈 테이블이라 FK 아님
+    feedback_day  date        NOT NULL,                   -- 오전 5시 기준 한국 날짜
+    created_at    timestamptz NOT NULL DEFAULT now(),
+    CHECK ((kind = 'RATING') = (score IS NOT NULL)),
+    CHECK (kind = 'RATING' OR text IS NOT NULL)
+);
+CREATE UNIQUE INDEX uq_beta_feedback_rating ON beta_feedback (user_id, feedback_day) WHERE kind = 'RATING';
 
 -- 크레딧 지급 건 (2026-11-23, ADR 0031). 잔액 = 소멸 전 지급 건의 remaining 합. 탈퇴해도 남김
 --   ATTENDANCE: 하루 1,500 (granted_on = 오전 5시 기준 그날), expires_at = 다음 오전 5시
@@ -556,10 +575,38 @@ CREATE TABLE chat_messages (
     signal          text,                                 -- USER일 때 말의 종류 (같은 세션 안 반복 규칙: 고민 1번, 무례 반복, 칭찬 연타)
     created_at      timestamptz NOT NULL DEFAULT now(),
     recapped_at     timestamptz,                          -- 흐름 카드에 넣은 시각. null이면 아직 (2026-11-23)
+    input_type      text CHECK (input_type IN ('TEXT', 'QUICK', 'VOICE')),  -- USER만 (2026-11-23 전 행은 null)
+    mode            text CHECK (mode IN ('BASIC', 'ADVANCED')),             -- CHARACTER만: 이 답장의 대화 모드
+    rating          text CHECK (rating IN ('UP', 'DOWN')),                  -- CHARACTER만: 사용자 평가 (api.md 40)
+    hidden_at       timestamptz,                          -- 신고로 가린 시각 (api.md 41). 대화방 · 이전 대화에서 빠짐
     UNIQUE (conversation_id, request_id, sender)          -- 재전송돼도 질문·답변 각각 한 번만
 );
 CREATE INDEX idx_chat_messages_connection ON chat_messages (connection_id, id);
 CREATE INDEX idx_chat_messages_room ON chat_messages (conversation_id, id);  -- 32 대화방 기록 (최신순 커서)
+
+-- 답변 신고 (2026-11-23, api.md 41). 신고한 사람 · 답장마다 한 번. 처리는 베타 동안 운영자가 DB에서
+CREATE TABLE chat_reports (
+    id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id     bigint      NOT NULL REFERENCES users (id),
+    message_id  bigint      NOT NULL REFERENCES chat_messages (id) ON DELETE CASCADE,
+    reason      text        NOT NULL CHECK (reason IN ('INAPPROPRIATE', 'VIOLENT', 'OUT_OF_CHARACTER', 'OTHER')),
+    detail      text,
+    status      text        NOT NULL DEFAULT 'OPEN' CHECK (status IN ('OPEN', 'RESOLVED', 'DISMISSED')),
+    created_at  timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (user_id, message_id)
+);
+
+-- 안전 위반 기록 (2026-11-23, api.md 20 '안전'). 24시간 안 3번이면 24시간 대화 정지 (횟수 · 기간 확정 필요). 탈퇴해도 남김
+CREATE TABLE safety_strikes (
+    id            bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id       bigint      NOT NULL REFERENCES users (id),
+    connection_id bigint,                                 -- 다른 모듈 테이블이라 FK 아님
+    request_id    uuid        NOT NULL,
+    category      text        NOT NULL,                   -- 판정이 붙인 종류 (기준 확정 필요)
+    created_at    timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (user_id, request_id)
+);
+CREATE INDEX idx_safety_strikes_user ON safety_strikes (user_id, created_at);
 
 -- LLM 호출 기록 (지우지 않고 계속 쌓임, 비용·크레딧 근거 + 품질·지연 분석). 호출 한 번 = 한 행, 실패도 기록
 -- 실험실·평가 호출은 사용자·세션이 없다 (source LAB · EVAL)
