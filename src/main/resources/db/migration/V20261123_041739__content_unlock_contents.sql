@@ -21,4 +21,4 @@ ALTER TABLE character_contents
     ADD COLUMN expression_name text,
     ADD COLUMN unlock_stage int NOT NULL CHECK (unlock_stage BETWEEN 2 AND 5),
     ADD CONSTRAINT character_contents_expression_name CHECK ((type = 'EXPRESSION') = (expression_name IS NOT NULL));
-CREATE INDEX idx_character_contents_unlock ON character_contents (character_id, unlock_stage);
+-- 인덱스는 schema.sql대로 기존 idx_character_contents_character (character_id, type) 하나 (메이트당 콘텐츠 열몇 개)

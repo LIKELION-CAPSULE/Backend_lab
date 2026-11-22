@@ -30,7 +30,8 @@ public interface RelationCommands {
     /**
      * 공부 종료 정산: 함께한 시간 누적 + 레벨 갱신 (api.md 22). 호감도는 바꾸지 않는다. 같은 세션은 한 번만
      *
-     * @deprecated 연결 끊기는 {@link #settleIntimacy}를 쓴다 (2026-11-23 친밀도). 제거 예정 PR: 호감도 정리 때
+     * @deprecated 연결 끊기는 {@link #settleIntimacy}를 쓴다 (2026-11-23 친밀도). 같은 정산 행을 쓰므로 먼저 부르면
+     *     그 연결의 친밀도 정산이 건너뛰어진다 → 새로 부르지 않는다. 제거 예정 PR: 호감도 정리 때
      */
     @Deprecated(forRemoval = true)
     StudySettlement settleStudy(long userId, long characterId, long sessionId, int studySeconds, int presentSeconds);

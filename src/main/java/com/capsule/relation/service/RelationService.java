@@ -247,11 +247,12 @@ public class RelationService implements RelationQuery, RelationCommands {
     @Transactional(readOnly = true)
     public IntimacySettlement intimacyOf(long userId, long characterId, long connectionId) {
         Optional<Relation> found = relations.findByUserIdAndCharacterId(userId, characterId);
-        int total = found.map(Relation::getCreditedSeconds).orElse(0);
         int stageNow = found.map(Relation::getStage).orElse(1);
         Optional<RelationSettlement> settled =
                 found.flatMap(rel -> settlements.findByRelationIdAndSessionId(rel.getId(), connectionId));
-        // 다시 읽을 때도 처음과 같게: 단계 전후 · 인정 시간은 정산 기록에서, 다음 단계까지는 지금 누적에서
+        // 다시 읽을 때도 처음과 같게 (명세 22 · 23): 누적도 그 정산 직후 값. 정산이 없으면 지금 누적
+        int total = settled.map(s -> settlements.creditedUpTo(s.getRelationId(), s.getCreatedAt(), connectionId))
+                .orElseGet(() -> found.map(Relation::getCreditedSeconds).orElse(0));
         return new IntimacySettlement(
                 settled.map(RelationSettlement::getStageBefore).orElse(stageNow),
                 settled.map(RelationSettlement::getStageAfter).orElse(stageNow),

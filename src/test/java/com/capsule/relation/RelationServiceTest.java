@@ -245,7 +245,9 @@ class RelationServiceTest {
         IntimacySettlement s2 = commands.settleIntimacy(userId, CHARACTER, second, now, 5000, 5000);
         assertThat(s2.creditedSeconds()).isEqualTo(3200); // 하루 한도 7200 − 4000
         assertThat(s2.stageUp()).isFalse();
-        assertThat(query.intimacyOf(userId, CHARACTER, first).stageAfter()).isEqualTo(2); // 다시 읽어도 처음 정산
+        assertThat(query.intimacyOf(userId, CHARACTER, first)).isEqualTo(s1); // 뒤 연결이 쌓여도 처음 정산 그대로
+        assertThat(query.intimacyOf(userId, CHARACTER, second)).isEqualTo(s2);
+        assertThat(s2.totalCreditedSeconds()).isEqualTo(7200);
         assertThat(query.stage(userId, CHARACTER)).isEqualTo(2);
         assertThat(jdbc.queryForObject(
                         "SELECT total_connected_seconds FROM user_character_relations WHERE user_id = ?",
