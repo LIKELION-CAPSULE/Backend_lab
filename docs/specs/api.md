@@ -622,7 +622,7 @@ H02에서 아바타를 저장하면 `onboardingRequired`가 false가 되고 H03 
 - 프론트: Not started
 - 노션: https://app.notion.com/p/f66b9a07e592825d98d1015154dd556d
 
-> 2026-11-23 (12/1 베타 3단계): 스터디룸 목록(`rooms`) → 메이트 리스트(`mates`) · 마지막 메이트(`lastMate`), `activeSession` → `activeConnection`. `todayStudySeconds`는 다음 단계에서 `todayPresentSeconds` · `todayConnectedSeconds`로 나눔
+> 2026-11-23 (12/1 베타 3단계): 스터디룸 목록(`rooms`) → 메이트 리스트(`mates`) · 마지막 메이트(`lastMate`), `activeSession` → `activeConnection`. 4단계: `todayStudySeconds` → `todayPresentSeconds` · `todayConnectedSeconds` (오전 5시 기준 하루)
 
 #### 설명
 
@@ -645,14 +645,15 @@ H02에서 아바타를 저장하면 `onboardingRequired`가 false가 되고 H03 
 
 | 이름 | 타입 | 설명 |
 | --- | --- | --- |
-| todayStudySeconds | Integer | 오늘(한국 날짜) 끝낸 연결의 공부 시간 합(초). 진행 중 연결은 빠짐 |
+| todayPresentSeconds | Integer | 오늘(오전 5시 기준) 끝낸 연결의 함께한 시간 합(초). 진행 중 연결은 빠짐 |
+| todayConnectedSeconds | Integer | 오늘 끝낸 연결의 연결 시간 합(초) |
 | activeConnection | Object | 진행 중 연결 (내 정보 조회와 같은 형태). 없으면 null |
 | lastMate | Object | 마지막으로 연결한 메이트 `id` · `name` · `illustrationUrl`. 연결한 적 없으면 null |
 | mates[] | Array | 활성 메이트 (정렬 순서) `id` · `name` · `oneLiner` · `ageRating` · `hashtags` · `cardImageUrl` · `comingSoon` |
 
 ```json
 {
-  "todayStudySeconds": 3300,
+  "todayPresentSeconds": 1500, "todayConnectedSeconds": 1920,
   "activeConnection": null,
   "lastMate": { "id": 1, "name": "채린", "illustrationUrl": "https://cdn.../chaerin/full.png" },
   "mates": [
@@ -856,6 +857,11 @@ GET /api/me/memories?date=2026-11-12
 | avatar | Object | `id`, `name`, `profileImageUrl`, `format`, `modelJsonUrl`, `scale`, `offsetX`, `offsetY` |
 | me | Object | `nickname`, `profileImageUrl`(아바타 썸네일) |
 | serverTime | String | 서버 시각 (타이머 보정) |
+| firstMeet | Boolean | 이 메이트와 처음 연결이면 true (SCR-49 첫 만남) |
+| greeting | Object | 인사 반응 `trigger`(`GREETING`) · `intensity`(null) · `line` · `expression` · `audio`. `line`은 대사 생성 전이라 지금은 null, `expression`은 반응표의 표정 이름 (없으면 null), `audio`는 음성 단계 전이라 null |
+| minorRemainingSeconds | Integer | 만 19세 미만이면 오늘(오전 5시 기준) 남은 연결 시간(초), 아니면 null |
+
+> 2026-11-23 (12/1 베타 4단계): `firstMeet` · `greeting` · `minorRemainingSeconds` 추가. 만 19세 미만이 오늘 3시간을 다 쓰면 403 MINOR_DAILY_LIMIT. `relation` · `credits` · `settings`는 친밀도 · 크레딧 단계에서
 
 ```json
 {
@@ -864,19 +870,26 @@ GET /api/me/memories?date=2026-11-12
   "mate": { "id": 1, "name": "채린", "profileImageUrl": "https://cdn.../chaerin.png", "format": "CUBISM", "modelJsonUrl": "https://cdn.../chaerin/v3/chaerin.model3.json", "scale": 1.0, "offsetX": 0, "offsetY": 12 },
   "avatar": { "id": 1, "name": "기본 아바타", "profileImageUrl": "https://cdn.../avatar1.png", "format": "CUBISM", "modelJsonUrl": "https://cdn.../haru/v1/Haru.model3.json", "scale": 1.0, "offsetX": 0, "offsetY": 0 },
   "me": { "nickname": "승희", "profileImageUrl": "https://cdn.../avatar1.png" },
-  "serverTime": "2026-11-07T05:00:02Z"
+  "serverTime": "2026-11-07T05:00:02Z",
+  "firstMeet": false,
+  "greeting": { "trigger": "GREETING", "intensity": null, "line": null, "expression": "웃음", "audio": null },
+  "minorRemainingSeconds": null
 }
 ```
 
 > ✅ **201 Created**
 
-> ❌ **403** ONBOARDING_REQUIRED · **404** MATE_NOT_FOUND (없거나 비활성) · **409** MATE_COMING_SOON (준비 중 메이트) · CONNECTION_ALREADY_IN_PROGRESS (`detail.connectionId`, 연타로 동시에 두 번 보내도 나중 것은 409) → 이어하기 팝업
+> ❌ **403** ONBOARDING_REQUIRED · MINOR_DAILY_LIMIT (만 19세 미만, 오늘 3시간 다 씀) · **404** MATE_NOT_FOUND (없거나 비활성) · **409** MATE_COMING_SOON (준비 중 메이트) · CONNECTION_ALREADY_IN_PROGRESS (`detail.connectionId`, 연타로 동시에 두 번 보내도 나중 것은 409) → 이어하기 팝업
 
 #### 이 API 다음에 할 일
 
-1. '공부 상태 기록'으로 `FOCUS` 1건 → `eventId` 받기
-2. '상태 반응 받기'에 그 `eventId` → 캐릭터 인사 (대사 + 모션 + 표정)
-3. 1분마다 heartbeat 시작
+1. 카메라가 켜져 얼굴이 보이면 '상태 기록'으로 `PRESENT` 1건
+2. 1분마다 heartbeat 시작 (청소년이면 `minorRemainingSeconds`가 0이 될 때 `MINOR_LIMIT`로 끊기)
+
+#### 하루 기준 · 청소년 3시간
+
+- 하루는 한국 시간 오전 5시에 바뀐다 (오늘 = 오전 5시부터 다음 날 오전 5시 전까지). 홈의 오늘 시간 · 청소년 3시간에 같은 기준
+- 청소년 남은 시간 = 3시간 − (오늘 끝난 연결의 연결 시간 합 + 진행 중 연결의 마지막 heartbeat 연결 시간)
 
 ## 17. POST /api/connections/{connectionId}/resume — 연결 이어하기
 - 분류: 공부 세션
@@ -888,7 +901,9 @@ GET /api/me/memories?date=2026-11-12
 
 #### 한 줄 요약
 
-비정상으로 나갔던 세션(탭 닫힘 · 새로고침 · 브라우저 종료 · 네트워크 끊김)을 **이어서 시작**합니다. 끊긴 동안은 **자동으로 쉬는 시간(BREAK)** 으로 처리돼 공부 시간에 들어가지 않습니다.
+비정상으로 나갔던 연결(탭 닫힘 · 새로고침 · 브라우저 종료 · 네트워크 끊김)을 **이어서 연결**합니다. 마지막 heartbeat 값을 돌려주고 프론트는 타이머를 거기서부터 잇습니다. 끊긴 동안은 시간에 들어가지 않습니다.
+
+> 2026-11-23 (12/1 베타 4단계): 쉬는 시간이 없어져 서버가 BREAK · FOCUS 이벤트를 넣지 않음. 응답 `studySeconds` · `breakSeconds` → 마지막 heartbeat 값 `connectedSeconds` · `presentSeconds` · `cameraOnSeconds` · `pipSeconds`
 
 #### 와이어프레임 대조
 
@@ -907,9 +922,8 @@ GET /api/me/memories?date=2026-11-12
 
 | 이름 | 타입 | 설명 |
 | --- | --- | --- |
-| connectionId · mate · avatar · me · serverTime |  | '연결 시작' 응답과 같음 (`startedAt`은 없음. 타이머는 `studySeconds`로) |
-| studySeconds | Integer | 지금까지 공부 시간 → H07 타이머를 여기서부터 이어서 표시 |
-| breakSeconds | Integer | 지금까지 휴식 시간 (끊긴 구간 포함) |
+| connectionId · mate · avatar · me · serverTime · minorRemainingSeconds |  | '연결 시작' 응답과 같음 (`startedAt` · `firstMeet` · `greeting`은 없음) |
+| connectedSeconds · presentSeconds · cameraOnSeconds · pipSeconds | Integer | 마지막 heartbeat 값 (받은 적 없으면 0) → 타이머를 여기서부터 이어서 |
 
 > 2026-11-23 (12/1 베타 3단계): `sessionId` → `connectionId`, `targetMinutes` · `room` 삭제, `character` → `mate`
 
@@ -919,31 +933,51 @@ GET /api/me/memories?date=2026-11-12
   "mate": { "id": 1, "name": "채린", "profileImageUrl": "https://cdn.../chaerin.png", "format": "CUBISM", "modelJsonUrl": "https://cdn.../chaerin/v3/chaerin.model3.json", "scale": 1.0, "offsetX": 0, "offsetY": 12 },
   "avatar": { "id": 1, "name": "기본 아바타", "profileImageUrl": "https://cdn.../avatar1.png", "format": "CUBISM", "modelJsonUrl": "https://cdn.../haru/v1/Haru.model3.json", "scale": 1.0, "offsetX": 0, "offsetY": 0 },
   "me": { "nickname": "승희", "profileImageUrl": "https://cdn.../avatar1.png" },
-  "studySeconds": 1043, "breakSeconds": 420,
+  "connectedSeconds": 1800, "presentSeconds": 1620, "cameraOnSeconds": 1700, "pipSeconds": 900,
+  "minorRemainingSeconds": null,
   "serverTime": "2026-11-07T05:31:10Z"
 }
 ```
 
 > ✅ **200 OK**
 
-> ❌ **404** CONNECTION_NOT_FOUND · **409** CONNECTION_ENDED (이미 자동 마감됨 → 리포트 조회로)
+> ❌ **404** CONNECTION_NOT_FOUND · **409** CONNECTION_ENDED (이미 자동 마감됨 → 연결 기록으로)
 
 #### 서버가 하는 일
 
-1. 마지막 상태가 `BREAK`가 아니면, 마지막 heartbeat 시각에 `BREAK` 이벤트를 넣음 (끊긴 구간 = 휴식). 마지막 heartbeat 뒤에 온 이벤트가 있으면 그 이벤트 시각에 넣음 (그 상태가 끊긴 동안 이어지지 않게)
-2. 지금 시각에 `FOCUS` 이벤트를 넣고 `last_heartbeat_at` 갱신
-3. 서버가 넣은 이 두 이벤트는 호감도에 반영하지 않음
+1. `last_heartbeat_at`만 지금으로 갱신 (자동 마감이 6시간 뒤로 밀림). 이벤트는 넣지 않음
 
 #### 이 API 다음에 할 일
 
-1. 캐릭터 Live2D를 다시 받아 H07 그리기 (새로고침이면 메모리에서 사라졌으므로)
-2. 이어하기 응답에는 `focusEventId`를 넣지 않음 (2026-11-03 결정). 이어하기 직후에는 반응 없이 바로 공부 재개. 프론트는 `FOCUS`를 따로 보내지 않음 (서버가 이미 넣음)
-3. heartbeat 재시작
+1. 메이트 Live2D를 다시 받아 연결 화면 그리기
+2. 얼굴이 보이면 `PRESENT`, heartbeat 재시작
 
 ## 18. POST /api/connections/{connectionId}/events — 상태 기록
 - 분류: 공부 세션
-- 설명: 상태가 바뀌거나 동작(졸음 · 하품 · 손 흔들기 · 고개 돌림)이 감지될 때마다 1건씩 전송 → 저장 + 호감도 반영 → eventId + 캐릭터별 '알아채는' 동작 · 호감도
-- 와이어프레임: H07 자리 감지 · 동작 감지 · H08 쉬는 시간 · H19 일시정지
+- 설명: 카메라 상태(얼굴 보임 · 자리 비움 · 복귀)와 말 걸기 타이머를 1건씩 전송 → 저장 → eventId + 메이트 반응(표정)
+- 와이어프레임: 연결 화면 카메라 인식 · 말 걸기 빈도
+
+> 2026-11-23 (12/1 베타 4단계): **이벤트 4종으로 바꿈** `PRESENT` · `AWAY` · `RETURN` · `IDLE_TALK` (쉬는 시간 · 동작 이벤트 삭제). 응답은 `{eventId, reaction}`, 호감도는 이벤트로 바뀌지 않음(친밀도는 함께한 시간으로). 대사(`line`)는 아직 19번으로. 아래 '이벤트 8종' 이후 옛 내용은 참고로만 남김 (실제 규칙은 바로 아래 '베타 이벤트')
+
+#### 베타 이벤트 (2026-11-23)
+
+| type | 언제 | 반응 `reaction.trigger` |
+| --- | --- | --- |
+| `PRESENT` | 얼굴 감지 시작 (처음 · 카메라를 다시 켬) | 없음 (`reaction` null) |
+| `AWAY` | 자리 비움 (10초 이상 안 보임, `occurredAt` = 안 보이기 시작한 시각) | `AWAY`, `intensity` = 이 연결에서 몇 번째 자리 비움인지 (1~3, 3 이상은 3) |
+| `RETURN` | 자리 비움 뒤 다시 보임 | `RETURN` |
+| `IDLE_TALK` | 말 걸기 빈도 타이머 (조용히면 안 보냄) | `IDLE` |
+
+- 요청 `{type, occurredAt}`. 모르는 type은 400 INVALID_EVENT. 같은 (`type`, `occurredAt`) 재전송은 200 + 기존 응답
+- 응답 `eventId`(Long), `reaction`(Object, 없으면 null): `trigger` · `intensity` · `line`(지금은 null, 대사는 19) · `expression`(반응표의 표정 이름, 없으면 null) · `audio`(null)
+- `occurredAt`이 연결 시작보다 이르면 시작 시각으로 맞춤
+- 카메라 반응 범위(눈 맞춤 · 하품 등 동작 이벤트)는 확정 필요 (그때 type 추가)
+
+```json
+{ "eventId": 12344, "reaction": { "trigger": "AWAY", "intensity": 2, "line": null, "expression": "삐짐", "audio": null } }
+```
+
+#### (옛 내용) 공부 상태 기록
 - 백엔드: Not started
 - 프론트: Not started
 - 노션: https://app.notion.com/p/7d3b9a07e59282318ed48104d03bd4c9
@@ -1325,23 +1359,35 @@ GET /api/me/memories?date=2026-11-12
 
 #### 🛫 Request
 
-> 2026-11-04: 지금까지의 공부 시간을 같이 보냄. 비정상 종료(자동 마감) 때 마지막으로 받은 이 값으로 세션 기록을 저장
+> 2026-11-23 (12/1 베타 4단계): 요청을 연결 기준 누적값 4개로, 응답 204 → 200 `{minorRemainingSeconds, serverTime}`. 에러 INVALID_STUDY_TIME → INVALID_CONNECTION_TIME
+
+모두 연결 시작부터 누적(초).
 
 | 이름 | 타입 | 필수 | 설명 |
 | --- | --- | --- | --- |
-| studySeconds | Integer | O | 지금까지 공부 시간(초). 쉬는 시간 제외 = 자리 지킴 + 자리 비움 |
-| presentSeconds | Integer | O | 그중 자리 지킴(초) |
+| connectedSeconds | Integer | O | 연결 시간 (통화 시간) |
+| presentSeconds | Integer | O | 함께한 시간 = 카메라가 켜져 있고 얼굴이 보인 시간 |
+| cameraOnSeconds | Integer | O | 카메라를 켠 시간 |
+| pipSeconds | Integer | O | PIP로 띄운 시간 |
 
 ```json
-{ "studySeconds": 1800, "presentSeconds": 1620 }
+{ "connectedSeconds": 1800, "presentSeconds": 1620, "cameraOnSeconds": 1700, "pipSeconds": 900 }
 ```
 
-> ✅ **204 No Content**
+검사: 0 ≤ `presentSeconds` ≤ `cameraOnSeconds` ≤ `connectedSeconds` ≤ 시작부터 지난 시간, 0 ≤ `pipSeconds` ≤ `connectedSeconds`
 
-> ❌ **400** INVALID_STUDY_TIME (본문이 없거나 공부 종료와 같은 검사에 걸림: 0 ≤ `presentSeconds` ≤ `studySeconds` ≤ 시작부터 지난 시간) · **404** CONNECTION_NOT_FOUND · **409** CONNECTION_ENDED → 이미 끝난 세션. 리포트 조회로
+#### 🛬 Response
 
-- 400이어도 **생존 신호(`last_heartbeat_at`)는 갱신**하고, 값만 저장하지 않음 (시계 차이로 1초 넘쳐도 끊긴 세션이 되지 않게)
-- 이어하기(17)를 하면 저장된 값을 이어하기 응답의 `studySeconds` 기준으로 맞춤 (다음 heartbeat 전에 또 끊겨도 옛 값으로 마감되지 않게)
+| 이름 | 타입 | 설명 |
+| --- | --- | --- |
+| minorRemainingSeconds | Integer | 만 19세 미만이면 오늘 남은 연결 시간(초), 아니면 null. 0이면 22를 `endType: MINOR_LIMIT`로 부름 |
+| serverTime | String | 서버 시각 |
+
+> ✅ **200 OK**
+
+> ❌ **400** INVALID_CONNECTION_TIME (본문이 없거나 위 검사에 걸림) · **404** CONNECTION_NOT_FOUND · **409** CONNECTION_ENDED → 이미 끝난 연결. 연결 기록으로
+
+- 400이어도 **생존 신호(`last_heartbeat_at`)는 갱신**하고, 값만 저장하지 않음 (시계 차이로 1초 넘쳐도 끊긴 연결이 되지 않게)
 
 #### 비정상 종료 정책
 
@@ -1349,7 +1395,9 @@ GET /api/me/memories?date=2026-11-12
 | --- | --- |
 | heartbeat가 2분 넘게 없음 | '끊긴 상태'로 보고 기다림 (세션은 진행 중 유지) |
 | 다시 로그인 · 새로고침 | 내 정보 · 홈 조회에 `activeConnection` → 이어하기 팝업 → 연결 이어하기 |
-| 6시간 동안 이어하지 않음 | 배치가 자동 마감: `ended_at = last_heartbeat_at`, `end_type = AUTO_CLOSED`, 정산 · 관계 갱신까지. 공부 시간 · 자리 지킴은 마지막 heartbeat 값으로 저장 (받은 값이 없으면 `connection_events`로 계산) |
+| 6시간 동안 이어하지 않음 | 배치가 자동 마감: `ended_at = last_heartbeat_at`, `end_type = AUTO_CLOSED`, 정산 · 관계 갱신까지. 시간 칸은 마지막 heartbeat 값으로 저장 (받은 값이 없으면 0) |
+| 자리 비움 10분 (카메라 끔이면 입력 없음 10분) | 프론트가 메이트 인사 뒤 22를 `endType: AUTO_AWAY`로 부름 |
+| 만 19세 미만 오늘 3시간 | 프론트가 22를 `endType: MINOR_LIMIT`로 부름 |
 
 ## 22. POST /api/connections/{connectionId}/end — 연결 끊기
 - 분류: 리포트
@@ -1384,33 +1432,34 @@ GET /api/me/memories?date=2026-11-12
 
 ##### [POST] /api/connections/{connectionId}/end
 
+> 2026-11-23 (12/1 베타 4단계): 요청을 heartbeat와 같은 누적값 4개 + `endType`으로. 응답 시간 칸 `connectedSeconds` · `presentSeconds` · `awaySeconds`, `messageCount`, `mate`에 `illustrationUrl` · `myRole`. 친밀도(`relation`)는 다음 단계에서 바꿈
+
 ##### 🛫 Request
 
-| 이름 | 타입 | 필수 | 설명 | DB 저장 |
-| --- | --- | --- | --- | --- |
-| studySeconds | Integer | O | 공부 시간 = 세션 시간 − 휴식 · 일시정지 (프론트 타이머 값) | `focus_seconds + distract_seconds` |
-| presentSeconds | Integer | O | 자리 지킴 = 공부 시간 − 자리 비움 | `focus_seconds` |
-
-json
+| 이름 | 타입 | 필수 | 설명 |
+| --- | --- | --- | --- |
+| connectedSeconds · presentSeconds · cameraOnSeconds · pipSeconds | Integer | O | 21 heartbeat와 같음 (검사도 같음) |
+| endType | String | X | `NORMAL`(직접 끊기, 기본) · `AUTO_AWAY`(자리 비움 · 입력 없음 10분) · `MINOR_LIMIT`(청소년 3시간) |
 
 ```json
-{ "studySeconds": 3300, "presentSeconds": 2880 }
+{ "connectedSeconds": 1920, "presentSeconds": 1500, "cameraOnSeconds": 1800, "pipSeconds": 900, "endType": "NORMAL" }
 ```
 
-- 자리 비움(`distract_seconds`)은 서버가 `studySeconds − presentSeconds`로 저장
-- 주간 · 월간 통계는 `connections`의 이 값들을 기간별로 더해서 계산
+- 자리 비움(`away_seconds`)은 서버가 이벤트(`AWAY` → 다음 `PRESENT` · `RETURN` · 끝)로 계산해 저장 (`cameraOnSeconds − presentSeconds`를 넘지 않게)
+- 기간별 통계는 `connections`의 이 값들을 더해서 계산
 
 ##### 🛬 Response
 
 | 이름 | 타입 | 설명 |
 | --- | --- | --- |
 | connectionId | Long | 연결 id |
-| startedAt · endedAt · endType |  | `NORMAL` / `AUTO_CLOSED` |
-| studySeconds | Integer | 저장된 공부 시간 |
-| presentSeconds | Integer | 저장된 자리 지킴 시간 |
-| awaySeconds | Integer | 저장된 자리 비움 시간 (studySeconds − presentSeconds) |
+| startedAt · endedAt · endType |  | `NORMAL` / `AUTO_CLOSED` / `AUTO_AWAY` / `MINOR_LIMIT` |
+| connectedSeconds | Integer | 연결 시간 |
+| presentSeconds | Integer | 함께한 시간 |
+| awaySeconds | Integer | 자리 비움 |
+| messageCount | Integer | 나눈 대화 수 (대화방 단계 전에는 0) |
 | returnCount | Integer | 자리 비운 뒤 돌아온 횟수 (`RETURN` 이벤트 수) |
-| mate | Object | `id`, `name` |
+| mate | Object | `id`, `name`, `illustrationUrl`(전신), `myRole` |
 | relation | Object | `levelBefore` · `levelAfter` · `levelUp`(공부 시간 레벨, 이 세션 자리 지킴 시간 반영) · `nextLevelSeconds`(다음 레벨이 되는 누적 자리 지킴 시간) · `pointsBefore`(공부 시작 때) · `pointsAfter`(이벤트 · 대화 반영 후) · `stage` · `stageName`(끝날 때 관계 단계) · `levelName`(옛 필드, `stageName`과 같은 값) · `nextLevelPoints`(옛 필드, 늘 null) |
 | closingLine | String | 완료 대사 (리포트 · 카드 공용). 캐릭터 설정에 완료 대사(`character_lines` CLOSING)가 있으면 지금 관계 단계의 그 문장(PM: 말포이는 고정. 단계별 문장은 확정 필요), 없으면 AI. 직접 끝냈는데 목표 시간의 절반도 못 채웠으면 공부 포기 대사(GIVE_UP, 임시 J-15, 문구 확정 필요). 기준 시간은 공부 시간 `studySeconds`(자리 지킴 + 자리 비움, 쉬는 시간 제외)로 확정, 목표 시간을 정하지 않은 세션은 포기로 보지 않음 (절반 · 직접 끝냄 조건은 확정 필요) |
 
@@ -1421,17 +1470,17 @@ json
 json
 
 ```json
-{  "connectionId": 512,  "startedAt": "2026-11-07T05:00:02Z", "endedAt": "2026-11-07T06:05:10Z", "endType": "NORMAL",  "studySeconds": 3300, "presentSeconds": 2880, "awaySeconds": 420,  "returnCount": 2,  "mate": { "id": 1, "name": "채린" },  "relation": { "levelBefore": 1, "levelAfter": 2, "levelUp": true, "nextLevelSeconds": 7200, "pointsBefore": 50, "pointsAfter": 53, "stage": 2, "stageName": "친한 사이", "levelName": "친한 사이", "nextLevelPoints": null },  "closingLine": "오늘도 같이 공부해서 좋았어. 다음에도 함께하자."}
+{  "connectionId": 512,  "startedAt": "2026-11-07T05:00:02Z", "endedAt": "2026-11-07T06:05:10Z", "endType": "NORMAL",  "connectedSeconds": 3300, "presentSeconds": 2880, "awaySeconds": 300, "messageCount": 0,  "returnCount": 2,  "mate": { "id": 1, "name": "채린", "illustrationUrl": "https://cdn.../chaerin/full.png", "myRole": "같은 반 친구" },  "relation": { "levelBefore": 1, "levelAfter": 2, "levelUp": true, "nextLevelSeconds": 7200, "pointsBefore": 50, "pointsAfter": 53, "stage": 2, "stageName": "친한 사이", "levelName": "친한 사이", "nextLevelPoints": null },  "closingLine": "오늘도 같이 공부해서 좋았어. 다음에도 함께하자."}
 ```
 
 > ✅ **200 OK** (이미 끝난 세션도 200 + 같은 결과)
 
-> ❌ **400** INVALID_STUDY_TIME (음수 · `presentSeconds > studySeconds` · 실제 경과 시간 초과) · **404** CONNECTION_NOT_FOUND
+> ❌ **400** INVALID_CONNECTION_TIME (21과 같은 검사) · INVALID_REQUEST (모르는 `endType`) · **404** CONNECTION_NOT_FOUND
 
 ##### 서버가 하는 일 (한 트랜잭션)
 
 1. `ended_at IS NULL`일 때만 종료 (두 번 눌러도 한 번만 정산)
-2. 받은 값 검증: `0 ≤ presentSeconds ≤ studySeconds ≤ (종료 시각 − 시작 시각)` → 통과하면 `focus_seconds` · `distract_seconds` 저장, `RETURN` 이벤트 수로 `return_count` 저장
+2. 받은 값 검증 → 통과하면 시간 칸 저장, 이벤트로 `away_seconds`, `RETURN` 이벤트 수로 `return_count` 저장
 3. 함께한 시간 누적(`total_study_seconds` · `total_present_seconds`) → 레벨 갱신, `relation_settlements`에 이 세션 레벨 전후 저장 (호감도는 바꾸지 않음)
 4. 이번 세션 대화를 흐름 카드 한 장으로 써서 `conversation_recaps`에 저장(최근 2장만 남김)하고 `chat_messages` 삭제. 카드 앞에 날짜 · 공부 시간을 붙임 (예: "11/03 55분, …")
 5. 완료 대사(`closingLine`)를 만들어 `connections.closing_line`에 저장
