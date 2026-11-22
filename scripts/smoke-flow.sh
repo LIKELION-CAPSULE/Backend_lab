@@ -83,9 +83,9 @@ message() { # message <단계 이름> <내용> [requestId]
 
 echo "▶ $HOST (응답 JSON: $OUT)"
 call health GET /actuator/health
-call login POST /api/auth/social/KAKAO "{\"code\":\"fake-kakao:smoke-$(uuid | cut -c1-8):민수\",\"redirectUri\":\"http://localhost:5173/oauth/kakao\"}"
+call login POST /api/auth/social/KAKAO "{\"code\":\"fake-kakao:smoke-$(uuid | cut -c1-8):민수\",\"redirectUri\":\"http://localhost:5173/oauth/kakao\",\"deviceHash\":\"smoke\"}"
 TOKEN=$(field "$RES" 'd["accessToken"]')
-call profile PATCH /api/me '{"avatarId":1}'
+call profile PATCH /api/me '{"avatarId":1,"birthDate":"2001-04-10"}'
 call schedule POST /api/me/memories '{"type":"EXAM","title":"영어 중간고사","dueDate":"2026-12-12","dueTime":null}'
 call session POST /api/sessions '{"roomId":1,"characterId":1,"targetMinutes":50}'
 SID=$(field "$RES" 'd["sessionId"]')

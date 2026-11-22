@@ -28,6 +28,7 @@ import org.springframework.test.web.servlet.ResultActions;
 abstract class UserApiTestSupport {
 
     static final String PASSWORD = "capsule1234";
+    static final String ADULT_BIRTH_DATE = "2001-04-10";
 
     @MockitoBean
     AvatarQuery avatarQuery;
@@ -62,9 +63,26 @@ abstract class UserApiTestSupport {
     }
 
     ResultActions signup(String verificationToken, String password, String nickname, String termIds) throws Exception {
+        return signup(verificationToken, password, nickname, termIds, ADULT_BIRTH_DATE);
+    }
+
+    ResultActions signup(String verificationToken, String password, String nickname, String termIds, String birthDate)
+            throws Exception {
         return postJson("/api/auth/email/signup", """
-                {"verificationToken":"%s","password":"%s","nickname":"%s","agreedTermVersionIds":%s}
-                """.formatted(verificationToken, password, nickname, termIds));
+                {"verificationToken":"%s","password":"%s","nickname":"%s","agreedTermVersionIds":%s,
+                 "birthDate":"%s","deviceHash":"%s"}
+                """.formatted(
+                        verificationToken, password, nickname, termIds, birthDate, deviceHash()));
+    }
+
+    static String deviceHash() {
+        return "dev-" + UUID.randomUUID();
+    }
+
+    static String kakaoBody(String code) {
+        return """
+                {"code":"%s","redirectUri":"http://localhost/oauth/kakao","deviceHash":"%s"}
+                """.formatted(code, deviceHash());
     }
 
     /** 가입까지 마친 사용자의 응답 (accessToken, userId) */

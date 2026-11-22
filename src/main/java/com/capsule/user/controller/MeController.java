@@ -10,8 +10,10 @@ import com.capsule.user.dto.MemoryList;
 import com.capsule.user.dto.MemoryResponse;
 import com.capsule.user.dto.MemoryStatus;
 import com.capsule.user.dto.UpdateMeRequest;
+import com.capsule.user.dto.UserSettings;
 import com.capsule.user.service.MemoryService;
 import com.capsule.user.service.ProfileService;
+import com.capsule.user.service.SettingsService;
 import com.capsule.user.service.TokenService;
 import com.capsule.user.service.WithdrawalService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -32,8 +34,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import tools.jackson.databind.JsonNode;
 
-/** api.md 8, 10, 13, 14, 27 */
+/** api.md 8, 10, 13, 14, 27, 29, 30 */
 @RestController
 @RequestMapping("/api/me")
 @Tag(name = ApiTags.ONBOARDING_HOME)
@@ -44,6 +47,7 @@ public class MeController {
     private final MemoryService memories;
     private final WithdrawalService withdrawals;
     private final TokenService tokens;
+    private final SettingsService settings;
 
     @Operation(summary = "8. 내 정보 조회", description = "내 정보 + 온보딩 필요 여부 + 진행 중 세션(H18 판단) (명세: api.md 8)")
     @GetMapping
@@ -51,10 +55,22 @@ public class MeController {
         return ApiResponse.ok(profiles.me(userId));
     }
 
-    @Operation(summary = "10. 프로필 설정", description = "닉네임 · 아바타 저장 (온보딩 완료) (명세: api.md 10)")
+    @Operation(summary = "10. 프로필 설정", description = "닉네임 · 아바타 · 생년월일(한 번) · 호칭 · 나에 대해. 보낸 값만 바꿈 (명세: api.md 10)")
     @PatchMapping
     public ApiResponse<MeResponse> update(@LoginUser long userId, @RequestBody UpdateMeRequest req) {
         return ApiResponse.ok(profiles.update(userId, req));
+    }
+
+    @Operation(summary = "29. 설정 조회", description = "설정 7개. 저장한 적 없는 값은 기본값 (명세: api.md 29)")
+    @GetMapping("/settings")
+    public ApiResponse<UserSettings> settings(@LoginUser long userId) {
+        return ApiResponse.ok(settings.get(userId));
+    }
+
+    @Operation(summary = "30. 설정 변경", description = "보낸 키만 바꾸고 전체 설정을 돌려줌. null이면 기본값 (명세: api.md 30)")
+    @PatchMapping("/settings")
+    public ApiResponse<UserSettings> updateSettings(@LoginUser long userId, @RequestBody JsonNode body) {
+        return ApiResponse.ok(settings.update(userId, body));
     }
 
     @Operation(

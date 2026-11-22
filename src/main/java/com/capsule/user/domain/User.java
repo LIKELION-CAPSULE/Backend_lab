@@ -7,6 +7,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.time.LocalDate;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -19,6 +20,8 @@ import lombok.NoArgsConstructor;
 public class User {
 
     private static final int NICKNAME_MAX = 20;
+    private static final int HONORIFIC_MAX = 10;
+    private static final int ABOUT_ME_MAX = 60;
     public static final String WITHDRAWN_NICKNAME = "탈퇴한 사용자";
 
     @Id
@@ -35,21 +38,53 @@ public class User {
     private Instant lastLoginAt;
     private Instant updatedAt;
     private Instant withdrawnAt;
+    private LocalDate birthDate;
+    private String honorific;
+    private String aboutMe;
+    private String referralCode;
+    // settings(jsonb)는 엔티티에 매핑하지 않는다: SettingsService가 SQL로 읽고 쓴다 (DB 기본값 '{}')
 
-    private User(String nickname, String email, String passwordHash, Instant now) {
+    private User(String nickname, String email, String passwordHash, String referralCode, Instant now) {
         this.nickname = nickname;
         this.email = email;
         this.password = passwordHash;
+        this.referralCode = referralCode;
         this.lastLoginAt = now;
         this.updatedAt = now;
     }
 
-    public static User emailUser(String email, String passwordHash, String nickname, Instant now) {
-        return new User(nickname, email, passwordHash, now);
+    /** 이메일 가입은 생년월일을 가입 때 받는다 (api.md 4) */
+    public static User emailUser(
+            String email, String passwordHash, String nickname, LocalDate birthDate, String referralCode, Instant now) {
+        User user = new User(nickname, email, passwordHash, referralCode, now);
+        user.birthDate = birthDate;
+        return user;
     }
 
-    public static User socialUser(String nickname, Instant now) {
-        return new User(nickname, null, null, now);
+    /** 카카오 가입은 생년월일을 온보딩(api.md 10)에서 받는다 */
+    public static User socialUser(String nickname, String referralCode, Instant now) {
+        return new User(nickname, null, null, referralCode, now);
+    }
+
+    /** 앞뒤 공백을 자르고 1~10자. 빈 문자열이면 null(지움) (api.md 10) */
+    public static String validHonorific(String raw) {
+        return optionalText(raw, HONORIFIC_MAX, UserErrorCode.INVALID_HONORIFIC);
+    }
+
+    /** 앞뒤 공백을 자르고 0~60자. 빈 문자열이면 null(지움) (api.md 10) */
+    public static String validAboutMe(String raw) {
+        return optionalText(raw, ABOUT_ME_MAX, UserErrorCode.INVALID_ABOUT_ME);
+    }
+
+    private static String optionalText(String raw, int max, UserErrorCode error) {
+        String text = raw.strip();
+        if (text.isEmpty()) {
+            return null;
+        }
+        if (text.codePointCount(0, text.length()) > max) {
+            throw new ApiException(error);
+        }
+        return text;
     }
 
     /** 앞뒤 공백을 자르고 1~20자 (가입·프로필 설정 공통 규칙) */
@@ -85,6 +120,9 @@ public class User {
         this.email = null;
         this.password = null;
         this.avatarId = null;
+        this.birthDate = null;
+        this.honorific = null;
+        this.aboutMe = null;
         this.updatedAt = now;
         this.withdrawnAt = now;
     }
@@ -95,6 +133,25 @@ public class User {
         this.updatedAt = now;
     }
 
+    /** 호칭 · 나에 대해 (null = 지움). 검사는 validHonorific · validAboutMe */
+    public void updateHonorific(String honorific, Instant now) {
+        this.honorific = honorific;
+        this.updatedAt = now;
+    }
+
+    public void updateAboutMe(String aboutMe, Instant now) {
+        this.aboutMe = aboutMe;
+        this.updatedAt = now;
+    }
+
+    /** 생년월일은 비어 있을 때 한 번만 (api.md 10). 이미 있으면 그대로 둔다 */
+    public void fillBirthDate(LocalDate birthDate, Instant now) {
+        if (this.birthDate == null) {
+            this.birthDate = birthDate;
+            this.updatedAt = now;
+        }
+    }
+
     public String passwordHash() {
         return password;
     }
@@ -103,8 +160,13 @@ public class User {
         return withdrawnAt == null;
     }
 
-    /** 닉네임은 가입 때 받으므로 아바타만 본다 (A1) */
+    /** 닉네임은 가입 때 받으므로 아바타와 생년월일만 본다 (api.md 8. 카카오 · 베타 전 가입자는 온보딩에서 생년월일) */
     public boolean onboardingRequired() {
-        return avatarId == null;
+        return avatarId == null || birthDate == null;
+    }
+
+    /** 만 19세 미만 (한국 날짜 기준). 생년월일이 없으면 false (api.md 8) */
+    public boolean isMinor(LocalDate today) {
+        return birthDate != null && Age.of(birthDate, today) < Age.ADULT;
     }
 }

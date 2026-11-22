@@ -5,6 +5,7 @@ import com.capsule.common.error.CommonErrorCode;
 import com.capsule.common.ratelimit.RateLimiter;
 import com.capsule.user.client.EmailSender;
 import com.capsule.user.client.KakaoClient;
+import com.capsule.user.domain.Age;
 import com.capsule.user.domain.User;
 import com.capsule.user.domain.UserErrorCode;
 import com.capsule.user.dto.KakaoProfile;
@@ -19,6 +20,7 @@ import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -57,6 +59,7 @@ public class AuthService {
     private final KakaoClient kakaoClient;
     private final TransactionTemplate tx;
     private final Clock clock;
+    private final SignupPolicy signupPolicy;
 
     @Transactional(readOnly = true)
     public List<TermVersion> terms() {
@@ -120,20 +123,25 @@ public class AuthService {
         String password = req.password();
         requireValidPassword(password);
         String nickname = User.validNickname(req.nickname());
+        LocalDate birthDate = Age.validBirthDate(req.birthDate(), Age.today(clock));
+        String deviceHash = SignupPolicy.validDeviceHash(req.deviceHash());
         Instant now = Instant.now(clock);
         List<Long> agreed = agreedLatestTerms(req.agreedTermVersionIds(), now);
         if (users.existsByEmail(email)) {
             throw new ApiException(UserErrorCode.EMAIL_ALREADY_USED);
         }
+        signupPolicy.requireSeat();
         User user;
         try {
             // 가입 버튼 연타처럼 같은 이메일이 동시에 오면 둘 다 위 확인을 지나고, 늦은 쪽은 users.email UNIQUE에 막힌다.
             // flush로 여기서 바로 부딪히게 해 500 대신 409로 (api.md 4, #40)
-            user = users.saveAndFlush(User.emailUser(email, passwordEncoder.encode(password), nickname, now));
+            user = users.saveAndFlush(User.emailUser(
+                    email, passwordEncoder.encode(password), nickname, birthDate, signupPolicy.newReferralCode(), now));
         } catch (DataIntegrityViolationException e) {
             throw new ApiException(UserErrorCode.EMAIL_ALREADY_USED);
         }
         terms.recordAgreements(user.getId(), agreed);
+        users.insertSignupDevice(deviceHash, user.getId());
         redis.delete(verifiedKey);
         return new Login(user.getId(), true, true);
     }
@@ -168,18 +176,20 @@ public class AuthService {
     }
 
     /**
-     * 처음이면 users + user_social_accounts + user_terms를 한 트랜잭션으로 (api.md 6 '서버가 하는 일').
+     * 처음이면 정원 확인 뒤 users + user_social_accounts + user_terms + signup_devices를 한 트랜잭션으로 (api.md 6 '서버가 하는 일').
      * 약관 체크는 받지 않는다. 카카오로 가입하면 가입 시점의 최신 필수 약관 버전에 동의한 것으로 기록한다.
      * 카카오 호출(네트워크 왕복 2번)은 트랜잭션 밖에서 한다. 카카오가 느려도 DB 커넥션을 붙잡지 않게
      */
     public Login kakao(KakaoRequest req) {
+        // 인가 코드는 한 번만 쓸 수 있어서, 요청 모양 검사를 카카오 호출보다 먼저 한다
+        String deviceHash = SignupPolicy.validDeviceHash(req.deviceHash());
         KakaoProfile profile = kakaoClient
                 .fetchProfile(req.code(), req.redirectUri())
                 .orElseThrow(() -> new ApiException(UserErrorCode.SOCIAL_AUTH_FAILED));
-        return tx.execute(status -> loginOrSignUp(profile));
+        return tx.execute(status -> loginOrSignUp(profile, deviceHash));
     }
 
-    private Login loginOrSignUp(KakaoProfile profile) {
+    private Login loginOrSignUp(KakaoProfile profile, String deviceHash) {
         Instant now = Instant.now(clock);
         Optional<Long> existingId = users.findUserIdBySocialAccount(KAKAO, profile.providerUserId());
         if (existingId.isPresent()) {
@@ -194,8 +204,10 @@ public class AuthService {
             // 닉네임 동의는 필수 항목(api.md 6)이지만 비어 올 수 있어 NOT NULL을 지키려고 둔 기본값. 프로필 설정에서 바꿀 수 있다
             nickname = "카카오 사용자";
         }
-        User user = users.save(User.socialUser(nickname, now));
+        signupPolicy.requireSeat();
+        User user = users.save(User.socialUser(nickname, signupPolicy.newReferralCode(), now));
         users.insertSocialAccount(KAKAO, profile.providerUserId(), user.getId());
+        users.insertSignupDevice(deviceHash, user.getId());
         terms.recordAgreements(
                 user.getId(),
                 terms.latestVersions(now).stream()

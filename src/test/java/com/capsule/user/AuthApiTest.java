@@ -203,16 +203,11 @@ class AuthApiTest extends UserApiTestSupport {
     void kakaoIgnoresLegacyTermsField() throws Exception {
         String code = "fake-kakao:%s:옛프론트".formatted(UUID.randomUUID());
         postJson("/api/auth/social/KAKAO", """
-                        {"code":"%s","redirectUri":"http://localhost/oauth/kakao","agreedTermVersionIds":[3,4]}
-                        """.formatted(code))
+                        {"code":"%s","redirectUri":"http://localhost/oauth/kakao","agreedTermVersionIds":[3,4],
+                         "deviceHash":"%s"}
+                        """.formatted(code, deviceHash()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.isNewUser").value(true));
-    }
-
-    private static String kakaoBody(String code) {
-        return """
-                {"code":"%s","redirectUri":"http://localhost/oauth/kakao"}
-                """.formatted(code);
     }
 
     private static String wrong(String code) {

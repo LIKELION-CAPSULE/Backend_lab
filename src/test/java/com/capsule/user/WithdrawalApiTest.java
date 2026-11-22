@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -66,11 +67,18 @@ class WithdrawalApiTest extends UserApiTestSupport {
 
         // 행은 남고 개인정보만 비움
         var row = jdbc.queryForMap(
-                "SELECT nickname, email, password, avatar_id, withdrawn_at FROM users WHERE id = ?", userId);
+                "SELECT nickname, email, password, avatar_id, withdrawn_at, birth_date, honorific, about_me"
+                        + " FROM users WHERE id = ?",
+                userId);
         assertThat(row.get("nickname")).isEqualTo("탈퇴한 사용자");
         assertThat(row.get("email")).isNull();
         assertThat(row.get("password")).isNull();
         assertThat(row.get("withdrawn_at")).isNotNull();
+        // 생년월일 · 호칭 · 나에 대해도 개인정보라 비움. 가입 기기는 초대 부정 방지용으로 남김
+        assertThat(row.get("birth_date")).isNull();
+        assertThat(row.get("honorific")).isNull();
+        assertThat(row.get("about_me")).isNull();
+        assertThat(count("signup_devices", userId)).isEqualTo(1);
         // 직접 말한 내용 · 대화 기억 삭제, 동의 기록은 남김
         assertThat(count("user_memories", userId)).isZero();
         assertThat(count("conversations", userId)).isZero();
@@ -85,6 +93,12 @@ class WithdrawalApiTest extends UserApiTestSupport {
         // 모든 기기 로그아웃, 남은 액세스 토큰으로는 401, 다시 불러도 204
         mvc.perform(post("/api/auth/refresh").cookie(refresh)).andExpect(status().isUnauthorized());
         mvc.perform(get("/api/me").header("Authorization", auth)).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/me/settings").header("Authorization", auth)).andExpect(status().isUnauthorized());
+        mvc.perform(patch("/api/me/settings")
+                        .header("Authorization", auth)
+                        .contentType("application/json")
+                        .content("{\"voiceEnabled\":false}"))
+                .andExpect(status().isUnauthorized());
         mvc.perform(post("/api/me/memories")
                         .header("Authorization", auth)
                         .contentType("application/json")
@@ -138,12 +152,6 @@ class WithdrawalApiTest extends UserApiTestSupport {
 
     private int count(String table, long userId) {
         return jdbc.queryForObject("SELECT count(*) FROM " + table + " WHERE user_id = ?", Integer.class, userId);
-    }
-
-    private static String kakaoBody(String code) {
-        return """
-                {"code":"%s","redirectUri":"http://localhost/oauth/kakao"}
-                """.formatted(code);
     }
 
     private static Cookie refreshCookie(MvcResult result) {
