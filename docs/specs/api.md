@@ -1459,7 +1459,7 @@ GET /api/me/memories?date=2026-11-12
 | connectedSeconds | Integer | 연결 시간 |
 | presentSeconds | Integer | 함께한 시간 |
 | awaySeconds | Integer | 자리 비움 |
-| messageCount | Integer | 나눈 대화 수 (대화방 단계 전에는 0) |
+| messageCount | Integer | 이 연결에서 답장까지 받은 대화 턴 수 (메시지 전송 20 · 28이 답장을 저장할 때 +1, 2026-11-23 6단계) |
 | returnCount | Integer | 자리 비운 뒤 돌아온 횟수 (`RETURN` 이벤트 수) |
 | mate | Object | `id`, `name`, `illustrationUrl`(전신), `myRole` |
 | relation | Object | 친밀도 (5단계 · 2026-11-23): `stageBefore` · `stageAfter`(1~5) · `stageName`(끝난 뒤 단계 이름, 메이트마다 다름) · `stageUp` · `creditedSeconds`(이번에 인정된 시간) · `nextStageSeconds`(다음 단계까지 남은 인정 시간, 5단계면 null) · `unlocked[]`(이번에 열린 것 `type`(EXPRESSION · VOICE_LINE) · `title` · `unlockStage` · `expressionName` · `assetUrl`) |
@@ -1872,9 +1872,11 @@ data: {"requestId":"9c3a...","characterId":1,"content":"알지. 그리핀도르 
 | SCR-13 이름 · 한 줄 소개 · 연령 등급 배지 · 해시태그 | `name`, `oneLiner`, `ageRating`, `hashtags` |
 | SCR-13 세로 일러스트 | `illustrationUrl` |
 | SCR-13 세계관 · 내 역할 · 인트로 | `world`, `myRole`, `intro` |
-| SCR-13 '연결하기' | `comingSoon`이면 막음. 이전 대화가 있으면 같은 대화방으로 이어짐 (`hasConversation`은 대화방 단계에서 추가) |
+| SCR-13 '연결하기' | `comingSoon`이면 막음. 이전 대화가 있으면 같은 대화방으로 이어짐 (`hasConversation`) |
 
-- 테이블: `characters`, `live2d_models` · 인증: 필요
+> 2026-11-23 (12/1 베타 6단계): `hasConversation` 추가
+
+- 테이블: `characters`, `live2d_models`, `conversations` · `chat_messages`(대화가 있는지) · 인증: 필요
 
 #### [GET] /api/mates/{mateId}
 
@@ -1894,6 +1896,7 @@ data: {"requestId":"9c3a...","characterId":1,"content":"알지. 그리핀도르 
 | intro | String | 인트로 ('왜 지금 나랑 같이 있는지'가 드러나는 첫 상황). 없으면 null |
 | model | Object | `format`, `modelJsonUrl`, `scale`, `offsetX`, `offsetY` (9번 아바타 `model`과 같은 모양) |
 | comingSoon | Boolean | 준비 중 메이트면 true → 연결 버튼 막기 |
+| hasConversation | Boolean | 이 메이트와 나눈 대화가 하나라도 있으면 true → 같은 대화방으로 이어서 연결 (32로 이전 대화를 불러옴) |
 
 ```json
 {
@@ -1901,7 +1904,8 @@ data: {"requestId":"9c3a...","characterId":1,"content":"알지. 그리핀도르 
   "illustrationUrl": "https://cdn.../chaerin/full.png", "voiceSampleUrl": "https://cdn.../chaerin/sample.mp3",
   "world": "채린은 같은 반의 조용하지만 다정한 친구예요...", "myRole": "당신은 채린의 같은 반 친구예요", "intro": "시험기간 밤, 각자 책상에서 영상통화 중.",
   "model": { "format": "CUBISM", "modelJsonUrl": "https://cdn.../chaerin/v3/chaerin.model3.json", "scale": 1.0, "offsetX": 0, "offsetY": 12 },
-  "comingSoon": false
+  "comingSoon": false,
+  "hasConversation": true
 }
 ```
 
@@ -1910,3 +1914,51 @@ data: {"requestId":"9c3a...","characterId":1,"content":"알지. 그리핀도르 
 > ❌ **404** MATE_NOT_FOUND (없거나 비활성 메이트)
 
 - 채린 · 남학생의 화면 문구(한 줄 소개 · 해시태그 · 세계관 · 내 역할 · 인트로 · 이미지 · 목소리)는 확정 필요 (PM · 디자이너가 전달). 위 예시는 노션 기획 초안
+
+## 32. GET /api/mates/{mateId}/messages — 대화방 기록
+- 분류: 연결
+- 설명: 채팅 패널. 이 메이트와 나눈 대화를 이전 연결까지 최신순으로
+- 와이어프레임: SCR-17 채팅 패널
+- 백엔드: Not started
+- 프론트: Not started
+
+> 2026-11-23 (12/1 베타 6단계): 대화방 기록 추가. 연결이 끝나도 메시지를 지우지 않는다 (예전에는 요약 카드에 넣고 지움)
+
+#### 설명
+
+메이트 하나 = 대화방 하나(`conversations`)입니다. 연결을 끊었다가 다시 연결해도 같은 대화방이라, 채팅 패널을 열 때 이전 대화를 불러옵니다. 답장을 못 받은 사용자 말(답하는 사이 연결이 끝남)은 저장하지 않으므로 나오지 않습니다.
+
+- 테이블: `conversations`, `chat_messages` · 인증: 필요
+
+#### [GET] /api/mates/{mateId}/messages?cursor=&size=
+
+#### 🛫 Query
+
+| 이름 | 타입 | 필수 | 설명 |
+| --- | --- | --- | --- |
+| cursor | String | X | 앞 응답의 `nextCursor`. 없으면 가장 최근부터 |
+| size | Integer | X | 기본 20, 최대 50. 범위 밖이면 400 INVALID_REQUEST |
+
+#### 🛬 Response
+
+| 이름 | 타입 | 설명 |
+| --- | --- | --- |
+| messages | Array | 최신순. `requestId`(사용자 말과 그 답장이 같은 값) · `sender`(`USER` · `MATE`) · `content` · `inputType` · `rating` · `createdAt` · `connectionId` |
+| nextCursor | String | 더 이전 대화가 있으면 다음 요청에 넣는 값. 없으면 null |
+
+- `inputType`(TEXT · QUICK · VOICE)은 메시지 전송이 아직 받지 않아 늘 null (음성 단계에서 채움)
+- `rating`(UP · DOWN)은 답변 평가(P1) 전까지 늘 null. 신고로 가린 답변을 빼는 것도 P1
+
+```json
+{
+  "messages": [
+    { "requestId": "7c1e2f0a-...", "sender": "MATE", "content": "또 마감이야? 끝나면 나한테 자랑해.", "inputType": null, "rating": null, "createdAt": "2026-12-01T12:10:02Z", "connectionId": 812 },
+    { "requestId": "7c1e2f0a-...", "sender": "USER", "content": "오늘 마감 있어서 좀 바빠", "inputType": null, "rating": null, "createdAt": "2026-12-01T12:10:00Z", "connectionId": 812 }
+  ],
+  "nextCursor": "1042"
+}
+```
+
+> ✅ **200 OK** (대화가 없으면 `messages: []`)
+
+> ❌ **400** INVALID_REQUEST (size · cursor 형식) · **404** MATE_NOT_FOUND (없거나 비활성 메이트)
