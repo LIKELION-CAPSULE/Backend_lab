@@ -35,6 +35,7 @@ import com.capsule.relation.api.RelationTypes.AffinityChange;
 import com.capsule.relation.api.RelationTypes.ChatScore;
 import com.capsule.relation.api.RelationTypes.RelationView;
 import com.capsule.relation.api.RelationTypes.SignalType;
+import com.capsule.session.api.ConnectionMessageCounter;
 import com.capsule.session.api.SessionClosingHandler;
 import com.capsule.session.api.SessionQuery;
 import com.capsule.session.api.SessionTypes.SessionClosing;
@@ -86,6 +87,7 @@ public class DialogueService {
     private static final DateTimeFormatter CARD_DATE = DateTimeFormatter.ofPattern("MM/dd");
 
     private final SessionQuery sessions;
+    private final ConnectionMessageCounter messageCounter;
     private final CharacterQuery characters;
     private final ReactionQuery reactions;
     private final RelationQuery relationQuery;
@@ -110,6 +112,7 @@ public class DialogueService {
 
     public DialogueService(
             SessionQuery sessions,
+            ConnectionMessageCounter messageCounter,
             CharacterQuery characters,
             ReactionQuery reactions,
             RelationQuery relationQuery,
@@ -132,6 +135,7 @@ public class DialogueService {
             RuntimeSettings<DialogueProperties> props,
             Clock clock) {
         this.sessions = sessions;
+        this.messageCounter = messageCounter;
         this.characters = characters;
         this.reactions = reactions;
         this.relationQuery = relationQuery;
@@ -301,9 +305,10 @@ public class DialogueService {
 
     /**
      * 읽기 → LLM(트랜잭션 밖, llm-budget) → 저장(한 트랜잭션: 호감도 · 답장).
-     * 저장 트랜잭션은 호감도(applyChat)부터 부른다: applyChat은 relation 행을 잠그고, 공부 종료(22)도 정산 때 같은 행을 잠근 채
-     * 커밋까지 간다. 그래서 종료와 겹치면 여기서 종료가 끝나길 기다린 뒤 아래 세션 확인에서 끝난 것을 보고 아무것도 남기지 않는다.
-     * 종료보다 먼저 잡으면 이 답장까지 커밋된 뒤에 종료가 정산·요약한다. 잠금 순서가 종료(세션 → relation → 대화)와 같아 교착이 없다.
+     * 저장 트랜잭션은 연결의 대화 수(countReply)부터 올린다 (2026-11-23): 연결 행을 잠그고, 공부 종료(22)도 연결 행을 먼저 잠근 채
+     * 커밋까지 간다. 그래서 종료와 겹치면 여기서 종료가 끝나길 기다린 뒤 끝난 연결이라 0행 → 아무것도 남기지 않는다.
+     * 종료보다 먼저 잡으면 이 답장까지 커밋된 뒤에 종료가 정산·요약한다. 잠금 순서가 종료(연결 → relation → 대화)와 같아 교착이 없다
+     * (호감도 applyChat이 relation 행을 잠그므로 반드시 그 앞에서).
      */
     private MessageResponse answer(
             SessionInfo session, Conversation conversation, MessageRequest request, Consumer<String> onReply) {
@@ -360,12 +365,14 @@ public class DialogueService {
         MessageResponse response;
         try {
             response = tx.execute(status -> {
-                AffinityChange affinity =
-                        relationCommands.applyChatScore(userId, characterId, sessionId, requestId, score);
-                if (sessions.find(sessionId).filter(SessionInfo::inProgress).isEmpty()) {
+                // 진행 중이면 연결의 대화 수 +1 (명세 22 messageCount, 2026-11-23). 끝났으면 0행.
+                // 연결 행 잠금이 relation 잠금(applyChat)보다 먼저여야 종료와 잠금 순서가 같다 (위 Javadoc)
+                if (!messageCounter.countReply(sessionId)) {
                     status.setRollbackOnly(); // 답하는 사이 공부가 끝났다: 정산·요약이 끝난 세션에 남기지 않는다
                     return null;
                 }
+                AffinityChange affinity =
+                        relationCommands.applyChatScore(userId, characterId, sessionId, requestId, score);
                 if (signal != null) messages.markSignal(conversation.getId(), requestId, signal.name());
                 messages.save(new ChatMessage(
                         conversation.getId(), sessionId, requestId, CHARACTER, reply, Instant.now(clock)));
@@ -387,7 +394,7 @@ public class DialogueService {
             return answered(conversation, session, request).orElseThrow(() -> e);
         }
         if (response == null) {
-            // 종료가 이번 사용자 말을 요약 전에 읽지 못했으면 끝난 세션에 남는다. 요약에 들어갔으면 이미 지워져 있다
+            // 답을 못 받은 사용자 말은 지운다 (대화방 기록에 남지 않게). 종료 카드에 이미 들어갔으면 카드에만 남는다
             messages.deleteQuestion(conversation.getId(), requestId);
             throw new ApiException(DialogueErrorCode.CONNECTION_ENDED);
         }
@@ -494,20 +501,20 @@ public class DialogueService {
 
     // --- 22 공부 종료 ---
 
-    /** 공부 종료 초안. pendingIds = 카드에 넣은 메시지 (저장할 때 지운다) */
+    /** 공부 종료 초안. pendingIds = 카드에 넣은 메시지 (저장할 때 recapped_at 표시) */
     public record ClosingDraft(List<Long> pendingIds, Optional<String> card, String line)
             implements SessionClosingHandler.Draft {}
 
     /**
      * 공부 종료 1단계: 트랜잭션 밖에서 이번 세션 대화를 흐름 카드 한 장으로 쓰고 완료 대사를 만든다 (기억 ②). DB에 쓰지 않는다:
      * LLM을 기다리는 동안 DB 연결을 잡지 않게 (개발 서버 풀 2).
-     * 대화방에 남은 메시지를 전부 쓴다: 카드에 넣은 메시지는 지우므로, 남은 게 있으면 앞선 종료에서 카드 쓰기가 실패한 것이다.
+     * 카드에 아직 안 넣은 메시지를 전부 쓴다: 이번 연결 것 + 앞선 종료에서 카드 쓰기가 실패한 것 (2026-11-23부터 지우지 않고 표시).
      * LLM이 실패하거나 마감을 넘겨도 공부 종료는 성공해야 하므로 고정 문구로 대신한다. 카드와 완료 대사는 같이 보낸다(둘 다 llm-budget 안).
      */
     public ClosingDraft draft(SessionClosing closing) {
         List<ChatMessage> pending = conversations
                 .findByUserIdAndCharacterId(closing.userId(), closing.characterId())
-                .map(c -> messages.findByConversationIdOrderById(c.getId()))
+                .map(c -> messages.findByConversationIdAndRecappedAtIsNullOrderById(c.getId()))
                 .orElse(List.of());
         CharacterInfo character = character(closing.characterId());
         String nickname = nickname(closing.userId());
@@ -561,7 +568,8 @@ public class DialogueService {
             List<ConversationRecap> all = recapRepository.findByConversationIdOrderByIdDesc(conversation.getId());
             int keep = props.current().recapMax(); // 한 번만 읽기: 사이에 커지면 subList가 범위를 넘는다
             if (all.size() > keep) recapRepository.deleteAll(all.subList(keep, all.size()));
-            messages.deleteAllByIdInBatch(d.pendingIds());
+            // 지우지 않는다: 32 대화방 기록으로 남김 (2026-11-23). 다음 카드에 또 들어가지 않게 표시만
+            if (!d.pendingIds().isEmpty()) messages.markRecapped(d.pendingIds(), Instant.now(clock));
         }
         // 카드 쓰기에 실패하면 메시지를 남긴다: 다음 종료 때 그 세션 카드에 같이 들어간다
         return d.line();

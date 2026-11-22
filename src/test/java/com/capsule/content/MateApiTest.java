@@ -41,7 +41,8 @@ class MateApiTest {
                 .andExpect(jsonPath("$.data.model.format").value("CUBISM"))
                 .andExpect(jsonPath("$.data.model.modelJsonUrl")
                         .value("https://cdn.capsule.invalid/chaerin/v3/chaerin.model3.json"))
-                .andExpect(jsonPath("$.data.comingSoon").value(false));
+                .andExpect(jsonPath("$.data.comingSoon").value(false))
+                .andExpect(jsonPath("$.data.hasConversation").value(false)); // 대화방 없음 (6단계)
     }
 
     @Test

@@ -16,6 +16,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
@@ -40,6 +41,7 @@ import com.capsule.relation.api.RelationTypes.AffinityChange;
 import com.capsule.relation.api.RelationTypes.ChatScore;
 import com.capsule.relation.api.RelationTypes.RelationView;
 import com.capsule.relation.api.RelationTypes.SignalType;
+import com.capsule.session.api.ConnectionMessageCounter;
 import com.capsule.session.api.SessionClosingHandler;
 import com.capsule.session.api.SessionQuery;
 import com.capsule.session.api.SessionTypes.SessionClosing;
@@ -83,6 +85,9 @@ class DialogueTest {
 
     @MockitoBean
     SessionQuery sessionQuery;
+
+    @MockitoBean // 답장 저장 때 진행 중이면 대화 수 +1 (6단계). 기본은 진행 중
+    ConnectionMessageCounter messageCounter;
 
     @MockitoBean
     CharacterQuery characterQuery;
@@ -133,6 +138,7 @@ class DialogueTest {
                 "INSERT INTO connections (user_id, character_id) VALUES (?, 1) RETURNING id", Long.class, userId);
         when(sessionQuery.find(sessionId))
                 .thenReturn(Optional.of(new SessionInfo(sessionId, userId, 1, CHARACTER_ID, Instant.now(), null)));
+        when(messageCounter.countReply(sessionId)).thenReturn(true);
         when(characterQuery.find(CHARACTER_ID))
                 .thenReturn(Optional.of(
                         new CharacterInfo(CHARACTER_ID, 1, "채린", null, List.of("츤데레"), "짝꿍", true, null, null)));
@@ -724,11 +730,8 @@ class DialogueTest {
     @Test
     void sessionEndedWhileAnsweringLeavesNothingBehind() throws Exception {
         UUID requestId = UUID.randomUUID();
-        // 요청을 받을 때는 진행 중, 답장을 저장하기 직전에는 끝남 (그사이 공부 종료가 커밋됨)
-        when(sessionQuery.find(sessionId))
-                .thenReturn(Optional.of(new SessionInfo(sessionId, userId, 1, CHARACTER_ID, Instant.now(), null)))
-                .thenReturn(
-                        Optional.of(new SessionInfo(sessionId, userId, 1, CHARACTER_ID, Instant.now(), Instant.now())));
+        // 요청을 받을 때는 진행 중, 답장을 저장하기 직전에는 끝남 (그사이 공부 종료가 커밋됨 → 대화 수를 못 올림)
+        when(messageCounter.countReply(sessionId)).thenReturn(false);
 
         send(requestId, "다 했다")
                 .andExpect(status().isConflict())
@@ -739,7 +742,7 @@ class DialogueTest {
     // --- 22 종료 때 마무리 ---
 
     @Test
-    void closeWritesARecapCardDeletesMessagesAndReturnsClosingLine() throws Exception {
+    void closeWritesARecapCardMarksMessagesAndReturnsClosingLine() throws Exception {
         send(UUID.randomUUID(), "파이팅").andExpect(status().isOk());
         long conversationId = jdbc.queryForObject("SELECT id FROM conversations WHERE user_id = ?", Long.class, userId);
         // 앞선 종료에서 카드 쓰기가 실패해 남은 다른 세션 메시지도 이번 카드에 같이 들어간다
@@ -787,9 +790,15 @@ class DialogueTest {
         assertThat(cards).hasSize(2).containsExactly(cards.getFirst(), "옛 카드 3");
         // 머리말(날짜 · 공부 시간)은 코드가 붙인다. Fake 요약은 입력 앞부분을 돌려준다
         assertThat(cards.getFirst()).matches("\\d{2}/\\d{2} 55분, \\(가짜 요약\\) <아는 사실>.*");
+        // 2026-11-23 6단계: 지우지 않고 카드에 넣은 표시만 (32 대화방 기록). 초안 뒤에 온 말은 다음 카드로
         assertThat(jdbc.queryForList(
-                        "SELECT content FROM chat_messages WHERE conversation_id = ?", String.class, conversationId))
+                        "SELECT content FROM chat_messages WHERE conversation_id = ? AND recapped_at IS NULL",
+                        String.class,
+                        conversationId))
                 .containsExactly("초안 뒤에 온 말");
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM chat_messages WHERE conversation_id = ?", Integer.class, conversationId))
+                .isEqualTo(4);
     }
 
     private void event(long eventId, String type, boolean firstFocus, boolean afterBreak) {
@@ -803,6 +812,63 @@ class DialogueTest {
                 .with(jwt().jwt(j -> j.subject(String.valueOf(userId))))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body));
+    }
+
+    // --- 32 대화방 기록 · 31 hasConversation (2026-11-23 6단계) ---
+
+    @Test
+    void chatRoomShowsOnlyAnsweredTurnsOfThisUser() throws Exception {
+        UUID answered = UUID.randomUUID();
+        send(answered, "파이팅").andExpect(status().isOk());
+        long conversationId = jdbc.queryForObject("SELECT id FROM conversations WHERE user_id = ?", Long.class, userId);
+        // 답장을 못 받은 사용자 말 (답장 만드는 중 · 처리 중 서버가 죽음)은 대화방에 안 보인다
+        jdbc.update(
+                "INSERT INTO chat_messages (conversation_id, connection_id, request_id, sender, content)"
+                        + " VALUES (?, ?, ?, 'USER', '답 없는 말')",
+                conversationId,
+                sessionId,
+                UUID.randomUUID());
+        // 다른 사용자의 대화방은 섞이지 않는다
+        long other = jdbc.queryForObject(
+                "INSERT INTO users (nickname, email, password) VALUES ('다른', ?, 'x') RETURNING id",
+                Long.class,
+                UUID.randomUUID() + "@dialogue.test");
+        long otherConversation = jdbc.queryForObject(
+                "INSERT INTO conversations (user_id, character_id) VALUES (?, 1) RETURNING id", Long.class, other);
+        jdbc.update(
+                "INSERT INTO chat_messages (conversation_id, connection_id, request_id, sender, content)"
+                        + " VALUES (?, ?, ?, 'CHARACTER', '남의 답장')",
+                otherConversation,
+                sessionId,
+                UUID.randomUUID());
+
+        mvc.perform(get("/api/mates/{id}/messages", CHARACTER_ID)
+                        .with(jwt().jwt(j -> j.subject(String.valueOf(userId)))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.messages.length()").value(2))
+                .andExpect(jsonPath("$.data.messages[0].sender").value("MATE"))
+                .andExpect(jsonPath("$.data.messages[1].sender").value("USER"))
+                .andExpect(jsonPath("$.data.messages[1].content").value("파이팅"))
+                .andExpect(jsonPath("$.data.messages[1].requestId").value(answered.toString()))
+                .andExpect(jsonPath("$.data.nextCursor").value(nullValue()));
+        mvc.perform(get("/api/mates/{id}/messages", CHARACTER_ID)
+                        .param("cursor", "abc")
+                        .with(jwt().jwt(j -> j.subject(String.valueOf(userId)))))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void hasConversationNeedsAnAnsweredTurn() throws Exception {
+        mvc.perform(get("/api/mates/{id}", CHARACTER_ID).with(jwt().jwt(j -> j.subject(String.valueOf(userId)))))
+                .andExpect(jsonPath("$.data.hasConversation").value(false));
+        when(messageCounter.countReply(sessionId)).thenReturn(false); // 답하는 사이 끝남 → 답장 없음
+        send(UUID.randomUUID(), "다 했다").andExpect(status().isConflict());
+        mvc.perform(get("/api/mates/{id}", CHARACTER_ID).with(jwt().jwt(j -> j.subject(String.valueOf(userId)))))
+                .andExpect(jsonPath("$.data.hasConversation").value(false));
+        when(messageCounter.countReply(sessionId)).thenReturn(true);
+        send(UUID.randomUUID(), "파이팅").andExpect(status().isOk());
+        mvc.perform(get("/api/mates/{id}", CHARACTER_ID).with(jwt().jwt(j -> j.subject(String.valueOf(userId)))))
+                .andExpect(jsonPath("$.data.hasConversation").value(true));
     }
 
     private ResultActions send(UUID requestId, String content) throws Exception {

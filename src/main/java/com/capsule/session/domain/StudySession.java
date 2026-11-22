@@ -1,5 +1,6 @@
 package com.capsule.session.domain;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -45,7 +46,13 @@ public class StudySession {
     private int awaySeconds;
     private int cameraOnSeconds;
     private int pipSeconds;
+    /**
+     * 답장마다 SQL로 +1 (StudySessionRepository.incrementMessageCount). 엔티티는 쓰지 않는다: heartbeat · 끊기가
+     * 먼저 읽은 값으로 행 전체를 저장하면 그사이 올린 수가 사라져서
+     */
+    @Column(insertable = false, updatable = false)
     private int messageCount;
+
     private int returnCount;
     private String mood;
     private String closingLine;
