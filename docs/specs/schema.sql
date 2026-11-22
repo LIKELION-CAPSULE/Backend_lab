@@ -93,6 +93,9 @@
 --
 -- 2026-11-23 변경 (12/1 베타 7단계: 크레딧, ADR 0031)
 --   - credit_grants · credit_ledger 추가 (새 모듈 credit)
+--
+-- 2026-11-23 변경 (12/1 베타 8단계: 친구 초대)
+--   - referrals 추가 (받은 사람당 한 행, 첫 연결 끝날 때 보상)
 -- =====================================================================
 
 BEGIN;
@@ -129,6 +132,23 @@ CREATE TABLE signup_devices (
     PRIMARY KEY (device_hash, user_id)
 );
 CREATE INDEX idx_signup_devices_user ON signup_devices (user_id);
+
+-- 친구 초대 (2026-11-23 8단계, api.md 35 · 36). 받은 사람(invitee)당 한 행. 탈퇴해도 남김
+CREATE TABLE referrals (
+    id                      bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    inviter_id              bigint      NOT NULL REFERENCES users (id),
+    invitee_id              bigint      NOT NULL UNIQUE REFERENCES users (id),  -- 코드는 한 번만
+    device_hash             text        NOT NULL,                              -- 입력할 때 기기 값
+    entered_at              timestamptz NOT NULL DEFAULT now(),
+    qualified_at            timestamptz,                                       -- 입력 뒤 첫 연결이 끝난 시각
+    qualified_connection_id bigint,                                            -- 그 연결 (다른 모듈 테이블이라 FK 아님, 23 referralReward)
+    inviter_rewarded        boolean     NOT NULL DEFAULT false,                -- 초대한 사람 1,000 (10명까지)
+    invitee_rewarded        boolean     NOT NULL DEFAULT false,                -- 받은 사람 1,000
+    CHECK (inviter_id <> invitee_id),
+    CHECK ((qualified_at IS NULL) = (qualified_connection_id IS NULL)),
+    CHECK (qualified_at IS NOT NULL OR NOT (inviter_rewarded OR invitee_rewarded))
+);
+CREATE INDEX idx_referrals_inviter ON referrals (inviter_id, id);
 
 -- 크레딧 지급 건 (2026-11-23, ADR 0031). 잔액 = 소멸 전 지급 건의 remaining 합. 탈퇴해도 남김
 --   ATTENDANCE: 하루 1,500 (granted_on = 오전 5시 기준 그날), expires_at = 다음 오전 5시
