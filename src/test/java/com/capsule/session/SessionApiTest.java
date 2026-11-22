@@ -413,6 +413,40 @@ class SessionApiTest {
         expectError(postEvent(userId, id, "PRESENT", Instant.now()), 409, "CONNECTION_ENDED");
     }
 
+    /** 8단계: 초대 코드를 입력한 뒤 처음 끝나는 연결에서 보상, 다음 연결에는 없음 (22 '서버가 하는 일' 7) */
+    @Test
+    void firstEndAfterReferralGivesRewardOnce() throws Exception {
+        long inviter = newUser();
+        jdbc.update(
+                "INSERT INTO referrals (inviter_id, invitee_id, device_hash) VALUES (?, ?, 'dev-x')", inviter, userId);
+        long id = start(userId);
+        backdate(id, 60);
+        end(id, 600, 600, 600, 0, null)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.referralReward.amount").value(1000));
+        mvc.perform(get("/api/connections/{id}", id).with(login(userId)))
+                .andExpect(jsonPath("$.data.referralReward.amount").value(1000)); // 다시 읽어도 같은 값
+        assertThat(jdbc.queryForMap(
+                        "SELECT qualified_connection_id, inviter_rewarded, invitee_rewarded FROM referrals"
+                                + " WHERE invitee_id = ?",
+                        userId))
+                .containsEntry("qualified_connection_id", id)
+                .containsEntry("inviter_rewarded", true)
+                .containsEntry("invitee_rewarded", true);
+        assertThat(jdbc.queryForList(
+                        "SELECT user_id FROM credit_grants WHERE kind = 'INVITE' AND user_id IN (?, ?) ORDER BY user_id",
+                        Long.class,
+                        inviter,
+                        userId))
+                .containsExactlyInAnyOrder(inviter, userId);
+
+        long next = start(userId);
+        backdate(next, 60);
+        end(next, 600, 600, 600, 0, null)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.referralReward").value(org.hamcrest.Matchers.nullValue()));
+    }
+
     @Test
     void reportOfInProgressConnectionIsConflict() throws Exception {
         long id = start(userId);
@@ -605,7 +639,8 @@ class SessionApiTest {
                 .andExpect(
                         jsonPath("$.data.relation.unlocked[0].expressionName").value("shy"))
                 .andExpect(jsonPath("$.data.relation.pointsAfter").doesNotExist())
-                .andExpect(jsonPath("$.data.closingLine").value(CLOSING_LINE));
+                .andExpect(jsonPath("$.data.closingLine").value(CLOSING_LINE))
+                .andExpect(jsonPath("$.data.referralReward").value(org.hamcrest.Matchers.nullValue()));
     }
 
     static ResultActions expectError(ResultActions result, int httpStatus, String code) throws Exception {

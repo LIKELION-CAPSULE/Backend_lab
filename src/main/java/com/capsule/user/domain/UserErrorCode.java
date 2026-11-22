@@ -3,7 +3,7 @@ package com.capsule.user.domain;
 import com.capsule.common.error.ErrorCode;
 import org.springframework.http.HttpStatus;
 
-/** user 모듈 에러 코드 (api.md 1~8, 10, 13, 14, 24~27, 29, 30) */
+/** user 모듈 에러 코드 (api.md 1~8, 10, 13, 14, 24~27, 29, 30, 35, 36) */
 public enum UserErrorCode implements ErrorCode {
     // 가입 · 인증
     INVALID_EMAIL(HttpStatus.BAD_REQUEST),
@@ -31,7 +31,13 @@ public enum UserErrorCode implements ErrorCode {
     INVALID_SETTINGS(HttpStatus.BAD_REQUEST),
     INVALID_MEMORY(HttpStatus.BAD_REQUEST),
     INVALID_DATE_RANGE(HttpStatus.BAD_REQUEST),
-    CONNECTION_IN_PROGRESS(HttpStatus.CONFLICT); // 2026-11-23 SESSION_IN_PROGRESS에서 이름 변경
+    CONNECTION_IN_PROGRESS(HttpStatus.CONFLICT), // 2026-11-23 SESSION_IN_PROGRESS에서 이름 변경
+    // 친구 초대 (36, 2026-11-23 8단계)
+    REFERRAL_SELF(HttpStatus.BAD_REQUEST),
+    REFERRAL_EXPIRED(HttpStatus.BAD_REQUEST),
+    REFERRAL_SAME_DEVICE(HttpStatus.BAD_REQUEST),
+    REFERRAL_CODE_NOT_FOUND(HttpStatus.NOT_FOUND),
+    REFERRAL_ALREADY_ENTERED(HttpStatus.CONFLICT);
 
     private final HttpStatus status;
 

@@ -1,6 +1,7 @@
 package com.capsule.user.domain;
 
 import com.capsule.common.error.ApiException;
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -42,6 +43,11 @@ public class User {
     private String honorific;
     private String aboutMe;
     private String referralCode;
+
+    /** DB 기본값. 저장한 그 트랜잭션 안에서는 null (35 · 36 초대 코드 입력 마감에만 씀) */
+    @Column(insertable = false, updatable = false)
+    private Instant createdAt;
+
     // settings(jsonb)는 엔티티에 매핑하지 않는다: SettingsService가 SQL로 읽고 쓴다 (DB 기본값 '{}')
 
     private User(String nickname, String email, String passwordHash, String referralCode, Instant now) {

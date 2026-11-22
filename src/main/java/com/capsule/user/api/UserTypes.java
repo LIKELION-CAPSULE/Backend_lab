@@ -44,4 +44,7 @@ public final class UserTypes {
      * user · session만 쓰는 계약이라 제자리에서 바꿈 (dialogue · relation 사용처 없음)
      */
     public record ActiveSessionSummary(long connectionId, long mateId, String mateName, Instant startedAt) {}
+
+    /** 연결로 받은 초대 보상 (받은 사람 몫, api.md 22 · 23 referralReward) */
+    public record ReferralReward(int amount) {}
 }
