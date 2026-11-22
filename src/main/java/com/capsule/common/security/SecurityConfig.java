@@ -27,6 +27,8 @@ import org.springframework.security.oauth2.server.resource.web.DefaultBearerToke
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
+import org.springframework.security.web.util.matcher.AndRequestMatcher;
+import org.springframework.security.web.util.matcher.NegatedRequestMatcher;
 import org.springframework.security.web.util.matcher.OrRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.web.cors.CorsConfiguration;
@@ -55,6 +57,10 @@ public class SecurityConfig {
                 path.matcher(HttpMethod.POST, "/api/auth/logout"),
                 path.matcher(HttpMethod.POST, "/api/auth/password/reset-request"), // api.md 25 · 26 비밀번호 찾기
                 path.matcher(HttpMethod.POST, "/api/auth/password/reset"),
+                // api.md 39 초대 코드 확인 (로그인 전 초대 링크 랜딩). 같은 모양인 35 /api/referrals/me는 로그인 필요
+                new AndRequestMatcher(
+                        path.matcher(HttpMethod.GET, "/api/referrals/{code}"),
+                        new NegatedRequestMatcher(path.matcher(HttpMethod.GET, "/api/referrals/me"))),
                 path.matcher("/actuator/health/**"),
                 // Swagger(ADR 0019). springdoc을 켠 local 프로필에서만 응답하고, 꺼진 prod에서는 404
                 path.matcher(HttpMethod.GET, "/swagger-ui.html"),
