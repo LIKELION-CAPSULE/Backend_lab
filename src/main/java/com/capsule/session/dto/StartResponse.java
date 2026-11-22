@@ -1,5 +1,6 @@
 package com.capsule.session.dto;
 
+import com.capsule.credit.api.CreditTypes.Credits;
 import java.time.Instant;
 
 /** api.md 16 연결 시작 */
@@ -13,4 +14,5 @@ public record StartResponse(
         boolean firstMeet,
         ReactionView greeting,
         Integer minorRemainingSeconds,
-        IntimacyView.Now relation) {}
+        IntimacyView.Now relation,
+        Credits credits) {}
