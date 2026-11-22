@@ -18,6 +18,7 @@ import com.capsule.content.api.ContentTypes.UnlockInfo;
 import com.capsule.content.api.MateQuery;
 import com.capsule.content.api.ReactionQuery;
 import com.capsule.content.api.UnlockQuery;
+import com.capsule.credit.api.CreditQuery;
 import com.capsule.relation.api.RelationCommands;
 import com.capsule.relation.api.RelationQuery;
 import com.capsule.relation.api.RelationTypes.IntimacySettlement;
@@ -87,6 +88,7 @@ public class SessionService {
     private final CharacterQuery characters;
     private final ReactionQuery reactions;
     private final UnlockQuery unlocks;
+    private final CreditQuery credits;
     private final RelationQuery relationQuery;
     private final RelationCommands relationCommands;
     private final SessionClosingHandler closingHandler;
@@ -172,7 +174,8 @@ public class SessionService {
                 firstMeet,
                 reaction(character.id(), "GREETING", null),
                 minorRemaining,
-                stageNow(mate, relationQuery.stage(userId, character.id())));
+                stageNow(mate, relationQuery.stage(userId, character.id())),
+                credits.current(userId));
     }
 
     // ---- 친밀도 (2026-11-23 5단계)

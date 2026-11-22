@@ -1,9 +1,13 @@
 package com.capsule.user.dto;
 
+import com.capsule.credit.api.CreditTypes.Credits;
 import com.capsule.user.api.UserTypes.ActiveSessionSummary;
 import java.time.LocalDate;
 
-/** profileImage = 아바타 썸네일 (B7). isMinor = 만 19세 미만. activeConnection = 진행 중 연결 (api.md 8) */
+/**
+ * profileImage = 아바타 썸네일 (B7). isMinor = 만 19세 미만. activeConnection = 진행 중 연결 (api.md 8).
+ * credits = GNB 크레딧 (7단계 · 2026-11-23)
+ */
 public record MeResponse(
         long userId,
         String nickname,
@@ -15,4 +19,5 @@ public record MeResponse(
         boolean isMinor,
         String honorific,
         String aboutMe,
-        String referralCode) {}
+        String referralCode,
+        Credits credits) {}

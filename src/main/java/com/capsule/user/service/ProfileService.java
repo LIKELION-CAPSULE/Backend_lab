@@ -4,6 +4,7 @@ import com.capsule.common.error.ApiException;
 import com.capsule.common.error.CommonErrorCode;
 import com.capsule.content.api.AvatarQuery;
 import com.capsule.content.api.ContentTypes.AvatarInfo;
+import com.capsule.credit.api.CreditQuery;
 import com.capsule.user.api.ActiveSessionLookup;
 import com.capsule.user.api.UserTypes.UserProfile;
 import com.capsule.user.domain.Age;
@@ -31,9 +32,11 @@ public class ProfileService {
     private final UserRepository users;
     private final AvatarQuery avatars;
     private final ActiveSessionLookup activeSessions;
+    private final CreditQuery credits;
     private final Clock clock;
 
-    @Transactional(readOnly = true)
+    /** 쓰기 트랜잭션: 크레딧이 그날 처음이면 출석분을 지급한다 (api.md 8 · 33) */
+    @Transactional
     public MeResponse me(long userId) {
         User user = activeUser(userId);
         return toMe(user, thumbnail(user));
@@ -96,7 +99,8 @@ public class ProfileService {
                 user.isMinor(Age.today(clock)),
                 user.getHonorific(),
                 user.getAboutMe(),
-                user.getReferralCode());
+                user.getReferralCode(),
+                credits.current(user.getId()));
     }
 
     private String thumbnail(User user) {

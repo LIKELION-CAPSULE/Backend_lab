@@ -120,6 +120,9 @@ class FlowE2ETest {
 
         // 연결 시작 응답의 인사: 시드 반응표 GREETING → 웃음, 첫 만남
         assertThat((Boolean) JsonPath.read(body(start), "$.data.firstMeet")).isTrue();
+        // 크레딧 (7단계): 그날 출석 1,500 (내 정보에서 이미 받아서 한 번만)
+        assertThat((Integer) JsonPath.read(body(start), "$.data.credits.todayRemaining"))
+                .isEqualTo(1500);
         assertThat((String) JsonPath.read(body(start), "$.data.greeting.expression"))
                 .isEqualTo("웃음");
 
@@ -177,6 +180,8 @@ class FlowE2ETest {
 
         // 17 새로고침 → activeConnection (이어하기 팝업 근거)
         MvcResult meNow = call(get("/api/me"), token, null, 200);
+        assertThat((Integer) JsonPath.read(body(meNow), "$.data.credits.attendanceRemaining"))
+                .isEqualTo(1500);
         assertThat(((Number) JsonPath.read(body(meNow), "$.data.activeConnection.connectionId")).longValue())
                 .isEqualTo(sessionId);
 
