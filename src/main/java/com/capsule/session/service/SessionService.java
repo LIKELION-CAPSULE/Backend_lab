@@ -382,11 +382,16 @@ public class SessionService {
                 .orElseThrow(SessionService::invalidConnectionTime);
     }
 
-    /** 21 · 22: 0 ≤ present ≤ cameraOn ≤ connected ≤ 시작부터 지난 시간, pip ≤ connected */
+    /**
+     * 21 · 22: 0 ≤ present ≤ cameraOn ≤ connected ≤ 시작부터 지난 시간, pip ≤ connected.
+     * 누적값이라 마지막 heartbeat의 연결 시간보다 줄어들 수 없다 (줄여 보내 청소년 3시간을 늘리지 못하게)
+     */
     private static Optional<ConnectionTimes> times(
             StudySession s, Integer connected, Integer present, Integer cameraOn, Integer pip, Instant now) {
         long elapsed = Duration.between(s.getStartedAt(), now).toSeconds();
-        return ConnectionTimes.valid(connected, present, cameraOn, pip, elapsed)
+        boolean notBackwards =
+                connected == null || connected >= s.lastHeartbeatTimes().connected();
+        return notBackwards && ConnectionTimes.valid(connected, present, cameraOn, pip, elapsed)
                 ? Optional.of(new ConnectionTimes(connected, present, cameraOn, pip))
                 : Optional.empty();
     }

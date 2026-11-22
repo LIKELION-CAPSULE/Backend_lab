@@ -389,7 +389,7 @@ async function heartbeat() {
   const s = S.s;
   try {
     await call('POST', `/api/connections/${s.id}/heartbeat`, times(s));
-    s.hb = new Date().toLocaleTimeString() + ' 204';
+    s.hb = new Date().toLocaleTimeString() + ' 200';
   } catch (e) { s.hb = '실패 ' + e.message; }
 }
 

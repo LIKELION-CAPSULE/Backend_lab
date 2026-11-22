@@ -570,13 +570,12 @@ public class DialogueService {
     // --- 공통 ---
 
     /**
-     * 베타 이벤트(2026-11-23): IDLE_TALK(말 걸기 타이머)는 IDLE, PRESENT(얼굴 감지 시작)는 GREETING, AWAY · RETURN은 그대로.
-     * 옛 FOCUS 기록은 세션 첫 FOCUS면 GREETING, 아니면 BREAK_END
+     * 베타 이벤트(2026-11-23): IDLE_TALK(말 걸기 타이머)는 IDLE, 나머지(PRESENT · AWAY · RETURN)는 그대로.
+     * 옛 FOCUS 기록은 세션 첫 FOCUS면 GREETING, 아니면 BREAK_END. IDLE 대사 콘텐츠는 아직 없음 (확정 필요)
      */
     private static String triggerOf(SessionEventInfo event) {
         return switch (event.type()) {
             case "IDLE_TALK" -> "IDLE";
-            case "PRESENT" -> "GREETING";
             case "FOCUS" -> event.firstFocusOfSession() ? "GREETING" : "BREAK_END";
             default -> event.type();
         };

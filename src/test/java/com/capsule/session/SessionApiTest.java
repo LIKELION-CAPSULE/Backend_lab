@@ -261,6 +261,8 @@ class SessionApiTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.minorRemainingSeconds").value(300))
                 .andExpect(jsonPath("$.data.serverTime").isString());
+        // 누적값을 줄여 보내 남은 시간을 늘릴 수 없다
+        expectError(heartbeat(id, 100, 0, 0, 0), 400, "INVALID_CONNECTION_TIME");
         end(id, 600, 0, 0, 0, "MINOR_LIMIT")
                 .andExpect(jsonPath("$.data.endType").value("MINOR_LIMIT"));
 
