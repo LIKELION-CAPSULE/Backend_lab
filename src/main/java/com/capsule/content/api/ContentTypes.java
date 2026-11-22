@@ -7,8 +7,42 @@ public final class ContentTypes {
 
     private ContentTypes() {}
 
-    /** Live2D 모델. modelJsonUrl = CDN 주소 + storage_prefix + model_json_path */
-    public record ModelInfo(String modelJsonUrl, double scale, int offsetX, int offsetY) {}
+    /**
+     * Live2D 모델. modelJsonUrl = CDN 주소 + storage_prefix + model_json_path.
+     * format = CUBISM · ALIVING2D_V2, 프론트가 렌더러를 고름 (api.md 9 · 31, 2026-11-23 확장)
+     */
+    public record ModelInfo(String format, String modelJsonUrl, double scale, int offsetX, int offsetY) {
+
+        public static final String CUBISM = "CUBISM";
+
+        /** 계약 확장 전 모양 (Cubism). 다른 모듈 테스트가 쓰던 생성자를 깨지 않으려고 남긴다 */
+        public ModelInfo(String modelJsonUrl, double scale, int offsetX, int offsetY) {
+            this(CUBISM, modelJsonUrl, scale, offsetX, offsetY);
+        }
+    }
+
+    /**
+     * 메이트 상세 (api.md 31). 메이트 = 캐릭터. 이미지 · 소리 주소는 CDN 주소를 붙인 값, 없으면 null
+     *
+     * @param ageRating ALL · ADULT
+     * @param stageNames 친밀도 단계 이름 (친밀도 단계에서 씀)
+     */
+    public record MateInfo(
+            long id,
+            String name,
+            String oneLiner,
+            String ageRating,
+            List<String> hashtags,
+            String illustrationUrl,
+            String cardImageUrl,
+            String voiceSampleUrl,
+            String world,
+            String myRole,
+            String intro,
+            ModelInfo model,
+            List<String> stageNames,
+            boolean comingSoon,
+            boolean active) {}
 
     public record AvatarInfo(long id, String name, String thumbnailUrl, boolean active, ModelInfo model) {}
 

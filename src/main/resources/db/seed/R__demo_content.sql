@@ -97,6 +97,12 @@ ON CONFLICT (id) DO UPDATE SET room_id = EXCLUDED.room_id, model_id = EXCLUDED.m
     personality = EXCLUDED.personality, intro = EXCLUDED.intro, profile_image_url = EXCLUDED.profile_image_url,
     home_image_url = EXCLUDED.home_image_url, sort_order = EXCLUDED.sort_order;
 
+-- 메이트 화면 칸 (api.md 31, 2026-11-23). 지금 캐릭터 1의 값을 옮긴 것뿐: 채린 · 남학생 문구 · 이미지는 확정 필요 (PM · 디자이너)
+--   단계 이름은 PRD 8장 친밀도 표(채린 기준)
+UPDATE characters SET one_liner = intro, hashtags = personality, age_rating = 'ALL',
+    stage_names = '{처음 만남, 아는 사이, 친구, 친한 친구, 단짝}'
+WHERE id = 1;
+
 -- id를 직접 넣었으므로 시퀀스를 맞춘다 (안 하면 다음 INSERT가 id 1부터 시작해 충돌)
 SELECT setval(pg_get_serial_sequence('live2d_models', 'id'), (SELECT max(id) FROM live2d_models));
 SELECT setval(pg_get_serial_sequence('live2d_motions', 'id'), (SELECT max(id) FROM live2d_motions));

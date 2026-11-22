@@ -41,4 +41,22 @@ public class CharacterEntity {
     private String homeImageUrl;
     private int sortOrder;
     private boolean isActive;
+
+    // 메이트 화면 칸 (12/1 베타, api.md 31)
+    private String oneLiner;
+
+    @JdbcTypeCode(SqlTypes.ARRAY)
+    private List<String> hashtags;
+
+    private String ageRating;
+    private String world;
+    private String myRole;
+    private String illustrationUrl;
+    private String cardImageUrl;
+    private String voiceSampleUrl;
+
+    @JdbcTypeCode(SqlTypes.ARRAY)
+    private List<String> stageNames;
+
+    private boolean comingSoon;
 }
