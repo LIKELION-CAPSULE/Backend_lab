@@ -12,6 +12,8 @@ capsule:
   dialogue:
     memory-async: false # 기억 정리를 답장 요청 안에서 바로 돌려 테스트가 결과를 본다
   fake-integrations: true
+  beta:
+    max-users: 1000000 # 테스트는 컨테이너 하나에 가입자가 계속 쌓여서 정원에 걸리지 않게. 정원 테스트는 따로 낮춘다
   auth:
     jwt-secret: test-only-secret-0123456789abcdef0123
     refresh-cookie-secure: false
