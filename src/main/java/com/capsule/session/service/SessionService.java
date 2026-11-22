@@ -11,16 +11,14 @@ import com.capsule.common.time.ClockConfig;
 import com.capsule.content.api.AvatarQuery;
 import com.capsule.content.api.CharacterQuery;
 import com.capsule.content.api.ContentTypes.AvatarInfo;
-import com.capsule.content.api.ContentTypes.BackgroundInfo;
 import com.capsule.content.api.ContentTypes.CharacterInfo;
+import com.capsule.content.api.ContentTypes.MateInfo;
 import com.capsule.content.api.ContentTypes.Reaction;
-import com.capsule.content.api.ContentTypes.RoomInfo;
+import com.capsule.content.api.MateQuery;
 import com.capsule.content.api.ReactionQuery;
-import com.capsule.content.api.RoomQuery;
 import com.capsule.relation.api.RelationCommands;
 import com.capsule.relation.api.RelationQuery;
 import com.capsule.relation.api.RelationTypes.AffinityChange;
-import com.capsule.relation.api.RelationTypes.RelationView;
 import com.capsule.relation.api.RelationTypes.SessionEventRef;
 import com.capsule.relation.api.RelationTypes.StudySettlement;
 import com.capsule.session.api.SessionClosingHandler;
@@ -29,7 +27,6 @@ import com.capsule.session.config.SessionProperties;
 import com.capsule.session.domain.SessionErrorCode;
 import com.capsule.session.domain.SessionEvent;
 import com.capsule.session.domain.StudySession;
-import com.capsule.session.dto.CharacterBrief;
 import com.capsule.session.dto.CharacterRef;
 import com.capsule.session.dto.EndRequest;
 import com.capsule.session.dto.EventCharacter;
@@ -38,14 +35,9 @@ import com.capsule.session.dto.EventResponse;
 import com.capsule.session.dto.Figure;
 import com.capsule.session.dto.HeartbeatRequest;
 import com.capsule.session.dto.HomeResponse;
-import com.capsule.session.dto.HomeRoom;
 import com.capsule.session.dto.Me;
-import com.capsule.session.dto.RelationBrief;
 import com.capsule.session.dto.ReportResponse;
 import com.capsule.session.dto.ResumeResponse;
-import com.capsule.session.dto.RoomCharacter;
-import com.capsule.session.dto.RoomDetail;
-import com.capsule.session.dto.RoomView;
 import com.capsule.session.dto.StartRequest;
 import com.capsule.session.dto.StartResponse;
 import com.capsule.session.repository.SessionEventRepository;
@@ -80,7 +72,7 @@ public class SessionService {
     private final SessionEventRepository events;
     private final UserQuery users;
     private final AvatarQuery avatars;
-    private final RoomQuery rooms;
+    private final MateQuery mates;
     private final CharacterQuery characters;
     private final ReactionQuery reactions;
     private final RelationQuery relationQuery;
@@ -91,70 +83,38 @@ public class SessionService {
     private final Clock clock;
     private final SessionProperties props;
 
-    // ---- 11 홈 · 12 룸 상세
+    // ---- 11 홈
 
     @Transactional(readOnly = true)
     public HomeResponse home(long userId) {
-        List<HomeRoom> list = rooms.activeRooms().stream()
-                .map(r -> new HomeRoom(
-                        r.id(),
-                        r.name(),
-                        r.thumbnailUrl(),
-                        r.characters().stream()
-                                .map(c -> new CharacterBrief(
-                                        c.id(),
-                                        c.name(),
-                                        c.homeImageUrl() != null ? c.homeImageUrl() : c.profileImageUrl()))
-                                .toList()))
+        List<HomeResponse.MateCard> list = mates.activeMates().stream()
+                .map(m -> new HomeResponse.MateCard(
+                        m.id(),
+                        m.name(),
+                        m.oneLiner(),
+                        m.ageRating(),
+                        m.hashtags() == null ? List.of() : m.hashtags(),
+                        m.cardImageUrl(),
+                        m.comingSoon()))
                 .toList();
+        HomeResponse.LastMate lastMate = sessions.findFirstByUserIdOrderByStartedAtDescIdDesc(userId)
+                .flatMap(s -> mates.find(s.characterId()))
+                .filter(MateInfo::active) // 비활성이 된 메이트로 '다시 연결하기'를 띄우지 않게
+                .map(m -> new HomeResponse.LastMate(m.id(), m.name(), m.illustrationUrl()))
+                .orElse(null);
         LocalDate today = LocalDate.ofInstant(now(), ClockConfig.KST);
         int todayStudySeconds = sessions.studySecondsEndedBetween(
                 userId,
                 today.atStartOfDay(ClockConfig.KST).toInstant(),
                 today.plusDays(1).atStartOfDay(ClockConfig.KST).toInstant());
-        return new HomeResponse(todayStudySeconds, activeSessions.find(userId).orElse(null), list);
+        return new HomeResponse(todayStudySeconds, activeSessions.find(userId).orElse(null), lastMate, list);
     }
 
-    @Transactional(readOnly = true)
-    public RoomDetail room(long userId, long roomId) {
-        RoomInfo room = activeRoom(roomId);
-        List<RoomCharacter> list = room.characters().stream()
-                .map(c -> {
-                    RelationView v = relationQuery.view(userId, c.id());
-                    return new RoomCharacter(
-                            c.id(),
-                            c.name(),
-                            c.profileImageUrl(),
-                            c.personality(),
-                            new RelationBrief(
-                                    v.level(),
-                                    v.stageName(),
-                                    v.totalStudySeconds(),
-                                    v.points(),
-                                    v.stage(),
-                                    v.stageName()));
-                })
-                .toList();
-        // 다른 룸의 진행 중 세션이면 이 룸 버튼은 그대로 둔다 (시작하면 409 → H18 팝업)
-        Long activeSessionId = sessions.findByUserIdAndEndedAtIsNull(userId)
-                .filter(s -> s.getRoomId() == roomId)
-                .map(StudySession::getId)
-                .orElse(null);
-        return new RoomDetail(
-                room.id(),
-                room.name(),
-                room.description(),
-                room.thumbnailUrl(),
-                room.bannerUrl(),
-                list,
-                activeSessionId);
-    }
+    // ---- 16 연결 시작 · 17 이어하기
 
-    // ---- 16 공부 시작 · 17 이어하기
-
-    /** 16 · H18 팝업: 진행 중인 세션이 이미 있음 */
-    public static ApiException alreadyInProgress(long sessionId) {
-        return new ApiException(SessionErrorCode.SESSION_ALREADY_IN_PROGRESS, Map.of("sessionId", sessionId));
+    /** 16 · 이어하기 팝업: 진행 중인 연결이 이미 있음 */
+    public static ApiException alreadyInProgress(long connectionId) {
+        return new ApiException(SessionErrorCode.CONNECTION_ALREADY_IN_PROGRESS, Map.of("connectionId", connectionId));
     }
 
     /** 동시 시작이 유니크 인덱스에 막혔을 때 먼저 만들어진 세션 */
@@ -165,21 +125,15 @@ public class SessionService {
 
     @Transactional
     public StartResponse start(long userId, StartRequest req) {
-        Integer minutes = req.targetMinutes();
-        // 3분, 또는 5~180분 5분 단위 (api.md 16, 2026-11-05 최소 3분)
-        boolean valid = minutes != null
-                && (props.targetMinutesExtra().contains(minutes)
-                        || (minutes >= props.targetMinutesMin()
-                                && minutes <= props.targetMinutesMax()
-                                && minutes % props.targetMinutesStep() == 0));
-        if (!valid) {
-            throw new ApiException(SessionErrorCode.INVALID_TARGET_MINUTES);
+        // 연결 시간 제한은 없다 (2026-11-23, 목표 시간 삭제)
+        MateInfo mate = mates.find(req.mateId())
+                .filter(MateInfo::active)
+                .orElseThrow(() -> new ApiException(SessionErrorCode.MATE_NOT_FOUND));
+        // 준비 중이면 막는다. 모델 없는 메이트는 준비 중일 때만 있다(schema CHECK)지만 화면을 못 그리니 같이 막음
+        if (mate.comingSoon() || mate.model() == null) {
+            throw new ApiException(SessionErrorCode.MATE_COMING_SOON);
         }
-        RoomInfo room = activeRoom(req.roomId());
-        CharacterInfo character = room.characters().stream()
-                .filter(c -> c.id() == req.characterId())
-                .findFirst()
-                .orElseThrow(() -> new ApiException(SessionErrorCode.CHARACTER_NOT_IN_ROOM));
+        CharacterInfo character = character(mate.id());
         UserProfile user = user(userId);
         if (user.onboardingRequired()) {
             throw new ApiException(SessionErrorCode.ONBOARDING_REQUIRED);
@@ -187,21 +141,12 @@ public class SessionService {
         sessions.findByUserIdAndEndedAtIsNull(userId).ifPresent(s -> {
             throw alreadyInProgress(s.getId());
         });
-        BackgroundInfo background = rooms.defaultBackground(room.id()).orElseThrow();
-        // 동시에 두 번 시작하면 부분 유니크 인덱스(사용자당 진행 중 세션 하나)가 막는다 → 컨트롤러가 409로 바꿈
-        StudySession s =
-                sessions.save(new StudySession(userId, room.id(), background.id(), character.id(), minutes, now()));
+        // 동시에 두 번 시작하면 부분 유니크 인덱스(사용자당 진행 중 연결 하나)가 막는다 → 컨트롤러가 409로 바꿈
+        StudySession s = sessions.save(new StudySession(userId, character.id(), now()));
         relationCommands.meet(userId, character.id());
         AvatarInfo avatar = avatar(user);
         return new StartResponse(
-                s.getId(),
-                s.getStartedAt(),
-                minutes,
-                roomView(room, background),
-                figure(character),
-                figure(avatar),
-                me(user, avatar),
-                now());
+                s.getId(), s.getStartedAt(), figure(character), figure(avatar), me(user, avatar), now());
     }
 
     @Transactional
@@ -233,10 +178,6 @@ public class SessionService {
         AvatarInfo avatar = avatar(user);
         return new ResumeResponse(
                 s.getId(),
-                s.getTargetMinutes(),
-                roomView(
-                        rooms.find(s.getRoomId()).orElseThrow(),
-                        rooms.background(s.getBackgroundId()).orElseThrow()),
                 figure(character(s.characterId())),
                 figure(avatar),
                 me(user, avatar),
@@ -371,7 +312,7 @@ public class SessionService {
     public ReportResponse report(long userId, long sessionId) {
         StudySession s = owned(sessions.findById(sessionId), userId);
         if (s.inProgress()) {
-            throw new ApiException(SessionErrorCode.SESSION_IN_PROGRESS);
+            throw new ApiException(SessionErrorCode.CONNECTION_IN_PROGRESS);
         }
         return toReport(s, relationQuery.settlementOf(s.getUserId(), s.characterId(), s.getId()));
     }
@@ -454,14 +395,13 @@ public class SessionService {
                 character(s.characterId()).name(),
                 endType,
                 studySeconds,
-                s.getTargetMinutes());
+                null); // 목표 시간 없음 (2026-11-23) → 공부 포기 판정 꺼짐
     }
 
     private ReportResponse toReport(StudySession s, StudySettlement settlement) {
         long characterId = s.characterId();
         return new ReportResponse(
                 s.getId(),
-                rooms.find(s.getRoomId()).map(RoomInfo::name).orElse(null),
                 s.getStartedAt(),
                 s.getEndedAt(),
                 s.getEndType(),
@@ -514,24 +454,18 @@ public class SessionService {
         return List.of(new EventCharacter(ref.characterId(), reaction.motion(), reaction.expression(), affinity));
     }
 
-    /** 남의 세션도 없는 세션과 똑같이 404 */
+    /** 남의 연결도 없는 연결과 똑같이 404 */
     private static StudySession owned(Optional<StudySession> found, long userId) {
         return found.filter(s -> s.getUserId() == userId)
-                .orElseThrow(() -> new ApiException(SessionErrorCode.SESSION_NOT_FOUND));
+                .orElseThrow(() -> new ApiException(SessionErrorCode.CONNECTION_NOT_FOUND));
     }
 
     private StudySession inProgress(long userId, long sessionId) {
         StudySession s = owned(sessions.findWithLockById(sessionId), userId);
         if (!s.inProgress()) {
-            throw new ApiException(SessionErrorCode.SESSION_ENDED);
+            throw new ApiException(SessionErrorCode.CONNECTION_ENDED);
         }
         return s;
-    }
-
-    private RoomInfo activeRoom(long roomId) {
-        return rooms.find(roomId)
-                .filter(RoomInfo::active)
-                .orElseThrow(() -> new ApiException(SessionErrorCode.ROOM_NOT_FOUND));
     }
 
     private UserProfile user(long userId) {
@@ -546,15 +480,12 @@ public class SessionService {
         return characters.find(characterId).orElseThrow();
     }
 
-    private static RoomView roomView(RoomInfo room, BackgroundInfo background) {
-        return new RoomView(room.id(), room.name(), background.imageUrl());
-    }
-
     private static Figure figure(CharacterInfo c) {
         return new Figure(
                 c.id(),
                 c.name(),
                 c.profileImageUrl(),
+                c.model().format(),
                 c.model().modelJsonUrl(),
                 c.model().scale(),
                 c.model().offsetX(),
@@ -566,6 +497,7 @@ public class SessionService {
                 a.id(),
                 a.name(),
                 a.thumbnailUrl(),
+                a.model().format(),
                 a.model().modelJsonUrl(),
                 a.model().scale(),
                 a.model().offsetX(),

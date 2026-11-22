@@ -66,17 +66,17 @@ PY
 }
 
 event() { # event <단계 이름> <type> [intensity]
-  call "event-$2" POST "/api/sessions/$SID/events" "{\"type\":\"$2\",\"occurredAt\":\"$(now)\"}"
+  call "event-$2" POST "/api/connections/$SID/events" "{\"type\":\"$2\",\"occurredAt\":\"$(now)\"}"
   row "$1 (18)"
   local eid; eid=$(field "$RES" 'd["eventId"]')
   local extra=""; [ -n "${3:-}" ] && extra=",\"intensity\":$3"
-  call "reaction-$2" POST "/api/sessions/$SID/events/$eid/reaction" "{\"requestId\":\"$(uuid)\"$extra}"
+  call "reaction-$2" POST "/api/connections/$SID/events/$eid/reaction" "{\"requestId\":\"$(uuid)\"$extra}"
   row "$1 (19)"
 }
 
 message() { # message <단계 이름> <내용> [requestId]
   LAST_RID="${3:-$(uuid)}"
-  call "message" POST "/api/sessions/$SID/messages" \
+  call "message" POST "/api/connections/$SID/messages" \
     "{\"requestId\":\"$LAST_RID\",\"characterId\":1,\"content\":\"$2\",\"inputType\":\"TEXT\",\"tts\":false}"
   row "$1 (20)"
 }
@@ -87,8 +87,8 @@ call login POST /api/auth/social/KAKAO "{\"code\":\"fake-kakao:smoke-$(uuid | cu
 TOKEN=$(field "$RES" 'd["accessToken"]')
 call profile PATCH /api/me '{"avatarId":1,"birthDate":"2001-04-10"}'
 call schedule POST /api/me/memories '{"type":"EXAM","title":"영어 중간고사","dueDate":"2026-12-12","dueTime":null}'
-call session POST /api/sessions '{"roomId":1,"characterId":1,"targetMinutes":50}'
-SID=$(field "$RES" 'd["sessionId"]')
+call session POST /api/connections '{"mateId":1}'
+SID=$(field "$RES" 'd["connectionId"]')
 START=$(date +%s)
 
 event "공부 시작 · 인사" FOCUS
@@ -109,10 +109,10 @@ event "쉬는 시간 끝" FOCUS
 message "같은 requestId 재전송" "쉬는 시간이다 뭐 하지" "$LAST_RID"
 
 ELAPSED=$(( $(date +%s) - START - 2 ))
-call end POST "/api/sessions/$SID/end" "{\"studySeconds\":$ELAPSED,\"presentSeconds\":$(( ELAPSED - 61 ))}"
-row "공부 종료 (22)"
-call report GET "/api/sessions/$SID/report"
-row "리포트 (23)"
+call end POST "/api/connections/$SID/end" "{\"studySeconds\":$ELAPSED,\"presentSeconds\":$(( ELAPSED - 61 ))}"
+row "연결 끊기 (22)"
+call report GET "/api/connections/$SID"
+row "연결 기록 (23)"
 
 echo
 echo "| 단계 | HTTP | 대사 | 감정 | 표정 | 동작 | 호감도 변동 | 호감도 | 단계 | 레벨 | 대체 | ms |"

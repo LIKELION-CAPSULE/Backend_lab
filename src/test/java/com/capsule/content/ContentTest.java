@@ -10,14 +10,11 @@ import com.capsule.TestcontainersConfiguration;
 import com.capsule.content.api.AvatarQuery;
 import com.capsule.content.api.CharacterQuery;
 import com.capsule.content.api.ContentTypes.AvatarInfo;
-import com.capsule.content.api.ContentTypes.BackgroundInfo;
 import com.capsule.content.api.ContentTypes.CharacterInfo;
 import com.capsule.content.api.ContentTypes.ExpressionRef;
 import com.capsule.content.api.ContentTypes.ModelInfo;
 import com.capsule.content.api.ContentTypes.Reaction;
-import com.capsule.content.api.ContentTypes.RoomInfo;
 import com.capsule.content.api.ReactionQuery;
-import com.capsule.content.api.RoomQuery;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -42,9 +39,6 @@ class ContentTest {
 
     @Autowired
     AvatarQuery avatarQuery;
-
-    @Autowired
-    RoomQuery roomQuery;
 
     @Autowired
     CharacterQuery characterQuery;
@@ -94,34 +88,21 @@ class ContentTest {
     }
 
     @Test
-    void rooms() {
-        assertThat(roomQuery.activeRooms()).extracting(RoomInfo::id).containsExactly(1L);
-
-        RoomInfo room = roomQuery.find(1).orElseThrow();
-        assertThat(room.name()).isEqualTo("밤의 호그와트 도서관");
-        assertThat(room.characters()).extracting(CharacterInfo::name).containsExactly("말포이");
-        assertThat(room.thumbnailUrl())
-                .isEqualTo("https://cdn.capsule.invalid/images/malfoy-ts/hogwarts-night-home-card-v1.webp");
-        assertThat(room.bannerUrl())
-                .isEqualTo("https://cdn.capsule.invalid/images/malfoy-ts/hogwarts-night-detail-banner-v1.webp");
-        assertThat(room.characters().get(0).profileImageUrl())
-                .isEqualTo("https://cdn.capsule.invalid/images/malfoy-ts/malfoy-ts-study-v1.webp");
-        assertThat(room.characters().get(0).homeImageUrl()).isNull(); // 홈 카드 그림에 합쳐 넣음 (2026-11-06)
-
-        assertThat(roomQuery.defaultBackground(1))
-                .contains(new BackgroundInfo(
-                        1,
-                        1,
-                        "밤의 도서관",
-                        "https://cdn.capsule.invalid/images/malfoy-ts/hogwarts-night-background-v1.webp"));
-        assertThat(roomQuery.find(999)).isEmpty();
+    void activeCharacters() {
+        // 스터디룸이 없어져 활성 캐릭터 전부 (2026-11-23). 준비 중 메이트(2)는 모델이 없다
+        assertThat(characterQuery.active()).extracting(CharacterInfo::id).startsWith(1L, 2L);
+        CharacterInfo comingSoon = characterQuery.find(2).orElseThrow();
+        assertThat(comingSoon.model()).isNull();
+        assertThat(characterQuery.find(999999)).isEmpty();
     }
 
     @Test
     void character() {
         CharacterInfo malfoy = characterQuery.find(1).orElseThrow();
-        assertThat(malfoy.roomId()).isEqualTo(1);
-        assertThat(malfoy.personality()).containsExactly("츤데레", "슬리데린 5학년", "라이벌");
+        assertThat(malfoy.roomId()).isZero(); // 룸이 없어짐 (2026-11-23)
+        assertThat(malfoy.profileImageUrl())
+                .isEqualTo("https://cdn.capsule.invalid/images/malfoy-ts/malfoy-ts-study-v1.webp");
+        assertThat(malfoy.personality()).containsExactly("츤데레", "슬리데린 5학년", "라이벌"); // = 해시태그
         assertThat(malfoy.model())
                 .isEqualTo(new ModelInfo("https://cdn.capsule.invalid/chaerin/v3/chaerin.model3.json", 1.0, 0, 12));
     }

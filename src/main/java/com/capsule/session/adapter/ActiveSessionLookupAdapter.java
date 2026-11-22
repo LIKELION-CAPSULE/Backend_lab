@@ -2,8 +2,6 @@ package com.capsule.session.adapter;
 
 import com.capsule.content.api.CharacterQuery;
 import com.capsule.content.api.ContentTypes.CharacterInfo;
-import com.capsule.content.api.ContentTypes.RoomInfo;
-import com.capsule.content.api.RoomQuery;
 import com.capsule.session.repository.StudySessionRepository;
 import com.capsule.user.api.ActiveSessionLookup;
 import com.capsule.user.api.UserTypes.ActiveSessionSummary;
@@ -18,7 +16,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class ActiveSessionLookupAdapter implements ActiveSessionLookup {
 
     private final StudySessionRepository sessions;
-    private final RoomQuery rooms;
     private final CharacterQuery characters;
 
     @Override
@@ -27,10 +24,9 @@ public class ActiveSessionLookupAdapter implements ActiveSessionLookup {
         return sessions.findByUserIdAndEndedAtIsNull(userId)
                 .map(s -> new ActiveSessionSummary(
                         s.getId(),
-                        s.getRoomId(),
-                        rooms.find(s.getRoomId()).map(RoomInfo::name).orElse(null),
+                        s.getCharacterId(),
                         characters
-                                .find(s.characterId())
+                                .find(s.getCharacterId())
                                 .map(CharacterInfo::name)
                                 .orElse(null),
                         s.getStartedAt()));

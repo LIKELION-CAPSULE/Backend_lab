@@ -83,9 +83,7 @@ class SettingsApiTest {
                 Long.class,
                 "settings-" + UUID.randomUUID() + "@test.invalid");
         long sessionId = jdbc.queryForObject(
-                "INSERT INTO study_sessions (user_id, room_id, background_id) VALUES (?, 1, 1) RETURNING id",
-                Long.class,
-                userId);
+                "INSERT INTO connections (user_id, character_id) VALUES (?, 1) RETURNING id", Long.class, userId);
         mvc.perform(put("/internal/llm-lab/api/relations")
                         .param("userId", String.valueOf(userId))
                         .param("characterId", "1")

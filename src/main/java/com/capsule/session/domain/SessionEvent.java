@@ -1,5 +1,6 @@
 package com.capsule.session.domain;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -12,7 +13,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 @Entity
-@Table(name = "session_events")
+@Table(name = "connection_events") // 2026-11-23 session_events에서 이름 변경
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class SessionEvent {
@@ -37,7 +38,9 @@ public class SessionEvent {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "connection_id")
     private long sessionId;
+
     private String type;
     private boolean falsePositive;
     private Instant occurredAt;

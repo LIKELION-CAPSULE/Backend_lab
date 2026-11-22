@@ -63,8 +63,8 @@ class SwaggerTest {
             // @LoginUser long userId는 토큰에서 채우므로 화면 입력칸(파라미터)이 아니다
             mvc.perform(get("/v3/api-docs"))
                     .andExpect(jsonPath("$.paths['/api/me'].get.parameters").doesNotExist())
-                    .andExpect(jsonPath("$.paths['/api/sessions/{sessionId}/end'].post.parameters[*].name")
-                            .value(contains("sessionId")));
+                    .andExpect(jsonPath("$.paths['/api/connections/{connectionId}/end'].post.parameters[*].name")
+                            .value(contains("connectionId")));
         }
 
         @Test

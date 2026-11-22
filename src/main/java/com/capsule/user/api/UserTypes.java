@@ -39,7 +39,9 @@ public final class UserTypes {
     /** type: EXAM · GOAL · PROMISE. dueDate·dueTime은 한국 날짜·시간 그대로 */
     public record MemoryInfo(long id, String type, String title, LocalDate dueDate, LocalTime dueTime) {}
 
-    /** 진행 중 세션 요약 (내 정보 조회의 activeSession, H18 팝업) */
-    public record ActiveSessionSummary(
-            long sessionId, long roomId, String roomName, String characterName, Instant startedAt) {}
+    /**
+     * 진행 중 연결 요약 (내 정보 · 홈의 activeConnection, 이어하기 팝업). 2026-11-23 룸 칸을 빼고 메이트로 (api.md 8 · 11).
+     * user · session만 쓰는 계약이라 제자리에서 바꿈 (dialogue · relation 사용처 없음)
+     */
+    public record ActiveSessionSummary(long connectionId, long mateId, String mateName, Instant startedAt) {}
 }

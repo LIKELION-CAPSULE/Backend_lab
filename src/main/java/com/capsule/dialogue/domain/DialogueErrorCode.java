@@ -6,8 +6,9 @@ import org.springframework.http.HttpStatus;
 /** dialogue 모듈 에러 코드 (api.md 19, 20, 28 + 실험실) */
 public enum DialogueErrorCode implements ErrorCode {
     // 대화 (api.md 19, 20, 28)
-    SESSION_NOT_FOUND(HttpStatus.NOT_FOUND),
-    SESSION_ENDED(HttpStatus.CONFLICT),
+    // 2026-11-23 세션 → 연결 (api.md 19 · 20 · 28)
+    CONNECTION_NOT_FOUND(HttpStatus.NOT_FOUND),
+    CONNECTION_ENDED(HttpStatus.CONFLICT),
     EVENT_NOT_FOUND(HttpStatus.NOT_FOUND),
     CHARACTER_NOT_IN_SESSION(HttpStatus.BAD_REQUEST),
     // 실험실 (/internal/llm-lab)

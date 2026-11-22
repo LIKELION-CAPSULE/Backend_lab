@@ -130,9 +130,7 @@ class DialogueTest {
                 Long.class,
                 UUID.randomUUID() + "@dialogue.test");
         sessionId = jdbc.queryForObject(
-                "INSERT INTO study_sessions (user_id, room_id, background_id) VALUES (?, 1, 1) RETURNING id",
-                Long.class,
-                userId);
+                "INSERT INTO connections (user_id, character_id) VALUES (?, 1) RETURNING id", Long.class, userId);
         when(sessionQuery.find(sessionId))
                 .thenReturn(Optional.of(new SessionInfo(sessionId, userId, 1, CHARACTER_ID, Instant.now(), null)));
         when(characterQuery.find(CHARACTER_ID))
@@ -255,7 +253,7 @@ class DialogueTest {
                 .andExpect(jsonPath("$.data.characters[0].emotion").value("NEUTRAL"))
                 .andExpect(jsonPath("$.data.characters[0].fallback").value(false));
         assertThat(jdbc.queryForObject(
-                        "SELECT count(*) FROM llm_usages WHERE session_id = ? AND purpose = 'REACTION'"
+                        "SELECT count(*) FROM llm_usages WHERE connection_id = ? AND purpose = 'REACTION'"
                                 + " AND source = 'APP' AND status = 'OK' AND cardinality(prompt_version_ids) = 2",
                         Integer.class,
                         sessionId))
@@ -295,14 +293,14 @@ class DialogueTest {
                 .thenReturn(Optional.of(new SessionInfo(sessionId, userId + 1, 1, CHARACTER_ID, Instant.now(), null)));
         react(99, body)
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.code").value("SESSION_NOT_FOUND"));
+                .andExpect(jsonPath("$.code").value("CONNECTION_NOT_FOUND"));
 
         when(sessionQuery.find(sessionId))
                 .thenReturn(
                         Optional.of(new SessionInfo(sessionId, userId, 1, CHARACTER_ID, Instant.now(), Instant.now())));
         react(99, body)
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("SESSION_ENDED"));
+                .andExpect(jsonPath("$.code").value("CONNECTION_ENDED"));
     }
 
     // --- 20 메시지 ---
@@ -328,7 +326,7 @@ class DialogueTest {
         assertThat(rows(requestId)).isEqualTo(2);
         // 호출 기록: 서비스 호출은 원문을 남기지 않는다(log-content=false), 쓴 프롬프트 버전은 남긴다
         assertThat(jdbc.queryForObject(
-                        "SELECT count(*) FROM llm_usages WHERE session_id = ? AND purpose = 'CHAT' AND provider = 'fake'"
+                        "SELECT count(*) FROM llm_usages WHERE connection_id = ? AND purpose = 'CHAT' AND provider = 'fake'"
                                 + " AND request IS NULL AND cardinality(prompt_version_ids) = 2",
                         Integer.class,
                         sessionId))
@@ -369,7 +367,7 @@ class DialogueTest {
 
     @Test
     void streamErrorsBeforeOpeningAreJson() throws Exception {
-        mvc.perform(post("/api/sessions/{sessionId}/messages/stream", sessionId)
+        mvc.perform(post("/api/connections/{sessionId}/messages/stream", sessionId)
                         .with(jwt().jwt(j -> j.subject(String.valueOf(userId))))
                         // 명세 28: Accept는 둘 다 (event-stream만 보내면 에러 JSON을 쓸 수 없어 실패한다)
                         .accept(MediaType.TEXT_EVENT_STREAM, MediaType.APPLICATION_JSON)
@@ -426,7 +424,7 @@ class DialogueTest {
 
     /** 28을 불러 스트림이 끝날 때까지 받은 본문 */
     private String streamed(UUID requestId, String content, MediaType accept) throws Exception {
-        MvcResult started = mvc.perform(post("/api/sessions/{sessionId}/messages/stream", sessionId)
+        MvcResult started = mvc.perform(post("/api/connections/{sessionId}/messages/stream", sessionId)
                         .with(jwt().jwt(j -> j.subject(String.valueOf(userId))))
                         .accept(accept)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -488,7 +486,7 @@ class DialogueTest {
         assertThat(scoreOf("ㅇㅇ")).isEqualTo(new ChatScore(SignalType.LOW_EFFORT, 0, 0));
         assertThat(scoreOf("ㄴㄴ")).isEqualTo(new ChatScore(SignalType.LOW_EFFORT, -1, 0)); // 같은 세션 반복
         assertThat(jdbc.queryForObject(
-                        "SELECT signal FROM chat_messages WHERE session_id = ? AND sender = 'USER' ORDER BY id LIMIT 1",
+                        "SELECT signal FROM chat_messages WHERE connection_id = ? AND sender = 'USER' ORDER BY id LIMIT 1",
                         String.class,
                         sessionId))
                 .isEqualTo("NEUTRAL");
@@ -567,7 +565,7 @@ class DialogueTest {
 
     @Test
     void characterMustBeTheSessionCharacter() throws Exception {
-        mvc.perform(post("/api/sessions/{sessionId}/messages", sessionId)
+        mvc.perform(post("/api/connections/{sessionId}/messages", sessionId)
                         .with(jwt().jwt(j -> j.subject(String.valueOf(userId))))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"requestId\":\"" + UUID.randomUUID()
@@ -678,7 +676,7 @@ class DialogueTest {
         long conversationId = jdbc.queryForObject("SELECT id FROM conversations WHERE user_id = ?", Long.class, userId);
         // 먼저 온 요청이 사용자 말을 저장하고 LLM을 기다리는 중인 상태를 만든다. 1초 뒤 그 요청이 답장을 저장한다
         jdbc.update(
-                "INSERT INTO chat_messages (conversation_id, session_id, request_id, sender, content) VALUES (?, ?, ?, 'USER', '처리 중')",
+                "INSERT INTO chat_messages (conversation_id, connection_id, request_id, sender, content) VALUES (?, ?, ?, 'USER', '처리 중')",
                 conversationId,
                 sessionId,
                 requestId);
@@ -689,7 +687,7 @@ class DialogueTest {
                 Thread.currentThread().interrupt();
             }
             jdbc.update(
-                    "INSERT INTO chat_messages (conversation_id, session_id, request_id, sender, content) VALUES (?, ?, ?, 'CHARACTER', '먼저 온 요청의 답')",
+                    "INSERT INTO chat_messages (conversation_id, connection_id, request_id, sender, content) VALUES (?, ?, ?, 'CHARACTER', '먼저 온 요청의 답')",
                     conversationId,
                     sessionId,
                     requestId);
@@ -709,7 +707,7 @@ class DialogueTest {
         long conversationId = jdbc.queryForObject("SELECT id FROM conversations WHERE user_id = ?", Long.class, userId);
         // 1분 전에 저장되고 답이 없는 사용자 말 = 먼저 온 요청이 중간에 죽음
         jdbc.update(
-                "INSERT INTO chat_messages (conversation_id, session_id, request_id, sender, content, created_at)"
+                "INSERT INTO chat_messages (conversation_id, connection_id, request_id, sender, content, created_at)"
                         + " VALUES (?, ?, ?, 'USER', '졸려', now() - interval '1 minute')",
                 conversationId,
                 sessionId,
@@ -734,7 +732,7 @@ class DialogueTest {
 
         send(requestId, "다 했다")
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("SESSION_ENDED"));
+                .andExpect(jsonPath("$.code").value("CONNECTION_ENDED"));
         assertThat(rows(requestId)).isZero(); // 답장도, 답을 못 받은 사용자 말도 남지 않는다
     }
 
@@ -746,12 +744,12 @@ class DialogueTest {
         long conversationId = jdbc.queryForObject("SELECT id FROM conversations WHERE user_id = ?", Long.class, userId);
         // 앞선 종료에서 카드 쓰기가 실패해 남은 다른 세션 메시지도 이번 카드에 같이 들어간다
         long earlier = jdbc.queryForObject(
-                "INSERT INTO study_sessions (user_id, room_id, background_id, ended_at, end_type)"
-                        + " VALUES (?, 1, 1, now(), 'AUTO_CLOSED') RETURNING id",
+                "INSERT INTO connections (user_id, character_id, ended_at, end_type)"
+                        + " VALUES (?, 1, now(), 'AUTO_CLOSED') RETURNING id",
                 Long.class,
                 userId);
         jdbc.update(
-                "INSERT INTO chat_messages (conversation_id, session_id, request_id, sender, content)"
+                "INSERT INTO chat_messages (conversation_id, connection_id, request_id, sender, content)"
                         + " VALUES (?, ?, ?, 'USER', '지난번 남은 말')",
                 conversationId,
                 earlier,
@@ -759,7 +757,7 @@ class DialogueTest {
         // 카드는 최근 recap-max(2)장만 남는다
         for (long s = 1; s <= 3; s++) {
             jdbc.update(
-                    "INSERT INTO conversation_recaps (conversation_id, session_id, content) VALUES (?, ?, ?)",
+                    "INSERT INTO conversation_recaps (conversation_id, connection_id, content) VALUES (?, ?, ?)",
                     conversationId,
                     -s,
                     "옛 카드 " + s);
@@ -774,7 +772,7 @@ class DialogueTest {
                 .isEqualTo(3); // 초안은 DB에 쓰지 않는다
         // 초안을 만든 뒤에 들어온 말은 카드에 안 들어갔으므로 지우지 않는다 (다음 종료 카드로)
         jdbc.update(
-                "INSERT INTO chat_messages (conversation_id, session_id, request_id, sender, content)"
+                "INSERT INTO chat_messages (conversation_id, connection_id, request_id, sender, content)"
                         + " VALUES (?, ?, ?, 'USER', '초안 뒤에 온 말')",
                 conversationId,
                 sessionId,
@@ -801,14 +799,14 @@ class DialogueTest {
     }
 
     private ResultActions react(long eventId, String body) throws Exception {
-        return mvc.perform(post("/api/sessions/{sessionId}/events/{eventId}/reaction", sessionId, eventId)
+        return mvc.perform(post("/api/connections/{sessionId}/events/{eventId}/reaction", sessionId, eventId)
                 .with(jwt().jwt(j -> j.subject(String.valueOf(userId))))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body));
     }
 
     private ResultActions send(UUID requestId, String content) throws Exception {
-        return mvc.perform(post("/api/sessions/{sessionId}/messages", sessionId)
+        return mvc.perform(post("/api/connections/{sessionId}/messages", sessionId)
                 .with(jwt().jwt(j -> j.subject(String.valueOf(userId))))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"requestId\":\"" + requestId + "\",\"characterId\":" + CHARACTER_ID + ",\"content\":\""

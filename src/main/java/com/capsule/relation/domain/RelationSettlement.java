@@ -1,5 +1,6 @@
 package com.capsule.relation.domain;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.IdClass;
@@ -28,6 +29,7 @@ public class RelationSettlement {
     private Long relationId;
 
     @Id
+    @Column(name = "connection_id") // 2026-11-23 세션 → 연결. 자바 이름은 그대로
     private Long sessionId;
 
     private int presentSeconds;

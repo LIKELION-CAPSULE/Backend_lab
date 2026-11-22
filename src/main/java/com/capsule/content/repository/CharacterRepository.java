@@ -6,5 +6,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface CharacterRepository extends JpaRepository<CharacterEntity, Long> {
 
-    List<CharacterEntity> findByRoomIdAndIsActiveTrueOrderBySortOrderAscIdAsc(long roomId);
+    List<CharacterEntity> findByIsActiveTrueOrderBySortOrderAscIdAsc();
 }

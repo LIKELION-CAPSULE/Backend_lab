@@ -24,15 +24,14 @@ import com.capsule.TestcontainersConfiguration;
 import com.capsule.content.api.AvatarQuery;
 import com.capsule.content.api.CharacterQuery;
 import com.capsule.content.api.ContentTypes.AvatarInfo;
-import com.capsule.content.api.ContentTypes.BackgroundInfo;
 import com.capsule.content.api.ContentTypes.CharacterInfo;
 import com.capsule.content.api.ContentTypes.ExpressionRef;
+import com.capsule.content.api.ContentTypes.MateInfo;
 import com.capsule.content.api.ContentTypes.ModelInfo;
 import com.capsule.content.api.ContentTypes.MotionRef;
 import com.capsule.content.api.ContentTypes.Reaction;
-import com.capsule.content.api.ContentTypes.RoomInfo;
+import com.capsule.content.api.MateQuery;
 import com.capsule.content.api.ReactionQuery;
-import com.capsule.content.api.RoomQuery;
 import com.capsule.relation.api.RelationCommands;
 import com.capsule.relation.api.RelationQuery;
 import com.capsule.relation.api.RelationTypes.AffinityChange;
@@ -87,15 +86,26 @@ class SessionApiTest {
             true,
             CHAERIN_MODEL,
             "https://cdn.capsule.invalid/chaerin-fullbody.webp");
-    static final RoomInfo ROOM = new RoomInfo(
+    static final MateInfo CHAERIN_MATE = new MateInfo(
             1,
-            "쌀쌀맞은 갸루짝꿍이 나에게만 친절하다!",
-            "차갑게 굴지만 나한테만 다정한 짝꿍과 같이 공부해요.",
-            "https://cdn.capsule.invalid/room1.png",
-            true,
-            List.of(CHAERIN),
-            "https://cdn.capsule.invalid/room1-banner.webp");
-    static final BackgroundInfo BACKGROUND = new BackgroundInfo(1, 1, "교실", "https://cdn.capsule.invalid/room1-bg.png");
+            "채린",
+            "시험기간 밤, 각자 공부하며 연결 중인 같은 반 친구",
+            "ALL",
+            List.of("같은반", "시험기간"),
+            "https://cdn.capsule.invalid/chaerin/full.png",
+            "https://cdn.capsule.invalid/chaerin/card.png",
+            null,
+            null,
+            null,
+            null,
+            CHAERIN_MODEL,
+            List.of(),
+            false,
+            true);
+    static final MateInfo COMING_SOON = new MateInfo(
+            2, "준비 중", null, "ALL", List.of(), null, null, null, null, null, null, null, List.of(), true, true);
+    static final CharacterInfo COMING_SOON_CHARACTER =
+            new CharacterInfo(2, 0, "준비 중", null, List.of(), null, true, null, null);
     static final AvatarInfo AVATAR = new AvatarInfo(
             1,
             "기본 아바타",
@@ -130,7 +140,7 @@ class SessionApiTest {
     AvatarQuery avatarQuery;
 
     @MockitoBean
-    RoomQuery roomQuery;
+    MateQuery mateQuery;
 
     @MockitoBean
     CharacterQuery characterQuery;
@@ -156,11 +166,11 @@ class SessionApiTest {
                 .willAnswer(inv -> Optional.of(
                         new UserProfile(inv.<Long>getArgument(0), "승희", null, 1L, AVATAR.thumbnailUrl(), false)));
         given(avatarQuery.find(1L)).willReturn(Optional.of(AVATAR));
-        given(roomQuery.find(1L)).willReturn(Optional.of(ROOM));
-        given(roomQuery.activeRooms()).willReturn(List.of(ROOM));
-        given(roomQuery.defaultBackground(1L)).willReturn(Optional.of(BACKGROUND));
-        given(roomQuery.background(1L)).willReturn(Optional.of(BACKGROUND));
+        given(mateQuery.find(1L)).willReturn(Optional.of(CHAERIN_MATE));
+        given(mateQuery.find(2L)).willReturn(Optional.of(COMING_SOON));
+        given(mateQuery.activeMates()).willReturn(List.of(CHAERIN_MATE, COMING_SOON));
         given(characterQuery.find(1L)).willReturn(Optional.of(CHAERIN));
+        given(characterQuery.find(2L)).willReturn(Optional.of(COMING_SOON_CHARACTER));
         given(relationQuery.view(anyLong(), eq(1L)))
                 .willReturn(new RelationView(1, 1, "아는 사이", 50, 0, null, 1, "아는 사이", 0, 3600));
         given(relationQuery.settlementOf(anyLong(), anyLong(), anyLong())).willReturn(SETTLEMENT);
@@ -176,37 +186,30 @@ class SessionApiTest {
         given(reactionQuery.pick(anyLong(), anyString(), any())).willReturn(Reaction.NONE);
     }
 
-    // ---- 16 공부 시작
+    // ---- 16 연결 시작
 
     @Test
-    void startAcceptsThreeMinuteMinimum() throws Exception {
-        // 최소 3분 (api.md 16). 5분 단위가 아니어도 3분은 받는다
-        startRequest(userId, 3)
+    void startCreatesConnectionWithScene() throws Exception {
+        startRequest(userId, 1)
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.data.targetMinutes").value(3));
-    }
-
-    @Test
-    void startCreatesSessionWithScene() throws Exception {
-        startRequest(userId, 50)
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.data.sessionId").isNumber())
+                .andExpect(jsonPath("$.data.connectionId").isNumber())
                 .andExpect(jsonPath("$.data.startedAt").isString())
-                .andExpect(jsonPath("$.data.targetMinutes").value(50))
-                .andExpect(jsonPath("$.data.room.name").value(ROOM.name()))
-                .andExpect(jsonPath("$.data.room.backgroundImageUrl").value(BACKGROUND.imageUrl()))
-                .andExpect(jsonPath("$.data.character.modelJsonUrl").value(CHAERIN_MODEL.modelJsonUrl()))
-                .andExpect(jsonPath("$.data.character.offsetY").value(12))
+                .andExpect(jsonPath("$.data.targetMinutes").doesNotExist()) // 시간 제한 없음 (2026-11-23)
+                .andExpect(jsonPath("$.data.room").doesNotExist())
+                .andExpect(jsonPath("$.data.mate.name").value("채린"))
+                .andExpect(jsonPath("$.data.mate.format").value("CUBISM"))
+                .andExpect(jsonPath("$.data.mate.modelJsonUrl").value(CHAERIN_MODEL.modelJsonUrl()))
+                .andExpect(jsonPath("$.data.mate.offsetY").value(12))
                 .andExpect(jsonPath("$.data.avatar.profileImageUrl").value(AVATAR.thumbnailUrl()))
+                .andExpect(jsonPath("$.data.avatar.format").value("CUBISM"))
                 .andExpect(jsonPath("$.data.me.nickname").value("승희"))
                 .andExpect(jsonPath("$.data.me.profileImageUrl").value(AVATAR.thumbnailUrl()))
                 .andExpect(jsonPath("$.data.serverTime").isString());
 
         verify(relationCommands).meet(userId, 1L);
         assertThat(jdbc.queryForObject(
-                        "SELECT count(*) FROM study_sessions s JOIN session_characters c ON c.session_id = s.id"
-                                + " WHERE s.user_id = ? AND c.character_id = 1 AND s.background_id = 1"
-                                + " AND s.last_heartbeat_at IS NOT NULL",
+                        "SELECT count(*) FROM connections WHERE user_id = ? AND character_id = 1"
+                                + " AND last_heartbeat_at IS NOT NULL",
                         Integer.class,
                         userId))
                 .isEqualTo(1);
@@ -214,27 +217,20 @@ class SessionApiTest {
 
     @Test
     void startRejectsInvalidRequests() throws Exception {
-        expectError(startRequest(userId, 52), 400, "INVALID_TARGET_MINUTES");
-        expectError(startRequest(userId, 185), 400, "INVALID_TARGET_MINUTES");
-        expectError(startRequest(userId, 2), 400, "INVALID_TARGET_MINUTES");
-        expectError(startRequest(userId, 4), 400, "INVALID_TARGET_MINUTES");
-        expectError(
-                startRequest(userId, "{\"roomId\":99,\"characterId\":1,\"targetMinutes\":50}"), 404, "ROOM_NOT_FOUND");
-        expectError(
-                startRequest(userId, "{\"roomId\":1,\"characterId\":2,\"targetMinutes\":50}"),
-                400,
-                "CHARACTER_NOT_IN_ROOM");
+        expectError(startRequest(userId, 99), 404, "MATE_NOT_FOUND");
+        expectError(startRequest(userId, 2), 409, "MATE_COMING_SOON");
+        expectError(startRequest(userId, "{}"), 400, "INVALID_REQUEST");
 
         given(userQuery.find(userId)).willReturn(Optional.of(new UserProfile(userId, "승희", null, null, null, true)));
-        expectError(startRequest(userId, 50), 403, "ONBOARDING_REQUIRED");
+        expectError(startRequest(userId, 1), 403, "ONBOARDING_REQUIRED");
     }
 
     @Test
     void startWhileInProgressPointsToExistingSession() throws Exception {
         long sessionId = start(userId);
 
-        expectError(startRequest(userId, 50), 409, "SESSION_ALREADY_IN_PROGRESS")
-                .andExpect(jsonPath("$.detail.sessionId").value(sessionId));
+        expectError(startRequest(userId, 1), 409, "CONNECTION_ALREADY_IN_PROGRESS")
+                .andExpect(jsonPath("$.detail.connectionId").value(sessionId));
     }
 
     // ---- 18 상태 변화 + SessionQuery.findEvent
@@ -307,7 +303,7 @@ class SessionApiTest {
         expectError(postEvent(userId, sessionId, "SLEEP", t0), 400, "INVALID_EVENT");
         // 프론트 시계가 늦어 시작 전 시각이 와도 시작 시각으로 맞춰진다 (여기선 t0의 FOCUS와 같아져 재전송으로 처리됨)
         assertThat(event(sessionId, "FOCUS", t0.minusSeconds(60), 200)).isEqualTo(focus);
-        expectError(postEvent(newUser(), sessionId, "FOCUS", t0), 404, "SESSION_NOT_FOUND");
+        expectError(postEvent(newUser(), sessionId, "FOCUS", t0), 404, "CONNECTION_NOT_FOUND");
     }
 
     @Test
@@ -367,25 +363,25 @@ class SessionApiTest {
         event(sessionId, "FOCUS", startedAt(sessionId), 201);
         // 30분 전에 시작해 10분 공부하고 끊긴 것으로 옮긴다
         jdbc.update(
-                "UPDATE study_sessions SET started_at = started_at - interval '30 minutes',"
+                "UPDATE connections SET started_at = started_at - interval '30 minutes',"
                         + " last_heartbeat_at = started_at - interval '20 minutes' WHERE id = ?",
                 sessionId);
         jdbc.update(
-                "UPDATE session_events SET occurred_at = occurred_at - interval '30 minutes' WHERE session_id = ?",
+                "UPDATE connection_events SET occurred_at = occurred_at - interval '30 minutes' WHERE connection_id = ?",
                 sessionId);
         clearInvocations(relationCommands);
 
-        mvc.perform(post("/api/sessions/{id}/resume", sessionId).with(login(userId)))
+        mvc.perform(post("/api/connections/{id}/resume", sessionId).with(login(userId)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.sessionId").value(sessionId))
+                .andExpect(jsonPath("$.data.connectionId").value(sessionId))
                 .andExpect(jsonPath("$.data.startedAt").doesNotExist())
-                .andExpect(jsonPath("$.data.character.name").value("채린"))
+                .andExpect(jsonPath("$.data.mate.name").value("채린"))
                 .andExpect(jsonPath("$.data.avatar.id").value(1))
                 .andExpect(jsonPath("$.data.studySeconds").value(600))
                 .andExpect(jsonPath("$.data.breakSeconds").value(greaterThanOrEqualTo(1200)));
 
         assertThat(jdbc.queryForList(
-                        "SELECT type FROM session_events WHERE session_id = ? ORDER BY occurred_at, id",
+                        "SELECT type FROM connection_events WHERE connection_id = ? ORDER BY occurred_at, id",
                         String.class,
                         sessionId))
                 .containsExactly("FOCUS", "BREAK", "FOCUS");
@@ -396,7 +392,7 @@ class SessionApiTest {
     void heartbeatRefreshesLastHeartbeatAndStoresStudyTime() throws Exception {
         long sessionId = start(userId);
         jdbc.update(
-                "UPDATE study_sessions SET started_at = started_at - interval '1 hour', last_heartbeat_at = NULL"
+                "UPDATE connections SET started_at = started_at - interval '1 hour', last_heartbeat_at = NULL"
                         + " WHERE id = ?",
                 sessionId);
 
@@ -404,31 +400,31 @@ class SessionApiTest {
 
         assertThat(jdbc.queryForMap(
                         "SELECT last_heartbeat_at IS NOT NULL AS beat, heartbeat_study_seconds, heartbeat_present_seconds"
-                                + " FROM study_sessions WHERE id = ?",
+                                + " FROM connections WHERE id = ?",
                         sessionId))
                 .containsEntry("beat", true)
                 .containsEntry("heartbeat_study_seconds", 1800)
                 .containsEntry("heartbeat_present_seconds", 1620);
 
         // 값이 틀리면 400이지만 생존 신호는 갱신하고, 저장된 값은 그대로
-        jdbc.update("UPDATE study_sessions SET last_heartbeat_at = NULL WHERE id = ?", sessionId);
+        jdbc.update("UPDATE connections SET last_heartbeat_at = NULL WHERE id = ?", sessionId);
         expectError(heartbeat(sessionId, 3700, 100), 400, "INVALID_STUDY_TIME"); // 경과 시간(1시간) 초과
         expectError(heartbeat(sessionId, 1800, 1900), 400, "INVALID_STUDY_TIME");
         expectError(heartbeat(sessionId, 1800, -1), 400, "INVALID_STUDY_TIME");
         expectError(
-                mvc.perform(post("/api/sessions/{id}/heartbeat", sessionId)
+                mvc.perform(post("/api/connections/{id}/heartbeat", sessionId)
                         .with(login(userId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}")),
                 400,
                 "INVALID_STUDY_TIME");
         expectError(
-                mvc.perform(post("/api/sessions/{id}/heartbeat", sessionId).with(login(userId))),
+                mvc.perform(post("/api/connections/{id}/heartbeat", sessionId).with(login(userId))),
                 400,
                 "INVALID_STUDY_TIME"); // 본문 없음
         assertThat(jdbc.queryForMap(
                         "SELECT last_heartbeat_at IS NOT NULL AS beat, heartbeat_study_seconds, heartbeat_present_seconds"
-                                + " FROM study_sessions WHERE id = ?",
+                                + " FROM connections WHERE id = ?",
                         sessionId))
                 .containsEntry("beat", true)
                 .containsEntry("heartbeat_study_seconds", 1800)
@@ -441,19 +437,19 @@ class SessionApiTest {
         event(sessionId, "FOCUS", startedAt(sessionId), 201);
         // 30분 전 시작, 10분 공부 뒤 끊김. 끊기기 전 마지막 heartbeat 값은 0초로 남아 있음
         jdbc.update(
-                "UPDATE study_sessions SET started_at = started_at - interval '30 minutes',"
+                "UPDATE connections SET started_at = started_at - interval '30 minutes',"
                         + " last_heartbeat_at = started_at - interval '20 minutes',"
                         + " heartbeat_study_seconds = 0, heartbeat_present_seconds = 0 WHERE id = ?",
                 sessionId);
         jdbc.update(
-                "UPDATE session_events SET occurred_at = occurred_at - interval '30 minutes' WHERE session_id = ?",
+                "UPDATE connection_events SET occurred_at = occurred_at - interval '30 minutes' WHERE connection_id = ?",
                 sessionId);
 
-        mvc.perform(post("/api/sessions/{id}/resume", sessionId).with(login(userId)))
+        mvc.perform(post("/api/connections/{id}/resume", sessionId).with(login(userId)))
                 .andExpect(jsonPath("$.data.studySeconds").value(600));
 
         assertThat(jdbc.queryForMap(
-                        "SELECT heartbeat_study_seconds, heartbeat_present_seconds FROM study_sessions WHERE id = ?",
+                        "SELECT heartbeat_study_seconds, heartbeat_present_seconds FROM connections WHERE id = ?",
                         sessionId))
                 .containsEntry("heartbeat_study_seconds", 600)
                 .containsEntry("heartbeat_present_seconds", 600);
@@ -468,9 +464,9 @@ class SessionApiTest {
         event(sessionId, "FOCUS", t0, 201);
         event(sessionId, "AWAY", t0.plusSeconds(600), 201);
         event(sessionId, "RETURN", t0.plusSeconds(1020), 201);
-        jdbc.update("UPDATE study_sessions SET started_at = started_at - interval '1 hour' WHERE id = ?", sessionId);
+        jdbc.update("UPDATE connections SET started_at = started_at - interval '1 hour' WHERE id = ?", sessionId);
         jdbc.update(
-                "UPDATE session_events SET occurred_at = occurred_at - interval '1 hour' WHERE session_id = ?",
+                "UPDATE connection_events SET occurred_at = occurred_at - interval '1 hour' WHERE connection_id = ?",
                 sessionId);
 
         expectError(end(sessionId, 3700, 100), 400, "INVALID_STUDY_TIME"); // 경과 시간(1시간) 초과
@@ -480,13 +476,13 @@ class SessionApiTest {
         expectReport(end(sessionId, 3300, 2880).andExpect(status().isOk()), sessionId);
         expectReport(end(sessionId, 10, 10).andExpect(status().isOk()), sessionId); // 다시 불러도 같은 결과
         expectReport(
-                mvc.perform(get("/api/sessions/{id}/report", sessionId).with(login(userId)))
+                mvc.perform(get("/api/connections/{id}", sessionId).with(login(userId)))
                         .andExpect(status().isOk()),
                 sessionId);
 
         verify(relationCommands, times(1)).settleStudy(anyLong(), anyLong(), anyLong(), anyInt(), anyInt());
         verify(relationCommands).settleStudy(userId, 1L, sessionId, 3300, 2880);
-        SessionClosing closing = new SessionClosing(sessionId, userId, 1L, "채린", "NORMAL", 3300, 50);
+        SessionClosing closing = new SessionClosing(sessionId, userId, 1L, "채린", "NORMAL", 3300, null);
         // 초안은 한 번만: 400 요청과 두 번째 종료에는 LLM을 부르지 않는다
         verify(closingHandler, times(1)).draft(any());
         verify(closingHandler).draft(closing);
@@ -494,7 +490,7 @@ class SessionApiTest {
         verify(closingHandler).close(eq(closing), same(DRAFT));
         assertThat(jdbc.queryForMap(
                         "SELECT end_type, focus_seconds, distract_seconds, return_count, closing_line"
-                                + " FROM study_sessions WHERE id = ?",
+                                + " FROM connections WHERE id = ?",
                         sessionId))
                 .containsEntry("end_type", "NORMAL")
                 .containsEntry("focus_seconds", 2880)
@@ -502,10 +498,12 @@ class SessionApiTest {
                 .containsEntry("return_count", 1)
                 .containsEntry("closing_line", CLOSING_LINE);
 
-        expectError(heartbeat(sessionId, 10, 10), 409, "SESSION_ENDED");
+        expectError(heartbeat(sessionId, 10, 10), 409, "CONNECTION_ENDED");
         expectError(
-                mvc.perform(post("/api/sessions/{id}/resume", sessionId).with(login(userId))), 409, "SESSION_ENDED");
-        expectError(postEvent(userId, sessionId, "FOCUS", Instant.now()), 409, "SESSION_ENDED");
+                mvc.perform(post("/api/connections/{id}/resume", sessionId).with(login(userId))),
+                409,
+                "CONNECTION_ENDED");
+        expectError(postEvent(userId, sessionId, "FOCUS", Instant.now()), 409, "CONNECTION_ENDED");
     }
 
     @Test
@@ -513,61 +511,51 @@ class SessionApiTest {
         long sessionId = start(userId);
 
         expectError(
-                mvc.perform(get("/api/sessions/{id}/report", sessionId).with(login(userId))),
+                mvc.perform(get("/api/connections/{id}", sessionId).with(login(userId))),
                 409,
-                "SESSION_IN_PROGRESS");
+                "CONNECTION_IN_PROGRESS");
         expectError(
-                mvc.perform(get("/api/sessions/{id}/report", sessionId).with(login(newUser()))),
+                mvc.perform(get("/api/connections/{id}", sessionId).with(login(newUser()))),
                 404,
-                "SESSION_NOT_FOUND");
+                "CONNECTION_NOT_FOUND");
     }
 
-    // ---- 11 홈 · 12 룸 상세 · ActiveSessionLookup
+    // ---- 11 홈 · ActiveSessionLookup
 
     @Test
-    void homeShowsRoomsAndActiveSession() throws Exception {
+    void homeShowsMatesLastMateAndActiveConnection() throws Exception {
         mvc.perform(get("/api/home").with(login(userId)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.activeSession").value(nullValue()))
-                .andExpect(jsonPath("$.data.rooms[0].thumbnailUrl").value(ROOM.thumbnailUrl()))
-                // 홈 카드는 전신 그림(homeImageUrl)을 profileImageUrl 칸으로 (api.md 11, 2026-11-06)
-                .andExpect(jsonPath("$.data.rooms[0].characters[0].profileImageUrl")
-                        .value(CHAERIN.homeImageUrl()))
-                .andExpect(
-                        jsonPath("$.data.rooms[0].characters[0].homeImageUrl").doesNotExist());
+                .andExpect(jsonPath("$.data.activeConnection").value(nullValue()))
+                .andExpect(jsonPath("$.data.lastMate").value(nullValue())) // 첫 방문
+                .andExpect(jsonPath("$.data.rooms").doesNotExist())
+                .andExpect(jsonPath("$.data.mates.length()").value(2))
+                .andExpect(jsonPath("$.data.mates[0].name").value("채린"))
+                .andExpect(jsonPath("$.data.mates[0].oneLiner").value(CHAERIN_MATE.oneLiner()))
+                .andExpect(jsonPath("$.data.mates[0].hashtags[0]").value("같은반"))
+                .andExpect(jsonPath("$.data.mates[0].cardImageUrl").value(CHAERIN_MATE.cardImageUrl()))
+                .andExpect(jsonPath("$.data.mates[0].comingSoon").value(false))
+                .andExpect(jsonPath("$.data.mates[1].comingSoon").value(true));
         assertThat(activeSessionLookup.find(userId)).isEmpty();
 
         long sessionId = start(userId);
 
         mvc.perform(get("/api/home").with(login(userId)))
-                .andExpect(jsonPath("$.data.activeSession.sessionId").value(sessionId))
-                .andExpect(jsonPath("$.data.activeSession.roomName").value(ROOM.name()))
-                .andExpect(jsonPath("$.data.activeSession.characterName").value("채린"));
+                .andExpect(jsonPath("$.data.activeConnection.connectionId").value(sessionId))
+                .andExpect(jsonPath("$.data.activeConnection.mateId").value(1))
+                .andExpect(jsonPath("$.data.activeConnection.mateName").value("채린"))
+                .andExpect(jsonPath("$.data.lastMate.id").value(1))
+                .andExpect(jsonPath("$.data.lastMate.illustrationUrl").value(CHAERIN_MATE.illustrationUrl()));
         assertThat(activeSessionLookup.find(userId))
                 .get()
-                .extracting(ActiveSessionSummary::sessionId, ActiveSessionSummary::roomId)
+                .extracting(ActiveSessionSummary::connectionId, ActiveSessionSummary::mateId)
                 .containsExactly(sessionId, 1L);
     }
 
     @Test
-    void roomDetailShowsCharacterRelationAndActiveSession() throws Exception {
-        mvc.perform(get("/api/rooms/1").with(login(userId)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.description").value(ROOM.description()))
-                .andExpect(jsonPath("$.data.thumbnailUrl").value(ROOM.thumbnailUrl()))
-                .andExpect(jsonPath("$.data.bannerUrl").value(ROOM.bannerUrl()))
-                .andExpect(jsonPath("$.data.characters[0].personality[0]").value("츤데레"))
-                .andExpect(jsonPath("$.data.characters[0].relation.level").value(1))
-                .andExpect(jsonPath("$.data.characters[0].relation.levelName").value("아는 사이"))
-                .andExpect(jsonPath("$.data.characters[0].relation.totalStudySeconds")
-                        .value(0))
-                .andExpect(jsonPath("$.data.activeSessionId").value(nullValue()));
-
-        long sessionId = start(userId);
-
-        mvc.perform(get("/api/rooms/1").with(login(userId)))
-                .andExpect(jsonPath("$.data.activeSessionId").value(sessionId));
-        expectError(mvc.perform(get("/api/rooms/99").with(login(userId))), 404, "ROOM_NOT_FOUND");
+    void roomDetailIsGone() throws Exception {
+        // 12 스터디룸 상세 삭제 (2026-11-23)
+        expectError(mvc.perform(get("/api/rooms/1").with(login(userId))), 404, "NOT_FOUND");
     }
 
     // ---- 자동 마감 배치
@@ -578,11 +566,11 @@ class SessionApiTest {
         event(sessionId, "FOCUS", startedAt(sessionId), 201);
         // 8시간 전에 시작해 1시간 공부하고 끊긴 것으로 옮긴다
         jdbc.update(
-                "UPDATE study_sessions SET started_at = started_at - interval '8 hours',"
+                "UPDATE connections SET started_at = started_at - interval '8 hours',"
                         + " last_heartbeat_at = started_at - interval '7 hours' WHERE id = ?",
                 sessionId);
         jdbc.update(
-                "UPDATE session_events SET occurred_at = occurred_at - interval '8 hours' WHERE session_id = ?",
+                "UPDATE connection_events SET occurred_at = occurred_at - interval '8 hours' WHERE connection_id = ?",
                 sessionId);
         long freshSessionId = start(newUser());
 
@@ -590,7 +578,7 @@ class SessionApiTest {
 
         assertThat(jdbc.queryForMap(
                         "SELECT end_type, ended_at = last_heartbeat_at AS at_heartbeat, focus_seconds, closing_line"
-                                + " FROM study_sessions WHERE id = ?",
+                                + " FROM connections WHERE id = ?",
                         sessionId))
                 .containsEntry("end_type", "AUTO_CLOSED")
                 .containsEntry("at_heartbeat", true)
@@ -598,7 +586,7 @@ class SessionApiTest {
                 .containsEntry("closing_line", CLOSING_LINE);
         verify(relationCommands).settleStudy(userId, 1L, sessionId, 3600, 3600);
         verify(closingHandler)
-                .close(eq(new SessionClosing(sessionId, userId, 1L, "채린", "AUTO_CLOSED", 3600, 50)), same(DRAFT));
+                .close(eq(new SessionClosing(sessionId, userId, 1L, "채린", "AUTO_CLOSED", 3600, null)), same(DRAFT));
         assertThat(sessionQuery.find(freshSessionId)).get().matches(SessionInfo::inProgress);
     }
 
@@ -607,25 +595,25 @@ class SessionApiTest {
         long sessionId = start(userId);
         event(sessionId, "FOCUS", startedAt(sessionId), 201);
         jdbc.update(
-                "UPDATE study_sessions SET started_at = started_at - interval '8 hours',"
+                "UPDATE connections SET started_at = started_at - interval '8 hours',"
                         + " last_heartbeat_at = started_at - interval '7 hours',"
                         + " heartbeat_study_seconds = 3000, heartbeat_present_seconds = 2700 WHERE id = ?",
                 sessionId);
         jdbc.update(
-                "UPDATE session_events SET occurred_at = occurred_at - interval '8 hours' WHERE session_id = ?",
+                "UPDATE connection_events SET occurred_at = occurred_at - interval '8 hours' WHERE connection_id = ?",
                 sessionId);
 
         service.autoCloseStale();
 
         // 이벤트로 계산하면 3600초지만, 마지막 heartbeat가 보낸 값으로 기록
         assertThat(jdbc.queryForMap(
-                        "SELECT end_type, focus_seconds, distract_seconds FROM study_sessions WHERE id = ?", sessionId))
+                        "SELECT end_type, focus_seconds, distract_seconds FROM connections WHERE id = ?", sessionId))
                 .containsEntry("end_type", "AUTO_CLOSED")
                 .containsEntry("focus_seconds", 2700)
                 .containsEntry("distract_seconds", 300);
         verify(relationCommands).settleStudy(userId, 1L, sessionId, 3000, 2700);
         verify(closingHandler)
-                .close(eq(new SessionClosing(sessionId, userId, 1L, "채린", "AUTO_CLOSED", 3000, 50)), same(DRAFT));
+                .close(eq(new SessionClosing(sessionId, userId, 1L, "채린", "AUTO_CLOSED", 3000, null)), same(DRAFT));
     }
 
     // ---- 도우미
@@ -638,24 +626,24 @@ class SessionApiTest {
         return jwt().jwt(j -> j.subject(String.valueOf(userId)));
     }
 
-    ResultActions startRequest(long userId, int targetMinutes) throws Exception {
-        return startRequest(userId, "{\"roomId\":1,\"characterId\":1,\"targetMinutes\":" + targetMinutes + "}");
+    ResultActions startRequest(long userId, long mateId) throws Exception {
+        return startRequest(userId, "{\"mateId\":" + mateId + "}");
     }
 
     ResultActions startRequest(long userId, String body) throws Exception {
-        return mvc.perform(post("/api/sessions")
+        return mvc.perform(post("/api/connections")
                 .with(login(userId))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body));
     }
 
     long start(long userId) throws Exception {
-        String body = startRequest(userId, 50)
+        String body = startRequest(userId, 1)
                 .andExpect(status().isCreated())
                 .andReturn()
                 .getResponse()
                 .getContentAsString();
-        return ((Number) JsonPath.read(body, "$.data.sessionId")).longValue();
+        return ((Number) JsonPath.read(body, "$.data.connectionId")).longValue();
     }
 
     Instant startedAt(long sessionId) {
@@ -663,7 +651,7 @@ class SessionApiTest {
     }
 
     ResultActions postEvent(long userId, long sessionId, String type, Instant occurredAt) throws Exception {
-        return mvc.perform(post("/api/sessions/{id}/events", sessionId)
+        return mvc.perform(post("/api/connections/{id}/events", sessionId)
                 .with(login(userId))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"type\":\"" + type + "\",\"occurredAt\":\"" + occurredAt + "\"}"));
@@ -679,22 +667,22 @@ class SessionApiTest {
     }
 
     ResultActions heartbeat(long sessionId, int studySeconds, int presentSeconds) throws Exception {
-        return mvc.perform(post("/api/sessions/{id}/heartbeat", sessionId)
+        return mvc.perform(post("/api/connections/{id}/heartbeat", sessionId)
                 .with(login(userId))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"studySeconds\":" + studySeconds + ",\"presentSeconds\":" + presentSeconds + "}"));
     }
 
     ResultActions end(long sessionId, int studySeconds, int presentSeconds) throws Exception {
-        return mvc.perform(post("/api/sessions/{id}/end", sessionId)
+        return mvc.perform(post("/api/connections/{id}/end", sessionId)
                 .with(login(userId))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"studySeconds\":" + studySeconds + ",\"presentSeconds\":" + presentSeconds + "}"));
     }
 
     static void expectReport(ResultActions result, long sessionId) throws Exception {
-        result.andExpect(jsonPath("$.data.sessionId").value(sessionId))
-                .andExpect(jsonPath("$.data.roomName").value(ROOM.name()))
+        result.andExpect(jsonPath("$.data.connectionId").value(sessionId))
+                .andExpect(jsonPath("$.data.roomName").doesNotExist())
                 .andExpect(jsonPath("$.data.startedAt").isString())
                 .andExpect(jsonPath("$.data.endedAt").isString())
                 .andExpect(jsonPath("$.data.endType").value("NORMAL"))
@@ -702,8 +690,8 @@ class SessionApiTest {
                 .andExpect(jsonPath("$.data.presentSeconds").value(2880))
                 .andExpect(jsonPath("$.data.awaySeconds").value(420))
                 .andExpect(jsonPath("$.data.returnCount").value(1))
-                .andExpect(jsonPath("$.data.character.id").value(1))
-                .andExpect(jsonPath("$.data.character.name").value("채린"))
+                .andExpect(jsonPath("$.data.mate.id").value(1))
+                .andExpect(jsonPath("$.data.mate.name").value("채린"))
                 .andExpect(jsonPath("$.data.relation.pointsAfter").value(55))
                 .andExpect(jsonPath("$.data.relation.levelName").value("아는 사이"))
                 .andExpect(jsonPath("$.data.closingLine").value(CLOSING_LINE));

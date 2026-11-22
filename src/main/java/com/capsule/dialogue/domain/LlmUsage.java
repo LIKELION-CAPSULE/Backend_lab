@@ -32,7 +32,10 @@ public class LlmUsage {
     private Long id;
 
     private Long userId;
+
+    @Column(name = "connection_id") // 2026-11-23 세션 → 연결. 자바 이름은 그대로
     private Long sessionId;
+
     private String purpose;
     private String source;
     private UUID traceId;

@@ -2,12 +2,6 @@ package com.capsule.session.dto;
 
 import java.time.Instant;
 
+/** api.md 16 연결 시작 */
 public record StartResponse(
-        long sessionId,
-        Instant startedAt,
-        Integer targetMinutes,
-        RoomView room,
-        Figure character,
-        Figure avatar,
-        Me me,
-        Instant serverTime) {}
+        long connectionId, Instant startedAt, Figure mate, Figure avatar, Me me, Instant serverTime) {}

@@ -13,6 +13,9 @@ public interface StudySessionRepository extends JpaRepository<StudySession, Long
 
     Optional<StudySession> findByUserIdAndEndedAtIsNull(long userId);
 
+    /** 홈의 마지막 메이트 (api.md 11): 가장 최근에 시작한 연결 */
+    Optional<StudySession> findFirstByUserIdOrderByStartedAtDescIdDesc(long userId);
+
     /** 쓰는 요청끼리(종료 연타, 자동 마감, heartbeat, 이벤트 재전송) 같은 세션을 한 줄로 세운다 */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<StudySession> findWithLockById(long id);

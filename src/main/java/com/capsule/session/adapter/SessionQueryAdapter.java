@@ -25,7 +25,8 @@ public class SessionQueryAdapter implements SessionQuery {
     public Optional<SessionInfo> find(long sessionId) {
         return sessions.findById(sessionId)
                 .map(s -> new SessionInfo(
-                        s.getId(), s.getUserId(), s.getRoomId(), s.characterId(), s.getStartedAt(), s.getEndedAt()));
+                        // 룸이 없어져 roomId는 0 (2026-11-23). SessionInfo 모양은 dialogue가 써서 그대로 둔다
+                        s.getId(), s.getUserId(), 0, s.characterId(), s.getStartedAt(), s.getEndedAt()));
     }
 
     @Override

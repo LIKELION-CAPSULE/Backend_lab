@@ -47,9 +47,7 @@ class RelationLabTest {
                 Long.class,
                 "flow-" + UUID.randomUUID() + "@test.invalid");
         long sessionId = jdbc.queryForObject(
-                "INSERT INTO study_sessions (user_id, room_id, background_id) VALUES (?, 1, 1) RETURNING id",
-                Long.class,
-                userId);
+                "INSERT INTO connections (user_id, character_id) VALUES (?, 1) RETURNING id", Long.class, userId);
 
         adjust(userId, "{\"points\": 80, \"sessionId\": " + sessionId + "}")
                 .andExpect(jsonPath("$.relation.points").value(80))

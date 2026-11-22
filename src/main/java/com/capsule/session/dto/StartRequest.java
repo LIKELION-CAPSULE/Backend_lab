@@ -2,4 +2,5 @@ package com.capsule.session.dto;
 
 import jakarta.validation.constraints.NotNull;
 
-public record StartRequest(@NotNull Long roomId, @NotNull Long characterId, Integer targetMinutes) {}
+/** api.md 16 연결 시작. 2026-11-23 룸 · 캐릭터 · 목표 시간 → 메이트 하나 */
+public record StartRequest(@NotNull Long mateId) {}

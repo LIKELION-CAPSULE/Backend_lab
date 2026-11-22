@@ -1,23 +1,18 @@
 package com.capsule.session.domain;
 
-import jakarta.persistence.CollectionTable;
-import jakarta.persistence.ElementCollection;
-import jakarta.persistence.Embeddable;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Table;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+/** connections 테이블 (2026-11-23 study_sessions에서 이름 변경). 자바 이름은 다음 정리 때 바꾼다 */
 @Entity
-@Table(name = "study_sessions")
+@Table(name = "connections")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class StudySession {
@@ -27,9 +22,9 @@ public class StudySession {
     private Long id;
 
     private long userId;
-    private long roomId;
-    private long backgroundId;
-    private Integer targetMinutes;
+    /** 연결한 메이트 (옛 session_characters 1행) */
+    private long characterId;
+
     private Instant startedAt;
     private Instant endedAt;
     private String endType;
@@ -42,27 +37,20 @@ public class StudySession {
     private int returnCount;
     private String closingLine;
 
-    @ElementCollection
-    @CollectionTable(name = "session_characters", joinColumns = @JoinColumn(name = "session_id"))
-    private List<SessionCharacter> characters = new ArrayList<>();
-
-    public StudySession(long userId, long roomId, long backgroundId, long characterId, int targetMinutes, Instant now) {
+    public StudySession(long userId, long characterId, Instant now) {
         this.userId = userId;
-        this.roomId = roomId;
-        this.backgroundId = backgroundId;
-        this.targetMinutes = targetMinutes;
+        this.characterId = characterId;
         this.startedAt = now;
         this.lastHeartbeatAt = now;
-        this.characters.add(new SessionCharacter(roomId, characterId));
     }
 
     public boolean inProgress() {
         return endedAt == null;
     }
 
-    /** 뼈대는 세션당 캐릭터 1명 */
+    /** 연결당 메이트 1명 */
     public long characterId() {
-        return characters.getFirst().characterId();
+        return characterId;
     }
 
     /** 생존 신호만. 공부 시간 값이 잘못된 heartbeat용 (저장된 값은 그대로 둠) */
@@ -91,7 +79,4 @@ public class StudySession {
     public void recordClosingLine(String closingLine) {
         this.closingLine = closingLine;
     }
-
-    @Embeddable
-    public record SessionCharacter(long roomId, long characterId) {}
 }

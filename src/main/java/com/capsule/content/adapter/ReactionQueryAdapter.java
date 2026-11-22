@@ -25,6 +25,7 @@ public class ReactionQueryAdapter implements ReactionQuery {
     public Reaction pick(long characterId, String trigger, Integer intensity) {
         return characters
                 .findById(characterId)
+                .filter(c -> c.getModel() != null) // 준비 중 메이트는 모델이 없다 (2026-11-23)
                 .map(c -> pickOne(rows(c.getModel().getId(), trigger, intensity)))
                 .orElse(Reaction.NONE);
     }

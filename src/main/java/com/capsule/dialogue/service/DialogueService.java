@@ -389,7 +389,7 @@ public class DialogueService {
         if (response == null) {
             // 종료가 이번 사용자 말을 요약 전에 읽지 못했으면 끝난 세션에 남는다. 요약에 들어갔으면 이미 지워져 있다
             messages.deleteQuestion(conversation.getId(), requestId);
-            throw new ApiException(DialogueErrorCode.SESSION_ENDED);
+            throw new ApiException(DialogueErrorCode.CONNECTION_ENDED);
         }
         // 기억 ①: 답장을 저장한 뒤 이번 사용자 말에서 기억할 것을 정리한다 (답장을 늦추지 않게 따로, 마감 없음)
         Runnable remember = () -> memoryKeeper.afterTurn(
@@ -580,9 +580,9 @@ public class DialogueService {
     private SessionInfo openSession(long userId, long sessionId) {
         SessionInfo session = sessions.find(sessionId)
                 .filter(s -> s.userId() == userId)
-                .orElseThrow(() -> new ApiException(DialogueErrorCode.SESSION_NOT_FOUND));
+                .orElseThrow(() -> new ApiException(DialogueErrorCode.CONNECTION_NOT_FOUND));
         if (!session.inProgress()) {
-            throw new ApiException(DialogueErrorCode.SESSION_ENDED);
+            throw new ApiException(DialogueErrorCode.CONNECTION_ENDED);
         }
         return session;
     }

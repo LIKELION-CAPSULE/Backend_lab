@@ -58,7 +58,7 @@ class WithdrawalApiTest extends UserApiTestSupport {
                 userId,
                 characterId);
         jdbc.update(
-                "INSERT INTO conversation_recaps (conversation_id, session_id, content) VALUES (?, 1, '카드')",
+                "INSERT INTO conversation_recaps (conversation_id, connection_id, content) VALUES (?, 1, '카드')",
                 conversationId);
 
         mvc.perform(delete("/api/me").header("Authorization", auth))
@@ -134,11 +134,11 @@ class WithdrawalApiTest extends UserApiTestSupport {
         String email = uniqueEmail();
         MvcResult signedUp = signedUp(email);
         given(activeSessionLookup.find(anyLong()))
-                .willReturn(Optional.of(new ActiveSessionSummary(1, 1, "룸", "채린", Instant.now())));
+                .willReturn(Optional.of(new ActiveSessionSummary(1, 1, "채린", Instant.now())));
 
         mvc.perform(delete("/api/me").header("Authorization", bearer(signedUp)))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("SESSION_IN_PROGRESS"));
+                .andExpect(jsonPath("$.code").value("CONNECTION_IN_PROGRESS"));
 
         assertThat(jdbc.queryForObject("SELECT withdrawn_at IS NULL FROM users WHERE email = ?", Boolean.class, email))
                 .isTrue();
