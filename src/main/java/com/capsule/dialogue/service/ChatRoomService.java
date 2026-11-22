@@ -47,11 +47,11 @@ public class ChatRoomService {
                 more ? String.valueOf(shown.getLast().getId()) : null);
     }
 
-    /** 31 hasConversation: 이 메이트와 나눈 메시지가 하나라도 있는지 */
+    /** 31 hasConversation: 이 메이트와 답장까지 받은 대화가 하나라도 있는지 */
     public boolean hasConversation(long userId, long mateId) {
         return conversations
                 .findByUserIdAndCharacterId(userId, mateId)
-                .map(c -> messages.existsByConversationId(c.getId()))
+                .map(c -> messages.existsByConversationIdAndSender(c.getId(), ChatMessage.CHARACTER))
                 .orElse(false);
     }
 

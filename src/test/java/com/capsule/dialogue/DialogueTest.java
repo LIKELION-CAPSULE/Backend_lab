@@ -16,6 +16,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
@@ -811,6 +812,63 @@ class DialogueTest {
                 .with(jwt().jwt(j -> j.subject(String.valueOf(userId))))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body));
+    }
+
+    // --- 32 대화방 기록 · 31 hasConversation (2026-11-23 6단계) ---
+
+    @Test
+    void chatRoomShowsOnlyAnsweredTurnsOfThisUser() throws Exception {
+        UUID answered = UUID.randomUUID();
+        send(answered, "파이팅").andExpect(status().isOk());
+        long conversationId = jdbc.queryForObject("SELECT id FROM conversations WHERE user_id = ?", Long.class, userId);
+        // 답장을 못 받은 사용자 말 (답장 만드는 중 · 처리 중 서버가 죽음)은 대화방에 안 보인다
+        jdbc.update(
+                "INSERT INTO chat_messages (conversation_id, connection_id, request_id, sender, content)"
+                        + " VALUES (?, ?, ?, 'USER', '답 없는 말')",
+                conversationId,
+                sessionId,
+                UUID.randomUUID());
+        // 다른 사용자의 대화방은 섞이지 않는다
+        long other = jdbc.queryForObject(
+                "INSERT INTO users (nickname, email, password) VALUES ('다른', ?, 'x') RETURNING id",
+                Long.class,
+                UUID.randomUUID() + "@dialogue.test");
+        long otherConversation = jdbc.queryForObject(
+                "INSERT INTO conversations (user_id, character_id) VALUES (?, 1) RETURNING id", Long.class, other);
+        jdbc.update(
+                "INSERT INTO chat_messages (conversation_id, connection_id, request_id, sender, content)"
+                        + " VALUES (?, ?, ?, 'CHARACTER', '남의 답장')",
+                otherConversation,
+                sessionId,
+                UUID.randomUUID());
+
+        mvc.perform(get("/api/mates/{id}/messages", CHARACTER_ID)
+                        .with(jwt().jwt(j -> j.subject(String.valueOf(userId)))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.messages.length()").value(2))
+                .andExpect(jsonPath("$.data.messages[0].sender").value("MATE"))
+                .andExpect(jsonPath("$.data.messages[1].sender").value("USER"))
+                .andExpect(jsonPath("$.data.messages[1].content").value("파이팅"))
+                .andExpect(jsonPath("$.data.messages[1].requestId").value(answered.toString()))
+                .andExpect(jsonPath("$.data.nextCursor").value(nullValue()));
+        mvc.perform(get("/api/mates/{id}/messages", CHARACTER_ID)
+                        .param("cursor", "abc")
+                        .with(jwt().jwt(j -> j.subject(String.valueOf(userId)))))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void hasConversationNeedsAnAnsweredTurn() throws Exception {
+        mvc.perform(get("/api/mates/{id}", CHARACTER_ID).with(jwt().jwt(j -> j.subject(String.valueOf(userId)))))
+                .andExpect(jsonPath("$.data.hasConversation").value(false));
+        when(messageCounter.countReply(sessionId)).thenReturn(false); // 답하는 사이 끝남 → 답장 없음
+        send(UUID.randomUUID(), "다 했다").andExpect(status().isConflict());
+        mvc.perform(get("/api/mates/{id}", CHARACTER_ID).with(jwt().jwt(j -> j.subject(String.valueOf(userId)))))
+                .andExpect(jsonPath("$.data.hasConversation").value(false));
+        when(messageCounter.countReply(sessionId)).thenReturn(true);
+        send(UUID.randomUUID(), "파이팅").andExpect(status().isOk());
+        mvc.perform(get("/api/mates/{id}", CHARACTER_ID).with(jwt().jwt(j -> j.subject(String.valueOf(userId)))))
+                .andExpect(jsonPath("$.data.hasConversation").value(true));
     }
 
     private ResultActions send(UUID requestId, String content) throws Exception {

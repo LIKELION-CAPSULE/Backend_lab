@@ -23,12 +23,17 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
     @Query("update ChatMessage m set m.recappedAt = :at where m.id in :ids")
     void markRecapped(List<Long> ids, Instant at);
 
-    /** 32 대화방 기록: 최신순, beforeId보다 오래된 것 (커서) */
-    @Query(
-            "select m from ChatMessage m where m.conversationId = :conversationId and m.id < :beforeId order by m.id desc")
+    /**
+     * 32 대화방 기록: 최신순, beforeId보다 오래된 것 (커서). 사용자 말은 답장이 있는 것만 (답장 만드는 중 · 처리 중 서버가 죽어 남은 말은 뺌)
+     */
+    @Query("select m from ChatMessage m where m.conversationId = :conversationId and m.id < :beforeId"
+            + " and (m.sender = 'CHARACTER' or exists (select 1 from ChatMessage r where r.conversationId = m.conversationId"
+            + " and r.requestId = m.requestId and r.sender = 'CHARACTER'))"
+            + " order by m.id desc")
     List<ChatMessage> findPage(long conversationId, long beforeId, Pageable page);
 
-    boolean existsByConversationId(long conversationId);
+    /** 31 hasConversation: 답장까지 받은 대화가 하나라도 있는지 */
+    boolean existsByConversationIdAndSender(long conversationId, String sender);
 
     /** 사용자 말의 종류를 남긴다 (답장 저장 트랜잭션 안에서) */
     @Modifying(flushAutomatically = true)

@@ -305,9 +305,10 @@ public class DialogueService {
 
     /**
      * 읽기 → LLM(트랜잭션 밖, llm-budget) → 저장(한 트랜잭션: 호감도 · 답장).
-     * 저장 트랜잭션은 호감도(applyChat)부터 부른다: applyChat은 relation 행을 잠그고, 공부 종료(22)도 정산 때 같은 행을 잠근 채
-     * 커밋까지 간다. 그래서 종료와 겹치면 여기서 종료가 끝나길 기다린 뒤 아래 세션 확인에서 끝난 것을 보고 아무것도 남기지 않는다.
-     * 종료보다 먼저 잡으면 이 답장까지 커밋된 뒤에 종료가 정산·요약한다. 잠금 순서가 종료(세션 → relation → 대화)와 같아 교착이 없다.
+     * 저장 트랜잭션은 연결의 대화 수(countReply)부터 올린다 (2026-11-23): 연결 행을 잠그고, 공부 종료(22)도 연결 행을 먼저 잠근 채
+     * 커밋까지 간다. 그래서 종료와 겹치면 여기서 종료가 끝나길 기다린 뒤 끝난 연결이라 0행 → 아무것도 남기지 않는다.
+     * 종료보다 먼저 잡으면 이 답장까지 커밋된 뒤에 종료가 정산·요약한다. 잠금 순서가 종료(연결 → relation → 대화)와 같아 교착이 없다
+     * (호감도 applyChat이 relation 행을 잠그므로 반드시 그 앞에서).
      */
     private MessageResponse answer(
             SessionInfo session, Conversation conversation, MessageRequest request, Consumer<String> onReply) {
@@ -364,13 +365,14 @@ public class DialogueService {
         MessageResponse response;
         try {
             response = tx.execute(status -> {
-                AffinityChange affinity =
-                        relationCommands.applyChatScore(userId, characterId, sessionId, requestId, score);
-                // 진행 중이면 연결의 대화 수 +1 (명세 22 messageCount, 2026-11-23). 끝났으면 0행
+                // 진행 중이면 연결의 대화 수 +1 (명세 22 messageCount, 2026-11-23). 끝났으면 0행.
+                // 연결 행 잠금이 relation 잠금(applyChat)보다 먼저여야 종료와 잠금 순서가 같다 (위 Javadoc)
                 if (!messageCounter.countReply(sessionId)) {
                     status.setRollbackOnly(); // 답하는 사이 공부가 끝났다: 정산·요약이 끝난 세션에 남기지 않는다
                     return null;
                 }
+                AffinityChange affinity =
+                        relationCommands.applyChatScore(userId, characterId, sessionId, requestId, score);
                 if (signal != null) messages.markSignal(conversation.getId(), requestId, signal.name());
                 messages.save(new ChatMessage(
                         conversation.getId(), sessionId, requestId, CHARACTER, reply, Instant.now(clock)));
@@ -392,7 +394,7 @@ public class DialogueService {
             return answered(conversation, session, request).orElseThrow(() -> e);
         }
         if (response == null) {
-            // 종료가 이번 사용자 말을 요약 전에 읽지 못했으면 끝난 세션에 남는다. 요약에 들어갔으면 이미 지워져 있다
+            // 답을 못 받은 사용자 말은 지운다 (대화방 기록에 남지 않게). 종료 카드에 이미 들어갔으면 카드에만 남는다
             messages.deleteQuestion(conversation.getId(), requestId);
             throw new ApiException(DialogueErrorCode.CONNECTION_ENDED);
         }
