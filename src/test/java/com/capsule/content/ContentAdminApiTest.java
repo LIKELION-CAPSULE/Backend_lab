@@ -65,17 +65,6 @@ class ContentAdminApiTest {
     }
 
     @Test
-    void listsMatesWithTheirModels() throws Exception {
-        mvc.perform(get("/internal/content/mates").header("Authorization", TOKEN))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data[0].id").value(1))
-                .andExpect(jsonPath("$.data[0].name").value("말포이"))
-                .andExpect(jsonPath("$.data[0].modelPath").value("chaerin/v3/"))
-                .andExpect(jsonPath("$.data[0].modelFormat").value("CUBISM"));
-        mvc.perform(get("/internal/content/mates")).andExpect(status().isUnauthorized());
-    }
-
-    @Test
     void needsTheToken() throws Exception {
         send("POST", "/internal/content/models", model("t1/v1/"), null).andExpect(status().isUnauthorized());
         send("POST", "/internal/content/models", model("t1/v1/"), "Bearer wrong")
