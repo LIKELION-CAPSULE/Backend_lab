@@ -100,6 +100,10 @@
 -- 2026-11-23 변경 (12/1 베타 남은 것: 대화 모드 · 안전 · 평가 · 신고 · 베타 피드백)
 --   - chat_messages: input_type · mode · rating · hidden_at
 --   - chat_reports · safety_strikes (dialogue), beta_feedback (user) 추가
+--
+-- 2026-11-23 변경 (메이트 배경)
+--   - character_backgrounds 추가 (메이트마다 배경 여러 장, 기본 하나). 대화 흐름에 따라 결정 모델이 고른다 (ADR 0032)
+--   - connections.background_code 추가 (이 연결의 지금 배경, NULL이면 메이트 기본 배경)
 -- =====================================================================
 
 BEGIN;
@@ -349,6 +353,23 @@ CREATE TABLE characters (
 );
 CREATE INDEX idx_characters_sort ON characters (sort_order);
 
+-- 메이트 배경 (2026-11-23, ADR 0032): 연결 화면 뒤 배경. 대화 흐름에 따라 결정 모델이 이 목록에서 고른다 (API 20 · 28)
+-- 옛 room_backgrounds(룸 기준)를 메이트 기준으로 다시 둔 것. 실제 배경 목록 · 이미지 · guide 문구는 확정 필요
+CREATE TABLE character_backgrounds (
+    id            bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    character_id  bigint  NOT NULL REFERENCES characters (id) ON DELETE CASCADE,
+    code          text    NOT NULL,                     -- 영문 이름 (예: classroom_day). API · 결정 모델 보기 값
+    name          text    NOT NULL,                     -- 표시 이름 (예: 낮 교실)
+    image_url     text    NOT NULL,                     -- CDN 상대 경로 또는 전체 URL (ADR 0024)
+    guide         text,                                 -- 언제 이 배경인지 (결정 모델 보기 설명). 없으면 name만 보기로
+    is_default    boolean NOT NULL DEFAULT false,       -- 연결을 시작할 때 배경
+    sort_order    int     NOT NULL DEFAULT 0,
+    is_active     boolean NOT NULL DEFAULT true,
+    UNIQUE (character_id, code)
+);
+CREATE UNIQUE INDEX uq_character_backgrounds_default
+    ON character_backgrounds (character_id) WHERE is_default;  -- 메이트당 기본 배경 하나
+
 -- ---------------------------------------------------------------------
 -- 6. 캐릭터 콘텐츠 / 관계 / 해금 / 기억 (S04, S09, S11)
 -- ---------------------------------------------------------------------
@@ -451,6 +472,7 @@ CREATE TABLE connections (
     return_count      int         NOT NULL DEFAULT 0,
     mood              text,                               -- 그날의 분위기 (연결마다 새로, 확정 필요)
     closing_line      text,                               -- 완료 대사 (종료 때 저장, 연결 기록 공용)
+    background_code   text,                               -- 지금 배경 character_backgrounds.code (NULL이면 메이트 기본 배경, 2026-11-23)
     CHECK (ended_at IS NULL OR ended_at >= started_at),
     CHECK ((ended_at IS NULL) = (end_type IS NULL)),
     CHECK (present_seconds <= camera_on_seconds AND camera_on_seconds <= connected_seconds AND pip_seconds <= connected_seconds)

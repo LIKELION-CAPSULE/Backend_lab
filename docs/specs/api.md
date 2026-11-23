@@ -869,6 +869,10 @@ GET /api/me/memories?date=2026-11-12
 | greeting | Object | 인사 반응 `trigger`(`GREETING`) · `intensity`(null) · `line` · `expression` · `audio`. `line`은 대사 생성 전이라 지금은 null, `expression`은 반응표의 표정 이름 (없으면 null), `audio`는 음성 단계 전이라 null |
 | minorRemainingSeconds | Integer | 만 19세 미만이면 오늘(오전 5시 기준) 남은 연결 시간(초), 아니면 null |
 | credits | Object | 상단 바 '오늘 남은 크레딧' (33의 `Credits`, 7단계 · 2026-11-23) |
+| backgrounds | Array | 이 메이트의 배경 전체 `code` · `name` · `imageUrl` (정렬 순서). 프론트가 미리 받아 두고 20 · 28의 `background`가 오면 바꿈. 배경이 없는 메이트면 빈 배열 |
+| background | String | 지금 배경 `code` (시작은 메이트 기본 배경). 배경이 없는 메이트면 null |
+
+> 2026-11-23 (메이트 배경, ADR 0032): `backgrounds` · `background` 추가. 배경은 대화 흐름에 따라 서버가 바꾼다 (20 '배경')
 
 > 2026-11-23 (12/1 베타 4단계): `firstMeet` · `greeting` · `minorRemainingSeconds` 추가. 만 19세 미만이 오늘 3시간을 다 쓰면 403 MINOR_DAILY_LIMIT
 
@@ -886,7 +890,12 @@ GET /api/me/memories?date=2026-11-12
   "relation": { "stage": 3, "stageName": "친구" },
   "greeting": { "trigger": "GREETING", "intensity": null, "line": null, "expression": "웃음", "audio": null },
   "minorRemainingSeconds": null,
-  "credits": { "todayRemaining": 1320, "attendanceRemaining": 1320, "attendanceExpiresAt": "2026-11-07T20:00:00Z", "inviteBalance": 0, "low": false, "exhausted": false }
+  "credits": { "todayRemaining": 1320, "attendanceRemaining": 1320, "attendanceExpiresAt": "2026-11-07T20:00:00Z", "inviteBalance": 0, "low": false, "exhausted": false },
+  "backgrounds": [
+    { "code": "classroom_day", "name": "낮 교실", "imageUrl": "https://cdn.../chaerin/v1/bg/classroom_day.png" },
+    { "code": "cafe", "name": "카페", "imageUrl": "https://cdn.../chaerin/v1/bg/cafe.png" }
+  ],
+  "background": "classroom_day"
 }
 ```
 
@@ -937,6 +946,7 @@ GET /api/me/memories?date=2026-11-12
 | --- | --- | --- |
 | connectionId · mate · avatar · me · serverTime · minorRemainingSeconds |  | '연결 시작' 응답과 같음 (`startedAt` · `firstMeet` · `greeting`은 없음) |
 | connectedSeconds · presentSeconds · cameraOnSeconds · pipSeconds | Integer | 마지막 heartbeat 값 (받은 적 없으면 0) → 타이머를 여기서부터 이어서 |
+| backgrounds · background | | '연결 시작'과 같음. `background`는 끊기기 전 마지막 배경, 그 배경이 그사이 지워졌거나 비활성이면 기본 배경 (2026-11-23 메이트 배경) |
 
 > 2026-11-23 (12/1 베타 3단계): `sessionId` → `connectionId`, `targetMinutes` · `room` 삭제, `character` → `mate`
 
@@ -1288,8 +1298,11 @@ GET /api/me/memories?date=2026-11-12
 | charged | Integer | 이번에 깎인 크레딧 (기본 0 · 고급 30). `fallback`이면 0 |
 | credits | Object | 차감 뒤 크레딧 (33의 `Credits`). 상단 바 갱신용 |
 | safety | String | 안전 경고를 받은 턴이면 `WARNING`, 아니면 null. 이때 `content`는 정해진 거절 대사 |
+| background | Object | 이 답장으로 배경이 바뀌었으면 `code` · `name` · `imageUrl`, 그대로면 null (아래 '배경') |
 
 > 2026-11-23 (12/1 베타): `mode` · `charged` · `credits` · `safety` 추가
+
+> 2026-11-23 (메이트 배경, ADR 0032): `background` 추가
 
 > 2026-11-04 (호감도 최종안): 점수는 LLM이 주지 않음. 말의 종류를 고르고 캐릭터 점수표로 정함. 오르기는 어렵고 내려가기는 쉬움
 >
@@ -1346,6 +1359,14 @@ GET /api/me/memories?date=2026-11-12
 - 사용자 말을 LLM에 넘기기 전에 검사한다. 위반이면 LLM을 부르지 않고 정해진 거절 대사로 답하고 `safety: "WARNING"`, `safety_strikes`에 기록
 - 24시간 안에 위반이 3번이면 그때부터 24시간 대화 정지 → 그동안 20 · 28은 403 CHAT_SUSPENDED (확정 필요: 횟수 · 기간, 반복 시 늘릴지)
 - 무엇을 위반으로 볼지(탐지 기준)는 확정 필요: 지금은 판정 자리만 있고 아무것도 잡지 않음 (TODO judgment). 답변 쪽 검사도 기준이 정해지면
+
+#### 배경 (2026-11-23, ADR 0032)
+
+- 배경은 메이트마다 여러 장(`character_backgrounds`)이고, 연결을 시작하면 기본 배경 (16 `backgrounds` · `background`)
+- 답장이 끝나면 결정 모델이 사용자 말 + 답장 + 지금 배경을 보고 "그대로" 또는 다른 배경 하나를 고른다 (표정 고르기와 같이, 1.5초 안에 못 고르면 그대로). 보기 설명은 배경마다 `guide`
+- 바뀌면 `connections.background_code`에 저장하고 응답 `background`로 알림. 이어하기(17)는 마지막 배경으로 시작
+- 배경이 2장 미만인 메이트, 대체 대사(`fallback`) · 안전 경고 턴, 같은 `requestId` 재전송은 고르지 않음 (`background` null)
+- 확정 필요: 메이트별 배경 목록 · 이미지 · `guide` 문구, 너무 자주 바뀌지 않게 할 규칙(예: 몇 턴 안에는 다시 안 바꿈) (J-18)
 
 #### 서버가 하는 일
 
@@ -1793,7 +1814,7 @@ json
 | 이벤트 | 몇 번 | data |
 | --- | --- | --- |
 | `reply` | 0번 이상 | `{"content": "지금까지 만들어진 답장"}`. **지금까지의 글 전체**(조각이 아님). 받을 때마다 말풍선 글을 이 값으로 바꿈 |
-| `done` | 마지막 1번 | 20번 응답과 같은 JSON. `content`가 최종 답장이라 말풍선을 이 값으로 확정 (마지막 `reply`와 조금 다를 수 있음: 앞뒤 공백 · 따옴표 정리). 표정 · 호감도도 여기서 |
+| `done` | 마지막 1번 | 20번 응답과 같은 JSON. `content`가 최종 답장이라 말풍선을 이 값으로 확정 (마지막 `reply`와 조금 다를 수 있음: 앞뒤 공백 · 따옴표 정리). 표정 · 호감도 · 배경(`background`, 2026-11-23)도 여기서 |
 | `error` | `done` 대신 1번 | 공통 에러 모양 `{"success": false, "code", "message", "detail"}`. 스트림을 연 뒤에 생긴 오류만 (예: 답하는 사이 공부가 끝남 → `CONNECTION_ENDED`) |
 
 ```
