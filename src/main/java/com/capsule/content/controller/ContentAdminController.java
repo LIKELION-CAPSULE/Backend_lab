@@ -2,15 +2,18 @@ package com.capsule.content.controller;
 
 import com.capsule.common.response.ApiResponse;
 import com.capsule.content.dto.ContentAdminRequests.CreateMate;
+import com.capsule.content.dto.ContentAdminRequests.MateRow;
 import com.capsule.content.dto.ContentAdminRequests.MateSaved;
 import com.capsule.content.dto.ContentAdminRequests.ModelRegistered;
 import com.capsule.content.dto.ContentAdminRequests.RegisterModel;
 import com.capsule.content.dto.ContentAdminRequests.SetModel;
 import com.capsule.content.service.ContentAdminService;
 import io.swagger.v3.oas.annotations.Hidden;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -41,6 +44,11 @@ public class ContentAdminController {
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<MateSaved> createMate(@RequestBody CreateMate body) {
         return ApiResponse.ok(admin.createMate(body));
+    }
+
+    @GetMapping("/internal/content/mates")
+    public ApiResponse<List<MateRow>> mates() {
+        return ApiResponse.ok(admin.mates());
     }
 
     @PutMapping("/internal/content/mates/{mateId}/model")

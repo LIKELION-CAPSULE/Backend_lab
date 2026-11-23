@@ -4,6 +4,7 @@ import com.capsule.common.error.ApiException;
 import com.capsule.content.domain.ContentErrorCode;
 import com.capsule.content.dto.ContentAdminRequests.CreateMate;
 import com.capsule.content.dto.ContentAdminRequests.Expression;
+import com.capsule.content.dto.ContentAdminRequests.MateRow;
 import com.capsule.content.dto.ContentAdminRequests.MateSaved;
 import com.capsule.content.dto.ContentAdminRequests.ModelRegistered;
 import com.capsule.content.dto.ContentAdminRequests.Motion;
@@ -144,6 +145,25 @@ public class ContentAdminService {
                 .single();
         log.info("콘텐츠 관리: 메이트 만듦 id={} name={} model={}", id, m.name(), m.modelId());
         return new MateSaved(id, m.modelId(), comingSoon);
+    }
+
+    /** 메이트 목록 (도구가 모델을 붙일 메이트를 고를 때). 비활성 · 준비 중도 포함, 표시 순서대로 */
+    @Transactional(readOnly = true)
+    public List<MateRow> mates() {
+        return jdbc.sql("""
+                        SELECT c.id, c.name, c.one_liner, c.model_id, m.storage_prefix, m.format, c.coming_soon, c.is_active
+                        FROM characters c LEFT JOIN live2d_models m ON m.id = c.model_id
+                        ORDER BY c.sort_order, c.id""")
+                .query((rs, i) -> new MateRow(
+                        rs.getLong(1),
+                        rs.getString(2),
+                        rs.getString(3),
+                        rs.getObject(4, Long.class),
+                        rs.getString(5),
+                        rs.getString(6),
+                        rs.getBoolean(7),
+                        rs.getBoolean(8)))
+                .list();
     }
 
     /** 메이트의 모델을 바꾼다(새 버전). 앞 모델 행은 기록으로 남는다 */
