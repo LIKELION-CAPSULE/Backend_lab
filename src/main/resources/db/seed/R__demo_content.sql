@@ -89,11 +89,12 @@ ON CONFLICT (id) DO UPDATE SET model_id = EXCLUDED.model_id, name = EXCLUDED.nam
     sort_order = EXCLUDED.sort_order, one_liner = EXCLUDED.one_liner, hashtags = EXCLUDED.hashtags,
     age_rating = EXCLUDED.age_rating, stage_names = EXCLUDED.stage_names;
 
--- 남학생 메이트: 설정이 오기 전이라 '준비 중' 카드만 (PRD 10장, 모델 없음)
+-- 남학생 메이트 서진 (PRD 10장 자리, 2026-11-24). 모델은 Aliving2D로 만들어 관리용 API로 붙인다(ADR 0033)
+--   여기서는 이름 · 순서만 맞춘다: 다시 돌아도 붙은 모델 · 준비 중 여부를 덮지 않게 (공용 개발 DB는 모델이 붙어 있음)
+--   모델이 없는 DB(로컬 · 테스트)에서는 준비 중 카드
 INSERT INTO characters (id, model_id, name, sort_order, coming_soon) OVERRIDING SYSTEM VALUE
-VALUES (2, NULL, '준비 중', 2, true)
-ON CONFLICT (id) DO UPDATE SET model_id = EXCLUDED.model_id, name = EXCLUDED.name,
-    sort_order = EXCLUDED.sort_order, coming_soon = EXCLUDED.coming_soon;
+VALUES (2, NULL, '서진', 2, true)
+ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, sort_order = EXCLUDED.sort_order;
 
 -- id를 직접 넣었으므로 시퀀스를 맞춘다 (안 하면 다음 INSERT가 id 1부터 시작해 충돌)
 SELECT setval(pg_get_serial_sequence('live2d_models', 'id'), (SELECT max(id) FROM live2d_models));
