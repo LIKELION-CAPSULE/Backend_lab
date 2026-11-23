@@ -563,6 +563,8 @@
 
 > 2026-11-23 (12/1 베타): `model.format` 추가. 지금 아바타는 모두 `CUBISM`. 내 아바타를 Aliving2D로 바꿀지는 확정 필요
 
+> 2026-11-24: 새로 넣는 모델의 기본 형식은 `ALIVING2D_V2`(DB 기본값). 아바타는 `CUBISM` 유지(확정), 메이트는 앞으로 Aliving2D. `ALIVING2D_V2`이면 `modelJsonUrl`은 Aliving2D 묶음의 `model.json`이고, 프론트는 Aliving2D 엔진(`engine.js` · `player.js`)으로 그린다. 표정은 `name`(반응 응답의 `expression` 값)으로 켠다
+
 > ✅ **200 OK**
 
 ## 10. PATCH /api/me — 프로필 설정

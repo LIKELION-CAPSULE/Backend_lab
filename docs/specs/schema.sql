@@ -104,6 +104,10 @@
 -- 2026-11-23 변경 (메이트 배경)
 --   - character_backgrounds 추가 (메이트마다 배경 여러 장, 기본 하나). 대화 흐름에 따라 결정 모델이 고른다 (ADR 0032)
 --   - connections.background_code 추가 (이 연결의 지금 배경, NULL이면 메이트 기본 배경)
+--
+-- 2026-11-24 변경 (모델 형식 기본값)
+--   - live2d_models.format 기본값 CUBISM → ALIVING2D_V2. 앞으로 넣는 모델은 Aliving2D 묶음(model.json).
+--     지금 있는 Cubism 모델(메이트 말포이 · 아바타)은 CUBISM 그대로(시드 · 데이터에 format을 적어 둠)
 -- =====================================================================
 
 BEGIN;
@@ -265,7 +269,7 @@ CREATE TABLE live2d_models (
     offset_x        int          NOT NULL DEFAULT 0,      -- 칸 안에서의 위치 보정
     offset_y        int          NOT NULL DEFAULT 0,
     created_at      timestamptz  NOT NULL DEFAULT now(),
-    format          text         NOT NULL DEFAULT 'CUBISM' CHECK (format IN ('CUBISM', 'ALIVING2D_V2'))  -- 프론트 렌더러 (api.md 9 · 31)
+    format          text         NOT NULL DEFAULT 'ALIVING2D_V2' CHECK (format IN ('CUBISM', 'ALIVING2D_V2'))  -- 프론트 렌더러 (api.md 9 · 31). 기본 Aliving2D (2026-11-24)
 );
 
 CREATE TABLE live2d_motions (
