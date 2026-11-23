@@ -14,17 +14,18 @@
 DELETE FROM live2d_reaction_maps WHERE model_id = 1;
 DELETE FROM live2d_motions WHERE model_id = 1;
 
-INSERT INTO live2d_models (id, storage_prefix, model_json_path, scale, offset_x, offset_y) OVERRIDING SYSTEM VALUE
-VALUES (1, 'chaerin/v3/', 'chaerin.model3.json', 1.00, 0, 12), -- v3 (2026-11-06): v2 파일에 model3.json의 EyeBlink(ParamEyeLOpen · ParamEyeROpen) · LipSync(ParamMouthOpenY) 그룹만 채움
+-- 모두 Cubism 모델이라 format = CUBISM을 적어 둔다 (기본값이 ALIVING2D_V2로 바뀜, 2026-11-24)
+INSERT INTO live2d_models (id, storage_prefix, model_json_path, scale, offset_x, offset_y, format) OVERRIDING SYSTEM VALUE
+VALUES (1, 'chaerin/v3/', 'chaerin.model3.json', 1.00, 0, 12, 'CUBISM'), -- v3 (2026-11-06): v2 파일에 model3.json의 EyeBlink(ParamEyeLOpen · ParamEyeROpen) · LipSync(ParamMouthOpenY) 그룹만 채움
        -- 이전 판 v2 (2026-11-06): 머리카락 · 물리 파라미터 12개 추가, physics3 추가, 표정 8개 수정
-       (2, 'haru/v1/', 'Haru.model3.json', 1.00, 0, 0), -- 아바타: Live2D 공식 샘플 Haru (무료 소재 라이선스, 출처 표기 필요, 음성 참조 제거)
+       (2, 'haru/v1/', 'Haru.model3.json', 1.00, 0, 0, 'CUBISM'), -- 아바타: Live2D 공식 샘플 Haru (무료 소재 라이선스, 출처 표기 필요, 음성 참조 제거)
        -- 아바타 2 · 3 (2026-11-06): Live2D 공식 샘플 Hiyori PRO · Natori PRO. Haru와 같은 무료 소재 라이선스(Live2D 오리지널 캐릭터).
        --   api.md 9 아바타 조건(얼굴 트래킹 표준 파라미터 6개 + 팔 · 손 파라미터)을 둘 다 만족. 음성 파일 · 참조 없음.
        --   샘플 zip(cubism.live2d.com/sample-data/bin/<이름>/<이름>_ja.zip)의 runtime/을 버킷 live2d-model의 <이름>/v1/에 그대로 올린다
-       (3, 'hiyori/v1/', 'hiyori_pro_t11.model3.json', 1.00, 0, 0), -- 일러스트: かにビーム
-       (4, 'natori/v1/', 'natori_pro_t06.model3.json', 1.00, 0, 0) -- 일러스트: 先崎真琴
+       (3, 'hiyori/v1/', 'hiyori_pro_t11.model3.json', 1.00, 0, 0, 'CUBISM'), -- 일러스트: かにビーム
+       (4, 'natori/v1/', 'natori_pro_t06.model3.json', 1.00, 0, 0, 'CUBISM') -- 일러스트: 先崎真琴
 ON CONFLICT (id) DO UPDATE SET storage_prefix = EXCLUDED.storage_prefix, model_json_path = EXCLUDED.model_json_path,
-    scale = EXCLUDED.scale, offset_x = EXCLUDED.offset_x, offset_y = EXCLUDED.offset_y;
+    scale = EXCLUDED.scale, offset_x = EXCLUDED.offset_x, offset_y = EXCLUDED.offset_y, format = EXCLUDED.format;
 
 -- 표정 8개: 이름 = 감정 이름 (api.md 19 말포이 표정 목록, 디자이너 파일 expression1~8 순서)
 INSERT INTO live2d_expressions (id, model_id, name, file_path) OVERRIDING SYSTEM VALUE

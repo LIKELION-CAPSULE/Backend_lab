@@ -26,6 +26,6 @@
   - prod 프로필은 아직 단독으로 뜨지 않는다. `fake-integrations: false`라 Fake 카카오 · 메일 클라이언트가 빠지는데 실제 구현이 없다(user 모듈). LLM도 공용 기본값 `fake`
   - Redis(0009)는 Supabase에 없다. 배포용 Redis(Upstash 등)는 배포 환경을 정할 때 따로 정한다. 연결 값은 `SPRING_DATA_REDIS_*` 환경변수
   - 리프레시 쿠키 SameSite(공용 기본 `Lax`), HTTPS 프록시 뒤의 `server.forward-headers-strategy`는 프론트 · 백엔드 도메인과 배포 환경이 정해지면 본다(B12)
-  - 운영 DB의 콘텐츠 데이터(룸 · 캐릭터 · 아바타 · Live2D 모델 행)는 시드(`db/seed`, 로컬 · 테스트 전용)로 들어가지 않는다. 실제 에셋이 정해지면 content 담당이 마이그레이션으로 넣는다
+  - 운영 DB의 콘텐츠 데이터(룸 · 캐릭터 · 아바타 · Live2D 모델 행)는 시드(`db/seed`, 로컬 · 테스트 전용)로 들어가지 않는다. 실제 에셋이 정해지면 content 담당이 마이그레이션으로 넣는다 → 0033에서 바뀜: 모델 · 메이트는 관리용 API(`/internal/content/**`)로 넣는다
   - 주소 저장 방식이 둘이다. Live2D는 `cdn.base-url` + `storage_prefix` + `model_json_path`로 조합하고, 이미지 컬럼(`thumbnail_url` · `profile_image_url` · `image_url` · `asset_url`)은 지금 스키마대로 전체 주소를 저장한다. 버킷을 옮기면 이미지 쪽만 데이터 마이그레이션이 필요하다. 상대 경로로 맞출지는 content 담당이 에셋을 넣을 때 정한다
   - 배포 환경(앱 서버를 어디서 돌릴지)은 아직 정하지 않았다

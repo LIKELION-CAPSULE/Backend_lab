@@ -51,7 +51,10 @@ class MateApiTest {
         mvc.perform(get("/api/mates/" + id).with(jwt().jwt(j -> j.subject("7"))))
                 .andExpect(jsonPath("$.data.illustrationUrl").value("https://cdn.capsule.invalid/images/test/full.png"))
                 .andExpect(jsonPath("$.data.voiceSampleUrl").value("https://other.cdn/sample.mp3"))
-                .andExpect(jsonPath("$.data.comingSoon").value(true));
+                .andExpect(jsonPath("$.data.comingSoon").value(true))
+                // format을 적지 않고 넣은 모델은 기본값 ALIVING2D_V2 (2026-11-24)
+                .andExpect(jsonPath("$.data.model.format").value("ALIVING2D_V2"))
+                .andExpect(jsonPath("$.data.model.modelJsonUrl").value("https://cdn.capsule.invalid/test/model.json"));
         jdbc.update("UPDATE characters SET is_active = false WHERE id = ?", id);
         mvc.perform(get("/api/mates/" + id).with(jwt().jwt(j -> j.subject("7"))))
                 .andExpect(status().isNotFound())
@@ -75,7 +78,7 @@ class MateApiTest {
     /** 준비 중 메이트 하나 (characters.model_id가 UNIQUE라 모델도 새로) */
     private long otherMate(String illustration, String voice) {
         long modelId = jdbc.queryForObject(
-                "INSERT INTO live2d_models (storage_prefix, model_json_path) VALUES ('test/', 'm.model3.json')"
+                "INSERT INTO live2d_models (storage_prefix, model_json_path) VALUES ('test/', 'model.json')"
                         + " RETURNING id",
                 Long.class);
         return jdbc.queryForObject(
