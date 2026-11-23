@@ -56,6 +56,12 @@ public class StudySession {
     private int returnCount;
     private String mood;
     private String closingLine;
+    /**
+     * 지금 배경 (character_backgrounds.code, NULL이면 메이트 기본, ADR 0032). 답장 때 SQL로 바꾼다
+     * (StudySessionRepository.updateBackground). 엔티티는 쓰지 않는다: messageCount와 같은 이유
+     */
+    @Column(insertable = false, updatable = false)
+    private String backgroundCode;
 
     public StudySession(long userId, long characterId, Instant now) {
         this.userId = userId;
