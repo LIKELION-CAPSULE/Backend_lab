@@ -946,7 +946,7 @@ GET /api/me/memories?date=2026-11-12
 | --- | --- | --- |
 | connectionId · mate · avatar · me · serverTime · minorRemainingSeconds |  | '연결 시작' 응답과 같음 (`startedAt` · `firstMeet` · `greeting`은 없음) |
 | connectedSeconds · presentSeconds · cameraOnSeconds · pipSeconds | Integer | 마지막 heartbeat 값 (받은 적 없으면 0) → 타이머를 여기서부터 이어서 |
-| backgrounds · background | | '연결 시작'과 같음. `background`는 끊기기 전 마지막 배경 (2026-11-23 메이트 배경) |
+| backgrounds · background | | '연결 시작'과 같음. `background`는 끊기기 전 마지막 배경, 그 배경이 그사이 지워졌거나 비활성이면 기본 배경 (2026-11-23 메이트 배경) |
 
 > 2026-11-23 (12/1 베타 3단계): `sessionId` → `connectionId`, `targetMinutes` · `room` 삭제, `character` → `mate`
 
