@@ -1274,7 +1274,7 @@ GET /api/me/memories?date=2026-11-12
 | content | String | O | 1~300자 |
 | inputType | String | O | `TEXT` 직접 입력 / `QUICK` 빠른 답장 / `VOICE` 누르고 말하기(STT 글자) |
 | mode | String | X | 대화 모드 `BASIC`(기본, 크레딧 없음) · `ADVANCED`(고급, 1턴 30). 없으면 `BASIC` |
-| tts | Boolean | X | true면 답장 음성도 받음 (기본 false). 음성 단계 전이라 지금은 무시 |
+| tts | Boolean | X | true면 답장 음성도 받음 (기본 false). **28 스트리밍에서만** 음성을 흘려 보냄 (28 '음성'). 20은 무시하고 `audioBase64`는 늘 null (2026-11-24) |
 
 > 2026-11-23 (12/1 베타): `inputType`에 `VOICE`, `mode` 추가. 고급 모드에 쓸 AI 모델은 운영 설정(`capsule.llm.advanced-model`)이고 정해지기 전까지는 기본 모드와 같은 모델 (확정 필요)
 
@@ -1301,6 +1301,7 @@ GET /api/me/memories?date=2026-11-12
 | credits | Object | 차감 뒤 크레딧 (33의 `Credits`). 상단 바 갱신용 |
 | safety | String | 안전 경고를 받은 턴이면 `WARNING`, 아니면 null. 이때 `content`는 정해진 거절 대사 |
 | background | Object | 이 답장으로 배경이 바뀌었으면 `code` · `name` · `imageUrl`, 그대로면 null (아래 '배경') |
+| voice | Boolean | 이번 턴에 음성을 보냈는지 (28 '음성'). 20 · 재전송은 늘 false (2026-11-24) |
 
 > 2026-11-23 (12/1 베타): `mode` · `charged` · `credits` · `safety` 추가
 
@@ -1811,12 +1812,14 @@ json
 
 #### 🛬 Response
 
-> ✅ **200 OK** · `Content-Type: text/event-stream`. 이벤트 두 종류(+ 오류)가 이 순서로 옴
+> ✅ **200 OK** · `Content-Type: text/event-stream`. 이벤트 두 종류(+ 오류)가 이 순서로 옴. 음성이 켜진 턴은 `audio` · `audio_end`가 섞여 옴 (아래 '음성')
 
 | 이벤트 | 몇 번 | data |
 | --- | --- | --- |
 | `reply` | 0번 이상 | `{"content": "지금까지 만들어진 답장"}`. **지금까지의 글 전체**(조각이 아님). 받을 때마다 말풍선 글을 이 값으로 바꿈 |
-| `done` | 마지막 1번 | 20번 응답과 같은 JSON. `content`가 최종 답장이라 말풍선을 이 값으로 확정 (마지막 `reply`와 조금 다를 수 있음: 앞뒤 공백 · 따옴표 정리). 표정 · 호감도 · 배경(`background`, 2026-11-23)도 여기서 |
+| `audio` | 0번 이상 | 음성 조각 `{"seq": 0, "format": "mp3", "data": "<base64>"}`. `seq` 순서대로 이어 붙여 재생. `reply` · `done` 사이사이와 `done` 뒤에도 옴 (2026-11-24) |
+| `audio_end` | 0 또는 1번, 맨 마지막 | `{"chunks": 12, "complete": true}`. 음성이 켜진 턴(`done.voice` true)에만. `complete` false면 음성이 중간에 끊김 (글은 `done` 그대로) |
+| `done` | 1번 (음성이 켜진 턴은 뒤에 `audio` · `audio_end`가 더 옴) | 20번 응답과 같은 JSON. `content`가 최종 답장이라 말풍선을 이 값으로 확정 (마지막 `reply`와 조금 다를 수 있음: 앞뒤 공백 · 따옴표 정리). 표정 · 호감도 · 배경(`background`, 2026-11-23)도 여기서 |
 | `error` | `done` 대신 1번 | 공통 에러 모양 `{"success": false, "code", "message", "detail"}`. 스트림을 연 뒤에 생긴 오류만 (예: 답하는 사이 공부가 끝남 → `CONNECTION_ENDED`) |
 
 ```
@@ -1845,6 +1848,40 @@ data: {"requestId":"9c3a...","characterId":1,"content":"알지. 그리핀도르 
 - 답 길이 · 수다 길어짐 · 일시정지 중 입력 막기는 20번과 같음
 - 프론트는 `EventSource`가 아니라 `fetch`로 부른다 (`EventSource`는 POST · 헤더를 못 보냄). 응답 본문을 읽으면서 빈 줄로 이벤트를 나눔
 - 연결이 끊기면 같은 `requestId`로 다시 보냄 (20번이든 28번이든). 이미 답했으면 `done`(28) 또는 보통 응답(20)으로 저장된 답장이 옴
+
+#### 음성 (TTS, 2026-11-24, ADR 0034)
+
+메이트 답장을 글자가 만들어지는 대로 음성으로 바꿔 `audio` 조각으로 흘려 보낸다. 답장을 다 기다리지 않아 첫 소리가 빨리 난다.
+
+- 켜지는 조건: 요청 `tts: true` + 설정 `voiceEnabled`(29) true + 크레딧이 이번 턴 비용(보이스 20, 고급 모드면 합쳐 50) 이상. 하나라도 아니면 음성 없이 글만 (에러 아님, 33 '그 기능만 멈춤')
+- `done`에 `voice`(Boolean): 이번 턴에 음성을 보냈는지. true면 마지막에 `audio_end`가 옴
+- 자르는 단위: 문장 끝(`.` `!` `?` `…` `~` 줄바꿈)마다 TTS에 넘긴다. 첫 조각은 빨리 소리를 내려고 쉼표에서도 자름. 조각 순서는 `seq`로 지킨다
+- 대체 대사 · 안전 경고 턴도 음성을 보내지만 크레딧은 깎지 않음. 보이스 20은 LLM 답장이 성공한 턴만 (`charged`에 합쳐 나옴: 보이스 20 · 고급 30 · 둘 다 50, 같은 `requestId`는 한 번만)
+- 같은 `requestId` 재전송은 음성 없이 `done`만 (`voice` false)
+- 음성 공급자 · 메이트별 목소리는 운영 설정 (`capsule.tts`). 기본은 가짜 음성(무음 조각)이라 비용이 들지 않음. 메이트별 실제 목소리는 확정 필요 (J-10)
+- `error`가 오면 음성도 멈춘다: 그 뒤로 `audio` · `audio_end`는 오지 않음. 사용자가 연결을 끊어도 남은 음성은 만들지 않음 (글은 끝까지 만들어 저장)
+- 20번(스트리밍 아님)은 음성을 주지 않는다: `tts`를 무시하고 `audioBase64`는 늘 null. 음성은 28로
+- 프론트 재생: `audio` 조각을 MediaSource(`audio/mpeg`)에 이어 붙이거나, 모아서 한 번에 재생. 사용자가 말을 시작하면 재생을 멈춤
+
+```
+event: reply
+data: {"content":"알지."}
+
+event: audio
+data: {"seq":0,"format":"mp3","data":"SUQzBAAAAA..."}
+
+event: reply
+data: {"content":"알지. 그리핀도르 그 녀석,"}
+
+event: done
+data: {"requestId":"9c3a...", ..., "voice":true, "charged":20}
+
+event: audio
+data: {"seq":1,"format":"mp3","data":"//uQxAAAAA..."}
+
+event: audio_end
+data: {"chunks":2,"complete":true}
+```
 
 ## 29. GET /api/me/settings — 설정 조회
 - 분류: 온보딩 · 홈
@@ -2038,7 +2075,7 @@ data: {"requestId":"9c3a...","characterId":1,"content":"알지. 그리핀도르 
 - 두 종류: **출석분**(하루 1,500, 다음 오전 5시에 남은 만큼 사라짐) · **초대분**(친구 초대 보상 1,000, 사라지지 않음)
 - 출석 지급과 지난 출석분 소멸은 배치 없이, 그날 그 사용자의 크레딧을 처음 읽거나 쓸 때 처리한다 (8 내 정보 · 16 연결 시작 · 33 · 34 · 차감). 하루 = 오전 5시 KST
 - 쓸 때는 출석분부터 (사라지는 것 먼저)
-- 차감: 보이스 대화 20 · 고급 대화 30 · 둘 다 50. 답장이 성공한 뒤에만, 같은 요청(`requestId`)은 한 번만. 모자라면 차감하지 않고 그 기능만 멈춤(기본 채팅은 계속). 고급 모드는 20 · 28의 `mode: ADVANCED` (2026-11-23), 보이스는 음성 단계에서
+- 차감: 보이스 대화 20 · 고급 대화 30 · 둘 다 50. 답장이 성공한 뒤에만, 같은 요청(`requestId`)은 한 번만. 모자라면 차감하지 않고 그 기능만 멈춤(기본 채팅은 계속). 고급 모드는 20 · 28의 `mode: ADVANCED` (2026-11-23), 보이스는 28의 `tts: true` (2026-11-24, 28 '음성'). 둘 다면 한 줄("고급 · 보이스 대화 · 채린" 50)로
 - 탈퇴해도 크레딧 행은 남김 (지표)
 
 #### 설명

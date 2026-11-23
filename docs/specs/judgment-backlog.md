@@ -16,7 +16,7 @@
 | J-07 | dialogue | seunghee | 답장 감정 → 모션·표정 고르는 규칙 (엔진 표정 태그 ↔ 반응 표 감정 이름) | `dialogue/service/DialogueService.java` | 감정이 있으면 반응 표에서 그 감정으로 고름(#41). LLM 답장은 대사를 다 쓴 뒤 결정 모델이 캐릭터 표정 목록에서 고름(ADR 0028). 마감 초과 대체 대사 · 가짜 AI는 감정이 없어 모션 · 표정 없음 | api.md 19·20 (9차: 감정 목록은 데이터) | 미정 (#11·#33, 데이터 #9) |
 | J-08 | dialogue | seunghee | 세션 종료 때 지난 대화 정리 | `dialogue/service/ClosingWriter.java` `recap`, 프롬프트 `summary.system` | **방식 정함 (승희 2026-11-04, ADR 0022 14)**: 합치는 요약 대신 세션마다 카드 한 장, 최근 2장(`recap-max`, ADR 0022 결정 16). 카드 길이 · 내용(70자 안팎 흐름)은 임시 | api.md 22 | 임시값 구현 (#12) |
 | J-09 | dialogue | seunghee | 완료 대사 `closingLine` 생성, 못 만들 때 대체 문구 | `dialogue/service/DialogueService.java` `draft`(캐릭터 설정의 완료 · 포기 대사), `ClosingWriter.java` `closingLine`(설정 없는 캐릭터의 LLM), 대체 문구 `prompts/fixed.lines.yml` | 캐릭터 설정이 있으면 지금 관계 단계의 미리 쓴 완료 대사(`character_lines` CLOSING, 목표 절반 미만이면 GIVE_UP)를 사용자 단위로 순서대로, 없으면 LLM(CLOSING). 실패 · 마감(7초) 초과면 고정 대체 문구 | api.md 22·23 | 미정 (#12) |
-| J-10 | dialogue | seunghee | TTS `audioBase64` | `dialogue/service/DialogueService.java` | 항상 null | api.md 19·20 | 미정 (#13) |
+| J-10 | dialogue | seonguk | TTS: 메이트별 목소리 · 공급자, 음성 실패 때 크레딧 (2026-11-24 방식 정함, ADR 0034) | `dialogue/service/VoiceStream.java`, `dialogue/client/OpenAiTtsClient.java`, 값은 `capsule.tts` | 28에서 문장 단위로 음성을 흘려 보냄. 기본은 가짜 음성(무음), `capsule.tts.provider=openai`면 OpenAI TTS. 목소리는 모든 메이트 `capsule.tts.voice`(임시) | api.md 28 '음성' | 방식 정함, 목소리 확정 필요 (#13) |
 | J-11 | session | seonguk | 종료 시 프론트 값과 서버 계산값이 "크게" 다를 때의 기준 | `session/service/SessionService.java` `end()` | 명세의 부등식 검증만 하고 프론트 값 사용 | api.md 22 "같이 챙길 것" | 미정 (#20) |
 | J-12 | dialogue | seunghee | 이벤트 반응 감정 `emotion` 값 목록과 정하는 기준 (LLM 출력) | `dialogue/service/DialogueService.java` `react` | **① 정함 (승희 2026-11-05)**: 상태 변화는 LLM이 캐릭터 표정 목록에서, 동작 4종은 미리 쓴 대사 칸의 표정. ② LLM 실패 대체 대사면 null (추천: 그 대사 칸의 표정) | api.md 19 (2026-11-04) | ② 미정 (#33) |
 | J-13 | dialogue | seunghee | 캐릭터가 기억할 사실의 기준 · 개수 (2026-11-04 추가) | `dialogue/service/MemoryKeeper.java` `keepQuestion`, 값은 `capsule.dialogue.memory-max` | 결정 모델 보기 설명: 저장(목표 · 계획, 이어지는 고민, 취향 · 습관, 캐릭터와 한 약속, 자기 이야기) / 무시(인사 · 잡담 · 공부 문제 자체 · 그때뿐인 상태 · 일정에 이미 있는 것). 최대 20개(승희). PM은 기억 기능을 데모데이 뒤로 미룸 | api.md 20 | 임시값 구현, PM 확인 필요 |
@@ -586,8 +586,8 @@
 - 명세: `api.md` 19·20번의 `tts`, `audioBase64` 설명
 
 #### 결정
-- ①: (미정)
-- ②: (미정)
+- ① (성욱 2026-11-24): 실시간 TTS. OpenAI TTS로 28 스트리밍에 문장 단위로 흘려 보낸다 (ADR 0034). 20은 음성 없음
+- ②: 목소리는 운영 설정(`capsule.tts.voices`), 메이트별 실제 목소리는 들어 보고 정함 (미정)
 
 ### J-11 공부 종료 때 프론트 값과 서버 계산이 크게 다를 때 (성욱 담당, #20)
 
