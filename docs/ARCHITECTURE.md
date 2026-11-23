@@ -115,7 +115,9 @@ flowchart LR
 |---|---|
 | api | `CharacterQuery`, `RoomQuery`, `AvatarQuery`, `ReactionQuery`(trigger·감정 → 모션·표정), `ContentTypes` |
 | adapter | `CharacterQueryAdapter`, `RoomQueryAdapter`, `AvatarQueryAdapter`, `ReactionQueryAdapter`, `ContentMapper`(CDN 주소 붙이기) |
-| controller | `AvatarController` (`GET /api/avatars`) |
+| controller | `AvatarController` (`GET /api/avatars`), `MateController`(31), `ContentAdminController`(`/internal/content/**` 모델 · 메이트 등록, 토큰 `CAPSULE_CONTENT_ADMIN_TOKEN`이 있을 때만, ADR 0033) |
+| service | `ContentAdminService`(관리용 API 쓰기: 값 검사 → 한 트랜잭션으로 `live2d_*` · `characters` 행) |
+| config | `ContentAdminSecurityConfig`(`/internal/content/**` 전용 보안 체인, `Authorization: Bearer <토큰>`) |
 | domain | `CharacterEntity`(`characters`), `StudyRoom`, `RoomBackground`, `Avatar`, `Live2dModel`, `Live2dMotion`, `Live2dExpression`, `ReactionMap`(`live2d_reaction_maps`) |
 
 `characters`에는 화면용 정보(이름·이미지·모델)만 있다. 말투·대사·점수표는 dialogue의 `character_profiles` 등에 있다.
