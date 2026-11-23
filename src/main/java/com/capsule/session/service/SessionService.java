@@ -8,8 +8,10 @@ import static com.capsule.session.domain.SessionEvent.RETURN;
 import com.capsule.common.error.ApiException;
 import com.capsule.common.error.CommonErrorCode;
 import com.capsule.content.api.AvatarQuery;
+import com.capsule.content.api.BackgroundQuery;
 import com.capsule.content.api.CharacterQuery;
 import com.capsule.content.api.ContentTypes.AvatarInfo;
+import com.capsule.content.api.ContentTypes.BackgroundInfo;
 import com.capsule.content.api.ContentTypes.CharacterInfo;
 import com.capsule.content.api.ContentTypes.MateInfo;
 import com.capsule.content.api.ContentTypes.Reaction;
@@ -28,6 +30,7 @@ import com.capsule.session.domain.ConnectionTimes;
 import com.capsule.session.domain.SessionErrorCode;
 import com.capsule.session.domain.SessionEvent;
 import com.capsule.session.domain.StudySession;
+import com.capsule.session.dto.BackgroundView;
 import com.capsule.session.dto.EndRequest;
 import com.capsule.session.dto.EventRequest;
 import com.capsule.session.dto.EventResponse;
@@ -87,6 +90,7 @@ public class SessionService {
     private final UserSettingsQuery userSettings;
     private final AvatarQuery avatars;
     private final MateQuery mates;
+    private final BackgroundQuery backgrounds;
     private final CharacterQuery characters;
     private final ReactionQuery reactions;
     private final UnlockQuery unlocks;
@@ -180,7 +184,20 @@ public class SessionService {
                 reaction(character.id(), "GREETING", null),
                 minorRemaining,
                 stageNow(mate, relationQuery.stage(userId, character.id())),
-                credits.current(userId));
+                credits.current(userId),
+                backgroundViews(character.id()),
+                currentBackground(character.id(), null));
+    }
+
+    // ---- 배경 (2026-11-23, ADR 0032)
+
+    private List<BackgroundView> backgroundViews(long mateId) {
+        return backgrounds.backgrounds(mateId).stream().map(BackgroundView::of).toList();
+    }
+
+    /** 저장된 code가 지금 목록에 없으면(지운 배경) 기본 배경. 배경이 없는 메이트면 null */
+    private String currentBackground(long mateId, String saved) {
+        return backgrounds.current(mateId, saved).map(BackgroundInfo::code).orElse(null);
     }
 
     // ---- 친밀도 (2026-11-23 5단계)
@@ -229,7 +246,9 @@ public class SessionService {
                 t.cameraOn(),
                 t.pip(),
                 minorRemaining(user, s),
-                now());
+                now(),
+                backgroundViews(s.characterId()),
+                currentBackground(s.characterId(), s.getBackgroundCode()));
     }
 
     // ---- 18 상태 기록 · 21 heartbeat

@@ -6,6 +6,7 @@ import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
@@ -23,7 +24,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.capsule.TestcontainersConfiguration;
+import com.capsule.content.api.BackgroundQuery;
 import com.capsule.content.api.CharacterQuery;
+import com.capsule.content.api.ContentTypes.BackgroundInfo;
 import com.capsule.content.api.ContentTypes.CharacterInfo;
 import com.capsule.content.api.ContentTypes.ExpressionRef;
 import com.capsule.content.api.ContentTypes.MotionRef;
@@ -34,6 +37,7 @@ import com.capsule.dialogue.client.LlmGateway;
 import com.capsule.dialogue.config.CharacterContentSeeder;
 import com.capsule.dialogue.config.DialogueProperties;
 import com.capsule.dialogue.dto.LlmPurpose;
+import com.capsule.dialogue.service.BackgroundPicker;
 import com.capsule.dialogue.service.ChatReplier;
 import com.capsule.relation.api.RelationCommands;
 import com.capsule.relation.api.RelationQuery;
@@ -107,6 +111,9 @@ class DialogueTest {
     @MockitoBean
     MemoryQuery memoryQuery;
 
+    @MockitoBean // 시드 메이트에 배경 데이터를 넣지 않으려고 (실제 조회는 content BackgroundQueryTest)
+    BackgroundQuery backgroundQuery;
+
     @MockitoSpyBean
     LlmGateway llm;
 
@@ -143,6 +150,7 @@ class DialogueTest {
                 .thenReturn(Optional.of(
                         new CharacterInfo(CHARACTER_ID, 1, "채린", null, List.of("츤데레"), "짝꿍", true, null, null)));
         when(reactionQuery.pick(anyLong(), anyString(), any())).thenReturn(Reaction.NONE);
+        when(backgroundQuery.current(anyLong(), any())).thenCallRealMethod();
         when(relationQuery.view(userId, CHARACTER_ID)).thenReturn(view(1, 80));
     }
 
@@ -337,6 +345,44 @@ class DialogueTest {
                         Integer.class,
                         sessionId))
                 .isEqualTo(1);
+    }
+
+    @Test
+    void replyCanChangeTheBackground() throws Exception {
+        // 배경 (명세 20 '배경', ADR 0032): 결정 모델이 고른 배경을 연결에 저장하고 응답으로 알린다
+        when(backgroundQuery.backgrounds(CHARACTER_ID))
+                .thenReturn(List.of(
+                        new BackgroundInfo("classroom", "교실", "https://cdn.test/bg/classroom.png", "공부할 때", true),
+                        new BackgroundInfo("cafe", "카페", "https://cdn.test/bg/cafe.png", "같이 카페에 갔을 때", false)));
+        doAnswer(inv -> {
+                    Map<?, ?> questions = inv.getArgument(1);
+                    if (!questions.containsKey(BackgroundPicker.QUESTION)) return inv.callRealMethod();
+                    return Map.of(BackgroundPicker.QUESTION, new Decider.Decision("cafe", 0.9));
+                })
+                .when(decider)
+                .decide(anyString(), any(), any());
+        when(relationCommands.applyChatScore(eq(userId), eq(CHARACTER_ID), eq(sessionId), any(), any()))
+                .thenReturn(change(0, 80));
+
+        UUID requestId = UUID.randomUUID();
+        send(requestId, "카페 가서 하자")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.background.code").value("cafe"))
+                .andExpect(jsonPath("$.data.background.name").value("카페"))
+                .andExpect(jsonPath("$.data.background.imageUrl").value("https://cdn.test/bg/cafe.png"));
+        assertThat(jdbc.queryForObject("SELECT background_code FROM connections WHERE id = ?", String.class, sessionId))
+                .isEqualTo("cafe");
+        // 재전송은 감정 · 표정처럼 배경도 다시 주지 않는다
+        send(requestId, "카페 가서 하자").andExpect(jsonPath("$.data.background").value(nullValue()));
+    }
+
+    @Test
+    void mateWithoutBackgroundsNeverAsksAboutThem() throws Exception {
+        UUID requestId = UUID.randomUUID();
+        when(relationCommands.applyChatScore(eq(userId), eq(CHARACTER_ID), eq(sessionId), eq(requestId), any()))
+                .thenReturn(change(0, 80));
+        send(requestId, "안녕").andExpect(jsonPath("$.data.background").value(nullValue()));
+        verify(decider, never()).decide(anyString(), argThat(q -> q.containsKey(BackgroundPicker.QUESTION)), any());
     }
 
     // --- 28 메시지 스트리밍 ---
@@ -670,7 +716,10 @@ class DialogueTest {
                 .andExpect(jsonPath("$.data.emotion").value(nullValue()))
                 .andExpect(jsonPath("$.data.fallback").value(true))
                 .andExpect(jsonPath("$.data.affinity.delta").value(0))
-                .andExpect(jsonPath("$.data.affinity.points").value(80));
+                .andExpect(jsonPath("$.data.affinity.points").value(80))
+                .andExpect(jsonPath("$.data.background").value(nullValue()));
+        // 대체 대사면 배경을 고르지 않는다 (명세 20 '배경')
+        verify(backgroundQuery, never()).backgrounds(anyLong());
         // 대체 대사면 0점으로만 부른다 (호감도 변화 없음, relation 잠금 순서만 지킴)
         verify(relationCommands).applyChatScore(userId, CHARACTER_ID, sessionId, requestId, ChatScore.none());
     }

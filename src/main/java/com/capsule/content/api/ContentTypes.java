@@ -92,6 +92,14 @@ public final class ContentTypes {
     public record UnlockInfo(
             long id, String type, String title, int unlockStage, String expressionName, String assetUrl) {}
 
+    /**
+     * 메이트 배경 하나 (api.md 16 backgrounds, 2026-11-23, ADR 0032).
+     *
+     * @param imageUrl CDN 주소를 붙인 값
+     * @param guide 언제 이 배경인지 (결정 모델 보기 설명), 없으면 null
+     */
+    public record BackgroundInfo(String code, String name, String imageUrl, String guide, boolean isDefault) {}
+
     public record MotionRef(String group, String file) {}
 
     public record ExpressionRef(String name, String file) {}
