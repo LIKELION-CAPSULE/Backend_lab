@@ -14,6 +14,7 @@ import java.util.UUID;
  * @param charged 이번에 깎인 크레딧 (기본 0 · 고급 30). fallback · 안전 경고 턴은 0
  * @param credits 차감 뒤 크레딧 (33 Credits). 기본 모드는 크레딧을 보지 않으므로 null
  * @param safety 안전 경고 턴이면 WARNING, 아니면 null
+ * @param background 이 답장으로 배경이 바뀌었으면 새 배경, 그대로 · 재전송이면 null (2026-11-23, ADR 0032)
  */
 public record MessageResponse(
         UUID requestId,
@@ -28,7 +29,11 @@ public record MessageResponse(
         ChatMode mode,
         int charged,
         Credits credits,
-        String safety) {
+        String safety,
+        Background background) {
 
     public static final String SAFETY_WARNING = "WARNING";
+
+    /** 바뀐 배경 (명세 20 '배경'). imageUrl은 CDN 주소를 붙인 값 */
+    public record Background(String code, String name, String imageUrl) {}
 }

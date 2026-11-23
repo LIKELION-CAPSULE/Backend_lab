@@ -19,6 +19,16 @@ public interface StudySessionRepository extends JpaRepository<StudySession, Long
             nativeQuery = true)
     int incrementMessageCount(long id);
 
+    /** 지금 배경 바꾸기 (ADR 0032). 진행 중인 연결만 (끝난 연결이면 0행) */
+    @Modifying
+    @Query(
+            value = "UPDATE connections SET background_code = :code WHERE id = :id AND ended_at IS NULL",
+            nativeQuery = true)
+    int updateBackground(long id, String code);
+
+    @Query(value = "SELECT background_code FROM connections WHERE id = :id", nativeQuery = true)
+    Optional<String> findBackgroundCode(long id);
+
     Optional<StudySession> findByUserIdAndEndedAtIsNull(long userId);
 
     /** 홈의 마지막 메이트 (api.md 11): 가장 최근에 시작한 연결 */

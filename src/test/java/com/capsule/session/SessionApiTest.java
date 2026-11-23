@@ -408,6 +408,47 @@ class SessionApiTest {
                 .isZero();
     }
 
+    // ---- 배경 (2026-11-23, ADR 0032)
+
+    @Test
+    void startAndResumeReturnMateBackgrounds() throws Exception {
+        // 배경이 없는 메이트: 빈 목록 · null
+        long none = start(userId);
+        mvc.perform(post("/api/connections/{id}/resume", none).with(login(userId)))
+                .andExpect(jsonPath("$.data.backgrounds").isEmpty())
+                .andExpect(jsonPath("$.data.background").value(nullValue()));
+        end(none, 0, 0, 0, 0, null).andExpect(status().isOk());
+
+        jdbc.update("INSERT INTO character_backgrounds (character_id, code, name, image_url, is_default, sort_order)"
+                + " VALUES (1, 'cafe', '카페', 'https://cdn.test/bg/cafe.png', false, 2),"
+                + " (1, 'classroom', '교실', 'https://cdn.test/bg/classroom.png', true, 1),"
+                + " (1, 'old', '안 씀', 'https://cdn.test/bg/old.png', false, 3)");
+        jdbc.update("UPDATE character_backgrounds SET is_active = false WHERE character_id = 1 AND code = 'old'");
+        try {
+            String body = startRequest(userId, 1)
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.data.backgrounds.length()").value(2))
+                    .andExpect(jsonPath("$.data.backgrounds[0].code").value("classroom"))
+                    .andExpect(jsonPath("$.data.backgrounds[0].imageUrl").value("https://cdn.test/bg/classroom.png"))
+                    .andExpect(jsonPath("$.data.backgrounds[0].guide").doesNotExist())
+                    .andExpect(jsonPath("$.data.background").value("classroom"))
+                    .andReturn()
+                    .getResponse()
+                    .getContentAsString();
+            long id = ((Number) JsonPath.read(body, "$.data.connectionId")).longValue();
+
+            // 대화로 바뀐 배경은 이어하기가 그대로 (지운 배경 code면 기본으로)
+            jdbc.update("UPDATE connections SET background_code = 'cafe' WHERE id = ?", id);
+            mvc.perform(post("/api/connections/{id}/resume", id).with(login(userId)))
+                    .andExpect(jsonPath("$.data.background").value("cafe"));
+            jdbc.update("UPDATE connections SET background_code = 'old' WHERE id = ?", id);
+            mvc.perform(post("/api/connections/{id}/resume", id).with(login(userId)))
+                    .andExpect(jsonPath("$.data.background").value("classroom"));
+        } finally {
+            jdbc.update("DELETE FROM character_backgrounds WHERE character_id = 1");
+        }
+    }
+
     // ---- 22 연결 끊기 · 23 연결 기록
 
     @Test

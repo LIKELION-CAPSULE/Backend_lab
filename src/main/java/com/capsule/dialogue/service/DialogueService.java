@@ -9,6 +9,7 @@ import com.capsule.common.ratelimit.RateLimiter;
 import com.capsule.common.settings.RuntimeSettings;
 import com.capsule.common.time.ClockConfig;
 import com.capsule.content.api.CharacterQuery;
+import com.capsule.content.api.ContentTypes.BackgroundInfo;
 import com.capsule.content.api.ContentTypes.CharacterInfo;
 import com.capsule.content.api.ContentTypes.Reaction;
 import com.capsule.content.api.ReactionQuery;
@@ -120,6 +121,7 @@ public class DialogueService {
     private final CreditQuery creditQuery;
     private final CreditCommands creditCommands;
     private final SafetyGuard safety;
+    private final BackgroundPicker backgroundPicker;
     /** 고급 모드 답장 모델. 비어 있으면 기본 모드와 같은 모델 (api.md 20, 2026-11-23) */
     private final String advancedModel;
 
@@ -150,6 +152,7 @@ public class DialogueService {
             CreditQuery creditQuery,
             CreditCommands creditCommands,
             SafetyGuard safety,
+            BackgroundPicker backgroundPicker,
             // TODO(judgment): J-16 고급 모드에 쓸 실제 모델 (운영 설정 capsule.llm.advanced-model). 정해지기 전까지 비워 두면 기본 모델
             @Value("${capsule.llm.advanced-model:}") String advancedModel) {
         this.sessions = sessions;
@@ -178,6 +181,7 @@ public class DialogueService {
         this.creditQuery = creditQuery;
         this.creditCommands = creditCommands;
         this.safety = safety;
+        this.backgroundPicker = backgroundPicker;
         this.advancedModel = advancedModel;
     }
 
@@ -414,6 +418,11 @@ public class DialogueService {
                                 .map(m -> SignalType.valueOf(m.getSignal()))
                                 .toList());
 
+        // 배경 (명세 20 '배경', ADR 0032): LLM 답장일 때만 결정 모델이 고른다 (fallback · 안전 경고 턴은 그대로). 트랜잭션 밖에서
+        Optional<BackgroundInfo> background = outcome.isPresent()
+                ? backgroundPicker.pick(sessionId, characterId, character.name(), request.content(), reply, ctx)
+                : Optional.empty();
+
         MessageResponse response;
         Credits[] shortOf = {null}; // 답하는 사이 크레딧이 모자라짐 → 409 (아래)
         try {
@@ -430,6 +439,7 @@ public class DialogueService {
                 messages.save(ChatMessage.reply(
                         conversation.getId(), sessionId, requestId, reply, mode.name(), Instant.now(clock)));
                 violation.ifPresent(category -> safety.record(userId, sessionId, requestId, category));
+                background.ifPresent(b -> backgroundPicker.save(sessionId, b)); // 연결 행은 countReply가 이미 잠금
                 // 크레딧은 맨 끝에 (사용자 잠금, 연결 → relation → 대화 → credit 순서라 종료와 교착이 없다).
                 // 고급 모드 답장이 성공했을 때만 깎는다 (fallback · 안전 경고 턴은 안 깎음, 같은 requestId는 한 번만)
                 int charged = 0;
@@ -466,7 +476,10 @@ public class DialogueService {
                         mode,
                         charged,
                         credits,
-                        violation.isPresent() ? MessageResponse.SAFETY_WARNING : null);
+                        violation.isPresent() ? MessageResponse.SAFETY_WARNING : null,
+                        background
+                                .map(b -> new MessageResponse.Background(b.code(), b.name(), b.imageUrl()))
+                                .orElse(null));
             });
         } catch (DataIntegrityViolationException e) {
             // 기다리다 이어받은 요청과 먼저 온 요청이 둘 다 답했다: 먼저 저장된 답장으로
@@ -600,7 +613,8 @@ public class DialogueService {
                             mode,
                             charged,
                             credits,
-                            warned ? MessageResponse.SAFETY_WARNING : null);
+                            warned ? MessageResponse.SAFETY_WARNING : null,
+                            null); // 배경은 처음 응답에서만 (재전송은 감정 · 표정처럼 null, 명세 20 '배경')
                 });
     }
 

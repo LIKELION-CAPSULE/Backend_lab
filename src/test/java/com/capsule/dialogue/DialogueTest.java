@@ -6,6 +6,7 @@ import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
@@ -34,6 +35,7 @@ import com.capsule.dialogue.client.LlmGateway;
 import com.capsule.dialogue.config.CharacterContentSeeder;
 import com.capsule.dialogue.config.DialogueProperties;
 import com.capsule.dialogue.dto.LlmPurpose;
+import com.capsule.dialogue.service.BackgroundPicker;
 import com.capsule.dialogue.service.ChatReplier;
 import com.capsule.relation.api.RelationCommands;
 import com.capsule.relation.api.RelationQuery;
@@ -337,6 +339,48 @@ class DialogueTest {
                         Integer.class,
                         sessionId))
                 .isEqualTo(1);
+    }
+
+    @Test
+    void replyCanChangeTheBackground() throws Exception {
+        // 배경 (명세 20 '배경', ADR 0032): 결정 모델이 고른 배경을 연결에 저장하고 응답으로 알린다
+        jdbc.update("INSERT INTO character_backgrounds (character_id, code, name, image_url, guide, is_default)"
+                + " VALUES (1, 'classroom', '교실', 'https://cdn.test/bg/classroom.png', '공부할 때', true),"
+                + " (1, 'cafe', '카페', 'https://cdn.test/bg/cafe.png', '같이 카페에 갔을 때', false)");
+        try {
+            doAnswer(inv -> {
+                        Map<?, ?> questions = inv.getArgument(1);
+                        if (!questions.containsKey(BackgroundPicker.QUESTION)) return inv.callRealMethod();
+                        return Map.of(BackgroundPicker.QUESTION, new Decider.Decision("cafe", 0.9));
+                    })
+                    .when(decider)
+                    .decide(anyString(), any(), any());
+            when(relationCommands.applyChatScore(eq(userId), eq(CHARACTER_ID), eq(sessionId), any(), any()))
+                    .thenReturn(change(0, 80));
+
+            UUID requestId = UUID.randomUUID();
+            send(requestId, "카페 가서 하자")
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.background.code").value("cafe"))
+                    .andExpect(jsonPath("$.data.background.name").value("카페"))
+                    .andExpect(jsonPath("$.data.background.imageUrl").value("https://cdn.test/bg/cafe.png"));
+            assertThat(jdbc.queryForObject(
+                            "SELECT background_code FROM connections WHERE id = ?", String.class, sessionId))
+                    .isEqualTo("cafe");
+            // 재전송은 감정 · 표정처럼 배경도 다시 주지 않는다
+            send(requestId, "카페 가서 하자").andExpect(jsonPath("$.data.background").value(nullValue()));
+        } finally {
+            jdbc.update("DELETE FROM character_backgrounds WHERE character_id = 1");
+        }
+    }
+
+    @Test
+    void mateWithoutBackgroundsNeverAsksAboutThem() throws Exception {
+        UUID requestId = UUID.randomUUID();
+        when(relationCommands.applyChatScore(eq(userId), eq(CHARACTER_ID), eq(sessionId), eq(requestId), any()))
+                .thenReturn(change(0, 80));
+        send(requestId, "안녕").andExpect(jsonPath("$.data.background").value(nullValue()));
+        verify(decider, never()).decide(anyString(), argThat(q -> q.containsKey(BackgroundPicker.QUESTION)), any());
     }
 
     // --- 28 메시지 스트리밍 ---
