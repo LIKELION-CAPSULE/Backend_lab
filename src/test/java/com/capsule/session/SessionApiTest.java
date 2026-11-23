@@ -19,8 +19,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.capsule.TestcontainersConfiguration;
 import com.capsule.content.api.AvatarQuery;
+import com.capsule.content.api.BackgroundQuery;
 import com.capsule.content.api.CharacterQuery;
 import com.capsule.content.api.ContentTypes.AvatarInfo;
+import com.capsule.content.api.ContentTypes.BackgroundInfo;
 import com.capsule.content.api.ContentTypes.CharacterInfo;
 import com.capsule.content.api.ContentTypes.ExpressionRef;
 import com.capsule.content.api.ContentTypes.MateInfo;
@@ -137,6 +139,9 @@ class SessionApiTest {
     @MockitoBean
     MateQuery mateQuery;
 
+    @MockitoBean // 시드 메이트에 배경 데이터를 넣지 않으려고 (실제 조회는 content BackgroundQueryTest)
+    BackgroundQuery backgroundQuery;
+
     @MockitoBean
     CharacterQuery characterQuery;
 
@@ -179,6 +184,7 @@ class SessionApiTest {
         });
         given(closingHandler.close(any(), any())).willReturn(CLOSING_LINE);
         given(reactionQuery.pick(anyLong(), anyString(), any())).willReturn(Reaction.NONE);
+        given(backgroundQuery.current(anyLong(), any())).willCallRealMethod();
     }
 
     void adult() {
@@ -419,34 +425,30 @@ class SessionApiTest {
                 .andExpect(jsonPath("$.data.background").value(nullValue()));
         end(none, 0, 0, 0, 0, null).andExpect(status().isOk());
 
-        jdbc.update("INSERT INTO character_backgrounds (character_id, code, name, image_url, is_default, sort_order)"
-                + " VALUES (1, 'cafe', '카페', 'https://cdn.test/bg/cafe.png', false, 2),"
-                + " (1, 'classroom', '교실', 'https://cdn.test/bg/classroom.png', true, 1),"
-                + " (1, 'old', '안 씀', 'https://cdn.test/bg/old.png', false, 3)");
-        jdbc.update("UPDATE character_backgrounds SET is_active = false WHERE character_id = 1 AND code = 'old'");
-        try {
-            String body = startRequest(userId, 1)
-                    .andExpect(status().isCreated())
-                    .andExpect(jsonPath("$.data.backgrounds.length()").value(2))
-                    .andExpect(jsonPath("$.data.backgrounds[0].code").value("classroom"))
-                    .andExpect(jsonPath("$.data.backgrounds[0].imageUrl").value("https://cdn.test/bg/classroom.png"))
-                    .andExpect(jsonPath("$.data.backgrounds[0].guide").doesNotExist())
-                    .andExpect(jsonPath("$.data.background").value("classroom"))
-                    .andReturn()
-                    .getResponse()
-                    .getContentAsString();
-            long id = ((Number) JsonPath.read(body, "$.data.connectionId")).longValue();
+        // 실제 조회(활성 · 정렬)는 content BackgroundQueryTest. 여기서는 목록 → 응답 모양과 지금 배경 고르기
+        given(backgroundQuery.backgrounds(1L))
+                .willReturn(List.of(
+                        new BackgroundInfo("classroom", "교실", "https://cdn.test/bg/classroom.png", "공부할 때", true),
+                        new BackgroundInfo("cafe", "카페", "https://cdn.test/bg/cafe.png", null, false)));
+        String body = startRequest(userId, 1)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.backgrounds.length()").value(2))
+                .andExpect(jsonPath("$.data.backgrounds[0].code").value("classroom"))
+                .andExpect(jsonPath("$.data.backgrounds[0].imageUrl").value("https://cdn.test/bg/classroom.png"))
+                .andExpect(jsonPath("$.data.backgrounds[0].guide").doesNotExist())
+                .andExpect(jsonPath("$.data.background").value("classroom"))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        long id = ((Number) JsonPath.read(body, "$.data.connectionId")).longValue();
 
-            // 대화로 바뀐 배경은 이어하기가 그대로 (지운 배경 code면 기본으로)
-            jdbc.update("UPDATE connections SET background_code = 'cafe' WHERE id = ?", id);
-            mvc.perform(post("/api/connections/{id}/resume", id).with(login(userId)))
-                    .andExpect(jsonPath("$.data.background").value("cafe"));
-            jdbc.update("UPDATE connections SET background_code = 'old' WHERE id = ?", id);
-            mvc.perform(post("/api/connections/{id}/resume", id).with(login(userId)))
-                    .andExpect(jsonPath("$.data.background").value("classroom"));
-        } finally {
-            jdbc.update("DELETE FROM character_backgrounds WHERE character_id = 1");
-        }
+        // 대화로 바뀐 배경은 이어하기가 그대로 (목록에 없는 code면 기본으로)
+        jdbc.update("UPDATE connections SET background_code = 'cafe' WHERE id = ?", id);
+        mvc.perform(post("/api/connections/{id}/resume", id).with(login(userId)))
+                .andExpect(jsonPath("$.data.background").value("cafe"));
+        jdbc.update("UPDATE connections SET background_code = 'old' WHERE id = ?", id);
+        mvc.perform(post("/api/connections/{id}/resume", id).with(login(userId)))
+                .andExpect(jsonPath("$.data.background").value("classroom"));
     }
 
     // ---- 22 연결 끊기 · 23 연결 기록
