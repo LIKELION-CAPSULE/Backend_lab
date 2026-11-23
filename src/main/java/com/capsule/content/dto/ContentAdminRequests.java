@@ -45,20 +45,4 @@ public final class ContentAdminRequests {
     public record MateSaved(long mateId, Long modelId, boolean comingSoon) {}
 
     public record SetModel(Long modelId) {}
-
-    /**
-     * 메이트 목록 한 줄 (도구가 '기존 메이트'를 고를 때). 비활성 메이트도 포함
-     *
-     * @param modelPath 붙은 모델의 storage_prefix (없으면 null)
-     * @param modelFormat CUBISM · ALIVING2D_V2 (없으면 null)
-     */
-    public record MateRow(
-            long id,
-            String name,
-            String oneLiner,
-            Long modelId,
-            String modelPath,
-            String modelFormat,
-            boolean comingSoon,
-            boolean active) {}
 }
