@@ -15,6 +15,7 @@ import java.util.UUID;
  * @param credits 차감 뒤 크레딧 (33 Credits). 기본 모드는 크레딧을 보지 않으므로 null
  * @param safety 안전 경고 턴이면 WARNING, 아니면 null
  * @param background 이 답장으로 배경이 바뀌었으면 새 배경, 그대로 · 재전송이면 null (2026-11-23, ADR 0032)
+ * @param voice 이번 턴에 음성을 보냈는지 (28 '음성', ADR 0034). 20 · 재전송은 false
  */
 public record MessageResponse(
         UUID requestId,
@@ -30,7 +31,8 @@ public record MessageResponse(
         int charged,
         Credits credits,
         String safety,
-        Background background) {
+        Background background,
+        boolean voice) {
 
     public static final String SAFETY_WARNING = "WARNING";
 

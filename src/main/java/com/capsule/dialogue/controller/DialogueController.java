@@ -11,6 +11,7 @@ import com.capsule.dialogue.dto.MessageResponse;
 import com.capsule.dialogue.dto.ReactionRequest;
 import com.capsule.dialogue.dto.ReactionResponse;
 import com.capsule.dialogue.service.DialogueService;
+import com.capsule.dialogue.service.VoiceStream;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -39,7 +40,7 @@ public class DialogueController {
     private static final Logger log = LoggerFactory.getLogger(DialogueController.class);
     private static final ExecutorService STREAMS = Executors.newVirtualThreadPerTaskExecutor();
     /** 첫 대사 llm-budget + 끝까지 LLM http-timeout(30초)보다 넉넉히. 프론트 프록시 상한(60초) 안 */
-    private static final Duration STREAM_TIMEOUT = Duration.ofSeconds(50);
+    private static final Duration STREAM_TIMEOUT = Duration.ofSeconds(90); // 답장 + 남은 음성(capsule.tts.wait-after-done)
 
     private final DialogueService dialogue;
 
@@ -73,17 +74,32 @@ public class DialogueController {
             @PathVariable("connectionId") long sessionId,
             @Valid @RequestBody MessageRequest request) {
         // 검증 · 재전송 · 속도 제한은 스트림을 열기 전에: 여기서 난 오류는 보통 JSON 에러 응답 (명세 28)
-        DialogueService.Accepted accepted = dialogue.accept(userId, sessionId, request);
+        // 음성(명세 28 '음성'): tts + voiceEnabled + 크레딧이면 켠다. 아니면 글만 (에러 아님)
+        DialogueService.Accepted accepted = dialogue.withVoice(dialogue.accept(userId, sessionId, request));
         SseEmitter emitter = new SseEmitter(STREAM_TIMEOUT.toMillis());
         emitter.onTimeout(emitter::complete); // 이미 연 SSE에 에러 JSON을 쓰려 하지 않게
         STREAMS.execute(() -> {
+            VoiceStream voice = null;
             try {
-                MessageResponse done =
-                        dialogue.reply(accepted, text -> send(emitter, "reply", Map.of("content", text)));
+                if (accepted.voice()) voice = dialogue.voiceStream(accepted, chunk -> send(emitter, "audio", chunk));
+                VoiceStream speaking = voice;
+                MessageResponse done = dialogue.reply(accepted, text -> {
+                    send(emitter, "reply", Map.of("content", text));
+                    if (speaking != null) speaking.onText(text); // 문장이 끝나는 대로 음성으로
+                });
                 send(emitter, "done", done);
+                if (voice != null && done.voice()) {
+                    // 남은 글(대체 · 거절 대사는 전부)을 음성으로 보내고, 다 보내면 audio_end
+                    voice.finish(done.content());
+                    send(emitter, "audio_end", voice.await(dialogue.voiceWait()));
+                } else if (voice != null) {
+                    voice.cancel(); // 먼저 온 같은 요청의 답장으로 바뀜: 이 글의 음성은 보내지 않는다 (명세 28: voice false면 audio_end 없음)
+                }
             } catch (ApiException e) {
+                if (voice != null) voice.cancel(); // error 뒤로 audio가 오지 않게 (명세 28 '음성')
                 send(emitter, "error", ErrorResponse.of(e));
             } catch (RuntimeException e) {
+                if (voice != null) voice.cancel();
                 log.error("스트리밍 답장 실패", e);
                 send(emitter, "error", ErrorResponse.of(CommonErrorCode.INTERNAL_ERROR));
             } finally {
@@ -94,11 +110,21 @@ public class DialogueController {
     }
 
     /** 사용자가 창을 닫아 연결이 끊겨도 답장은 끝까지 만들어 저장한다 (같은 requestId로 다시 보내면 받음) */
-    private static void send(SseEmitter emitter, String event, Object data) {
+    /** @return 보냈으면 true. 스트림이 닫혔으면 false (음성은 이걸 보고 멈춘다) */
+    private static boolean send(SseEmitter emitter, String event, Object data) {
+        // 음성 조각은 다른 스레드에서 오므로 한 번에 한 이벤트만 쓴다 (SseEmitter는 동시 쓰기에 안전하지 않음)
+        synchronized (emitter) {
+            return sendNow(emitter, event, data);
+        }
+    }
+
+    private static boolean sendNow(SseEmitter emitter, String event, Object data) {
         try {
             emitter.send(SseEmitter.event().name(event).data(data, MediaType.APPLICATION_JSON));
+            return true;
         } catch (IOException | IllegalStateException e) {
             log.debug("스트림이 이미 닫힘 ({}): {}", event, e.toString());
+            return false;
         }
     }
 }

@@ -216,6 +216,132 @@ class DialogueModeSafetyTest {
                 .andExpect(jsonPath("$.data.credits.todayRemaining").value(1500));
     }
 
+    // --- 음성 (28 '음성', ADR 0034). TTS는 가짜(무음 mp3) ---
+
+    @Test
+    void voiceStreamsAudioChunksThenAudioEndAndChargesTwenty() throws Exception {
+        UUID requestId = UUID.randomUUID();
+        String body = streamed(requestId, "안녕", null, true);
+
+        assertThat(body).contains("event:audio").contains("\"format\":\"mp3\"").contains("\"seq\":0");
+        assertThat(body).contains("\"voice\":true").contains("\"charged\":20").contains("\"todayRemaining\":1480");
+        // audio_end는 맨 끝 한 번, done 뒤
+        assertThat(body.indexOf("event:audio_end")).isGreaterThan(body.indexOf("event:done"));
+        assertThat(body.trim()).contains("\"complete\":true");
+        assertThat(body.split("event:audio_end", -1)).hasSize(2);
+        assertThat(jdbc.queryForObject(
+                        "SELECT title FROM credit_ledger WHERE user_id = ? AND request_id = ?",
+                        String.class,
+                        userId,
+                        requestId))
+                .isEqualTo("보이스 대화 · 채린");
+
+        // 재전송은 음성 없이 done만, 깎은 금액은 처음과 같게
+        String again = streamed(requestId, "안녕", null, true);
+        assertThat(again)
+                .doesNotContain("event:audio")
+                .contains("\"voice\":false")
+                .contains("\"charged\":20");
+        assertThat(usedCount()).isEqualTo(1);
+    }
+
+    @Test
+    void advancedVoiceChargesFiftyInOneLine() throws Exception {
+        UUID requestId = UUID.randomUUID();
+        assertThat(streamed(requestId, "안녕", "ADVANCED", true))
+                .contains("\"voice\":true")
+                .contains("\"charged\":50")
+                .contains("\"todayRemaining\":1450");
+        assertThat(jdbc.queryForObject(
+                        "SELECT title FROM credit_ledger WHERE user_id = ? AND request_id = ?",
+                        String.class,
+                        userId,
+                        requestId))
+                .isEqualTo("고급 · 보이스 대화 · 채린");
+    }
+
+    @Test
+    void voiceOffInSettingsOrShortOfCreditsMeansTextOnly() throws Exception {
+        jdbc.update("UPDATE users SET settings = '{\"voiceEnabled\":false}'::jsonb WHERE id = ?", userId);
+        assertThat(streamed(UUID.randomUUID(), "안녕", null, true))
+                .doesNotContain("event:audio")
+                .contains("\"voice\":false")
+                .contains("\"charged\":0");
+
+        jdbc.update("UPDATE users SET settings = '{}'::jsonb WHERE id = ?", userId);
+        send(UUID.randomUUID(), "처음", "TEXT", null).andExpect(status().isOk());
+        streamed(UUID.randomUUID(), "출석 지급", "ADVANCED", false); // 출석분 지급 (1,500 − 30)
+        jdbc.update("UPDATE credit_grants SET remaining = 19 WHERE user_id = ?", userId);
+        // 보이스 20보다 적으면 에러가 아니라 글만 (그 기능만 멈춤)
+        assertThat(streamed(UUID.randomUUID(), "안녕", null, true))
+                .doesNotContain("event:audio")
+                .contains("\"voice\":false")
+                .contains("event:done");
+    }
+
+    @Test
+    void nonStreamingMessageNeverHasVoice() throws Exception {
+        mvc.perform(post("/api/connections/{id}/messages", sessionId)
+                        .with(jwt().jwt(j -> j.subject(String.valueOf(userId))))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body(UUID.randomUUID(), "안녕", "TEXT", null, true)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.voice").value(false))
+                .andExpect(jsonPath("$.data.audioBase64").value(nullValue()))
+                .andExpect(jsonPath("$.data.charged").value(0));
+    }
+
+    @Test
+    void fallbackLineIsVoicedButNotCharged() throws Exception {
+        doAnswer(inv -> {
+                    if (inv.getArgument(0) == LlmPurpose.CHAT) throw new IllegalStateException("LLM 실패");
+                    return inv.callRealMethod();
+                })
+                .when(llm)
+                .complete(any(), any(), any(), any(), any());
+        assertThat(streamed(UUID.randomUUID(), "안녕", null, true))
+                .contains("\"fallback\":true")
+                .contains("event:audio")
+                .contains("\"voice\":true")
+                .contains("\"charged\":0")
+                .contains("event:audio_end");
+        assertThat(usedCount()).isZero();
+    }
+
+    @Test
+    void creditsShortAfterVoiceStartedChargeOnlyWhatIsLeftAndResendMatches() throws Exception {
+        send(UUID.randomUUID(), "처음", "TEXT", "ADVANCED").andExpect(status().isOk()); // 출석분 지급 + 30
+        // 음성을 켠 뒤 LLM이 답하는 사이 다른 요청이 써서 35만 남음: 고급+보이스 50은 안 되고 고급 30만
+        doAnswer(inv -> {
+                    if (inv.getArgument(0) == LlmPurpose.CHAT)
+                        jdbc.update("UPDATE credit_grants SET remaining = 35 WHERE user_id = ?", userId);
+                    return inv.callRealMethod();
+                })
+                .when(llm)
+                .complete(any(), any(), any(), any(), any());
+        UUID both = UUID.randomUUID();
+        assertThat(streamed(both, "고급 음성", "ADVANCED", true))
+                .contains("\"voice\":true")
+                .contains("\"charged\":30")
+                .contains("event:audio_end");
+        assertThat(streamed(both, "고급 음성", "ADVANCED", true)).contains("\"charged\":30"); // 재전송도 30
+
+        // 보이스만인데 0이 됨: 깎지 않고 음성은 그대로 (그 기능만 멈춤), 재전송도 0
+        doAnswer(inv -> {
+                    if (inv.getArgument(0) == LlmPurpose.CHAT)
+                        jdbc.update("UPDATE credit_grants SET remaining = 0 WHERE user_id = ?", userId);
+                    return inv.callRealMethod();
+                })
+                .when(llm)
+                .complete(any(), any(), any(), any(), any());
+        jdbc.update("UPDATE credit_grants SET remaining = 100 WHERE user_id = ? AND remaining > 0", userId);
+        UUID voiceOnly = UUID.randomUUID();
+        assertThat(streamed(voiceOnly, "음성만", null, true))
+                .contains("\"voice\":true")
+                .contains("\"charged\":0");
+        assertThat(streamed(voiceOnly, "음성만", null, true)).contains("\"charged\":0");
+    }
+
     @Test
     void creditsRunningOutWhileAnsweringRollsBackTo409() throws Exception {
         send(UUID.randomUUID(), "처음", "TEXT", "ADVANCED").andExpect(status().isOk()); // 출석분 지급 + 30
@@ -470,8 +596,13 @@ class DialogueModeSafetyTest {
     }
 
     private static String body(UUID requestId, String content, String inputType, String mode) {
+        return body(requestId, content, inputType, mode, false);
+    }
+
+    private static String body(UUID requestId, String content, String inputType, String mode, boolean tts) {
         return "{\"requestId\":\"" + requestId + "\",\"characterId\":" + CHARACTER_ID + ",\"content\":\"" + content
-                + "\",\"inputType\":\"" + inputType + "\"" + (mode == null ? "" : ",\"mode\":\"" + mode + "\"") + "}";
+                + "\",\"inputType\":\"" + inputType + "\"" + (mode == null ? "" : ",\"mode\":\"" + mode + "\"")
+                + (tts ? ",\"tts\":true" : "") + "}";
     }
 
     private ResultActions send(UUID requestId, String content, String inputType, String mode) throws Exception {
@@ -482,11 +613,15 @@ class DialogueModeSafetyTest {
     }
 
     private String streamed(UUID requestId, String content, String mode) throws Exception {
+        return streamed(requestId, content, mode, false);
+    }
+
+    private String streamed(UUID requestId, String content, String mode, boolean tts) throws Exception {
         MvcResult started = mvc.perform(post("/api/connections/{id}/messages/stream", sessionId)
                         .with(jwt().jwt(j -> j.subject(String.valueOf(userId))))
                         .accept(MediaType.TEXT_EVENT_STREAM, MediaType.APPLICATION_JSON)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(body(requestId, content, "TEXT", mode)))
+                        .content(body(requestId, content, "TEXT", mode, tts)))
                 .andExpect(request().asyncStarted())
                 .andReturn();
         mvc.perform(asyncDispatch(started)).andExpect(status().isOk());
