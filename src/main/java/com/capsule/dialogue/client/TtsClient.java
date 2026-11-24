@@ -16,5 +16,11 @@ public interface TtsClient {
      */
     void speak(Speech speech, Consumer<byte[]> onChunk);
 
-    record Speech(String text, String voice, double speed, String instructions) {}
+    /** @param model 메이트 목소리의 모델 (ADR 0036). null이면 운영 설정 capsule.tts.model */
+    record Speech(String text, String voice, double speed, String instructions, String model) {
+
+        public Speech(String text, String voice, double speed, String instructions) {
+            this(text, voice, speed, instructions, null);
+        }
+    }
 }
