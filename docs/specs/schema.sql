@@ -111,6 +111,9 @@
 -- 2026-11-25 변경 (로그인 화면 메이트, api.md 48)
 --   - live2d_models: engine_path · player_path · reactions_path 추가 (Aliving2D 엔진 스크립트 경로)
 --
+-- 2026-11-25 변경 (메이트 목소리, ADR 0036)
+--   - characters: tts_voice · tts_model · tts_instructions 추가 (대화 음성 28과 '목소리 듣기' 샘플이 같은 값으로 만들어짐)
+--
 -- 2026-11-24 변경 (화면 대조, ADR 0035)
 --   - notifications · beta_waitlist · mate_alerts 추가 (user, api.md 43 ~ 46)
 --   - connections.notified_stage 추가 (연결 중 단계 상승 알림을 한 번만, api.md 21)
@@ -395,7 +398,11 @@ CREATE TABLE characters (
     my_role           text,                                -- 내 역할
     illustration_url  text,                                -- 세로 일러스트 (메이트 상세)
     card_image_url    text,                                -- 홈 메이트 카드
-    voice_sample_url  text,                                -- '목소리 듣기' mp3
+    voice_sample_url  text,                                -- '목소리 듣기' mp3 (아래 목소리로 만든 샘플)
+    -- 메이트 목소리 (2026-11-25, ADR 0036): 대화 음성(api.md 28)이 이 값으로 TTS. NULL이면 운영 설정 기본값
+    tts_voice         text,                                -- 예: coral
+    tts_model         text,                                -- 예: gpt-4o-mini-tts
+    tts_instructions  text,                                -- 말투 지시 (instructions를 받는 모델만)
     stage_names       text[]      NOT NULL DEFAULT '{}',   -- 친밀도 단계 이름 5개 (친밀도 단계에서 씀)
     coming_soon       boolean     NOT NULL DEFAULT false,  -- 준비 중 메이트 (조회는 되고 연결은 막음)
     CHECK (coming_soon OR model_id IS NOT NULL)            -- 연결할 수 있는 메이트는 모델이 있어야 함
