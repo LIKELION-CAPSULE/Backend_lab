@@ -86,6 +86,7 @@ class WithdrawalApiTest extends UserApiTestSupport {
         // 직접 말한 내용 · 대화 기억 삭제, 동의 기록은 남김
         assertThat(count("user_memories", userId)).isZero();
         assertThat(count("mate_alerts", userId)).isZero(); // 메이트 공개 알림 신청도 지움 (46)
+        assertThat(count("notifications", userId)).isZero(); // 알림도 지움 (43)
         assertThat(count("conversations", userId)).isZero();
         assertThat(count("character_memories", userId)).isZero();
         assertThat(jdbc.queryForObject(

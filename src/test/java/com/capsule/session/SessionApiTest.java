@@ -498,6 +498,12 @@ class SessionApiTest {
 
         expectReport(end(id, 3000, 2000, 2800, 600, "AUTO_AWAY").andExpect(status().isOk()), id);
         expectReport(end(id, 10, 10, 10, 0, null).andExpect(status().isOk()), id); // 다시 불러도 같은 결과
+        // 단계가 오르면 알림 (43 STAGE_UP, 2026-11-24): 끊기를 다시 불러도 한 번
+        assertThat(jdbc.queryForList(
+                        "SELECT title FROM notifications WHERE user_id = ? AND type = 'STAGE_UP'",
+                        String.class,
+                        userId))
+                .containsExactly("채린과 \"아는 사이\"가 됐어요 · 새 표정");
         expectReport(mvc.perform(get("/api/connections/{id}", id).with(login(userId))), id);
 
         verify(relationCommands, times(1)).settleIntimacy(anyLong(), anyLong(), anyLong(), any(), anyInt(), anyInt());

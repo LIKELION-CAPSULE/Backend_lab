@@ -1,6 +1,7 @@
 package com.capsule.credit.service;
 
 import com.capsule.common.time.ClockConfig;
+import com.capsule.credit.api.AttendanceGrantedEvent;
 import com.capsule.credit.api.CreditCommands;
 import com.capsule.credit.api.CreditQuery;
 import com.capsule.credit.api.CreditTypes.Credits;
@@ -17,6 +18,7 @@ import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,6 +41,7 @@ public class CreditService implements CreditQuery, CreditCommands {
     private final CreditGrantRepository grants;
     private final CreditLedgerRepository ledger;
     private final Clock clock;
+    private final ApplicationEventPublisher events;
 
     @Override
     public Credits current(long userId) {
@@ -116,6 +119,8 @@ public class CreditService implements CreditQuery, CreditCommands {
             open.addFirst(g);
             ledger.save(new CreditLedgerEntry(
                     userId, CreditLedgerEntry.ATTENDANCE, "출석", ATTENDANCE_AMOUNT, balance(open, now), null, now));
+            // 알림(43 ATTENDANCE): user가 같은 트랜잭션에서 적는다 (ADR 0035)
+            events.publishEvent(new AttendanceGrantedEvent(userId, ATTENDANCE_AMOUNT, day));
         }
         return open;
     }

@@ -65,6 +65,17 @@ class ReferralApiTest extends UserApiTestSupport {
         assertThat(rewards.rewardOf(invitee, 502L)).isEmpty();
         assertThat(inviteCredits(inviter)).isEqualTo(1000);
         assertThat(inviteCredits(invitee)).isEqualTo(1000);
+        // 알림 (43 REFERRAL_REWARD, 2026-11-24): 양쪽 한 번씩
+        assertThat(jdbc.queryForList(
+                        "SELECT title FROM notifications WHERE user_id = ? AND type = 'REFERRAL_REWARD'",
+                        String.class,
+                        inviter))
+                .containsExactly("민지님 첫 연결 · 크레딧 1,000");
+        assertThat(jdbc.queryForList(
+                        "SELECT title FROM notifications WHERE user_id = ? AND type = 'REFERRAL_REWARD'",
+                        String.class,
+                        invitee))
+                .containsExactly("친구 초대 보상 · 크레딧 1,000");
         // 34 내역 문구에 상대 닉네임 (피그마 SCR-30)
         mvc.perform(get("/api/credits/transactions").param("filter", "INVITE").with(login(inviter)))
                 .andExpect(jsonPath("$.data.items[0].title").value("친구 초대 · 민지님 첫 연결"));

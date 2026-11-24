@@ -6,6 +6,7 @@ import com.capsule.user.api.UserWithdrawnEvent;
 import com.capsule.user.domain.User;
 import com.capsule.user.domain.UserErrorCode;
 import com.capsule.user.repository.AlertRequestRepository;
+import com.capsule.user.repository.NotificationRepository;
 import com.capsule.user.repository.UserMemoryRepository;
 import com.capsule.user.repository.UserRepository;
 import java.time.Clock;
@@ -23,6 +24,7 @@ public class WithdrawalService {
     private final UserRepository users;
     private final UserMemoryRepository memories;
     private final AlertRequestRepository alertRequests;
+    private final NotificationRepository notificationRows;
     private final ActiveSessionLookup activeSessions;
     private final ApplicationEventPublisher events;
     private final TokenService tokens;
@@ -47,6 +49,7 @@ public class WithdrawalService {
             users.deleteSocialAccounts(userId);
             memories.deleteByUserId(userId);
             alertRequests.deleteMateAlerts(userId); // 메이트 공개 알림 신청 (46)
+            notificationRows.deleteByUserId(userId); // 알림 (43)
             events.publishEvent(new UserWithdrawnEvent(userId)); // dialogue가 대화 기억을 같은 트랜잭션에서 지움
         });
         tokens.revokeAll(userId);
