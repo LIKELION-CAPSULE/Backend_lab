@@ -127,6 +127,17 @@ class VoiceStreamTest {
         assertThat(sent).isEmpty();
     }
 
+    @Test
+    void ttsGetsTheCleanedTextAndSkipsPiecesWithNothingToSay() {
+        EchoTts tts = new EchoTts();
+        VoiceStream v = new VoiceStream(tts, "coral", 1.0, null, 6, sent::add);
+        v.finish("(한숨) 또 틀렸어?! ㅋㅋㅋ. 다시 해 보자~");
+
+        assertThat(v.await(Duration.ofSeconds(5)).complete()).isTrue();
+        assertThat(tts.asked).extracting(TtsClient.Speech::text).containsExactly("또 틀렸어?!", "다시 해 보자");
+        assertThat(sent).extracting(VoiceStream.AudioChunk::seq).containsExactly(0, 1); // 건너뛴 조각은 seq를 쓰지 않음
+    }
+
     static void sleep(long ms) {
         try {
             Thread.sleep(ms);

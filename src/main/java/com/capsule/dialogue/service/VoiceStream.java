@@ -104,8 +104,10 @@ public class VoiceStream {
         synchronized (sendLock) {
             if (closed) return; // 남은 조각은 TTS를 부르지 않는다 (비용)
         }
+        String spoken = SpeechText.clean(piece); // 지문 · 이모지 · ㅋㅋ 등은 음성에서만 뺀다 (글은 그대로)
+        if (spoken == null) return;
         try {
-            tts.speak(new Speech(piece, voice, speed, instructions), this::send);
+            tts.speak(new Speech(spoken, voice, speed, instructions), this::send);
         } catch (RuntimeException e) {
             synchronized (sendLock) {
                 failed = true;

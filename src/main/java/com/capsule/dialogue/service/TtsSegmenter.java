@@ -56,8 +56,15 @@ public class TtsSegmenter {
 
     /** from 뒤 첫 끊는 자리(그 글자 다음 위치). 문장 끝 뒤에 붙은 닫는 따옴표 · 같은 부호는 같이 가져간다. 없으면 -1 */
     private int boundary(String text, int from) {
+        int open = 0; // 열린 지문 괄호 수
+        boolean star = false; // *지문* 안
         for (int i = from; i < text.length(); i++) {
             char c = text.charAt(i);
+            if (c == '(' || c == '（' || c == '[') open++;
+            else if ((c == ')' || c == '）' || c == ']') && open > 0) open--;
+            else if (c == '*') star = !star;
+            // 지문 안에서는 자르지 않는다: 반쪽 괄호가 남으면 읽기용 정리(SpeechText)가 지문을 못 뺀다
+            if (open > 0 || star) continue;
             boolean sentence = SENTENCE_END.indexOf(c) >= 0;
             boolean clause = first && CLAUSE_END.indexOf(c) >= 0 && i - from + 1 >= firstClauseMin;
             if (!sentence && !clause) continue;

@@ -52,4 +52,12 @@ class TtsSegmenterTest {
         TtsSegmenter seg = new TtsSegmenter(6);
         assertThat(seg.flush("미안, 잠깐 딴생각했어. 다시 말해줄래?")).containsExactly("미안, 잠깐 딴생각했어.", "다시 말해줄래?");
     }
+
+    @Test
+    void doesNotCutInsideStageDirections() {
+        // 지문 안의 마침표에서 자르면 반쪽 괄호가 남아 읽기용 정리가 지문을 못 뺀다
+        TtsSegmenter seg = new TtsSegmenter(6);
+        assertThat(seg.feed("(한숨을 쉬며. 웃는다) 알지. 그")).containsExactly("(한숨을 쉬며. 웃는다) 알지.");
+        assertThat(seg.feed("(한숨을 쉬며. 웃는다) 알지. *눈을 감는다. 잠깐* 좋아! 응")).containsExactly("*눈을 감는다. 잠깐* 좋아!");
+    }
 }
