@@ -688,6 +688,14 @@ class DialogueModeSafetyTest {
                         userId,
                         CHARACTER_ID))
                 .isZero();
+        // 31 메이트 상세: 가린 답장만 남았으니 '이어서 연결'이 아님
+        mvc.perform(get("/api/mates/{id}", CHARACTER_ID).with(jwt().jwt(j -> j.subject(String.valueOf(userId)))))
+                .andExpect(jsonPath("$.data.hasConversation").value(false));
+        // 다른 메이트와 연결 중이면 이 메이트는 초기화할 수 있다
+        long other = jdbc.queryForObject(
+                "INSERT INTO connections (user_id, character_id) VALUES (?, 2) RETURNING id", Long.class, userId);
+        reset(CHARACTER_ID).andExpect(status().isNoContent());
+        jdbc.update("UPDATE connections SET ended_at = now(), end_type = 'NORMAL' WHERE id = ?", other);
         // 다시 눌러도 204, 대화가 없는 메이트도 204, 없는 메이트는 404
         reset(CHARACTER_ID).andExpect(status().isNoContent());
         reset(999_999_999L)

@@ -43,8 +43,6 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
     List<ChatMessage> findMyReplies(long userId, UUID requestId);
 
     /** 31 hasConversation: 답장까지 받은 대화가 하나라도 있는지 */
-    boolean existsByConversationIdAndSender(long conversationId, String sender);
-
     /** 31 hasConversation: 가리지 않은 답장이 있는지 (47 대화 초기화 뒤에는 false, 2026-11-24) */
     boolean existsByConversationIdAndSenderAndHiddenAtIsNull(long conversationId, String sender);
 
@@ -56,6 +54,9 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
     @Query("update ChatMessage m set m.hiddenAt = coalesce(m.hiddenAt, :at), m.recappedAt = coalesce(m.recappedAt, :at)"
             + " where m.conversationId = :conversationId")
     int hideAll(long conversationId, Instant at);
+
+    /** 기억 정리(비동기)가 저장하기 직전: 이 사용자 말이 그사이 초기화(47)로 가려졌는지 */
+    boolean existsByRequestIdAndSenderAndHiddenAtIsNotNull(UUID requestId, String sender);
 
     /** 사용자 말의 종류를 남긴다 (답장 저장 트랜잭션 안에서) */
     @Modifying(flushAutomatically = true)

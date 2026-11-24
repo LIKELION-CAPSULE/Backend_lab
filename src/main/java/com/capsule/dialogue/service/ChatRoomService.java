@@ -68,7 +68,7 @@ public class ChatRoomService {
      * 47 대화 초기화: 이 메이트와의 대화를 처음부터. 메시지는 가리고(지우지 않음), 지난 대화 카드와 메이트가 기억한 사실은 지운다.
      * 친밀도 · 호감도 · 해금 · 크레딧 · 안전 정지는 그대로. 이 메이트와 연결 중이면 409 (답장 저장과 겹치지 않게)
      */
-    // TODO(judgment): SCR-36 '초기화'가 사용자 버튼인지 안전 제재 단계인지 확정 필요 (명세 47). 제재로 정해지면 SafetyGuard에서 이걸 부른다
+    // TODO(judgment): J-19 SCR-36 '초기화'가 사용자 버튼인지 안전 제재 단계인지 (명세 47). 제재로 정해지면 SafetyGuard에서 이걸 부른다
     @Transactional
     public void reset(long userId, long mateId) {
         mates.find(mateId)

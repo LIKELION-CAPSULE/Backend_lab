@@ -92,7 +92,7 @@ public class DialogueService {
     private static final ExecutorService LLM_THREADS = Executors.newVirtualThreadPerTaskExecutor();
     /** 세션 카드 머리말 날짜 (예: "11/03 52분") */
     private static final DateTimeFormatter CARD_DATE = DateTimeFormatter.ofPattern("MM/dd");
-    /** 고급 대화 1턴 크레딧 (api.md 33 '크레딧 규칙') */
+    /** 고급 모드 1턴 크레딧 (api.md 33 '크레딧 규칙') */
     public static final int ADVANCED_COST = 30;
     /** 보이스 대화 1턴 크레딧 (api.md 33 '크레딧 규칙', 28 '음성') */
     public static final int VOICE_COST = 20;

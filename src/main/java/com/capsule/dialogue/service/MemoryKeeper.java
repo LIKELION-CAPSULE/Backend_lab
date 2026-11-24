@@ -9,10 +9,12 @@ import com.capsule.dialogue.client.Llm;
 import com.capsule.dialogue.client.LlmGateway;
 import com.capsule.dialogue.config.DialogueProperties;
 import com.capsule.dialogue.domain.CharacterMemory;
+import com.capsule.dialogue.domain.ChatMessage;
 import com.capsule.dialogue.dto.ChatLine;
 import com.capsule.dialogue.dto.LlmContext;
 import com.capsule.dialogue.dto.LlmPurpose;
 import com.capsule.dialogue.repository.CharacterMemoryRepository;
+import com.capsule.dialogue.repository.ChatMessageRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -58,6 +60,7 @@ public class MemoryKeeper {
     private final Decider decider;
     private final LlmGateway llm;
     private final CharacterMemoryRepository memories;
+    private final ChatMessageRepository messages;
     private final RuntimeSettings<DialogueProperties> props;
     private final Clock clock;
 
@@ -109,6 +112,8 @@ public class MemoryKeeper {
             return;
         }
         String line = write(character, target.map(CharacterMemory::getContent).orElse(null), recent, userMessage, ctx);
+        // 비동기로 도는 사이 사용자가 대화를 초기화했으면(47) 지운 기억을 되살리지 않는다
+        if (messages.existsByRequestIdAndSenderAndHiddenAtIsNotNull(requestId, ChatMessage.USER)) return;
         Instant now = Instant.now(clock);
         if (target.isPresent()) {
             target.get().rewrite(line, requestId, now);
