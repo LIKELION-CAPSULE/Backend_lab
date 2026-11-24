@@ -8,11 +8,13 @@ import com.capsule.content.dto.ContentAdminRequests.CreateMate;
 import com.capsule.content.dto.ContentAdminRequests.Expression;
 import com.capsule.content.dto.ContentAdminRequests.MateImages;
 import com.capsule.content.dto.ContentAdminRequests.MateSaved;
+import com.capsule.content.dto.ContentAdminRequests.MateVoice;
 import com.capsule.content.dto.ContentAdminRequests.ModelRegistered;
 import com.capsule.content.dto.ContentAdminRequests.Motion;
 import com.capsule.content.dto.ContentAdminRequests.Reaction;
 import com.capsule.content.dto.ContentAdminRequests.RegisterModel;
 import com.capsule.content.dto.ContentAdminRequests.SetMateImages;
+import com.capsule.content.dto.ContentAdminRequests.SetMateVoice;
 import com.capsule.content.dto.ContentAdminRequests.SetRuntime;
 import com.capsule.content.dto.ContentAdminRequests.UpdateAvatar;
 import java.util.HashMap;
@@ -238,6 +240,27 @@ public class ContentAdminService {
                 saved.cardImagePath(),
                 saved.voiceSamplePath());
         return saved;
+    }
+
+    static final Pattern VOICE = Pattern.compile("[a-z][a-z0-9_-]{0,39}");
+    static final Pattern TTS_MODEL = Pattern.compile("[a-z0-9][a-z0-9._-]{0,59}");
+
+    /** 메이트 목소리 · 샘플 (ADR 0036). 네 칸을 통째로 바꾼다 (null · 빈 값 = 비움 → 운영 설정 기본값) */
+    @Transactional
+    public MateVoice setMateVoice(long mateId, SetMateVoice r) {
+        String voice = blank(r.voice()), model = blank(r.model()), instructions = blank(r.instructions());
+        check(voice == null || VOICE.matcher(voice).matches(), "voice는 영문 소문자 이름 (예: coral)");
+        check(model == null || TTS_MODEL.matcher(model).matches(), "model은 영문 소문자 · 숫자 이름 (예: gpt-4o-mini-tts)");
+        check(instructions == null || instructions.length() <= 1000, "instructions는 1000자까지");
+        checkAsset(r.samplePath(), AUDIO, "samplePath는 버킷 안 mp3 경로");
+        String sample = blank(r.samplePath());
+        int changed =
+                jdbc.sql("""
+                        UPDATE characters SET tts_voice = ?, tts_model = ?, tts_instructions = ?, voice_sample_url = ?
+                        WHERE id = ?""").params(voice, model, instructions, sample, mateId).update();
+        if (changed == 0) throw new ApiException(ContentErrorCode.MATE_NOT_FOUND);
+        log.info("콘텐츠 관리: 메이트 {} 목소리 voice={} model={} sample={}", mateId, voice, model, sample);
+        return new MateVoice(mateId, voice, model, instructions, sample);
     }
 
     /** null(그대로) · 빈 값(지움)은 통과. 아니면 버킷 안 상대 경로 + 확장자 */

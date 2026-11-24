@@ -50,6 +50,11 @@ public class CharacterEntity {
     private String cardImageUrl;
     private String voiceSampleUrl;
 
+    // 메이트 목소리 (2026-11-25, ADR 0036). NULL이면 운영 설정 기본값
+    private String ttsVoice;
+    private String ttsModel;
+    private String ttsInstructions;
+
     @JdbcTypeCode(SqlTypes.ARRAY)
     private List<String> stageNames;
 

@@ -311,6 +311,53 @@ class ContentAdminApiTest {
         }
     }
 
+    @Autowired
+    com.capsule.content.api.VoiceQuery voices;
+
+    @Test
+    void mateVoiceAndItsSampleAreSetTogether() throws Exception {
+        String prefix = unique("vo");
+        long mate = mateWith(register(prefix), "목소리 메이트");
+        String url = "/internal/content/mates/" + mate + "/voice";
+        try {
+            // 정하기 전: 칸이 비어 있음 (dialogue는 운영 설정 기본값)
+            assertThat(voices.voice(mate))
+                    .hasValueSatisfying(v -> assertThat(v.voice()).isNull());
+            send(
+                            "PUT",
+                            url,
+                            "{\"voice\": \"nova\", \"model\": \"gpt-4o-mini-tts\", \"instructions\": \"다정하게 말한다.\","
+                                    + " \"samplePath\": \"" + prefix + "media/voice-1.mp3\"}",
+                            TOKEN)
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.voice").value("nova"));
+            assertThat(voices.voice(mate))
+                    .contains(
+                            new com.capsule.content.api.ContentTypes.VoiceInfo("nova", "gpt-4o-mini-tts", "다정하게 말한다."));
+            mvc.perform(get("/api/mates/" + mate).with(jwt().jwt(j -> j.subject("1"))))
+                    .andExpect(jsonPath("$.data.voiceSampleUrl")
+                            .value(org.hamcrest.Matchers.endsWith("/" + prefix + "media/voice-1.mp3")));
+
+            // 통째로 바꿈: 보내지 않은 칸은 비워진다 (옛 샘플이 남지 않게)
+            send("PUT", url, "{\"voice\": \"coral\"}", TOKEN).andExpect(status().isOk());
+            assertThat(voices.voice(mate))
+                    .contains(new com.capsule.content.api.ContentTypes.VoiceInfo("coral", null, null));
+            assertThat(jdbc.queryForObject("SELECT voice_sample_url FROM characters WHERE id = ?", String.class, mate))
+                    .isNull();
+
+            send("PUT", url, "{\"voice\": \"Nova!\"}", TOKEN).andExpect(status().isBadRequest());
+            send("PUT", url, "{\"model\": \"../x\"}", TOKEN).andExpect(status().isBadRequest());
+            send("PUT", url, "{\"samplePath\": \"" + prefix + "a.png\"}", TOKEN).andExpect(status().isBadRequest());
+            send("PUT", url, "{\"instructions\": \"" + "가".repeat(1001) + "\"}", TOKEN)
+                    .andExpect(status().isBadRequest());
+            send("PUT", "/internal/content/mates/999999/voice", "{}", TOKEN).andExpect(status().isNotFound());
+            send("PUT", url, "{}", null).andExpect(status().isUnauthorized());
+            assertThat(voices.voice(999999)).isEmpty();
+        } finally {
+            jdbc.update("UPDATE characters SET is_active = false WHERE id = ?", mate);
+        }
+    }
+
     @Test
     void avatarsAreRegisteredAndSwitchedOff() throws Exception {
         String prefix = unique("av");

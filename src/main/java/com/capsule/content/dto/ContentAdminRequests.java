@@ -76,5 +76,18 @@ public final class ContentAdminRequests {
      */
     public record SetMateImages(String illustrationPath, String cardImagePath, String voiceSamplePath) {}
 
+    /**
+     * 메이트 목소리 (ADR 0036). Aliving2D가 들어 보고 고른 값과 그 값으로 만든 샘플. 네 칸을 통째로 바꾼다 (null인 칸은 비움 → 운영 설정
+     * 기본값). 목소리가 바뀌면 옛 샘플은 맞지 않으므로 samplePath도 같이 보낸다
+     *
+     * @param voice 예: coral (영문 소문자)
+     * @param model 예: gpt-4o-mini-tts
+     * @param instructions 말투 지시, 1000자까지
+     * @param samplePath 버킷 안 mp3 경로 (31 voiceSampleUrl)
+     */
+    public record SetMateVoice(String voice, String model, String instructions, String samplePath) {}
+
+    public record MateVoice(long mateId, String voice, String model, String instructions, String samplePath) {}
+
     public record MateImages(long mateId, String illustrationPath, String cardImagePath, String voiceSamplePath) {}
 }
