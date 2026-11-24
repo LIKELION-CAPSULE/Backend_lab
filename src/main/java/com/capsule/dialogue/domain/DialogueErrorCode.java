@@ -17,6 +17,8 @@ public enum DialogueErrorCode implements ErrorCode {
     CREDIT_INSUFFICIENT(HttpStatus.CONFLICT),
     // 대화방 기록 (api.md 32, 2026-11-23)
     MATE_NOT_FOUND(HttpStatus.NOT_FOUND),
+    /** 47 대화 초기화: 이 메이트와 연결 중이면 끝낸 뒤에 (2026-11-24) */
+    CONNECTION_IN_PROGRESS(HttpStatus.CONFLICT),
     // 답변 평가 · 신고 (api.md 40 · 41, 2026-11-23)
     MESSAGE_NOT_FOUND(HttpStatus.NOT_FOUND),
     ALREADY_REPORTED(HttpStatus.CONFLICT),

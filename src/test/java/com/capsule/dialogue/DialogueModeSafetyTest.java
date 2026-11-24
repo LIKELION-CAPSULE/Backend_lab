@@ -143,7 +143,7 @@ class DialogueModeSafetyTest {
                         String.class,
                         userId,
                         requestId))
-                .isEqualTo("고급 대화 · 채린");
+                .isEqualTo("고급 모드 · 채린"); // 화면(SCR-30) 문구와 같게
         assertThat(jdbc.queryForObject(
                         "SELECT mode FROM chat_messages WHERE request_id = ? AND sender = 'CHARACTER'",
                         String.class,
@@ -257,7 +257,7 @@ class DialogueModeSafetyTest {
                         String.class,
                         userId,
                         requestId))
-                .isEqualTo("고급 · 보이스 대화 · 채린");
+                .isEqualTo("고급 모드 · 보이스 대화 · 채린");
     }
 
     @Test
@@ -640,6 +640,72 @@ class DialogueModeSafetyTest {
                 .with(jwt().jwt(j -> j.subject(String.valueOf(userId))))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(json));
+    }
+
+    // --- 47 대화 초기화 (2026-11-24) ---
+
+    @Test
+    void resetHidesTheRoomAndForgetsCardsAndFactsButNotWhileConnected() throws Exception {
+        send(UUID.randomUUID(), "안녕", "TEXT", null).andExpect(status().isOk());
+        room().andExpect(jsonPath("$.data.messages.length()").value(2));
+        long conversationId = jdbc.queryForObject(
+                "SELECT id FROM conversations WHERE user_id = ? AND character_id = ?",
+                Long.class,
+                userId,
+                CHARACTER_ID);
+        jdbc.update(
+                "INSERT INTO conversation_recaps (conversation_id, connection_id, content) VALUES (?, ?, '지난 대화')",
+                conversationId,
+                sessionId);
+        jdbc.update(
+                "INSERT INTO character_memories (user_id, character_id, content) VALUES (?, ?, '토익 준비 중')",
+                userId,
+                CHARACTER_ID);
+
+        // 이 메이트와 연결 중이면 409 (답장 저장과 겹치지 않게)
+        reset(CHARACTER_ID)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CONNECTION_IN_PROGRESS"));
+        jdbc.update("UPDATE connections SET ended_at = now(), end_type = 'NORMAL' WHERE id = ?", sessionId);
+
+        reset(CHARACTER_ID).andExpect(status().isNoContent());
+        room().andExpect(jsonPath("$.data.messages.length()").value(0));
+        // 지우지 않고 가림 + 다음 흐름 카드에 다시 들어가지 않게 카드에 넣은 것으로 표시
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM chat_messages WHERE conversation_id = ? AND hidden_at IS NOT NULL"
+                                + " AND recapped_at IS NOT NULL",
+                        Integer.class,
+                        conversationId))
+                .isEqualTo(2);
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM conversation_recaps WHERE conversation_id = ?",
+                        Integer.class,
+                        conversationId))
+                .isZero();
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM character_memories WHERE user_id = ? AND character_id = ?",
+                        Integer.class,
+                        userId,
+                        CHARACTER_ID))
+                .isZero();
+        // 31 메이트 상세: 가린 답장만 남았으니 '이어서 연결'이 아님
+        mvc.perform(get("/api/mates/{id}", CHARACTER_ID).with(jwt().jwt(j -> j.subject(String.valueOf(userId)))))
+                .andExpect(jsonPath("$.data.hasConversation").value(false));
+        // 다른 메이트와 연결 중이면 이 메이트는 초기화할 수 있다
+        long other = jdbc.queryForObject(
+                "INSERT INTO connections (user_id, character_id) VALUES (?, 2) RETURNING id", Long.class, userId);
+        reset(CHARACTER_ID).andExpect(status().isNoContent());
+        jdbc.update("UPDATE connections SET ended_at = now(), end_type = 'NORMAL' WHERE id = ?", other);
+        // 다시 눌러도 204, 대화가 없는 메이트도 204, 없는 메이트는 404
+        reset(CHARACTER_ID).andExpect(status().isNoContent());
+        reset(999_999_999L)
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("MATE_NOT_FOUND"));
+    }
+
+    private ResultActions reset(long mateId) throws Exception {
+        return mvc.perform(post("/api/mates/{id}/conversation/reset", mateId)
+                .with(jwt().jwt(j -> j.subject(String.valueOf(userId)))));
     }
 
     private ResultActions room() throws Exception {

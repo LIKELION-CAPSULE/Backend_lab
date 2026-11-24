@@ -92,7 +92,7 @@ public class DialogueService {
     private static final ExecutorService LLM_THREADS = Executors.newVirtualThreadPerTaskExecutor();
     /** 세션 카드 머리말 날짜 (예: "11/03 52분") */
     private static final DateTimeFormatter CARD_DATE = DateTimeFormatter.ofPattern("MM/dd");
-    /** 고급 대화 1턴 크레딧 (api.md 33 '크레딧 규칙') */
+    /** 고급 모드 1턴 크레딧 (api.md 33 '크레딧 규칙') */
     public static final int ADVANCED_COST = 30;
     /** 보이스 대화 1턴 크레딧 (api.md 33 '크레딧 규칙', 28 '음성') */
     public static final int VOICE_COST = 20;
@@ -914,9 +914,10 @@ public class DialogueService {
         return null;
     }
 
-    /** 크레딧 내역 문구 (명세 34): "고급 대화 · 채린" · "보이스 대화 · 채린" · "고급 · 보이스 대화 · 채린" */
+    /** 크레딧 내역 문구 (명세 33 · 34): "고급 모드 · 채린" · "보이스 대화 · 채린" · "고급 모드 · 보이스 대화 · 채린" */
     static String spendTitle(boolean advanced, boolean voice, String mate) {
-        String what = advanced && voice ? "고급 · 보이스 대화" : advanced ? "고급 대화" : "보이스 대화";
+        // 화면(SCR-30) 문구와 같게 '고급 모드' (2026-11-24, 명세 33)
+        String what = advanced && voice ? "고급 모드 · 보이스 대화" : advanced ? "고급 모드" : "보이스 대화";
         return what + " · " + mate;
     }
 }
