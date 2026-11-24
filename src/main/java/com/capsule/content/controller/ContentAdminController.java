@@ -6,9 +6,11 @@ import com.capsule.content.dto.ContentAdminRequests.CreateAvatar;
 import com.capsule.content.dto.ContentAdminRequests.CreateMate;
 import com.capsule.content.dto.ContentAdminRequests.MateImages;
 import com.capsule.content.dto.ContentAdminRequests.MateSaved;
+import com.capsule.content.dto.ContentAdminRequests.MateVoice;
 import com.capsule.content.dto.ContentAdminRequests.ModelRegistered;
 import com.capsule.content.dto.ContentAdminRequests.RegisterModel;
 import com.capsule.content.dto.ContentAdminRequests.SetMateImages;
+import com.capsule.content.dto.ContentAdminRequests.SetMateVoice;
 import com.capsule.content.dto.ContentAdminRequests.SetModel;
 import com.capsule.content.dto.ContentAdminRequests.SetRuntime;
 import com.capsule.content.dto.ContentAdminRequests.UpdateAvatar;
@@ -73,6 +75,12 @@ public class ContentAdminController {
     @PatchMapping("/internal/content/mates/{mateId}/images")
     public ApiResponse<MateImages> setMateImages(@PathVariable long mateId, @RequestBody SetMateImages body) {
         return ApiResponse.ok(admin.setMateImages(mateId, body));
+    }
+
+    /** 메이트 목소리 · 샘플 (ADR 0036). 네 칸을 통째로 바꾼다 */
+    @PutMapping("/internal/content/mates/{mateId}/voice")
+    public ApiResponse<MateVoice> setMateVoice(@PathVariable long mateId, @RequestBody SetMateVoice body) {
+        return ApiResponse.ok(admin.setMateVoice(mateId, body));
     }
 
     @PutMapping("/internal/content/mates/{mateId}/model")

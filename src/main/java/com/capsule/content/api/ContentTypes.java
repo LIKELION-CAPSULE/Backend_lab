@@ -60,6 +60,15 @@ public final class ContentTypes {
             boolean comingSoon,
             boolean active) {}
 
+    /**
+     * 메이트 목소리 (ADR 0036). 칸이 null이면 운영 설정 기본값을 쓴다
+     *
+     * @param voice 예: coral
+     * @param model 예: gpt-4o-mini-tts
+     * @param instructions 말투 지시
+     */
+    public record VoiceInfo(String voice, String model, String instructions) {}
+
     public record AvatarInfo(long id, String name, String thumbnailUrl, boolean active, ModelInfo model) {}
 
     /**
