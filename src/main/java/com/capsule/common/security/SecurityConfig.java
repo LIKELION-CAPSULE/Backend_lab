@@ -61,6 +61,8 @@ public class SecurityConfig {
                 new AndRequestMatcher(
                         path.matcher(HttpMethod.GET, "/api/referrals/{code}"),
                         new NegatedRequestMatcher(path.matcher(HttpMethod.GET, "/api/referrals/me"))),
+                // api.md 45 출시 알림 신청: 베타 정원이 차서 가입 못 한 사람이 이메일만 남김 (2026-11-24)
+                path.matcher(HttpMethod.POST, "/api/beta/waitlist"),
                 path.matcher("/actuator/health/**"),
                 // Swagger(ADR 0019). springdoc을 켠 local 프로필에서만 응답하고, 꺼진 prod에서는 404
                 path.matcher(HttpMethod.GET, "/swagger-ui.html"),
