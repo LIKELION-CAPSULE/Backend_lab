@@ -30,6 +30,8 @@ public class NotificationService {
     static final int MAX_SIZE = 50;
     /** 이보다 오래된 알림은 목록 · 안 읽은 수에서 뺀다 (명세 43) */
     static final Duration KEEP = Duration.ofDays(90);
+    /** 44 한 번에 읽음 처리할 수 있는 id 수 */
+    static final int MAX_READ_IDS = 100;
 
     private static final String MATES_ME = "/mates/me";
     private static final String CREDITS = "/credits";
@@ -114,6 +116,8 @@ public class NotificationService {
 
     @Transactional
     public NotificationList.Unread read(long userId, List<Long> ids) {
+        // 빈 배열은 아무것도 안 함, ids가 없을 때만 전부 (명세 44). 아주 긴 배열은 SQL 파라미터 한도에 걸리므로 막는다
+        if (ids != null && ids.size() > MAX_READ_IDS) throw new ApiException(CommonErrorCode.INVALID_REQUEST);
         if (ids == null) notifications.markAllRead(userId, now());
         else if (!ids.isEmpty()) notifications.markRead(userId, ids, now());
         return new NotificationList.Unread(unreadCount(userId));

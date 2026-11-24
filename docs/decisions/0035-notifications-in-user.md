@@ -3,7 +3,7 @@
 - 결정
   - 알림 모아 보기(SCR-63, api.md 43 · 44)는 user 모듈의 `notifications` 테이블 하나에 쌓는다. 종류: STAGE_UP(친밀도 단계 상승) · ATTENDANCE(출석 크레딧) · REFERRAL_REWARD(초대 보상)
   - 적는 쪽
-    - session(연결 끊기 22에서 단계가 오르면): user 계약 `NotificationCommands.notify`를 부른다. session은 이미 user api를 쓴다
+    - session(연결 끊기 22에서 단계가 오르면): user 계약 `NotificationCommands.stageUp`을 부른다 (문구는 user가 만든다). session은 이미 user api를 쓴다
     - credit(출석 지급): 계약 호출 대신 `AttendanceGrantedEvent`(credit api)를 내고 user가 받아 적는다. user가 이미 credit을 부르므로(8번 credits) credit → user 호출은 순환이 된다
     - user(초대 보상): 안에서 바로 적는다
   - 같은 일을 두 번 적지 않게 `dedup_key`(출석 날짜, 연결 id, 초대 id + 쪽)에 부분 유니크 인덱스
