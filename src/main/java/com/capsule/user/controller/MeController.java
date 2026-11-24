@@ -3,40 +3,27 @@ package com.capsule.user.controller;
 import com.capsule.common.config.ApiTags;
 import com.capsule.common.response.ApiResponse;
 import com.capsule.common.security.LoginUser;
-import com.capsule.user.domain.UserMemory;
-import com.capsule.user.dto.CreateMemoryRequest;
 import com.capsule.user.dto.MeResponse;
-import com.capsule.user.dto.MemoryList;
-import com.capsule.user.dto.MemoryResponse;
-import com.capsule.user.dto.MemoryStatus;
 import com.capsule.user.dto.UpdateMeRequest;
 import com.capsule.user.dto.UserSettings;
-import com.capsule.user.service.MemoryService;
 import com.capsule.user.service.ProfileService;
 import com.capsule.user.service.SettingsService;
 import com.capsule.user.service.TokenService;
 import com.capsule.user.service.WithdrawalService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import java.time.LocalDate;
 import lombok.RequiredArgsConstructor;
-import org.springframework.format.annotation.DateTimeFormat;
-import org.springframework.format.annotation.DateTimeFormat.ISO;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
-import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import tools.jackson.databind.JsonNode;
 
-/** api.md 8, 10, 13, 14, 27, 29, 30 */
+/** api.md 8, 10, 27, 29, 30 (13 · 14 일정은 2026-11-24 삭제) */
 @RestController
 @RequestMapping("/api/me")
 @Tag(name = ApiTags.ONBOARDING_HOME)
@@ -44,7 +31,6 @@ import tools.jackson.databind.JsonNode;
 public class MeController {
 
     private final ProfileService profiles;
-    private final MemoryService memories;
     private final WithdrawalService withdrawals;
     private final TokenService tokens;
     private final SettingsService settings;
@@ -83,26 +69,5 @@ public class MeController {
         return ResponseEntity.noContent()
                 .header(HttpHeaders.SET_COOKIE, tokens.revoke(null))
                 .build();
-    }
-
-    @Operation(summary = "13. 일정 저장", description = "시험 · 약속 · 목표 일정 저장 (명세: api.md 13)")
-    @PostMapping("/memories")
-    @ResponseStatus(HttpStatus.CREATED)
-    public ApiResponse<MemoryResponse> createMemory(@LoginUser long userId, @RequestBody CreateMemoryRequest req) {
-        return ApiResponse.ok(memories.create(userId, req));
-    }
-
-    @Operation(
-            summary = "14. 내 일정 조회",
-            description = "내 일정(시험 · 약속 · 목표) 조회. 달력 점 · 날짜 클릭 · 예정/전체/지난 탭 (명세: api.md 14)")
-    @GetMapping("/memories")
-    public ApiResponse<MemoryList> memories(
-            @LoginUser long userId,
-            @RequestParam(required = false) @DateTimeFormat(iso = ISO.DATE) LocalDate from,
-            @RequestParam(required = false) @DateTimeFormat(iso = ISO.DATE) LocalDate to,
-            @RequestParam(required = false) @DateTimeFormat(iso = ISO.DATE) LocalDate date,
-            @RequestParam(defaultValue = "UPCOMING") MemoryStatus status,
-            @RequestParam(required = false) UserMemory.Type type) {
-        return ApiResponse.ok(memories.list(userId, from, to, date, status, type));
     }
 }

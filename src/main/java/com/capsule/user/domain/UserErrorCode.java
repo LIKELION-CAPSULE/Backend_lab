@@ -24,13 +24,11 @@ public enum UserErrorCode implements ErrorCode {
     SOCIAL_AUTH_FAILED(HttpStatus.UNAUTHORIZED),
     REFRESH_TOKEN_INVALID(HttpStatus.UNAUTHORIZED),
     RESET_TOKEN_INVALID(HttpStatus.BAD_REQUEST),
-    // 프로필 · 일정 · 탈퇴
+    // 프로필 · 탈퇴 (일정 INVALID_MEMORY · INVALID_DATE_RANGE는 13 · 14와 같이 2026-11-24 삭제)
     AVATAR_NOT_FOUND(HttpStatus.BAD_REQUEST),
     INVALID_HONORIFIC(HttpStatus.BAD_REQUEST),
     INVALID_ABOUT_ME(HttpStatus.BAD_REQUEST),
     INVALID_SETTINGS(HttpStatus.BAD_REQUEST),
-    INVALID_MEMORY(HttpStatus.BAD_REQUEST),
-    INVALID_DATE_RANGE(HttpStatus.BAD_REQUEST),
     CONNECTION_IN_PROGRESS(HttpStatus.CONFLICT), // 2026-11-23 SESSION_IN_PROGRESS에서 이름 변경
     // 친구 초대 (36, 2026-11-23 8단계)
     REFERRAL_SELF(HttpStatus.BAD_REQUEST),
@@ -39,7 +37,10 @@ public enum UserErrorCode implements ErrorCode {
     REFERRAL_CODE_NOT_FOUND(HttpStatus.NOT_FOUND),
     REFERRAL_ALREADY_ENTERED(HttpStatus.CONFLICT),
     // 베타 피드백 (42, 2026-11-23)
-    FEEDBACK_ALREADY_TODAY(HttpStatus.CONFLICT);
+    FEEDBACK_ALREADY_TODAY(HttpStatus.CONFLICT),
+    // 메이트 공개 알림 (46, 2026-11-24)
+    MATE_NOT_FOUND(HttpStatus.NOT_FOUND),
+    MATE_ALREADY_OPEN(HttpStatus.CONFLICT);
 
     private final HttpStatus status;
 

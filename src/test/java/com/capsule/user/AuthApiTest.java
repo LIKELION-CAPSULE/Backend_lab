@@ -45,7 +45,8 @@ class AuthApiTest extends UserApiTestSupport {
                         "/api/auth/email/verification/confirm",
                         "{\"email\":\"%s\",\"code\":\"%s\"}".formatted(email, wrong(code)))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("INVALID_CODE"));
+                .andExpect(jsonPath("$.code").value("INVALID_CODE"))
+                .andExpect(jsonPath("$.detail.remainingAttempts").value(4)); // 5번 중 1번 틀림 (SCR-51)
         MvcResult confirmed = postJson(
                         "/api/auth/email/verification/confirm",
                         "{\"email\":\"%s\",\"code\":\"%s\"}".formatted(email, code))
@@ -107,7 +108,8 @@ class AuthApiTest extends UserApiTestSupport {
         String wrongBody = "{\"email\":\"%s\",\"code\":\"%s\"}".formatted(email, wrong(code));
         for (int i = 0; i < 4; i++) {
             postJson("/api/auth/email/verification/confirm", wrongBody)
-                    .andExpect(jsonPath("$.code").value("INVALID_CODE"));
+                    .andExpect(jsonPath("$.code").value("INVALID_CODE"))
+                    .andExpect(jsonPath("$.detail.remainingAttempts").value(4 - i));
         }
         postJson("/api/auth/email/verification/confirm", wrongBody)
                 .andExpect(status().isTooManyRequests())

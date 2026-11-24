@@ -1,8 +1,6 @@
 package com.capsule.user;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.hamcrest.Matchers.contains;
-import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -91,112 +89,45 @@ class ProfileAndMemoryApiTest extends UserApiTestSupport {
     }
 
     @Test
-    void memorySaveRules() throws Exception {
-        String auth = bearer(signedUp(uniqueEmail()));
-        LocalDate today = LocalDate.now(ClockConfig.KST);
-
-        for (String invalid : new String[] {
-            "{\"type\":\"EXAM\",\"title\":\"시험\"}", // 시험인데 날짜 없음
-            "{\"type\":\"EXAM\",\"title\":\"시험\",\"dueDate\":\"%s\"}".formatted(today.minusDays(1)), // 지난 날짜
-            "{\"type\":\"GOAL\",\"title\":\"목표\",\"dueTime\":\"20:00\"}", // 날짜 없이 시간만
-            "{\"type\":\"EXAM\",\"title\":\"시험\",\"dueDate\":\"2099/11/08\"}", // 형식 오류
-            "{\"type\":\"EXAM\",\"title\":\"시험\",\"dueDate\":\"%s\",\"dueTime\":\"8pm\"}".formatted(today),
-            "{\"type\":\"TRIP\",\"title\":\"여행\",\"dueDate\":\"%s\"}".formatted(today),
-            "{\"type\":\"EXAM\",\"title\":\"  \",\"dueDate\":\"%s\"}".formatted(today) // 빈 제목
-        }) {
-            createMemory(auth, invalid)
-                    .andExpect(status().isBadRequest())
-                    .andExpect(jsonPath("$.code").value("INVALID_MEMORY"));
-        }
-
-        createMemory(
-                        auth,
-                        "{\"type\":\"PROMISE\",\"title\":\"\",\"dueDate\":\"%s\",\"dueTime\":\"20:00\"}"
-                                .formatted(today.plusDays(1)))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.data.memoryId").isNumber())
-                .andExpect(jsonPath("$.data.type").value("PROMISE"))
-                .andExpect(jsonPath("$.data.title").value("같이 공부하기"))
-                .andExpect(jsonPath("$.data.dueDate").value(today.plusDays(1).toString()))
-                .andExpect(jsonPath("$.data.dueTime").value("20:00"))
-                .andExpect(jsonPath("$.data.dDay").value(1));
-        createMemory(auth, "{\"type\":\"GOAL\",\"title\":\"토익 900\"}")
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.data.dueDate").value(nullValue()))
-                .andExpect(jsonPath("$.data.dDay").value(nullValue()));
-        // 시간은 약속에서만: 시험에 시간이 와도 종일로 저장
-        createMemory(
-                        auth,
-                        "{\"type\":\"EXAM\",\"title\":\"모의고사\",\"dueDate\":\"%s\",\"dueTime\":\"09:00\"}"
-                                .formatted(today.plusDays(2)))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.data.dueTime").value(nullValue()));
-    }
-
-    @Test
-    void memoryListing() throws Exception {
+    void memoryApisAreGoneButOldRowsStillReachTheConversation() throws Exception {
+        // 일정 저장 · 조회(13 · 14)는 2026-11-24에 지웠다. 이미 저장된 일정은 대화 프롬프트가 계속 읽는다
         MvcResult user = signedUp(uniqueEmail());
         String auth = bearer(user);
         long userId = ((Number) read(user, "$.data.userId")).longValue();
+        mvc.perform(post("/api/me/memories")
+                        .header(HttpHeaders.AUTHORIZATION, auth)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"type\":\"GOAL\",\"title\":\"토익 900\"}"))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/me/memories").header(HttpHeaders.AUTHORIZATION, auth))
+                .andExpect(status().isNotFound());
+
         LocalDate today = LocalDate.now(ClockConfig.KST);
-        createMemory(auth, "{\"type\":\"EXAM\",\"title\":\"영어 중간고사\",\"dueDate\":\"%s\"}".formatted(today.plusDays(5)))
-                .andExpect(status().isCreated());
-        createMemory(auth, "{\"type\":\"PROMISE\",\"title\":\"도서관\",\"dueDate\":\"%s\"}".formatted(today.plusDays(1)))
-                .andExpect(status().isCreated());
-        createMemory(
-                        auth,
-                        "{\"type\":\"PROMISE\",\"title\":\"같이 공부하기\",\"dueDate\":\"%s\",\"dueTime\":\"20:00\"}"
-                                .formatted(today.plusDays(1)))
-                .andExpect(status().isCreated());
-        createMemory(auth, "{\"type\":\"GOAL\",\"title\":\"토익 900\"}").andExpect(status().isCreated());
-        // 지난 일정은 API로 못 만들어서 직접 넣는다
+        jdbc.update(
+                "INSERT INTO user_memories (user_id, type, title, due_date) VALUES (?, 'EXAM', '영어 중간고사', ?)",
+                userId,
+                today.plusDays(5));
         jdbc.update(
                 "INSERT INTO user_memories (user_id, type, title, due_date) VALUES (?, 'EXAM', '지난 시험', ?)",
                 userId,
                 today.minusDays(3));
-
-        listMemories(auth)
-                .andExpect(jsonPath("$.data.memories[*].title").value(contains("같이 공부하기", "도서관", "영어 중간고사")))
-                .andExpect(jsonPath("$.data.memories[2].dDay").value(5))
-                .andExpect(jsonPath("$.data.datesWithMemories")
-                        .value(contains(
-                                today.minusDays(3).toString(),
-                                today.plusDays(1).toString(),
-                                today.plusDays(5).toString())));
-        listMemories(auth, "status", "PAST")
-                .andExpect(jsonPath("$.data.memories[*].title").value(contains("지난 시험")))
-                .andExpect(jsonPath("$.data.memories[0].dDay").value(-3));
-        listMemories(auth, "status", "ALL")
-                .andExpect(jsonPath("$.data.memories[*].title")
-                        .value(contains("지난 시험", "같이 공부하기", "도서관", "영어 중간고사", "토익 900")));
-        listMemories(auth, "date", today.plusDays(5).toString())
-                .andExpect(jsonPath("$.data.memories[*].title").value(contains("영어 중간고사")));
-        listMemories(auth, "type", "PROMISE")
-                .andExpect(jsonPath("$.data.memories[*].title").value(contains("같이 공부하기", "도서관")));
-        listMemories(auth, "from", today.toString(), "to", today.plusDays(3).toString())
-                .andExpect(jsonPath("$.data.memories[*].title").value(contains("같이 공부하기", "도서관")))
-                .andExpect(jsonPath("$.data.datesWithMemories")
-                        .value(contains(today.plusDays(1).toString())));
-        listMemories(
-                        auth,
-                        "from",
-                        today.plusDays(10).toString(),
-                        "to",
-                        today.plusDays(20).toString())
-                .andExpect(jsonPath("$.data.memories").value(empty()));
-        // 날짜 없는 목표는 기간과 상관없이 '전체'의 맨 아래
-        listMemories(auth, "from", today.toString(), "to", today.plusDays(3).toString(), "status", "ALL")
-                .andExpect(jsonPath("$.data.memories[*].title").value(contains("같이 공부하기", "도서관", "토익 900")));
-
-        listMemories(auth, "from", today.toString(), "to", today.minusDays(1).toString())
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("INVALID_DATE_RANGE"));
-        listMemories(auth, "from", today.toString(), "to", today.plusDays(100).toString())
-                .andExpect(jsonPath("$.code").value("INVALID_DATE_RANGE"));
-
         assertThat(memoryQuery.memoriesForConversation(userId))
                 .extracting(MemoryInfo::title)
-                .containsExactly("같이 공부하기", "도서관", "영어 중간고사", "토익 900");
+                .containsExactly("영어 중간고사");
+    }
+
+    @Test
+    void loginTypeTellsKakaoAccountsApart() throws Exception {
+        // 계정 설정 보안 탭의 '로그인 방식' (SCR-60): 비밀번호가 없으면 카카오 가입자
+        MvcResult user = signedUp(uniqueEmail());
+        String auth = bearer(user);
+        long userId = ((Number) read(user, "$.data.userId")).longValue();
+        mvc.perform(get("/api/me").header(HttpHeaders.AUTHORIZATION, auth))
+                .andExpect(jsonPath("$.data.loginType").value("EMAIL"));
+        jdbc.update("UPDATE users SET password = NULL, email = NULL WHERE id = ?", userId);
+        mvc.perform(get("/api/me").header(HttpHeaders.AUTHORIZATION, auth))
+                .andExpect(jsonPath("$.data.loginType").value("KAKAO"))
+                .andExpect(jsonPath("$.data.email").value(nullValue()));
     }
 
     @Test
@@ -226,21 +157,5 @@ class ProfileAndMemoryApiTest extends UserApiTestSupport {
                 .header(HttpHeaders.AUTHORIZATION, auth)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body));
-    }
-
-    private ResultActions createMemory(String auth, String body) throws Exception {
-        return mvc.perform(post("/api/me/memories")
-                .header(HttpHeaders.AUTHORIZATION, auth)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(body));
-    }
-
-    /** params = 이름, 값, 이름, 값 ... */
-    private ResultActions listMemories(String auth, String... params) throws Exception {
-        var request = get("/api/me/memories").header(HttpHeaders.AUTHORIZATION, auth);
-        for (int i = 0; i < params.length; i += 2) {
-            request.param(params[i], params[i + 1]);
-        }
-        return mvc.perform(request);
     }
 }
