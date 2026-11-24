@@ -26,6 +26,17 @@ public interface StudySessionRepository extends JpaRepository<StudySession, Long
             nativeQuery = true)
     int updateBackground(long id, String code);
 
+    /**
+     * 연결 중 단계 상승 알림 (api.md 21): 더 높은 단계일 때만 올린다. 1행이면 이번에 처음 알릴 단계
+     * (heartbeat가 겹쳐 와도 한 번만 알리게 조건부 UPDATE)
+     */
+    @Modifying
+    @Query(
+            value = "UPDATE connections SET notified_stage = :stage WHERE id = :id AND ended_at IS NULL"
+                    + " AND coalesce(notified_stage, :baseline) < :stage",
+            nativeQuery = true)
+    int raiseNotifiedStage(long id, int baseline, int stage);
+
     @Query(value = "SELECT background_code FROM connections WHERE id = :id", nativeQuery = true)
     Optional<String> findBackgroundCode(long id);
 

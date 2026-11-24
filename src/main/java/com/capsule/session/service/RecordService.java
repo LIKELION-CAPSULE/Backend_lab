@@ -90,7 +90,8 @@ public class RecordService {
                 now.stage(),
                 SessionService.stageName(mate, now.stage()),
                 last ? null : SessionService.stageName(mate, now.stage() + 1),
-                now.nextStageSeconds());
+                now.nextStageSeconds(),
+                now.stageProgress());
     }
 
     /** 이 메이트의 해금 콘텐츠 전부 (열리는 단계 순). 열렸는지는 relation의 해금 기록으로 */

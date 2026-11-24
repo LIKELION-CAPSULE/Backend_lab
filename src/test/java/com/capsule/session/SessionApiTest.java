@@ -107,7 +107,7 @@ class SessionApiTest {
             true,
             new ModelInfo("https://cdn.capsule.invalid/live2d/avatar1/v1/avatar1.model3.json", 1.0, 0, 0));
     /** 1단계 → 2단계, 이번 인정 2000초 */
-    static final IntimacySettlement SETTLEMENT = new IntimacySettlement(1, 2, 2000, 4000, 14000);
+    static final IntimacySettlement SETTLEMENT = new IntimacySettlement(1, 2, 2000, 4000, 14000, 2);
 
     static final UnlockInfo SHY = new UnlockInfo(9, "EXPRESSION", "수줍은 웃음", 2, "shy", null);
     static final String CLOSING_LINE = "오늘도 같이 있어서 좋았어.";
@@ -374,6 +374,26 @@ class SessionApiTest {
     }
 
     // ---- 21 heartbeat · 17 이어하기
+
+    @Test
+    void heartbeatAnnouncesAStageUpOncePerStage() throws Exception {
+        // 연결 중 '새 표정이 열렸어요' (api.md 21 stageUp, SCR-56): 미리보기 단계가 시작 단계보다 높아지면 그 단계에서 한 번만
+        long id = start(userId);
+        backdate(id, 120);
+        given(relationQuery.stage(userId, 1L)).willReturn(1);
+        given(relationQuery.previewStage(eq(userId), eq(1L), any(), anyInt())).willReturn(1);
+        heartbeat(id, 600, 500, 600, 0).andExpect(jsonPath("$.data.stageUp").value(nullValue()));
+
+        given(relationQuery.previewStage(eq(userId), eq(1L), any(), anyInt())).willReturn(2);
+        given(unlockQuery.between(1L, 1, 2)).willReturn(List.of(SHY));
+        heartbeat(id, 4000, 3700, 4000, 0)
+                .andExpect(jsonPath("$.data.stageUp.stage").value(2))
+                .andExpect(jsonPath("$.data.stageUp.stageName").value("아는 사이"))
+                .andExpect(jsonPath("$.data.stageUp.unlocked[0].expressionName").value("shy"));
+        heartbeat(id, 4100, 3800, 4100, 0).andExpect(jsonPath("$.data.stageUp").value(nullValue())); // 같은 단계는 한 번만
+        assertThat(jdbc.queryForObject("SELECT notified_stage FROM connections WHERE id = ?", Integer.class, id))
+                .isEqualTo(2);
+    }
 
     @Test
     void heartbeatStoresTimesAndResumeReturnsThem() throws Exception {
@@ -720,6 +740,8 @@ class SessionApiTest {
                 .andExpect(jsonPath("$.data.relation.stageName").value("아는 사이"))
                 .andExpect(jsonPath("$.data.relation.creditedSeconds").value(2000))
                 .andExpect(jsonPath("$.data.relation.nextStageSeconds").value(14000))
+                .andExpect(jsonPath("$.data.relation.stageProgress").value(2)) // 2026-11-24 친밀도 막대
+                .andExpect(jsonPath("$.data.cameraOnSeconds").isNumber()) // 2026-11-24 '함께한 시간(캠)'
                 .andExpect(
                         jsonPath("$.data.relation.unlocked[0].expressionName").value("shy"))
                 .andExpect(jsonPath("$.data.relation.pointsAfter").doesNotExist())

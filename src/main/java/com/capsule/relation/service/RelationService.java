@@ -260,7 +260,8 @@ public class RelationService implements RelationQuery, RelationCommands {
                 settled.map(RelationSettlement::getStageAfter).orElse(stageNow),
                 settled.map(RelationSettlement::getCreditedSeconds).orElse(0),
                 total,
-                IntimacyPolicy.secondsToNextStage(total));
+                IntimacyPolicy.secondsToNextStage(total),
+                IntimacyPolicy.stageProgress(total));
     }
 
     @Override
@@ -270,7 +271,24 @@ public class RelationService implements RelationQuery, RelationCommands {
         int credited = found.map(Relation::getCreditedSeconds).orElse(0);
         // 저장된 stage = stageOf(누적 인정) 전제 (정산이 둘을 같이 올리고 내리지 않음). intimacyOf와 같은 계산
         return new IntimacyNow(
-                found.map(Relation::getStage).orElse(1), credited, IntimacyPolicy.secondsToNextStage(credited));
+                found.map(Relation::getStage).orElse(1),
+                credited,
+                IntimacyPolicy.secondsToNextStage(credited),
+                IntimacyPolicy.stageProgress(credited));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public int previewStage(long userId, long characterId, Instant at, int presentSeconds) {
+        Optional<Relation> found = relations.findByUserIdAndCharacterId(userId, characterId);
+        if (found.isEmpty()) return IntimacyPolicy.stageOf(IntimacyPolicy.credit(presentSeconds, 0, false));
+        Relation rel = found.get();
+        // settleIntimacy와 같은 계산 (잠그지 않고 읽기만: 미리보기라 그사이 바뀌어도 22에서 다시 정산)
+        LocalDate day = IntimacyPolicy.dayOf(at);
+        int creditedToday = relations.creditedOn(rel.getId(), day).orElse(0);
+        boolean chatted = relations.chatTurnsOn(rel.getId(), day).orElse(0) > 0;
+        int credited = IntimacyPolicy.credit(presentSeconds, creditedToday, chatted);
+        return Math.max(rel.getStage(), IntimacyPolicy.stageOf(rel.getCreditedSeconds() + credited));
     }
 
     @Override

@@ -10,6 +10,7 @@ public record IntimacyView(
         boolean stageUp,
         int creditedSeconds,
         Integer nextStageSeconds,
+        int stageProgress,
         List<Unlocked> unlocked) {
 
     /** 이번에 열린 해금 콘텐츠 */

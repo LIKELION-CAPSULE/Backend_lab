@@ -23,8 +23,9 @@ public record MyMatesResponse(List<MyMate> mates) {
             List<Unlock> unlocks,
             List<Recent> recent) {}
 
-    /** nextStageName · nextStageSeconds는 5단계면 null */
-    public record Relation(int stage, String stageName, String nextStageName, Integer nextStageSeconds) {}
+    /** nextStageName · nextStageSeconds는 5단계면 null. stageProgress 0~100 (2026-11-24) */
+    public record Relation(
+            int stage, String stageName, String nextStageName, Integer nextStageSeconds, int stageProgress) {}
 
     /** 이 메이트의 해금 콘텐츠 하나. 열리는 단계 순 */
     public record Unlock(

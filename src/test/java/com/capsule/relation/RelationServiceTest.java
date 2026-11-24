@@ -233,12 +233,12 @@ class RelationServiceTest {
 
     @Test
     void intimacyCreditsPresentTimeWithDailyCap() {
-        assertThat(query.intimacyNow(userId, CHARACTER)).isEqualTo(new IntimacyNow(1, 0, 3600)); // 안 만났으면 1단계
+        assertThat(query.intimacyNow(userId, CHARACTER)).isEqualTo(new IntimacyNow(1, 0, 3600, 0)); // 안 만났으면 1단계
         Instant now = Instant.now(clock);
         long first = newSession();
         chat(first, PLUS_ONE); // 그날 대화 있음 → 절반 아님
         IntimacySettlement s1 = commands.settleIntimacy(userId, CHARACTER, first, now, 4000, 5000);
-        assertThat(s1).isEqualTo(new IntimacySettlement(1, 2, 4000, 4000, 14000)); // 1시간 넘어 2단계
+        assertThat(s1).isEqualTo(new IntimacySettlement(1, 2, 4000, 4000, 14000, 2)); // 1시간 넘어 2단계, 2단계(1~5시간) 안 2%
         assertThat(s1.stageUp()).isTrue();
         assertThat(commands.settleIntimacy(userId, CHARACTER, first, now, 4000, 5000))
                 .isEqualTo(s1); // 같은 연결은 한 번만
@@ -252,7 +252,7 @@ class RelationServiceTest {
         assertThat(s2.totalCreditedSeconds()).isEqualTo(7200);
         assertThat(query.stage(userId, CHARACTER)).isEqualTo(2);
         // 내 메이트(37): 지금 단계 · 누적 인정 · 다음 단계(5시간)까지
-        assertThat(query.intimacyNow(userId, CHARACTER)).isEqualTo(new IntimacyNow(2, 7200, 10800));
+        assertThat(query.intimacyNow(userId, CHARACTER)).isEqualTo(new IntimacyNow(2, 7200, 10800, 25)); // 2단계 안 25%
         assertThat(jdbc.queryForObject(
                         "SELECT total_connected_seconds FROM user_character_relations WHERE user_id = ?",
                         Integer.class,
@@ -261,9 +261,21 @@ class RelationServiceTest {
     }
 
     @Test
+    void previewStageUsesTheSameRuleWithoutSaving() {
+        // 연결 중 미리보기 (api.md 21 stageUp): 22와 같은 규칙, 저장 안 함
+        Instant now = Instant.now(clock);
+        assertThat(query.previewStage(userId, CHARACTER, now, 4000)).isEqualTo(1); // 안 만남 · 대화 없음 → 절반 2000초
+        long session = newSession();
+        chat(session, PLUS_ONE); // 그날 대화 있음
+        assertThat(query.previewStage(userId, CHARACTER, now, 4000)).isEqualTo(2); // 4000초 → 1시간 넘음
+        assertThat(query.previewStage(userId, CHARACTER, now, 99_999)).isEqualTo(2); // 하루 2시간 한도
+        assertThat(query.stage(userId, CHARACTER)).isEqualTo(1); // 저장은 22에서
+    }
+
+    @Test
     void intimacyIsHalfWithoutChatThatDay() {
         IntimacySettlement s = commands.settleIntimacy(userId, CHARACTER, newSession(), Instant.now(clock), 3000, 3000);
-        assertThat(s).isEqualTo(new IntimacySettlement(1, 1, 1500, 1500, 2100));
+        assertThat(s).isEqualTo(new IntimacySettlement(1, 1, 1500, 1500, 2100, 41));
         assertThat(query.intimacyOf(userId, CHARACTER, 999_999).creditedSeconds())
                 .isZero(); // 정산 없는 연결
     }

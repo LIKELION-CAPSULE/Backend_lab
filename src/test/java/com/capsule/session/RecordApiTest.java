@@ -100,8 +100,8 @@ class RecordApiTest {
         given(mateQuery.find(2L)).willReturn(Optional.of(MATE2));
         given(relationQuery.stage(anyLong(), eq(1L))).willReturn(2);
         given(relationQuery.stage(anyLong(), eq(2L))).willReturn(4);
-        given(relationQuery.intimacyNow(anyLong(), eq(1L))).willReturn(new IntimacyNow(2, 4000, 14000));
-        given(relationQuery.intimacyNow(anyLong(), eq(2L))).willReturn(new IntimacyNow(5, 150000, null));
+        given(relationQuery.intimacyNow(anyLong(), eq(1L))).willReturn(new IntimacyNow(2, 4000, 14000, 2));
+        given(relationQuery.intimacyNow(anyLong(), eq(2L))).willReturn(new IntimacyNow(5, 150000, null, 100));
         given(relationQuery.unlockedContentIds(anyLong())).willReturn(Set.of(9L));
         given(unlockQuery.between(1L, 0, Integer.MAX_VALUE)).willReturn(List.of(SHY, NIGHT));
         given(unlockQuery.between(2L, 0, Integer.MAX_VALUE)).willReturn(List.of());
@@ -152,6 +152,7 @@ class RecordApiTest {
                 .andExpect(jsonPath("$.data.mates[1].relation.stageName").value("아는 사이"))
                 .andExpect(jsonPath("$.data.mates[1].relation.nextStageName").value("친구"))
                 .andExpect(jsonPath("$.data.mates[1].relation.nextStageSeconds").value(14000))
+                .andExpect(jsonPath("$.data.mates[1].relation.stageProgress").value(2))
                 .andExpect(jsonPath("$.data.mates[1].unlocks[*].id", contains(9, 10)))
                 .andExpect(jsonPath("$.data.mates[1].unlocks[0].unlocked").value(true))
                 .andExpect(
