@@ -124,8 +124,8 @@ public final class RelationTypes {
             int stageProgress) {
 
         /**
-         * @deprecated 진행률을 받는 생성자를 쓴다 (2026-11-24 확장). 진행률 0.
-         *     제거 예정 PR: 남은 사용처(테스트)를 옮긴 뒤 relation 정리 PR
+         * @deprecated 진행률을 받는 생성자를 쓴다 (2026-11-24 확장). 이 생성자는 진행률을 모르고 0을 넣는다.
+         *     이 레포 안 사용처는 없음 — 다른 브랜치가 쓸 수 있어 남김. 제거: 다음 relation 정리 PR
          */
         @Deprecated(forRemoval = true)
         public IntimacySettlement(
@@ -153,8 +153,8 @@ public final class RelationTypes {
     public record IntimacyNow(int stage, int creditedSeconds, Integer nextStageSeconds, int stageProgress) {
 
         /**
-         * @deprecated 진행률을 받는 생성자를 쓴다 (2026-11-24 확장). 진행률 0.
-         *     제거 예정 PR: 남은 사용처(테스트)를 옮긴 뒤 relation 정리 PR
+         * @deprecated 진행률을 받는 생성자를 쓴다 (2026-11-24 확장). 이 생성자는 진행률을 모르고 0을 넣는다.
+         *     이 레포 안 사용처는 없음 — 다른 브랜치가 쓸 수 있어 남김. 제거: 다음 relation 정리 PR
          */
         @Deprecated(forRemoval = true)
         public IntimacyNow(int stage, int creditedSeconds, Integer nextStageSeconds) {

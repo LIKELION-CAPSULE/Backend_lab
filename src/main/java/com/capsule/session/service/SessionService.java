@@ -214,10 +214,7 @@ public class SessionService {
 
     private IntimacyView intimacy(long characterId, IntimacySettlement r) {
         MateInfo mate = mates.find(characterId).orElse(null);
-        List<IntimacyView.Unlocked> unlocked = unlocks.between(characterId, r.stageBefore(), r.stageAfter()).stream()
-                .map(u -> new IntimacyView.Unlocked(
-                        u.type(), u.title(), u.unlockStage(), u.expressionName(), u.assetUrl()))
-                .toList();
+        List<IntimacyView.Unlocked> unlocked = unlockedBetween(characterId, r.stageBefore(), r.stageAfter());
         return new IntimacyView(
                 r.stageBefore(),
                 r.stageAfter(),
@@ -228,6 +225,9 @@ public class SessionService {
                 r.stageProgress(),
                 unlocked);
     }
+
+    /** 친밀도 마지막 단계 (명세 37 · 22: 5단계) */
+    private static final int MAX_STAGE = 5;
 
     /** 이 단계 사이에서 열리는 해금 콘텐츠 (22 relation.unlocked · 21 stageUp.unlocked) */
     private List<IntimacyView.Unlocked> unlockedBetween(long characterId, int after, int upTo) {
@@ -242,8 +242,10 @@ public class SessionService {
      * 알린 단계는 connections.notified_stage에 남겨 단계마다 한 번만. 실제 정산 · 해금 기록은 22에서
      */
     private HeartbeatResponse.StageUp stageUp(StudySession s, ConnectionTimes t, Instant now) {
+        if (s.getNotifiedStage() != null && s.getNotifiedStage() >= MAX_STAGE) return null; // 더 오를 단계 없음
         long mateId = s.characterId();
         int start = relationQuery.stage(s.getUserId(), mateId);
+        if (start >= MAX_STAGE) return null;
         int preview = relationQuery.previewStage(s.getUserId(), mateId, now, t.present());
         if (preview <= start || sessions.raiseNotifiedStage(s.getId(), start, preview) == 0) return null;
         int before = s.getNotifiedStage() == null ? start : Math.max(start, s.getNotifiedStage());

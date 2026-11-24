@@ -393,7 +393,16 @@ class SessionApiTest {
         heartbeat(id, 4100, 3800, 4100, 0).andExpect(jsonPath("$.data.stageUp").value(nullValue())); // 같은 단계는 한 번만
         assertThat(jdbc.queryForObject("SELECT notified_stage FROM connections WHERE id = ?", Integer.class, id))
                 .isEqualTo(2);
+        // 다음 단계는 이미 알린 단계 다음부터만 (2단계 해금을 다시 보내지 않음)
+        given(relationQuery.previewStage(eq(userId), eq(1L), any(), anyInt())).willReturn(3);
+        given(unlockQuery.between(1L, 2, 3)).willReturn(List.of(NIGHT_UNLOCK));
+        heartbeat(id, 5000, 4700, 5000, 0)
+                .andExpect(jsonPath("$.data.stageUp.stage").value(3))
+                .andExpect(jsonPath("$.data.stageUp.unlocked.length()").value(1))
+                .andExpect(jsonPath("$.data.stageUp.unlocked[0].title").value("밤 인사"));
     }
+
+    static final UnlockInfo NIGHT_UNLOCK = new UnlockInfo(10, "VOICE_LINE", "밤 인사", 3, null, "voice/night.mp3");
 
     @Test
     void heartbeatStoresTimesAndResumeReturnsThem() throws Exception {
