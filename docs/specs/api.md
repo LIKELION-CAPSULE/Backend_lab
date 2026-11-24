@@ -199,7 +199,9 @@
 
 > ✅ **200 OK**
 
-> ❌ **400** INVALID_CODE · CODE_EXPIRED · **429** TOO_MANY_ATTEMPTS (5회 틀리면 번호 폐기)
+> ❌ **400** INVALID_CODE (`detail.remainingAttempts` = 남은 시도 횟수, SCR-51 '(2/5)') · CODE_EXPIRED · **429** TOO_MANY_ATTEMPTS (5회 틀리면 번호 폐기)
+
+> 2026-11-24 (화면 대조): INVALID_CODE에 `detail.remainingAttempts` 추가
 
 ## 4. POST /api/auth/email/signup — 회원가입
 - 분류: 인증
@@ -484,6 +486,8 @@
 | aboutMe | String | 나에 대해 한 줄. 없으면 null |
 | referralCode | String | 내 초대 코드 (예: `CAP-7K2Q`) |
 | credits | Object | 크레딧 요약 (33의 `Credits`와 같은 모양, GNB) |
+| loginType | String | `EMAIL` · `KAKAO` (계정 설정 보안 탭의 '로그인 방식', SCR-60). 2026-11-24 (화면 대조) |
+| unreadNotifications | Integer | 안 읽은 알림 수 (GNB 벨 점, 43). 2026-11-24 (화면 대조) |
 
 > 2026-11-23 (12/1 베타): `birthDate` · `isMinor` · `honorific` · `aboutMe` · `referralCode` 추가, `onboardingRequired`에 생년월일 조건 추가
 
@@ -684,139 +688,18 @@ H02에서 아바타를 저장하면 `onboardingRequired`가 false가 되고 H03 
 > 2026-11-23: 스터디룸(`study_rooms` · `room_backgrounds`)을 지우면서 이 API도 지움. 부르면 404 NOT_FOUND. 메이트 정보는 31, 친밀도는 친밀도 단계에서 31 · 내 메이트에 붙임
 
 ## 13. POST /api/me/memories — 일정 저장
-- 분류: 온보딩 · 홈
-- 설명: 시험 · 약속 · 목표 일정 저장
-- 와이어프레임: H06 시험 · H10 다음 공부 약속 · H14 일정 추가
-- 백엔드: Not started
-- 프론트: Not started
-- 노션: https://app.notion.com/p/6cab9a07e59282108b0081090687fbf3
+- 분류: 마이페이지
+- 설명: **삭제** (2026-11-24 (화면 대조)). 12/1 베타 화면에 일정이 없어 지움. 부르면 404 NOT_FOUND
+- 백엔드: 삭제
+- 프론트: 삭제
 
-#### 한 줄 요약
-
-시험 · 약속 · 목표 일정을 저장합니다. 날짜와 시간을 **따로** 받습니다 (DB `due_date` · `due_time`). 시간이 없으면 '종일' 일정입니다.
-
-#### 와이어프레임 대조
-
-| 화면 요소 | 이 API가 하는 일 |
-| --- | --- |
-| H06 '시험이 있나요? · + 일정 추가' | `type = EXAM` |
-| H06 '없어요' | 호출 안 함 |
-| H10 '다음 공부 약속 · 날짜 · 시간 · 약속 저장하기' | `type = PROMISE` (날짜 + 시간) |
-| H10 '저장하지 않고 홈으로' | 호출 안 함 |
-| H14 '+ 일정 추가' 다이얼로그 '종류 · 일정 이름 · 날짜 · 시간(약속일 때) · 저장' | `type`, `title`, `dueDate`, `dueTime` |
-
-- 테이블: `user_memories` · 인증: 필요
-
-#### [POST] /api/me/memories
-
-#### 🛫 Request
-
-| 이름 | 타입 | 필수 | 설명 |
-| --- | --- | --- | --- |
-| type | String | O | `EXAM`(시험) / `PROMISE`(약속) / `GOAL`(목표) |
-| title | String | O | 일정 이름 (약속은 비우면 '같이 공부하기') |
-| dueDate | String | EXAM · PROMISE는 O, GOAL은 X | `YYYY-MM-DD` (한국 날짜 그대로). 목표는 마감일이 없을 수 있음 |
-| dueTime | String | X | `HH:mm`. 약속에서만 사용 (다른 종류에 오면 버리고 종일로 저장). **dueDate 없이 시간만은 불가** |
-
-```json
-{ "type": "PROMISE", "title": "같이 공부하기", "dueDate": "2026-11-08", "dueTime": "20:00" }
-```
-
-```json
-{ "type": "EXAM", "title": "영어 중간고사", "dueDate": "2026-11-12", "dueTime": null }
-```
-
-#### 🛬 Response
-
-'내 일정 조회'의 항목 1개와 같은 형태
-
-```json
-{ "memoryId": 32, "type": "PROMISE", "title": "같이 공부하기", "dueDate": "2026-11-08", "dueTime": "20:00", "dDay": 1 }
-```
-
-> ✅ **201 Created**
-
-> ❌ **400** INVALID_MEMORY (빈 제목 · 지난 날짜 · 날짜 없이 시간만 · 형식 오류)
-
-#### 참고
-
-- 날짜 · 시간은 타임존 변환 없이 한국 기준 그대로 주고받음 (ISO 시각 아님)
-- 저장한 일정은 모든 캐릭터가 기억해서 대화에 활용
+> 2026-11-24 (화면 대조): 일정 저장 · 조회(13 · 14)를 지움. `user_memories`는 남기고(이미 저장된 일정은 대화 프롬프트가 계속 읽음, 탈퇴 때 지움) 새로 쌓는 길만 막음
 
 ## 14. GET /api/me/memories — 내 일정 조회
-- 분류: 온보딩 · 홈
-- 설명: 내 일정(시험 · 약속 · 목표) 조회 — 달력 점 · 날짜 클릭 · 예정/전체/지난 탭
-- 와이어프레임: H14 마이페이지 달력 · 일정 목록
-- 백엔드: Not started
-- 프론트: Not started
-- 노션: https://app.notion.com/p/da5b9a07e59283ce98c401775309fcb9
-
-#### 한 줄 요약
-
-내 일정(시험 · 약속 · 목표)을 조회합니다. 마이페이지 달력의 점, 날짜 클릭, 예정 · 전체 · 지난 일정 탭을 이 API 하나로 처리합니다.
-
-#### 와이어프레임 대조
-
-| 화면 요소 | 쿼리 · 응답 |
-| --- | --- |
-| H14 달력 '‹ 0000년 00월 ›' | `from` · `to`로 그 달 범위 |
-| H14 달력 '점 = 일정 있음' | `datesWithMemories` |
-| H14 '날짜 클릭 → 그 날짜 일정만' | `date` |
-| H14 '예정 · 전체 · 지난 일정' 탭 | `status` = `UPCOMING` / `ALL` / `PAST` |
-| H14 목록 '시험 · 00.00 · 종일' · '약속 · 00.00 · 00:00' · '목표' | `type`, `title`, `dueDate`, `dueTime`(null이면 '종일') |
-| H14 빈 상태 '등록된 일정이 없어요' | `memories: []` |
-| H14 '+ 일정 추가' | '일정 저장' API |
-
-- 테이블: `user_memories` · 인증: 필요
-
-#### [GET] /api/me/memories
-
-#### 🛫 Request (Query)
-
-| 이름 | 타입 | 필수 | 설명 |
-| --- | --- | --- | --- |
-| from · to | String (`YYYY-MM-DD`) | X | 달력 달의 1일 ~ 말일 |
-| date | String (`YYYY-MM-DD`) | X | 특정 날짜만. 있으면 `from` · `to`보다 우선 |
-| status | String | X | `UPCOMING`(기본) / `ALL` / `PAST` |
-| type | String | X | `EXAM` / `PROMISE` / `GOAL`. 없으면 전부 |
-
-```javascript
-GET /api/me/memories?from=2026-11-01&to=2026-11-30&status=UPCOMING
-GET /api/me/memories?date=2026-11-12
-```
-
-#### 🛬 Response
-
-| 이름 | 타입 | 설명 |
-| --- | --- | --- |
-| memories[].memoryId | Long | 일정 id |
-| memories[].type | String | `EXAM` / `PROMISE` / `GOAL` |
-| memories[].title | String | 일정 이름 |
-| memories[].dueDate | String | `YYYY-MM-DD`, 없으면 null (마감일 없는 목표) |
-| memories[].dueTime | String | `HH:mm`, 없으면 null → '종일' 표시 |
-| memories[].dDay | Integer | 오늘 기준 D-day (지난 일정은 음수, 날짜 없으면 null) |
-| datesWithMemories | Array | `from`~`to` 안에서 일정이 있는 날짜 (탭 · `date`와 무관. `type`을 보내면 그 종류만) |
-
-```json
-{
-  "memories": [
-    { "memoryId": 32, "type": "PROMISE", "title": "같이 공부하기", "dueDate": "2026-11-08", "dueTime": "20:00", "dDay": 1 },
-    { "memoryId": 31, "type": "EXAM", "title": "영어 중간고사", "dueDate": "2026-11-12", "dueTime": null, "dDay": 5 }
-  ],
-  "datesWithMemories": ["2026-11-08", "2026-11-12"]
-}
-```
-
-> ✅ **200 OK**
-
-> ❌ **400** INVALID_DATE_RANGE (끝일이 시작일보다 빠름 · 범위 100일 초과)
-
-#### 규칙
-
-- 정렬: 예정 · 전체는 가까운 날짜부터, 지난 일정은 최근 것부터. 날짜 없는 목표는 '전체'의 맨 아래
-- 같은 날이면 시간 있는 일정이 먼저, 종일은 그 다음
-- 날짜 없는 목표는 '전체'(`status=ALL`)에만 나오고, `from` · `to`와 상관없이 포함됨. `date`를 보내면 빠짐
-- `date`와 `status`는 같이 적용됨. 지난 날짜를 누르면 `status=ALL`(또는 `PAST`)을 같이 보냄 (기본값 UPCOMING이면 빈 목록)
+- 분류: 마이페이지
+- 설명: **삭제** (2026-11-24 (화면 대조)). 13과 같이 지움. 부르면 404 NOT_FOUND
+- 백엔드: 삭제
+- 프론트: 삭제
 
 ## 16. POST /api/connections — 연결 시작
 - 분류: 공부 세션
@@ -1440,6 +1323,9 @@ GET /api/me/memories?date=2026-11-12
 | --- | --- | --- |
 | minorRemainingSeconds | Integer | 만 19세 미만이면 오늘 남은 연결 시간(초), 아니면 null. 0이면 22를 `endType: MINOR_LIMIT`로 부름 |
 | serverTime | String | 서버 시각 |
+| stageUp | Object | 이번 heartbeat로 친밀도 단계가 오를 만큼 함께했으면 `{ stage, stageName, unlocked[] }`, 아니면 null. 연결 중 '새 표정이 열렸어요' 알림 (SCR-56). 연결마다 단계당 한 번만 (2026-11-24 (화면 대조)) |
+
+> 2026-11-24 (화면 대조): `stageUp` 추가. 미리보기: 이번 연결의 `presentSeconds`를 22와 같은 규칙(하루 2시간 · 대화 없으면 절반)으로 인정했을 때의 단계. 실제 정산 · 해금 기록은 22에서 (그래서 연결 중 알림을 본 표정도 22 `unlocked`에 다시 나옴)
 
 > ✅ **200 OK**
 
@@ -1515,10 +1401,11 @@ GET /api/me/memories?date=2026-11-12
 | connectedSeconds | Integer | 연결 시간 |
 | presentSeconds | Integer | 함께한 시간 |
 | awaySeconds | Integer | 자리 비움 |
+| cameraOnSeconds | Integer | 카메라 켠 시간 (연결 기록 '함께한 시간(캠)', SCR-21). 2026-11-24 (화면 대조) |
 | messageCount | Integer | 이 연결에서 답장까지 받은 대화 턴 수 (메시지 전송 20 · 28이 답장을 저장할 때 +1, 2026-11-23 6단계) |
 | returnCount | Integer | 자리 비운 뒤 돌아온 횟수 (`RETURN` 이벤트 수) |
 | mate | Object | `id`, `name`, `illustrationUrl`(전신), `myRole` |
-| relation | Object | 친밀도 (5단계 · 2026-11-23): `stageBefore` · `stageAfter`(1~5) · `stageName`(끝난 뒤 단계 이름, 메이트마다 다름) · `stageUp` · `creditedSeconds`(이번에 인정된 시간) · `nextStageSeconds`(다음 단계까지 남은 인정 시간, 5단계면 null) · `unlocked[]`(이번에 열린 것 `type`(EXPRESSION · VOICE_LINE) · `title` · `unlockStage` · `expressionName` · `assetUrl`) |
+| relation | Object | 친밀도 (5단계 · 2026-11-23): `stageBefore` · `stageAfter`(1~5) · `stageName`(끝난 뒤 단계 이름, 메이트마다 다름) · `stageUp` · `creditedSeconds`(이번에 인정된 시간) · `nextStageSeconds`(다음 단계까지 남은 인정 시간, 5단계면 null) · `stageProgress`(지금 단계 안에서 얼마나 왔는지 0~100, 5단계면 100. SCR-21 친밀도 막대, 2026-11-24 (화면 대조)) · `unlocked[]`(이번에 열린 것 `type`(EXPRESSION · VOICE_LINE) · `title` · `unlockStage` · `expressionName` · `assetUrl`) |
 | referralReward | Object | 이 연결로 초대 보상(받은 사람 몫)을 받았으면 `{ "amount": 1000 }`, 아니면 null (8단계 · 2026-11-23) |
 | betaFeedbackAvailable | Boolean | 오늘(오전 5시 기준) 베타 평가(42 `RATING`)를 아직 안 했으면 true → 연결 기록 위에 평가 카드 (SCR-55, 2026-11-23) |
 | closingLine | String | 완료 대사 (리포트 · 카드 공용). 캐릭터 설정에 완료 대사(`character_lines` CLOSING)가 있으면 지금 관계 단계의 그 문장(PM: 말포이는 고정. 단계별 문장은 확정 필요), 없으면 AI. 직접 끝냈는데 목표 시간의 절반도 못 채웠으면 공부 포기 대사(GIVE_UP, 임시 J-15, 문구 확정 필요). 기준 시간은 공부 시간 `studySeconds`(자리 지킴 + 자리 비움, 쉬는 시간 제외)로 확정, 목표 시간을 정하지 않은 세션은 포기로 보지 않음 (절반 · 직접 끝냄 조건은 확정 필요) |
@@ -2076,7 +1963,7 @@ data: {"chunks":2,"complete":true}
 - 두 종류: **출석분**(하루 1,500, 다음 오전 5시에 남은 만큼 사라짐) · **초대분**(친구 초대 보상 1,000, 사라지지 않음)
 - 출석 지급과 지난 출석분 소멸은 배치 없이, 그날 그 사용자의 크레딧을 처음 읽거나 쓸 때 처리한다 (8 내 정보 · 16 연결 시작 · 33 · 34 · 차감). 하루 = 오전 5시 KST
 - 쓸 때는 출석분부터 (사라지는 것 먼저)
-- 차감: 보이스 대화 20 · 고급 대화 30 · 둘 다 50. 답장이 성공한 뒤에만, 같은 요청(`requestId`)은 한 번만. 모자라면 차감하지 않고 그 기능만 멈춤(기본 채팅은 계속). 고급 모드는 20 · 28의 `mode: ADVANCED` (2026-11-23), 보이스는 28의 `tts: true` (2026-11-24, 28 '음성'). 둘 다면 한 줄("고급 · 보이스 대화 · 채린" 50)로
+- 차감: 보이스 대화 20 · 고급 모드 30 · 둘 다 50. 내역 문구는 `고급 모드 · 채린` · `보이스 대화 · 채린` · `고급 모드 · 보이스 대화 · 채린` (화면 SCR-30과 같게, 2026-11-24 (화면 대조)). 답장이 성공한 뒤에만, 같은 요청(`requestId`)은 한 번만. 모자라면 차감하지 않고 그 기능만 멈춤(기본 채팅은 계속). 고급 모드는 20 · 28의 `mode: ADVANCED` (2026-11-23), 보이스는 28의 `tts: true` (2026-11-24, 28 '음성'). 둘 다면 한 줄("고급 · 보이스 대화 · 채린" 50)로
 - 탈퇴해도 크레딧 행은 남김 (지표)
 
 #### 설명
@@ -2267,7 +2154,7 @@ data: {"chunks":2,"complete":true}
 | firstMetAt · lastConnectedAt | String | 처음 · 마지막 연결 시작 시각 |
 | connectionCount | Integer | 끝난 연결 수 |
 | totalPresentSeconds · totalConnectedSeconds | Integer | 누적 함께한 시간 · 연결 시간 |
-| relation | Object | `stage` · `stageName` · `nextStageName`(5단계면 null) · `nextStageSeconds`(다음 단계까지 남은 인정 시간, 5단계면 null) |
+| relation | Object | `stage` · `stageName` · `nextStageName`(5단계면 null) · `nextStageSeconds`(다음 단계까지 남은 인정 시간, 5단계면 null) · `stageProgress`(0~100, 2026-11-24 (화면 대조)) |
 | unlocks | Array | 이 메이트의 해금 콘텐츠 전부, 열리는 단계 순. `id` · `type`(EXPRESSION · VOICE_LINE) · `title` · `unlockStage` · `unlockStageName` · `expressionName` · `assetUrl` · `unlocked` |
 | recent | Array | 최근 끝난 연결 5개 `connectionId` · `endedAt` · `presentSeconds` · `connectedSeconds` (누르면 23) |
 
@@ -2443,3 +2330,125 @@ data: {"chunks":2,"complete":true}
 > ✅ **201 Created**
 
 > ❌ **400** INVALID_REQUEST · **409** FEEDBACK_ALREADY_TODAY (오늘 RATING을 이미 함, 오전 5시 기준)
+
+## 43. GET /api/notifications — 알림 목록
+- 분류: 홈
+- 설명: GNB 벨의 알림 모아 보기. 최신순
+- 와이어프레임: SCR-63
+- 백엔드: 2026-11-24 (화면 대조)
+- 프론트: Not started
+
+> 2026-11-24 (화면 대조): 추가 (ADR 0035)
+
+- 테이블: `notifications` · 인증: 필요
+
+#### 🛫 Request (Query)
+
+| 이름 | 타입 | 필수 | 설명 |
+| --- | --- | --- | --- |
+| before | Long | X | 이 id보다 오래된 것부터 (다음 페이지). 없으면 최신부터 |
+| size | Integer | X | 1~50, 기본 20 |
+
+#### 🛬 Response
+
+| 이름 | 타입 | 설명 |
+| --- | --- | --- |
+| items | Array | `id` · `type` · `title` · `body`(없으면 null) · `link`(누르면 갈 곳, 없으면 null) · `read` · `createdAt` |
+| unreadCount | Integer | 안 읽은 알림 수 (8 `unreadNotifications`와 같음) |
+| nextBefore | Long | 다음 페이지를 부를 `before`. 끝이면 null |
+
+알림 종류 `type`
+
+| type | 언제 | title 예 | link |
+| --- | --- | --- | --- |
+| `STAGE_UP` | 연결을 끝내 친밀도 단계가 올랐을 때 (22) | 채린과 "친구"가 됐어요 · 새 표정 | `/mates/me` |
+| `ATTENDANCE` | 그날 출석 크레딧을 받았을 때 | 오늘 출석 크레딧 1,500 | `/credits` |
+| `REFERRAL_REWARD` | 초대 보상을 받았을 때 (받은 사람 · 초대한 사람) | 민지님 첫 연결 · 크레딧 1,000 | `/credits/invite` |
+
+```json
+{ "items": [ { "id": 31, "type": "STAGE_UP", "title": "채린과 \"친구\"가 됐어요 · 새 표정", "body": null, "link": "/mates/me", "read": false, "createdAt": "2026-11-24T03:00:00Z" } ], "unreadCount": 1, "nextBefore": null }
+```
+
+> ✅ **200 OK**
+
+- 운영 공지(예: "남학생 메이트가 곧 공개돼요")는 아직 없음 (보낼 곳 · 화면 확정 필요)
+- 90일 지난 알림은 목록에서 빠짐
+
+## 44. POST /api/notifications/read — 알림 읽음
+- 분류: 홈
+- 설명: 알림 모아 보기를 열면 읽음 처리
+- 와이어프레임: SCR-63
+- 백엔드: 2026-11-24 (화면 대조)
+- 프론트: Not started
+
+- 테이블: `notifications` · 인증: 필요
+
+#### 🛫 Request
+
+| 이름 | 타입 | 필수 | 설명 |
+| --- | --- | --- | --- |
+| ids | Array(Long) | X | 읽음 처리할 알림. 없으면 내 알림 전부 |
+
+#### 🛬 Response
+
+`{ "unreadCount": 0 }`
+
+> ✅ **200 OK** · 내 알림이 아닌 id는 무시
+
+## 45. POST /api/beta/waitlist — 출시 알림 신청
+- 분류: 온보딩
+- 설명: 베타 정원이 찼을 때 이메일을 남겨 출시 알림을 받음
+- 와이어프레임: SCR-46 '출시 알림 받기'
+- 백엔드: 2026-11-24 (화면 대조)
+- 프론트: Not started
+
+- 테이블: `beta_waitlist` · 인증: **불필요**
+
+#### 🛫 Request
+
+`{ "email": "name@example.com" }`
+
+#### 🛬 Response
+
+> ✅ **204 No Content** · 이미 신청한 이메일이어도 204 (중복 신청은 한 줄)
+
+> ❌ **400** INVALID_EMAIL · **429** TOO_MANY_REQUESTS (같은 IP 1분에 5번)
+
+- 실제 메일 발송(출시 때)은 운영이 이 목록으로 (확정 필요)
+
+## 46. POST /api/mates/{mateId}/alert — 메이트 공개 알림 신청
+- 분류: 온보딩 · 홈
+- 설명: 준비 중 메이트의 '알림 받기'
+- 와이어프레임: SCR-53 '12월 중 공개 · 알림 받기'
+- 백엔드: 2026-11-24 (화면 대조)
+- 프론트: Not started
+
+- 테이블: `mate_alerts` · 인증: 필요
+
+#### 🛬 Response
+
+> ✅ **204 No Content** · 이미 신청했어도 204
+
+> ❌ **404** MATE_NOT_FOUND · **409** MATE_ALREADY_OPEN (준비 중이 아닌 메이트)
+
+- 공개됐을 때 알림(43 `MATE_OPEN`)은 공개 절차가 정해지면 (확정 필요)
+
+## 47. POST /api/mates/{mateId}/conversation/reset — 대화 초기화
+- 분류: 대화
+- 설명: 이 메이트와의 대화를 처음부터. 대화방 기록 · 지난 대화 요약 · 메이트가 기억한 사실을 지움
+- 와이어프레임: SCR-36 '초기화' (경고 → 대화 정지 → 초기화 단계)
+- 백엔드: 2026-11-24 (화면 대조)
+- 프론트: Not started
+
+> 2026-11-24 (화면 대조): 추가. 확정 필요: SCR-36의 '초기화'가 사용자가 누르는 버튼인지, 안전 위반 제재 단계(서버가 하는 것)인지. 지금은 사용자가 누르는 API로 만들고, 제재로 정해지면 같은 동작을 안전 규칙에서 부름
+
+- 테이블: `chat_messages`(`hidden_at`), `conversation_recaps`, `character_memories` · 인증: 필요
+
+#### 🛬 Response
+
+> ✅ **204 No Content**
+
+> ❌ **404** MATE_NOT_FOUND · **409** CONNECTION_IN_PROGRESS (이 메이트와 연결 중이면 끝낸 뒤에)
+
+- 메시지는 지우지 않고 가린다(`hidden_at`, 신고 41과 같음): 대화방(32) · 다음 답장의 이전 대화에서 빠짐. 친밀도 · 호감도 · 해금 · 크레딧은 그대로
+- 안전 정지(403 CHAT_SUSPENDED)는 풀리지 않음

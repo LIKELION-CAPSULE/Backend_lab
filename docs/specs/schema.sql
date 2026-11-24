@@ -108,6 +108,11 @@
 --   - character_backgrounds 추가 (메이트마다 배경 여러 장, 기본 하나). 대화 흐름에 따라 결정 모델이 고른다 (ADR 0032)
 --   - connections.background_code 추가 (이 연결의 지금 배경, NULL이면 메이트 기본 배경)
 --
+-- 2026-11-24 변경 (화면 대조, ADR 0035)
+--   - notifications · beta_waitlist · mate_alerts 추가 (user, api.md 43 ~ 46)
+--   - connections.notified_stage 추가 (연결 중 단계 상승 알림을 한 번만, api.md 21)
+--   - user_memories: 저장 · 조회 API(13 · 14) 삭제. 테이블은 남김 (대화 프롬프트가 남은 행을 읽음)
+--
 -- 2026-11-24 변경 (모델 형식 기본값)
 --   - live2d_models.format 기본값 CUBISM → ALIVING2D_V2. 앞으로 넣는 모델은 Aliving2D 묶음(model.json).
 --     지금 있는 Cubism 모델(메이트 말포이 · 아바타)은 CUBISM 그대로(시드 · 데이터에 format을 적어 둠)
@@ -179,6 +184,36 @@ CREATE TABLE beta_feedback (
     CHECK (kind = 'RATING' OR text IS NOT NULL)
 );
 CREATE UNIQUE INDEX uq_beta_feedback_rating ON beta_feedback (user_id, feedback_day) WHERE kind = 'RATING';
+
+-- 알림 (2026-11-24, api.md 43 · 44, ADR 0035). 다른 모듈의 일(단계 상승 · 출석 · 초대 보상)을 user가 받아 적는다. 탈퇴하면 지움
+CREATE TABLE notifications (
+    id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id     bigint      NOT NULL REFERENCES users (id),
+    type        text        NOT NULL CHECK (type IN ('STAGE_UP', 'ATTENDANCE', 'REFERRAL_REWARD')),
+    title       text        NOT NULL,
+    body        text,
+    link        text,                                      -- 프론트 경로 (예: /mates/me)
+    dedup_key   text,                                      -- 같은 일을 두 번 적지 않게 (예: 출석 날짜, 연결 id)
+    created_at  timestamptz NOT NULL DEFAULT now(),
+    read_at     timestamptz
+);
+CREATE INDEX idx_notifications_user ON notifications (user_id, id DESC);
+CREATE UNIQUE INDEX uq_notifications_dedup ON notifications (user_id, type, dedup_key) WHERE dedup_key IS NOT NULL;
+
+-- 출시 알림 신청 (2026-11-24, api.md 45). 정원이 찬 뒤 로그인 없이 이메일만 받음
+CREATE TABLE beta_waitlist (
+    id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    email       text        NOT NULL UNIQUE,               -- 소문자로 저장
+    created_at  timestamptz NOT NULL DEFAULT now()
+);
+
+-- 준비 중 메이트 공개 알림 신청 (2026-11-24, api.md 46). 메이트는 다른 모듈 테이블이라 FK 아님
+CREATE TABLE mate_alerts (
+    user_id      bigint      NOT NULL REFERENCES users (id),
+    character_id bigint      NOT NULL,
+    created_at   timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (user_id, character_id)
+);
 
 -- 크레딧 지급 건 (2026-11-23, ADR 0031). 잔액 = 소멸 전 지급 건의 remaining 합. 탈퇴해도 남김
 --   ATTENDANCE: 하루 1,500 (granted_on = 오전 5시 기준 그날), expires_at = 다음 오전 5시
@@ -437,6 +472,7 @@ CREATE TABLE user_unlocked_contents (
 );
 
 -- 시험, 목표, 약속 (캐릭터 공통). 사용자가 직접 말한 내용이라 탈퇴 시 서버가 삭제
+-- 2026-11-24: 저장 · 조회 API(13 · 14) 삭제. 남은 행은 대화 프롬프트가 계속 읽음
 -- 날짜만 말하면 due_time은 NULL (자정과 구분됨). date / time은 타임존 변환 없이 한국 날짜 그대로 저장
 CREATE TABLE user_memories (
     id         bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -480,6 +516,7 @@ CREATE TABLE connections (
     mood              text,                               -- 그날의 분위기 (연결마다 새로, 확정 필요)
     closing_line      text,                               -- 완료 대사 (종료 때 저장, 연결 기록 공용)
     background_code   text,                               -- 지금 배경 character_backgrounds.code (NULL이면 메이트 기본 배경, 2026-11-23)
+    notified_stage    int,                                -- 연결 중 단계 상승을 알린 마지막 단계 (api.md 21 stageUp, NULL이면 시작 단계, 2026-11-24)
     CHECK (ended_at IS NULL OR ended_at >= started_at),
     CHECK ((ended_at IS NULL) = (end_type IS NULL)),
     CHECK (present_seconds <= camera_on_seconds AND camera_on_seconds <= connected_seconds AND pip_seconds <= connected_seconds)
