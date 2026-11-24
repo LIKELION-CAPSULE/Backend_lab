@@ -48,8 +48,8 @@ public class ContentAdminController {
         return ApiResponse.ok(admin.createMate(body));
     }
 
-    /** 이미 등록된 모델의 Aliving2D 엔진 경로 (2026-11-25) */
-    @PatchMapping("/internal/content/models/{modelId}/runtime")
+    /** 이미 등록된 모델의 Aliving2D 엔진 경로 (2026-11-25). 세 칸을 통째로 바꾼다 (보내지 않은 칸은 비움) */
+    @PutMapping("/internal/content/models/{modelId}/runtime")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void setRuntime(@PathVariable long modelId, @RequestBody SetRuntime body) {
         admin.setRuntime(modelId, body);

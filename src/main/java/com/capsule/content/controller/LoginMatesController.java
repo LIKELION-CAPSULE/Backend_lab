@@ -13,12 +13,14 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Duration;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /** api.md 48 로그인 화면 메이트 (2026-11-25). 로그인 없이 부른다 */
+@Slf4j
 @RestController
 @Tag(name = ApiTags.ONBOARDING_HOME)
 @RequiredArgsConstructor
@@ -37,7 +39,7 @@ public class LoginMatesController {
             description = "로그인 전 화면에서 움직일 메이트와 모델. 공개 · 활성 · 전연령 · 모델이 있는 메이트만 (명세: api.md 48)")
     @GetMapping("/api/login-mates")
     public ResponseEntity<ApiResponse<LoginMatesResponse>> list(HttpServletRequest http) {
-        if (!rateLimiter.tryAcquire("rl:login-mates:" + clientIp(http), PER_MINUTE, Duration.ofMinutes(1))) {
+        if (!withinLimit(clientIp(http))) {
             throw new ApiException(CommonErrorCode.TOO_MANY_REQUESTS);
         }
         LoginMatesResponse body = new LoginMatesResponse(mates.activeMates().stream()
@@ -48,6 +50,18 @@ public class LoginMatesController {
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.maxAge(Duration.ofMinutes(5)).cachePublic())
                 .body(ApiResponse.ok(body));
+    }
+
+    /**
+     * 로그인 화면이 Redis 장애로 막히지 않게: 횟수를 셀 수 없으면 통과시킨다 (읽기 전용 · 공개 정보라 남용돼도 피해가 작음)
+     */
+    private boolean withinLimit(String ip) {
+        try {
+            return rateLimiter.tryAcquire("rl:login-mates:" + ip, PER_MINUTE, Duration.ofMinutes(1));
+        } catch (RuntimeException e) {
+            log.warn("로그인 화면 메이트: 횟수 제한을 셀 수 없어 통과 ({})", e.toString());
+            return true;
+        }
     }
 
     private static LoginMatesResponse.Mate view(MateInfo m) {

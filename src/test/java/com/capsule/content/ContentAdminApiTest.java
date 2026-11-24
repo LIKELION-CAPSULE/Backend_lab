@@ -202,6 +202,7 @@ class ContentAdminApiTest {
         String login = mvc.perform(get("/api/login-mates"))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Cache-Control", org.hamcrest.Matchers.containsString("max-age=300")))
+                .andExpect(header().string("Cache-Control", org.hamcrest.Matchers.containsString("public")))
                 .andReturn()
                 .getResponse()
                 .getContentAsString();
@@ -211,16 +212,23 @@ class ContentAdminApiTest {
         assertThat(found.get(0).get("model")).isEqualTo(detailModel);
         assertThat(found.get(0).get("ageRating")).isEqualTo("ALL");
 
-        // 준비 중 · 성인 메이트는 빠진다
+        // 준비 중 · 성인 · 비활성 메이트는 빠진다
         long soon = mateWith(null, "준비 로그인");
         long adult = mateWith(register(unique("adult")), "성인 메이트");
-        jdbc.update("UPDATE characters SET age_rating = 'ADULT' WHERE id = ?", adult);
-        String after =
-                mvc.perform(get("/api/login-mates")).andReturn().getResponse().getContentAsString();
-        List<Object> ids = JsonPath.read(after, "$.data.mates[*].id");
-        assertThat(ids).contains((int) mate).doesNotContain((int) soon, (int) adult);
-        // 다른 테스트의 홈 목록에 안 섞이게
-        jdbc.update("UPDATE characters SET is_active = false WHERE id IN (?, ?, ?)", mate, soon, adult);
+        long off = mateWith(register(unique("off")), "꺼진 메이트");
+        try {
+            jdbc.update("UPDATE characters SET age_rating = 'ADULT' WHERE id = ?", adult);
+            jdbc.update("UPDATE characters SET is_active = false WHERE id = ?", off);
+            String after = mvc.perform(get("/api/login-mates"))
+                    .andReturn()
+                    .getResponse()
+                    .getContentAsString();
+            List<Object> ids = JsonPath.read(after, "$.data.mates[*].id");
+            assertThat(ids).contains((int) mate).doesNotContain((int) soon, (int) adult, (int) off);
+        } finally {
+            // 다른 테스트의 홈 목록에 안 섞이게
+            jdbc.update("UPDATE characters SET is_active = false WHERE id IN (?, ?, ?, ?)", mate, soon, adult, off);
+        }
     }
 
     @Test
@@ -237,17 +245,17 @@ class ContentAdminApiTest {
                 .andExpect(status().isBadRequest()); // player만 있고 engine 없음
         long modelId = register(prefix); // 엔진 없이 등록된 모델 (운영 채린처럼)
         send(
-                        "PATCH",
+                        "PUT",
                         "/internal/content/models/" + modelId + "/runtime",
                         "{\"enginePath\": \"aliving2d/v4/engine.js\"}",
                         TOKEN)
                 .andExpect(status().isNoContent());
         assertThat(jdbc.queryForObject("SELECT engine_path FROM live2d_models WHERE id = ?", String.class, modelId))
                 .isEqualTo("aliving2d/v4/engine.js");
-        send("PATCH", "/internal/content/models/" + modelId + "/runtime", "{\"enginePath\": \"../x.js\"}", TOKEN)
+        send("PUT", "/internal/content/models/" + modelId + "/runtime", "{\"enginePath\": \"../x.js\"}", TOKEN)
                 .andExpect(status().isBadRequest());
-        send("PATCH", "/internal/content/models/999999/runtime", "{}", TOKEN).andExpect(status().isNotFound());
-        send("PATCH", "/internal/content/models/" + modelId + "/runtime", "{}", null)
+        send("PUT", "/internal/content/models/999999/runtime", "{}", TOKEN).andExpect(status().isNotFound());
+        send("PUT", "/internal/content/models/" + modelId + "/runtime", "{}", null)
                 .andExpect(status().isUnauthorized());
     }
 
