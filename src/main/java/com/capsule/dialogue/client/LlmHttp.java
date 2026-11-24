@@ -81,7 +81,8 @@ public final class LlmHttp {
         return (System.nanoTime() - startNanos) / 1_000_000;
     }
 
-    private static boolean isTimeout(Throwable e) {
+    /** 응답 시간 초과인지 (원인 사슬 전체). 음성(OpenAiTtsClient)도 쓴다 */
+    static boolean isTimeout(Throwable e) {
         for (Throwable t = e; t != null; t = t.getCause())
             if (t instanceof HttpTimeoutException || t instanceof java.net.SocketTimeoutException) return true;
         return false;

@@ -94,6 +94,8 @@ public class DialogueService {
     private static final DateTimeFormatter CARD_DATE = DateTimeFormatter.ofPattern("MM/dd");
     /** 고급 대화 1턴 크레딧 (api.md 33 '크레딧 규칙') */
     public static final int ADVANCED_COST = 30;
+    /** 보이스 대화 1턴 크레딧 (api.md 33 '크레딧 규칙', 28 '음성') */
+    public static final int VOICE_COST = 20;
 
     private final SessionQuery sessions;
     private final ConnectionMessageCounter messageCounter;
@@ -122,6 +124,7 @@ public class DialogueService {
     private final CreditCommands creditCommands;
     private final SafetyGuard safety;
     private final BackgroundPicker backgroundPicker;
+    private final VoiceStreams voices;
     /** 고급 모드 답장 모델. 비어 있으면 기본 모드와 같은 모델 (api.md 20, 2026-11-23) */
     private final String advancedModel;
 
@@ -153,6 +156,7 @@ public class DialogueService {
             CreditCommands creditCommands,
             SafetyGuard safety,
             BackgroundPicker backgroundPicker,
+            VoiceStreams voices,
             // TODO(judgment): J-16 고급 모드에 쓸 실제 모델 (운영 설정 capsule.llm.advanced-model). 정해지기 전까지 비워 두면 기본 모델
             @Value("${capsule.llm.advanced-model:}") String advancedModel) {
         this.sessions = sessions;
@@ -182,6 +186,7 @@ public class DialogueService {
         this.creditCommands = creditCommands;
         this.safety = safety;
         this.backgroundPicker = backgroundPicker;
+        this.voices = voices;
         this.advancedModel = advancedModel;
     }
 
@@ -271,14 +276,54 @@ public class DialogueService {
 
     /**
      * 받아 둔 메시지 (명세 20 · 28): 검증 · 재전송 확인 · 사용자 말 저장 · 속도 제한까지 끝난 상태.
-     * answered가 있으면 이미 답한 재전송, inFlightSince가 있으면 같은 requestId가 처리 중
+     * answered가 있으면 이미 답한 재전송, inFlightSince가 있으면 같은 requestId가 처리 중.
+     * voice는 이번 턴에 음성을 보낼지 (28만, {@link #withVoice})
      */
     public record Accepted(
             SessionInfo session,
             Conversation conversation,
             MessageRequest request,
             MessageResponse answered,
-            Instant inFlightSince) {}
+            Instant inFlightSince,
+            boolean voice) {
+
+        public Accepted(
+                SessionInfo session,
+                Conversation conversation,
+                MessageRequest request,
+                MessageResponse answered,
+                Instant inFlightSince) {
+            this(session, conversation, request, answered, inFlightSince, false);
+        }
+
+        /** 새로 답할 요청인지 (재전송 · 처리 중 대기가 아님) */
+        public boolean fresh() {
+            return answered == null && inFlightSince == null;
+        }
+    }
+
+    /**
+     * 28 음성 (명세 28 '음성', ADR 0034): tts 요청 + 설정 voiceEnabled + 크레딧(보이스 20, 고급이면 50)이면 음성을 켠다.
+     * 아니면 그대로(음성 없이 글만, 에러 아님). 재전송 · 처리 중 대기는 음성을 보내지 않는다
+     */
+    public Accepted withVoice(Accepted a) {
+        if (!a.fresh() || !Boolean.TRUE.equals(a.request().tts())) return a;
+        long userId = a.session().userId();
+        if (!voices.enabled(userId)) return a;
+        int cost = VOICE_COST + (a.request().modeOrBasic() == ChatMode.ADVANCED ? ADVANCED_COST : 0);
+        Credits credits = tx.execute(s -> creditQuery.current(userId));
+        if (credits.todayRemaining() < cost) return a;
+        return new Accepted(a.session(), a.conversation(), a.request(), null, null, true);
+    }
+
+    /** 이 턴의 음성 스트림 (withVoice가 켠 요청만). 받은 음성 조각을 sink로 (false를 돌려주면 음성을 멈춤) */
+    public VoiceStream voiceStream(Accepted a, java.util.function.Predicate<VoiceStream.AudioChunk> sink) {
+        return voices.open(a.session().userId(), a.session().characterId(), sink);
+    }
+
+    public Duration voiceWait() {
+        return voices.waitAfterDone();
+    }
 
     /** 20 · 28 앞부분. 여기서 나는 오류는 보통 HTTP 오류다 (28은 스트림을 열기 전) */
     public Accepted accept(long userId, long sessionId, MessageRequest request) {
@@ -345,7 +390,7 @@ public class DialogueService {
         if (a.answered() != null) return a.answered();
         if (a.inFlightSince() != null)
             return awaitAnswer(a.session(), a.conversation(), a.request(), a.inFlightSince());
-        return answer(a.session(), a.conversation(), a.request(), onReply);
+        return answer(a.session(), a.conversation(), a.request(), onReply, a.voice());
     }
 
     /**
@@ -357,7 +402,11 @@ public class DialogueService {
      * 안전 위반이면 LLM을 부르지 않고 거절 대사 · 0점 · 위반 기록 (명세 20 '안전')
      */
     private MessageResponse answer(
-            SessionInfo session, Conversation conversation, MessageRequest request, Consumer<String> onReply) {
+            SessionInfo session,
+            Conversation conversation,
+            MessageRequest request,
+            Consumer<String> onReply,
+            boolean voice) {
         long userId = session.userId();
         long sessionId = session.id();
         long characterId = session.characterId();
@@ -436,30 +485,44 @@ public class DialogueService {
                 AffinityChange affinity =
                         relationCommands.applyChatScore(userId, characterId, sessionId, requestId, score);
                 if (signal != null) messages.markSignal(conversation.getId(), requestId, signal.name());
-                messages.save(ChatMessage.reply(
+                ChatMessage saved = messages.save(ChatMessage.reply(
                         conversation.getId(), sessionId, requestId, reply, mode.name(), Instant.now(clock)));
                 violation.ifPresent(category -> safety.record(userId, sessionId, requestId, category));
                 background.ifPresent(b -> backgroundPicker.save(sessionId, b)); // 연결 행은 countReply가 이미 잠금
                 // 크레딧은 맨 끝에 (사용자 잠금, 연결 → relation → 대화 → credit 순서라 종료와 교착이 없다).
-                // 고급 모드 답장이 성공했을 때만 깎는다 (fallback · 안전 경고 턴은 안 깎음, 같은 requestId는 한 번만)
+                // 고급 모드 · 보이스는 LLM 답장이 성공했을 때만 깎는다 (fallback · 안전 경고 턴은 안 깎음, 같은 requestId는 한 번만).
+                // 둘 다면 한 줄로 50 (명세 33 '크레딧 규칙', 28 '음성')
+                boolean llmReply = outcome.isPresent();
+                boolean advanced = mode == ChatMode.ADVANCED;
                 int charged = 0;
                 Credits credits = null;
-                if (mode == ChatMode.ADVANCED) {
-                    if (outcome.isPresent()) {
-                        SpendResult spent =
-                                creditCommands.spend(userId, ADVANCED_COST, "고급 대화 · " + character.name(), requestId);
-                        if (!spent.spent()) {
-                            // 잔액을 확인한 뒤 다른 요청이 먼저 써서 모자라졌다: 409로 되돌린다 (아무것도 남기지 않음, 명세 20).
-                            // 그래서 저장된 고급 모드 LLM 답장은 늘 깎인 것이다 (재전송 charged의 근거)
-                            shortOf[0] = spent.credits();
-                            status.setRollbackOnly();
-                            return null;
-                        }
-                        charged = ADVANCED_COST;
-                        credits = spent.credits();
-                    } else {
-                        credits = creditQuery.current(userId);
+                if (llmReply && (advanced || voice)) {
+                    boolean voicePart = voice; // 이번에 보이스 몫까지 깎는지
+                    int cost = (advanced ? ADVANCED_COST : 0) + (voicePart ? VOICE_COST : 0);
+                    SpendResult spent = creditCommands.spend(
+                            userId, cost, spendTitle(advanced, voicePart, character.name()), requestId);
+                    if (!spent.spent() && advanced && voicePart) {
+                        // 음성을 켠 뒤 잔액이 모자라짐: 고급 모드 몫만이라도 (음성은 이미 나가는 중이라 그대로 둠)
+                        voicePart = false;
+                        cost = ADVANCED_COST;
+                        spent = creditCommands.spend(
+                                userId, cost, spendTitle(true, false, character.name()), requestId);
                     }
+                    if (spent.spent()) {
+                        charged = cost;
+                        // 재전송 charged를 처음과 같게: 보이스 몫까지 깎였는지 남긴다
+                        if (voicePart) saved.markVoiceCharged();
+                    } else if (advanced) {
+                        // 잔액을 확인한 뒤 다른 요청이 먼저 써서 모자라졌다: 409로 되돌린다 (아무것도 남기지 않음, 명세 20).
+                        // 그래서 저장된 고급 모드 LLM 답장은 늘 깎인 것이다 (재전송 charged의 근거)
+                        shortOf[0] = spent.credits();
+                        status.setRollbackOnly();
+                        return null;
+                    }
+                    // 보이스만 모자라짐: 깎지 않는다 (그 기능만 멈춤, 음성은 이미 나가는 중)
+                    credits = spent.credits();
+                } else if (advanced || voice) {
+                    credits = creditQuery.current(userId);
                 }
                 String emotion = outcome.map(ChatOutcome::emotion).orElse(null);
                 Reaction reaction = emotionReaction(characterId, emotion);
@@ -479,7 +542,8 @@ public class DialogueService {
                         violation.isPresent() ? MessageResponse.SAFETY_WARNING : null,
                         background
                                 .map(b -> new MessageResponse.Background(b.code(), b.name(), b.imageUrl()))
-                                .orElse(null));
+                                .orElse(null),
+                        voice);
             });
         } catch (DataIntegrityViolationException e) {
             // 기다리다 이어받은 요청과 먼저 온 요청이 둘 다 답했다: 먼저 저장된 답장으로
@@ -526,7 +590,7 @@ public class DialogueService {
                 throw new IllegalStateException(e);
             }
         }
-        return answer(session, conversation, request, null);
+        return answer(session, conversation, request, null, false); // 이어받은 요청은 음성 없이 (처리 중 대기와 같음)
     }
 
     /**
@@ -592,12 +656,13 @@ public class DialogueService {
                     boolean warned = safety.struck(userId, request.requestId());
                     int charged = 0;
                     Credits credits = null;
-                    if (mode == ChatMode.ADVANCED) {
+                    boolean advanced = mode == ChatMode.ADVANCED;
+                    if (advanced || m.isVoiceCharged()) {
                         boolean llmReply = !warned
                                 && question(conversation, request)
                                         .map(q -> q.getSignal() != null)
                                         .orElse(false);
-                        charged = llmReply ? ADVANCED_COST : 0;
+                        if (llmReply) charged = (advanced ? ADVANCED_COST : 0) + (m.isVoiceCharged() ? VOICE_COST : 0);
                         credits = tx.execute(s -> creditQuery.current(userId));
                     }
                     return new MessageResponse(
@@ -614,7 +679,8 @@ public class DialogueService {
                             charged,
                             credits,
                             warned ? MessageResponse.SAFETY_WARNING : null,
-                            null); // 배경은 처음 응답에서만 (재전송은 감정 · 표정처럼 null, 명세 20 '배경')
+                            null, // 배경은 처음 응답에서만 (재전송은 감정 · 표정처럼 null, 명세 20 '배경')
+                            false); // 재전송은 음성 없이 (명세 28 '음성')
                 });
     }
 
@@ -840,8 +906,17 @@ public class DialogueService {
         return await(start(call));
     }
 
-    // TODO(judgment): J-10 TTS 대사 음성(mp3) 생성. 지금은 tts:true여도 null
+    /**
+     * 19 · 20 응답의 audioBase64는 늘 null: 답장 음성은 28 스트리밍의 audio 이벤트로만 (명세 28 '음성', ADR 0034).
+     * 상태 반응(19) 음성은 아직 없음
+     */
     private static String audio(Boolean tts) {
         return null;
+    }
+
+    /** 크레딧 내역 문구 (명세 34): "고급 대화 · 채린" · "보이스 대화 · 채린" · "고급 · 보이스 대화 · 채린" */
+    static String spendTitle(boolean advanced, boolean voice, String mate) {
+        String what = advanced && voice ? "고급 · 보이스 대화" : advanced ? "고급 대화" : "보이스 대화";
+        return what + " · " + mate;
     }
 }

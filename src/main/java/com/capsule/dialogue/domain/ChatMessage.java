@@ -46,6 +46,9 @@ public class ChatMessage {
     /** CHARACTER만: 이 답장의 대화 모드 BASIC · ADVANCED */
     private String mode;
 
+    /** CHARACTER만: 이 답장에서 보이스 20을 깎았는지 (api.md 28 '음성', 재전송 charged 계산용) */
+    private boolean voiceCharged;
+
     /** CHARACTER만: 사용자 평가 UP · DOWN (api.md 40). null이면 없음 */
     private String rating;
 
@@ -76,6 +79,11 @@ public class ChatMessage {
         ChatMessage m = new ChatMessage(conversationId, sessionId, requestId, CHARACTER, content, now);
         m.mode = mode;
         return m;
+    }
+
+    /** 이 답장에서 보이스 20을 깎았다 (답장 저장 트랜잭션 안, 차감 뒤) */
+    public void markVoiceCharged() {
+        this.voiceCharged = true;
     }
 
     /** 평가를 덮어쓴다. null이면 취소 */
