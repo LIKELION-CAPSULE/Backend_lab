@@ -6,11 +6,13 @@ import com.capsule.content.dto.ContentAdminRequests.AvatarSaved;
 import com.capsule.content.dto.ContentAdminRequests.CreateAvatar;
 import com.capsule.content.dto.ContentAdminRequests.CreateMate;
 import com.capsule.content.dto.ContentAdminRequests.Expression;
+import com.capsule.content.dto.ContentAdminRequests.MateImages;
 import com.capsule.content.dto.ContentAdminRequests.MateSaved;
 import com.capsule.content.dto.ContentAdminRequests.ModelRegistered;
 import com.capsule.content.dto.ContentAdminRequests.Motion;
 import com.capsule.content.dto.ContentAdminRequests.Reaction;
 import com.capsule.content.dto.ContentAdminRequests.RegisterModel;
+import com.capsule.content.dto.ContentAdminRequests.SetMateImages;
 import com.capsule.content.dto.ContentAdminRequests.SetRuntime;
 import com.capsule.content.dto.ContentAdminRequests.UpdateAvatar;
 import java.util.HashMap;
@@ -197,6 +199,52 @@ public class ContentAdminService {
                 r.enginePath(),
                 r.playerPath(),
                 r.reactionsPath());
+    }
+
+    static final Pattern IMAGE = Pattern.compile("(?i).+\\.(png|jpe?g|webp)");
+    static final Pattern AUDIO = Pattern.compile("(?i).+\\.mp3");
+
+    /** 메이트 이미지 · 목소리 샘플 경로 (Aliving2D가 버킷에 올린 뒤, 2026-11-25). null = 그대로, "" = 지움 */
+    @Transactional
+    public MateImages setMateImages(long mateId, SetMateImages r) {
+        checkAsset(r.illustrationPath(), IMAGE, "illustrationPath는 버킷 안 png · jpg · webp 경로");
+        checkAsset(r.cardImagePath(), IMAGE, "cardImagePath는 버킷 안 png · jpg · webp 경로");
+        checkAsset(r.voiceSamplePath(), AUDIO, "voiceSamplePath는 버킷 안 mp3 경로");
+        int changed = jdbc.sql("""
+                        UPDATE characters
+                        SET illustration_url = CASE WHEN ? THEN illustration_url ELSE ? END,
+                            card_image_url   = CASE WHEN ? THEN card_image_url ELSE ? END,
+                            voice_sample_url = CASE WHEN ? THEN voice_sample_url ELSE ? END
+                        WHERE id = ?""")
+                .params(
+                        r.illustrationPath() == null,
+                        blank(r.illustrationPath()),
+                        r.cardImagePath() == null,
+                        blank(r.cardImagePath()),
+                        r.voiceSamplePath() == null,
+                        blank(r.voiceSamplePath()),
+                        mateId)
+                .update();
+        if (changed == 0) throw new ApiException(ContentErrorCode.MATE_NOT_FOUND);
+        MateImages saved = jdbc.sql(
+                        "SELECT id, illustration_url, card_image_url, voice_sample_url FROM characters WHERE id = ?")
+                .param(mateId)
+                .query((rs, n) -> new MateImages(rs.getLong(1), rs.getString(2), rs.getString(3), rs.getString(4)))
+                .single();
+        log.info(
+                "콘텐츠 관리: 메이트 {} 이미지 illustration={} card={} voice={}",
+                mateId,
+                saved.illustrationPath(),
+                saved.cardImagePath(),
+                saved.voiceSamplePath());
+        return saved;
+    }
+
+    /** null(그대로) · 빈 값(지움)은 통과. 아니면 버킷 안 상대 경로 + 확장자 */
+    private static void checkAsset(String path, Pattern type, String reason) {
+        if (blank(path) == null) return;
+        String p = path.strip();
+        check(FILE.matcher(p).matches() && type.matcher(p).matches(), reason + ": " + path);
     }
 
     /** 아바타 (api.md 9). 모델은 다른 메이트 · 아바타가 쓰지 않아야 함 */
