@@ -100,7 +100,9 @@ public class ProfileService {
                 user.getHonorific(),
                 user.getAboutMe(),
                 user.getReferralCode(),
-                credits.current(user.getId()));
+                credits.current(user.getId()),
+                // 비밀번호가 없으면 카카오 가입자 (소셜은 카카오만, api.md 6)
+                user.passwordHash() == null ? MeResponse.KAKAO : MeResponse.EMAIL);
     }
 
     private String thumbnail(User user) {

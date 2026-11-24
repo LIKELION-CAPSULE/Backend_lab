@@ -12,7 +12,6 @@ import com.jayway.jsonpath.JsonPath;
 import jakarta.servlet.http.Cookie;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
-import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -104,12 +103,8 @@ class FlowE2ETest {
         assertThat((String) JsonPath.read(body(mate), "$.data.model.format")).isEqualTo("CUBISM");
         assertThat((Boolean) JsonPath.read(body(mate), "$.data.hasConversation"))
                 .isFalse();
-        String examDate = LocalDate.now().plusDays(10).toString();
-        call(
-                post("/api/me/memories"),
-                token,
-                "{\"type\":\"EXAM\",\"title\":\"영어 중간고사\",\"dueDate\":\"" + examDate + "\",\"dueTime\":null}",
-                201);
+        // 일정 저장(13)은 2026-11-24에 지웠다 (12/1 베타 화면에 없음)
+        call(post("/api/me/memories"), token, "{\"type\":\"EXAM\",\"title\":\"영어 중간고사\"}", 404);
 
         // 10~11 연결 시작 → FOCUS → 인사 반응. 시드의 준비 중 메이트(2, 모델 없음)는 연결할 수 없다
         MvcResult comingSoon = call(post("/api/connections"), token, "{\"mateId\":2}", 409);

@@ -24,6 +24,7 @@ import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -105,7 +106,10 @@ public class AuthService {
                 redis.delete(List.of(codeKey(email), codeFailKey(email)));
                 throw new ApiException(UserErrorCode.TOO_MANY_ATTEMPTS);
             }
-            throw new ApiException(UserErrorCode.INVALID_CODE);
+            // 남은 시도 횟수 (api.md 3, SCR-51 '(2/5)'): 틀린 횟수는 방금 올린 값
+            String failed = redis.opsForValue().get(codeFailKey(email));
+            int remaining = MAX_FAILURES - (failed == null ? 1 : Integer.parseInt(failed));
+            throw new ApiException(UserErrorCode.INVALID_CODE, Map.of("remainingAttempts", remaining));
         }
         redis.delete(List.of(codeKey(email), codeFailKey(email)));
         String token = "vt_" + TokenService.randomToken();

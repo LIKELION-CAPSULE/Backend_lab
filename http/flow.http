@@ -34,13 +34,6 @@ Authorization: Bearer {{token}}
 GET {{host}}/api/mates/1
 Authorization: Bearer {{token}}
 
-### 7. 시험 일정 저장 (H06)
-POST {{host}}/api/me/memories
-Authorization: Bearer {{token}}
-Content-Type: application/json
-
-{ "type": "EXAM", "title": "영어 중간고사", "dueDate": "2026-12-12", "dueTime": null }
-
 ### 8. 연결 시작 (SCR-13 연결하기)
 POST {{host}}/api/connections
 Authorization: Bearer {{token}}

@@ -42,11 +42,15 @@ class WithdrawalApiTest extends UserApiTestSupport {
         long userId = ((Number) read(signedUp, "$.data.userId")).longValue();
         Cookie refresh = refreshCookie(signedUp);
 
-        mvc.perform(post("/api/me/memories")
-                        .header("Authorization", auth)
-                        .contentType("application/json")
-                        .content("{\"type\":\"EXAM\",\"title\":\"중간고사\",\"dueDate\":\"2026-12-01\"}"))
-                .andExpect(status().isCreated());
+        // 일정 저장 API(13)는 지웠다: 남아 있던 일정도 탈퇴 때 지워지는지 (행을 직접 넣음)
+        jdbc.update(
+                "INSERT INTO user_memories (user_id, type, title, due_date) VALUES (?, 'EXAM', '중간고사', '2026-12-01')",
+                userId);
+        long alertMate = jdbc.queryForObject(
+                "INSERT INTO characters (name, coming_soon, is_active) VALUES ('탈퇴 알림 테스트', true, true) RETURNING id",
+                Long.class);
+        mvc.perform(post("/api/mates/{id}/alert", alertMate).header("Authorization", auth))
+                .andExpect(status().isNoContent());
         long characterId = jdbc.queryForObject("SELECT id FROM characters ORDER BY id LIMIT 1", Long.class);
         long conversationId = jdbc.queryForObject(
                 "INSERT INTO conversations (user_id, character_id) VALUES (?, ?) RETURNING id",
@@ -81,6 +85,7 @@ class WithdrawalApiTest extends UserApiTestSupport {
         assertThat(count("signup_devices", userId)).isEqualTo(1);
         // 직접 말한 내용 · 대화 기억 삭제, 동의 기록은 남김
         assertThat(count("user_memories", userId)).isZero();
+        assertThat(count("mate_alerts", userId)).isZero(); // 메이트 공개 알림 신청도 지움 (46)
         assertThat(count("conversations", userId)).isZero();
         assertThat(count("character_memories", userId)).isZero();
         assertThat(jdbc.queryForObject(
@@ -99,12 +104,6 @@ class WithdrawalApiTest extends UserApiTestSupport {
                         .contentType("application/json")
                         .content("{\"voiceEnabled\":false}"))
                 .andExpect(status().isUnauthorized());
-        mvc.perform(post("/api/me/memories")
-                        .header("Authorization", auth)
-                        .contentType("application/json")
-                        .content("{\"type\":\"GOAL\",\"title\":\"다시\"}"))
-                .andExpect(status().isUnauthorized());
-        assertThat(count("user_memories", userId)).isZero();
         mvc.perform(delete("/api/me").header("Authorization", auth)).andExpect(status().isNoContent());
 
         // 이메일이 비워져서 같은 이메일로 새로 가입할 수 있다 (인증 요청은 1분 제한이라 DB로 확인)
