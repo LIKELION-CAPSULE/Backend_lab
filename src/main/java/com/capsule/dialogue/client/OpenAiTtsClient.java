@@ -40,12 +40,13 @@ public class OpenAiTtsClient implements TtsClient {
     @Override
     public void speak(Speech speech, Consumer<byte[]> onChunk) {
         Map<String, Object> body = new LinkedHashMap<>();
-        body.put("model", props.model());
+        String model = speech.model() == null || speech.model().isBlank() ? props.model() : speech.model();
+        body.put("model", model);
         body.put("input", speech.text());
         body.put("voice", speech.voice());
         body.put("response_format", FORMAT);
         // gpt-4o-mini-tts는 speed 대신 instructions로 말투를 받는다. tts-1 계열만 speed
-        if (props.model().startsWith("tts-1")) body.put("speed", speech.speed());
+        if (model.startsWith("tts-1")) body.put("speed", speech.speed());
         else if (speech.instructions() != null && !speech.instructions().isBlank())
             body.put("instructions", speech.instructions());
         try {

@@ -94,6 +94,16 @@ class OpenAiTtsClientTest {
     }
 
     @Test
+    void theMatesModelWinsOverTheSetting() {
+        // 메이트 목소리의 모델 (ADR 0036): 설정이 gpt-4o-mini-tts여도 tts-1이면 speed 규칙까지 그 모델 기준
+        client("gpt-4o-mini-tts").speak(new Speech("알지.", "nova", 0.85, "무시됨", "tts-1"), b -> {});
+        assertThat(requestBody.get("model").asString()).isEqualTo("tts-1");
+        assertThat(requestBody.get("voice").asString()).isEqualTo("nova");
+        assertThat(requestBody.get("speed").asDouble()).isEqualTo(0.85);
+        assertThat(requestBody.has("instructions")).isFalse();
+    }
+
+    @Test
     void tts1ModelsGetSpeed() {
         client("tts-1").speak(new Speech("알지.", "coral", 0.85, "무시됨"), b -> {});
         assertThat(requestBody.get("speed").asDouble()).isEqualTo(0.85);

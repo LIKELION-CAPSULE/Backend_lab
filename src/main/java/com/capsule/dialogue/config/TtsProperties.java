@@ -30,7 +30,7 @@ public record TtsProperties(
         voices = voices == null ? Map.of() : Map.copyOf(voices);
     }
 
-    // TODO(judgment): J-10 메이트별 실제 목소리 (지금은 모든 메이트가 voice 하나, 들어 보고 voices에 채운다)
+    // TODO(judgment): J-10 메이트별 실제 목소리. 이제 메이트 데이터(characters.tts_voice, ADR 0036)가 먼저고, 이 값은 비었을 때만
     public String voiceFor(long mateId) {
         return voices.getOrDefault(mateId, voice);
     }

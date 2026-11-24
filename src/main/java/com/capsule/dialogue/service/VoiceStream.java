@@ -30,6 +30,7 @@ public class VoiceStream {
 
     private final TtsClient tts;
     private final String voice;
+    private final String model;
     private final double speed;
     private final String instructions;
     private final TtsSegmenter segmenter;
@@ -51,8 +52,21 @@ public class VoiceStream {
             String instructions,
             int firstClauseMin,
             Predicate<AudioChunk> sink) {
+        this(tts, voice, null, speed, instructions, firstClauseMin, sink);
+    }
+
+    /** @param model 메이트 목소리의 모델 (ADR 0036). null이면 운영 설정 */
+    public VoiceStream(
+            TtsClient tts,
+            String voice,
+            String model,
+            double speed,
+            String instructions,
+            int firstClauseMin,
+            Predicate<AudioChunk> sink) {
         this.tts = tts;
         this.voice = voice;
+        this.model = model;
         this.speed = speed;
         this.instructions = instructions;
         this.segmenter = new TtsSegmenter(firstClauseMin);
@@ -107,7 +121,7 @@ public class VoiceStream {
         String spoken = SpeechText.clean(piece); // 지문 · 이모지 · ㅋㅋ 등은 음성에서만 뺀다 (글은 그대로)
         if (spoken == null) return;
         try {
-            tts.speak(new Speech(spoken, voice, speed, instructions), this::send);
+            tts.speak(new Speech(spoken, voice, speed, instructions, model), this::send);
         } catch (RuntimeException e) {
             synchronized (sendLock) {
                 failed = true;
