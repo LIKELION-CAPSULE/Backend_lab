@@ -33,4 +33,10 @@ public class Live2dModel {
 
     /** CUBISM · ALIVING2D_V2 (api.md 9 · 31). 프론트가 렌더러를 고름 */
     private String format;
+
+    /** Aliving2D 런타임 스크립트 (버킷 루트 기준 경로, 여러 모델이 같은 엔진, 2026-11-25). CUBISM이면 null */
+    private String enginePath;
+
+    private String playerPath;
+    private String reactionsPath;
 }

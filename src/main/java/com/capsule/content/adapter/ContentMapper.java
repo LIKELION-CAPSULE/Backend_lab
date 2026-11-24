@@ -38,7 +38,10 @@ public class ContentMapper {
                 cdnBaseUrl + "/" + m.getStoragePrefix() + m.getModelJsonPath(),
                 m.getScale().doubleValue(),
                 m.getOffsetX(),
-                m.getOffsetY());
+                m.getOffsetY(),
+                asset(m.getEnginePath()),
+                asset(m.getPlayerPath()),
+                asset(m.getReactionsPath()));
     }
 
     public AvatarInfo avatar(Avatar a) {

@@ -9,15 +9,31 @@ public final class ContentTypes {
 
     /**
      * Live2D 모델. modelJsonUrl = CDN 주소 + storage_prefix + model_json_path.
+     * engineUrl · playerUrl · reactionsUrl = Aliving2D 런타임 스크립트 (CDN 주소 + 버킷 루트 기준 경로, 없으면 null, 2026-11-25 확장).
      * format = CUBISM · ALIVING2D_V2, 프론트가 렌더러를 고름 (api.md 9 · 31, 2026-11-23 확장)
      */
-    public record ModelInfo(String format, String modelJsonUrl, double scale, int offsetX, int offsetY) {
+    public record ModelInfo(
+            String format,
+            String modelJsonUrl,
+            double scale,
+            int offsetX,
+            int offsetY,
+            String engineUrl,
+            String playerUrl,
+            String reactionsUrl) {
 
         public static final String CUBISM = "CUBISM";
 
         /** 계약 확장 전 모양 (Cubism). 다른 모듈 테스트가 쓰던 생성자를 깨지 않으려고 남긴다 */
         public ModelInfo(String modelJsonUrl, double scale, int offsetX, int offsetY) {
             this(CUBISM, modelJsonUrl, scale, offsetX, offsetY);
+        }
+
+        /**
+         * 엔진 주소가 없는 모양 (2026-11-25 확장 전). Cubism이거나 엔진을 아직 안 넣은 모델
+         */
+        public ModelInfo(String format, String modelJsonUrl, double scale, int offsetX, int offsetY) {
+            this(format, modelJsonUrl, scale, offsetX, offsetY, null, null, null);
         }
     }
 
