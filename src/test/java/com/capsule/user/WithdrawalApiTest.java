@@ -47,7 +47,7 @@ class WithdrawalApiTest extends UserApiTestSupport {
                 "INSERT INTO user_memories (user_id, type, title, due_date) VALUES (?, 'EXAM', '중간고사', '2026-12-01')",
                 userId);
         long alertMate = jdbc.queryForObject(
-                "INSERT INTO characters (name, coming_soon, is_active) VALUES ('탈퇴 알림 테스트', true, true) RETURNING id",
+                "INSERT INTO characters (name, coming_soon, is_active, sort_order) VALUES ('탈퇴 알림 테스트', true, true, 9000) RETURNING id",
                 Long.class);
         mvc.perform(post("/api/mates/{id}/alert", alertMate).header("Authorization", auth))
                 .andExpect(status().isNoContent());
@@ -104,6 +104,10 @@ class WithdrawalApiTest extends UserApiTestSupport {
                         .contentType("application/json")
                         .content("{\"voiceEnabled\":false}"))
                 .andExpect(status().isUnauthorized());
+        // 남은 액세스 토큰으로 메이트 공개 알림(46)을 다시 신청할 수 없다
+        mvc.perform(post("/api/mates/{id}/alert", alertMate).header("Authorization", auth))
+                .andExpect(status().isUnauthorized());
+        assertThat(count("mate_alerts", userId)).isZero();
         mvc.perform(delete("/api/me").header("Authorization", auth)).andExpect(status().isNoContent());
 
         // 이메일이 비워져서 같은 이메일로 새로 가입할 수 있다 (인증 요청은 1분 제한이라 DB로 확인)

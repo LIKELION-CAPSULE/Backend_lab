@@ -41,6 +41,23 @@ class AlertRequestApiTest extends UserApiTestSupport {
     }
 
     @Test
+    void waitlistLimitsByTheHopTheProxyAppended() throws Exception {
+        // Railway 프록시 뒤: X-Forwarded-For 맨 오른쪽(프록시가 붙인 값)으로 센다. 앞쪽을 바꿔도 같은 사람
+        String real = "172.16." + (int) (Math.random() * 250) + "." + (int) (Math.random() * 250);
+        for (int i = 0; i < 5; i++) {
+            forwarded("198.51.100." + i + ", " + real).andExpect(status().isNoContent());
+        }
+        forwarded("203.0.113.9, " + real).andExpect(status().isTooManyRequests());
+    }
+
+    private ResultActions forwarded(String xff) throws Exception {
+        return mvc.perform(post("/api/beta/waitlist")
+                .header("X-Forwarded-For", xff)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"email\":\"" + uniqueEmail() + "\"}"));
+    }
+
+    @Test
     void mateAlertOnlyForComingSoonMates() throws Exception {
         MvcResult user = signedUp(uniqueEmail());
         String auth = bearer(user);
@@ -83,7 +100,7 @@ class AlertRequestApiTest extends UserApiTestSupport {
     /** 테스트 전용 메이트 (모델 없는 준비 중 메이트는 schema CHECK상 가능) */
     private long mate(boolean comingSoon) {
         return jdbc.queryForObject(
-                "INSERT INTO characters (name, coming_soon, is_active) VALUES (?, ?, true) RETURNING id",
+                "INSERT INTO characters (name, coming_soon, is_active, sort_order) VALUES (?, ?, true, 9000) RETURNING id",
                 Long.class,
                 "알림 테스트 " + UUID.randomUUID().toString().substring(0, 6),
                 comingSoon);

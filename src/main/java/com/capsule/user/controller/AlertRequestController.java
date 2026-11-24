@@ -28,7 +28,18 @@ public class AlertRequestController {
     @PostMapping("/api/beta/waitlist")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void joinWaitlist(@RequestBody WaitlistRequest req, HttpServletRequest http) {
-        alerts.joinWaitlist(req.email(), http.getRemoteAddr());
+        alerts.joinWaitlist(req.email(), clientIp(http));
+    }
+
+    /**
+     * Railway 프록시 뒤라 getRemoteAddr()는 프록시 주소다. X-Forwarded-For의 맨 오른쪽 = 프록시가 직접 붙인 보낸 쪽 주소
+     * (앞쪽 값은 보내는 쪽이 꾸밀 수 있음). 헤더가 없으면(로컬 · 테스트) 접속 주소
+     */
+    static String clientIp(HttpServletRequest http) {
+        String forwarded = http.getHeader("X-Forwarded-For");
+        if (forwarded == null || forwarded.isBlank()) return http.getRemoteAddr();
+        String[] hops = forwarded.split(",");
+        return hops[hops.length - 1].strip();
     }
 
     @Operation(summary = "46. 메이트 공개 알림 신청", description = "준비 중 메이트의 '알림 받기' (명세: api.md 46)")
