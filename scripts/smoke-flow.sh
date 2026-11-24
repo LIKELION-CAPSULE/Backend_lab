@@ -88,7 +88,6 @@ call health GET /actuator/health
 call login POST /api/auth/social/KAKAO "{\"code\":\"fake-kakao:smoke-$(uuid | cut -c1-8):민수\",\"redirectUri\":\"http://localhost:5173/oauth/kakao\",\"deviceHash\":\"smoke\"}"
 TOKEN=$(field "$RES" 'd["accessToken"]')
 call profile PATCH /api/me '{"avatarId":1,"birthDate":"2001-04-10"}'
-call schedule POST /api/me/memories '{"type":"EXAM","title":"영어 중간고사","dueDate":"2026-12-12","dueTime":null}'
 call session POST /api/connections '{"mateId":1}'
 SID=$(field "$RES" 'd["connectionId"]')
 START=$(date +%s)
