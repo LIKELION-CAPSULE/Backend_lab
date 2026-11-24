@@ -101,6 +101,9 @@
 --   - chat_messages: input_type · mode · rating · hidden_at
 --   - chat_reports · safety_strikes (dialogue), beta_feedback (user) 추가
 --
+-- 2026-11-24 변경 (음성 TTS, ADR 0034)
+--   - chat_messages.voice_charged 추가 (이 답장에서 보이스 크레딧을 깎았는지)
+--
 -- 2026-11-23 변경 (메이트 배경)
 --   - character_backgrounds 추가 (메이트마다 배경 여러 장, 기본 하나). 대화 흐름에 따라 결정 모델이 고른다 (ADR 0032)
 --   - connections.background_code 추가 (이 연결의 지금 배경, NULL이면 메이트 기본 배경)
@@ -603,6 +606,7 @@ CREATE TABLE chat_messages (
     recapped_at     timestamptz,                          -- 흐름 카드에 넣은 시각. null이면 아직 (2026-11-23)
     input_type      text CHECK (input_type IN ('TEXT', 'QUICK', 'VOICE')),  -- USER만 (2026-11-23 전 행은 null)
     mode            text CHECK (mode IN ('BASIC', 'ADVANCED')),             -- CHARACTER만: 이 답장의 대화 모드
+    voice_charged   boolean NOT NULL DEFAULT false,      -- CHARACTER만: 이 답장에서 보이스 20을 깎았는지 (api.md 28 '음성', 재전송 charged 계산용, 2026-11-24)
     rating          text CHECK (rating IN ('UP', 'DOWN')),                  -- CHARACTER만: 사용자 평가 (api.md 40)
     hidden_at       timestamptz,                          -- 신고로 가린 시각 (api.md 41). 대화방 · 이전 대화에서 빠짐
     UNIQUE (conversation_id, request_id, sender)          -- 재전송돼도 질문·답변 각각 한 번만
