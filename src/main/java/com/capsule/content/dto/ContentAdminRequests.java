@@ -65,4 +65,16 @@ public final class ContentAdminRequests {
     public record MateSaved(long mateId, Long modelId, boolean comingSoon) {}
 
     public record SetModel(Long modelId) {}
+
+    /**
+     * 메이트 이미지 · 목소리 샘플 (api.md 11 · 31 · 48, 2026-11-25). Aliving2D가 파일을 버킷에 올린 뒤 부른다. 경로는 버킷 안 경로(예:
+     * chaerin/v1/full.png). null인 칸은 그대로, 빈 문자열("" · 공백만)이면 지운다
+     *
+     * @param illustrationPath 세로 일러스트 (31 illustrationUrl, 11 lastMate · 리포트 mate). png · jpg · webp
+     * @param cardImagePath 홈 · 로그인 카드 (11 mates[].cardImageUrl, 48). png · jpg · webp
+     * @param voiceSamplePath '목소리 듣기' (31 voiceSampleUrl). mp3
+     */
+    public record SetMateImages(String illustrationPath, String cardImagePath, String voiceSamplePath) {}
+
+    public record MateImages(long mateId, String illustrationPath, String cardImagePath, String voiceSamplePath) {}
 }

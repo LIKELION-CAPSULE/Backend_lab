@@ -5,6 +5,7 @@
     - `POST /internal/content/models`: 모델 하나(경로 · `format` · 크기 · 위치)와 그 표정 · 모션 · 반응표를 한 트랜잭션으로 넣고 새 모델 id를 준다
     - `POST /internal/content/mates`: 새 메이트(이름 · 한 줄 소개 · 소개 · 해시태그 · 모델). 모델이 없으면 준비 중 메이트
     - `PUT /internal/content/mates/{id}/model`: 메이트의 모델을 바꾼다(새 버전으로 교체)
+    - (2026-11-25 추가) `PUT /internal/content/models/{id}/runtime`(Aliving2D 엔진 경로), `POST · PATCH /internal/content/avatars`(아바타), `PATCH /internal/content/mates/{id}/images`(일러스트 · 카드 이미지 · 목소리 샘플 경로, null은 그대로 · 빈 값은 지움)
   - 인증은 고정 토큰 `Authorization: Bearer <토큰>`. 토큰은 환경변수 `CAPSULE_CONTENT_ADMIN_TOKEN`(설정 `capsule.content.admin.token`)으로만 넣고, 값이 없으면 이 API와 보안 체인이 아예 생기지 않는다(운영에서 잊고 열리는 일이 없게)
   - 부르는 쪽은 모델 제작 도구 Aliving2D의 '캡슐에 올리기': 모델 묶음을 Supabase 버킷(ADR 0024)에 `<이름>/v<번호>/`로 올린 뒤 이 API로 등록한다. 서버 주소 · 토큰은 Aliving2D 쪽 PC에만 둔다
   - ADR 0016 '남은 일'의 "운영 DB의 콘텐츠 데이터는 content 담당이 마이그레이션으로 넣는다"를 이것으로 바꾼다. 예시 시드(`db/seed`)는 로컬 · 테스트용으로 그대로

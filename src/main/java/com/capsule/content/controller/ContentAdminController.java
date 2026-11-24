@@ -4,9 +4,11 @@ import com.capsule.common.response.ApiResponse;
 import com.capsule.content.dto.ContentAdminRequests.AvatarSaved;
 import com.capsule.content.dto.ContentAdminRequests.CreateAvatar;
 import com.capsule.content.dto.ContentAdminRequests.CreateMate;
+import com.capsule.content.dto.ContentAdminRequests.MateImages;
 import com.capsule.content.dto.ContentAdminRequests.MateSaved;
 import com.capsule.content.dto.ContentAdminRequests.ModelRegistered;
 import com.capsule.content.dto.ContentAdminRequests.RegisterModel;
+import com.capsule.content.dto.ContentAdminRequests.SetMateImages;
 import com.capsule.content.dto.ContentAdminRequests.SetModel;
 import com.capsule.content.dto.ContentAdminRequests.SetRuntime;
 import com.capsule.content.dto.ContentAdminRequests.UpdateAvatar;
@@ -65,6 +67,12 @@ public class ContentAdminController {
     @PatchMapping("/internal/content/avatars/{avatarId}")
     public ApiResponse<AvatarSaved> updateAvatar(@PathVariable long avatarId, @RequestBody UpdateAvatar body) {
         return ApiResponse.ok(admin.updateAvatar(avatarId, body));
+    }
+
+    /** 메이트 일러스트 · 카드 이미지 · 목소리 샘플 경로 (2026-11-25). null인 칸은 그대로, ""는 지움 */
+    @PatchMapping("/internal/content/mates/{mateId}/images")
+    public ApiResponse<MateImages> setMateImages(@PathVariable long mateId, @RequestBody SetMateImages body) {
+        return ApiResponse.ok(admin.setMateImages(mateId, body));
     }
 
     @PutMapping("/internal/content/mates/{mateId}/model")

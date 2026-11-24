@@ -260,6 +260,58 @@ class ContentAdminApiTest {
     }
 
     @Test
+    void mateImagesAreSetPartiallyAndShownAsUrls() throws Exception {
+        String prefix = unique("img");
+        long mate = mateWith(register(prefix), "이미지 메이트");
+        String images = "/internal/content/mates/" + mate + "/images";
+        try {
+            send(
+                            "PATCH",
+                            images,
+                            "{\"illustrationPath\": \"" + prefix + "full.png\", \"cardImagePath\": \"" + prefix
+                                    + "card.webp\", \"voiceSamplePath\": \"" + prefix + "sample.mp3\"}",
+                            TOKEN)
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.illustrationPath").value(prefix + "full.png"));
+            mvc.perform(get("/api/mates/" + mate).with(jwt().jwt(j -> j.subject("1"))))
+                    .andExpect(jsonPath("$.data.illustrationUrl")
+                            .value(org.hamcrest.Matchers.endsWith("/" + prefix + "full.png")))
+                    .andExpect(jsonPath("$.data.voiceSampleUrl")
+                            .value(org.hamcrest.Matchers.endsWith("/" + prefix + "sample.mp3")));
+            mvc.perform(get("/api/login-mates"))
+                    .andExpect(jsonPath("$.data.mates[?(@.id == " + mate + ")].cardImageUrl")
+                            .value(org.hamcrest.Matchers.contains(
+                                    org.hamcrest.Matchers.endsWith(prefix + "card.webp"))));
+
+            // 보낸 칸만 바뀌고(null은 그대로), ""는 지운다
+            send("PATCH", images, "{\"voiceSamplePath\": \"\"}", TOKEN)
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.illustrationPath").value(prefix + "full.png"))
+                    .andExpect(jsonPath("$.data.cardImagePath").value(prefix + "card.webp"))
+                    .andExpect(jsonPath("$.data.voiceSamplePath").doesNotExist());
+
+            // 경로 · 확장자 검사, 없는 메이트, 토큰
+            send("PATCH", images, "{\"illustrationPath\": \"../full.png\"}", TOKEN)
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("INVALID_CONTENT"));
+            send("PATCH", images, "{\"illustrationPath\": \"/" + prefix + "full.png\"}", TOKEN)
+                    .andExpect(status().isBadRequest());
+            send("PATCH", images, "{\"illustrationPath\": \"https://evil.example/full.png\"}", TOKEN)
+                    .andExpect(status().isBadRequest());
+            send("PATCH", images, "{\"cardImagePath\": \"" + prefix + "card.gif\"}", TOKEN)
+                    .andExpect(status().isBadRequest());
+            send("PATCH", images, "{\"voiceSamplePath\": \"" + prefix + "sample.png\"}", TOKEN)
+                    .andExpect(status().isBadRequest());
+            send("PATCH", "/internal/content/mates/999999/images", "{}", TOKEN)
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.code").value("MATE_NOT_FOUND"));
+            send("PATCH", images, "{}", null).andExpect(status().isUnauthorized());
+        } finally {
+            jdbc.update("UPDATE characters SET is_active = false WHERE id = ?", mate); // 다른 테스트의 목록에 안 섞이게
+        }
+    }
+
+    @Test
     void avatarsAreRegisteredAndSwitchedOff() throws Exception {
         String prefix = unique("av");
         long modelId = register(prefix);
