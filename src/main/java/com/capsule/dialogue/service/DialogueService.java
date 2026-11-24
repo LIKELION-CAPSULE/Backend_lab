@@ -914,9 +914,10 @@ public class DialogueService {
         return null;
     }
 
-    /** 크레딧 내역 문구 (명세 34): "고급 대화 · 채린" · "보이스 대화 · 채린" · "고급 · 보이스 대화 · 채린" */
+    /** 크레딧 내역 문구 (명세 33 · 34): "고급 모드 · 채린" · "보이스 대화 · 채린" · "고급 모드 · 보이스 대화 · 채린" */
     static String spendTitle(boolean advanced, boolean voice, String mate) {
-        String what = advanced && voice ? "고급 · 보이스 대화" : advanced ? "고급 대화" : "보이스 대화";
+        // 화면(SCR-30) 문구와 같게 '고급 모드' (2026-11-24, 명세 33)
+        String what = advanced && voice ? "고급 모드 · 보이스 대화" : advanced ? "고급 모드" : "보이스 대화";
         return what + " · " + mate;
     }
 }

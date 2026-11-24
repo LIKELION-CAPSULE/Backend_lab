@@ -10,6 +10,11 @@ public interface CharacterMemoryRepository extends JpaRepository<CharacterMemory
 
     List<CharacterMemory> findByUserIdAndCharacterIdOrderById(long userId, long characterId);
 
+    /** 47 대화 초기화: 이 메이트가 기억한 사실 */
+    @Modifying
+    @Query("delete from CharacterMemory m where m.userId = :userId and m.characterId = :characterId")
+    int deleteByUserIdAndCharacterId(long userId, long characterId);
+
     /** 회원 탈퇴 */
     @Modifying
     @Query("delete from CharacterMemory m where m.userId = :userId")
