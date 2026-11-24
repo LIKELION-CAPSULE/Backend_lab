@@ -6,7 +6,8 @@ import java.time.LocalDate;
 
 /**
  * profileImage = 아바타 썸네일 (B7). isMinor = 만 19세 미만. activeConnection = 진행 중 연결 (api.md 8).
- * credits = GNB 크레딧 (7단계 · 2026-11-23). loginType = EMAIL · KAKAO (SCR-60, 2026-11-24)
+ * credits = GNB 크레딧 (7단계 · 2026-11-23). loginType = EMAIL · KAKAO (SCR-60, 2026-11-24).
+ * unreadNotifications = 안 읽은 알림 수 (GNB 벨 점, 43, 2026-11-24)
  */
 public record MeResponse(
         long userId,
@@ -21,7 +22,8 @@ public record MeResponse(
         String aboutMe,
         String referralCode,
         Credits credits,
-        String loginType) {
+        String loginType,
+        int unreadNotifications) {
 
     public static final String EMAIL = "EMAIL";
     public static final String KAKAO = "KAKAO";

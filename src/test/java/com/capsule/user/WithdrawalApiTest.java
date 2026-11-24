@@ -42,6 +42,9 @@ class WithdrawalApiTest extends UserApiTestSupport {
         long userId = ((Number) read(signedUp, "$.data.userId")).longValue();
         Cookie refresh = refreshCookie(signedUp);
 
+        jdbc.update(
+                "INSERT INTO notifications (user_id, type, title, dedup_key) VALUES (?, 'ATTENDANCE', '오늘 출석 크레딧 1,500', 'day:t')",
+                userId);
         // 일정 저장 API(13)는 지웠다: 남아 있던 일정도 탈퇴 때 지워지는지 (행을 직접 넣음)
         jdbc.update(
                 "INSERT INTO user_memories (user_id, type, title, due_date) VALUES (?, 'EXAM', '중간고사', '2026-12-01')",
@@ -86,6 +89,7 @@ class WithdrawalApiTest extends UserApiTestSupport {
         // 직접 말한 내용 · 대화 기억 삭제, 동의 기록은 남김
         assertThat(count("user_memories", userId)).isZero();
         assertThat(count("mate_alerts", userId)).isZero(); // 메이트 공개 알림 신청도 지움 (46)
+        assertThat(count("notifications", userId)).isZero(); // 알림도 지움 (43)
         assertThat(count("conversations", userId)).isZero();
         assertThat(count("character_memories", userId)).isZero();
         assertThat(jdbc.queryForObject(

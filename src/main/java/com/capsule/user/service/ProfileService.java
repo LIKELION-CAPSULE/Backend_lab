@@ -33,6 +33,7 @@ public class ProfileService {
     private final AvatarQuery avatars;
     private final ActiveSessionLookup activeSessions;
     private final CreditQuery credits;
+    private final NotificationService notifications;
     private final Clock clock;
 
     /** 쓰기 트랜잭션: 크레딧이 그날 처음이면 출석분을 지급한다 (api.md 8 · 33) */
@@ -100,9 +101,11 @@ public class ProfileService {
                 user.getHonorific(),
                 user.getAboutMe(),
                 user.getReferralCode(),
+                // 순서 주의: credits.current가 그날 첫 출석을 지급하면서 알림을 적으므로 unreadCount보다 먼저
                 credits.current(user.getId()),
                 // 비밀번호가 없으면 카카오 가입자 (소셜은 카카오만, api.md 6)
-                user.passwordHash() == null ? MeResponse.KAKAO : MeResponse.EMAIL);
+                user.passwordHash() == null ? MeResponse.KAKAO : MeResponse.EMAIL,
+                notifications.unreadCount(user.getId()));
     }
 
     private String thumbnail(User user) {

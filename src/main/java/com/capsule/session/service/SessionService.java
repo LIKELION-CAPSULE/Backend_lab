@@ -50,6 +50,7 @@ import com.capsule.session.repository.SessionEventRepository;
 import com.capsule.session.repository.StudySessionRepository;
 import com.capsule.user.api.ActiveSessionLookup;
 import com.capsule.user.api.BetaFeedbackQuery;
+import com.capsule.user.api.NotificationCommands;
 import com.capsule.user.api.ReferralRewards;
 import com.capsule.user.api.UserQuery;
 import com.capsule.user.api.UserSettingsQuery;
@@ -94,6 +95,7 @@ public class SessionService {
     private final CharacterQuery characters;
     private final ReactionQuery reactions;
     private final UnlockQuery unlocks;
+    private final NotificationCommands notifications;
     private final CreditQuery credits;
     private final RelationQuery relationQuery;
     private final RelationCommands relationCommands;
@@ -434,6 +436,15 @@ public class SessionService {
                     .map(UnlockInfo::id)
                     .toList();
             relationCommands.recordUnlocks(s.getUserId(), opened);
+            // 알림 (43 STAGE_UP, ADR 0035): 같은 트랜잭션이라 끊기가 롤백되면 알림도 남지 않음
+            MateInfo mate = mates.find(characterId).orElse(null);
+            notifications.stageUp(
+                    s.getUserId(),
+                    s.getId(),
+                    mate == null ? "메이트" : mate.name(),
+                    settlement.stageAfter(),
+                    stageName(mate, settlement.stageAfter()),
+                    !opened.isEmpty());
         }
         s.recordClosingLine(closingHandler.close(closingOf(s, endType, t.connected()), draft));
         // 초대 보상 (22 '서버가 하는 일' 7): 코드를 입력한 뒤 처음 끝나는 연결. 크레딧 잠금이라 맨 끝에

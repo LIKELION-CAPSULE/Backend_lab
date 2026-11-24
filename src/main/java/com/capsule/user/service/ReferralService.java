@@ -52,6 +52,7 @@ public class ReferralService {
     private final UserRepository users;
     private final CreditCommands credits;
     private final RateLimiter rateLimiter;
+    private final NotificationService notifications;
     private final Clock clock;
     private final String linkBase;
 
@@ -60,12 +61,14 @@ public class ReferralService {
             UserRepository users,
             CreditCommands credits,
             RateLimiter rateLimiter,
+            NotificationService notifications,
             Clock clock,
             @Value("${capsule.referral.link-base:https://capsule.ai.kr/i/}") String linkBase) {
         this.referrals = referrals;
         this.users = users;
         this.credits = credits;
         this.rateLimiter = rateLimiter;
+        this.notifications = notifications;
         this.clock = clock;
         this.linkBase = linkBase;
     }
@@ -194,6 +197,12 @@ public class ReferralService {
         } else {
             credits.grantInvite(userId, REWARD, id, false, inviteeTitle);
             if (inviterReward) credits.grantInvite(inviterId, REWARD, id, true, inviterTitle);
+        }
+        // 알림 (43 REFERRAL_REWARD, 2026-11-24): 받은 사람 · (받았으면) 초대한 사람
+        notifications.referralReward(userId, id, false, null, REWARD);
+        if (inviterReward) {
+            String invitee = users.findById(userId).map(User::getNickname).orElse(null);
+            notifications.referralReward(inviterId, id, true, invitee, REWARD);
         }
         return Optional.of(new ReferralReward(REWARD));
     }
