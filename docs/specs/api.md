@@ -553,7 +553,7 @@
 | avatars[].id | Long | 아바타 id |
 | avatars[].name | String | 이름 |
 | avatars[].thumbnailUrl | String | 썸네일 |
-| avatars[].model | Object | `format`, `modelJsonUrl`, `scale`, `offsetX`, `offsetY` |
+| avatars[].model | Object | `format`, `modelJsonUrl`, `scale`, `offsetX`, `offsetY`, `engineUrl` · `playerUrl` · `reactionsUrl`(Aliving2D 엔진 · 플레이어 · 반응표 스크립트, CUBISM이거나 없으면 null, 2026-11-25) |
 | avatars[].model.format | String | `CUBISM`(Live2D Cubism `.model3.json`) / `ALIVING2D_V2`(Aliving2D 묶음 `model.json`). 프론트가 이 값으로 렌더러를 고름 |
 
 ```json
@@ -744,8 +744,8 @@ H02에서 아바타를 저장하면 `onboardingRequired`가 false가 되고 H03 
 | --- | --- | --- |
 | connectionId | Long | 연결 id |
 | startedAt | String | 시작 시각 (서버) |
-| mate | Object | `id`, `name`, `profileImageUrl`, `format`, `modelJsonUrl`, `scale`, `offsetX`, `offsetY` |
-| avatar | Object | `id`, `name`, `profileImageUrl`, `format`, `modelJsonUrl`, `scale`, `offsetX`, `offsetY` |
+| mate | Object | `id`, `name`, `profileImageUrl`, `format`, `modelJsonUrl`, `scale`, `offsetX`, `offsetY`, `engineUrl` · `playerUrl` · `reactionsUrl`(Aliving2D 엔진 · 플레이어 · 반응표 스크립트, CUBISM이거나 없으면 null, 2026-11-25) |
+| avatar | Object | `id`, `name`, `profileImageUrl`, `format`, `modelJsonUrl`, `scale`, `offsetX`, `offsetY`, `engineUrl` · `playerUrl` · `reactionsUrl`(Aliving2D 엔진 · 플레이어 · 반응표 스크립트, CUBISM이거나 없으면 null, 2026-11-25) |
 | me | Object | `nickname`, `honorific`(메이트가 부르는 이름, 없으면 null), `profileImageUrl`(아바타 썸네일) |
 | settings | Object | 29의 설정 전체 (말 걸기 빈도 · 음성 · 대화 모드 기본값 등). 연결 화면이 29를 따로 부르지 않게 (2026-11-23) |
 | serverTime | String | 서버 시각 (타이머 보정) |
@@ -1879,7 +1879,7 @@ data: {"chunks":2,"complete":true}
 | world | String | 캐릭터 · 세계관 설명. 없으면 null |
 | myRole | String | 내 역할 (예: "당신은 채린의 같은 반 친구예요"). 없으면 null |
 | intro | String | 인트로 ('왜 지금 나랑 같이 있는지'가 드러나는 첫 상황). 없으면 null |
-| model | Object | `format`, `modelJsonUrl`, `scale`, `offsetX`, `offsetY` (9번 아바타 `model`과 같은 모양) |
+| model | Object | `format`, `modelJsonUrl`, `scale`, `offsetX`, `offsetY`, `engineUrl` · `playerUrl` · `reactionsUrl`(Aliving2D 엔진 · 플레이어 · 반응표 스크립트, CUBISM이거나 없으면 null, 2026-11-25) (9번 아바타 `model`과 같은 모양) |
 | comingSoon | Boolean | 준비 중 메이트면 true → 연결 버튼 막기 |
 | hasConversation | Boolean | 이 메이트와 나눈 대화가 하나라도 있으면 true → 같은 대화방으로 이어서 연결 (32로 이전 대화를 불러옴) |
 
@@ -2452,3 +2452,36 @@ data: {"chunks":2,"complete":true}
 
 - 메시지는 지우지 않고 가린다(`hidden_at`, 신고 41과 같음): 대화방(32) · 다음 답장의 이전 대화에서 빠짐. 친밀도 · 호감도 · 해금 · 크레딧은 그대로
 - 안전 정지(403 CHAT_SUSPENDED)는 풀리지 않음
+
+## 48. GET /api/login-mates — 로그인 화면 메이트
+- 분류: 온보딩
+- 설명: 로그인 전 화면(SCR-01 '채린 깨우기')에서 움직일 메이트와 모델. 로그인 없이
+- 와이어프레임: SCR-01
+- 백엔드: 2026-11-25
+- 프론트: Not started
+
+> 2026-11-25: 추가 (프론트 요청: 로그인 화면용 메이트 모델 공개 API)
+
+- 테이블: `characters` · `live2d_models` · 인증: **불필요**
+
+#### 🛬 Response
+
+| 이름 | 타입 | 설명 |
+| --- | --- | --- |
+| mates | Array | 로그인 화면에 띄울 메이트, 정렬 순서. 공개된(준비 중 아님) · 활성 · 전연령(`ALL`) · 모델이 있는 메이트만. 없으면 `[]` |
+| mates[].id · name · ageRating | | 메이트 (31과 같음) |
+| mates[].cardImageUrl | String | 모델을 불러오기 전 · 실패했을 때 보여 줄 정지 이미지 (11 홈 카드와 같은 그림). 없으면 null |
+| mates[].model | Object | 31 메이트 상세의 `model`과 **문자 하나까지 같은 값** (주소에 쿼리 · 서명 없음). 로그인 뒤 다시 불러오지 않고 재사용 |
+
+```json
+{ "mates": [ { "id": 1, "name": "채린", "ageRating": "ALL", "cardImageUrl": "https://cdn.../chaerin/card.webp",
+  "model": { "format": "ALIVING2D_V2", "modelJsonUrl": "https://cdn.../chaerin/v2/model/model.json", "scale": 1.0, "offsetX": 0, "offsetY": 0,
+             "engineUrl": "https://cdn.../aliving2d/v4/engine.js", "playerUrl": "https://cdn.../aliving2d/v4/player.js", "reactionsUrl": "https://cdn.../aliving2d/v4/reactions.json" } } ] }
+```
+
+> ✅ **200 OK** · `Cache-Control: public, max-age=300`
+
+> ❌ **429** TOO_MANY_REQUESTS (같은 IP 1분에 60번)
+
+- 모델 · 엔진 파일은 Supabase Storage 공개 버킷(ADR 0024)에 버전이 들어간 고정 경로로 둔다(`<이름>/v<번호>/`, `aliving2d/v<번호>/`). 파일의 긴 캐시(`max-age=31536000, immutable`)는 올릴 때 붙인다. 버킷은 CORS `*`
+- 엔진 스크립트 출처는 Supabase Storage(`CAPSULE_CDN_BASE_URL`)라 웹 · API 서버와 다른 출처 → 프론트 허용 목록에 이 출처를 더해야 함
