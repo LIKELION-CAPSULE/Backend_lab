@@ -62,6 +62,12 @@ public class StudySession {
      */
     @Column(insertable = false, updatable = false)
     private String backgroundCode;
+    /**
+     * 연결 중 단계 상승을 알린 마지막 단계 (api.md 21 stageUp, 2026-11-24). NULL이면 아직 안 알림.
+     * heartbeat가 SQL로 올린다 (StudySessionRepository.raiseNotifiedStage, backgroundCode와 같은 이유)
+     */
+    @Column(insertable = false, updatable = false)
+    private Integer notifiedStage;
 
     public StudySession(long userId, long characterId, Instant now) {
         this.userId = userId;

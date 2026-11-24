@@ -11,6 +11,7 @@ public record ReportResponse(
         int connectedSeconds,
         int presentSeconds,
         int awaySeconds,
+        int cameraOnSeconds,
         int messageCount,
         int returnCount,
         MateRef mate,

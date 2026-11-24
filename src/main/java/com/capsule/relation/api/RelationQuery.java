@@ -6,6 +6,7 @@ import com.capsule.relation.api.RelationTypes.IntimacySettlement;
 import com.capsule.relation.api.RelationTypes.RelationView;
 import com.capsule.relation.api.RelationTypes.SessionEventRef;
 import com.capsule.relation.api.RelationTypes.StudySettlement;
+import java.time.Instant;
 import java.util.Set;
 
 public interface RelationQuery {
@@ -29,6 +30,12 @@ public interface RelationQuery {
 
     /** 지금 친밀도: 단계 · 누적 인정 시간 · 다음 단계까지 남은 시간 (내 메이트, api.md 37). 안 만났으면 1단계 · 0초 */
     IntimacyNow intimacyNow(long userId, long characterId);
+
+    /**
+     * 연결 중 미리보기 (api.md 21 stageUp, 2026-11-24 확장): 이 연결의 함께한 시간을 지금 끊는다면 몇 단계가 되는지.
+     * 22 정산과 같은 규칙(하루 2시간 · 그날 대화가 없으면 절반)으로 계산만 하고 저장하지 않는다. 안 만났으면 1단계부터
+     */
+    int previewStage(long userId, long characterId, Instant at, int presentSeconds);
 
     /** 이 사용자에게 열린 해금 콘텐츠 id 전부 (user_unlocked_contents, 내 메이트 api.md 37 unlocks[].unlocked) */
     Set<Long> unlockedContentIds(long userId);

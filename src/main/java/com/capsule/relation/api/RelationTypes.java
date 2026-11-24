@@ -113,9 +113,29 @@ public final class RelationTypes {
      * @param creditedSeconds 이 연결에서 인정된 시간
      * @param totalCreditedSeconds 누적 인정 시간
      * @param nextStageSeconds 다음 단계까지 남은 인정 시간, 5단계면 null
+     * @param stageProgress 지금 단계 안에서 얼마나 왔는지 0~100, 5단계면 100 (SCR-21 친밀도 막대, 2026-11-24 확장)
      */
     public record IntimacySettlement(
-            int stageBefore, int stageAfter, int creditedSeconds, int totalCreditedSeconds, Integer nextStageSeconds) {
+            int stageBefore,
+            int stageAfter,
+            int creditedSeconds,
+            int totalCreditedSeconds,
+            Integer nextStageSeconds,
+            int stageProgress) {
+
+        /**
+         * @deprecated 진행률을 받는 생성자를 쓴다 (2026-11-24 확장). 이 생성자는 진행률을 모르고 0을 넣는다.
+         *     이 레포 안 사용처는 없음 — 다른 브랜치가 쓸 수 있어 남김. 제거: 다음 relation 정리 PR
+         */
+        @Deprecated(forRemoval = true)
+        public IntimacySettlement(
+                int stageBefore,
+                int stageAfter,
+                int creditedSeconds,
+                int totalCreditedSeconds,
+                Integer nextStageSeconds) {
+            this(stageBefore, stageAfter, creditedSeconds, totalCreditedSeconds, nextStageSeconds, 0);
+        }
 
         public boolean stageUp() {
             return stageAfter > stageBefore;
@@ -128,8 +148,19 @@ public final class RelationTypes {
      * @param stage 친밀도 단계 1~5
      * @param creditedSeconds 누적 인정 시간
      * @param nextStageSeconds 다음 단계까지 남은 인정 시간, 5단계면 null
+     * @param stageProgress 지금 단계 안에서 0~100, 5단계면 100 (2026-11-24 확장)
      */
-    public record IntimacyNow(int stage, int creditedSeconds, Integer nextStageSeconds) {}
+    public record IntimacyNow(int stage, int creditedSeconds, Integer nextStageSeconds, int stageProgress) {
+
+        /**
+         * @deprecated 진행률을 받는 생성자를 쓴다 (2026-11-24 확장). 이 생성자는 진행률을 모르고 0을 넣는다.
+         *     이 레포 안 사용처는 없음 — 다른 브랜치가 쓸 수 있어 남김. 제거: 다음 relation 정리 PR
+         */
+        @Deprecated(forRemoval = true)
+        public IntimacyNow(int stage, int creditedSeconds, Integer nextStageSeconds) {
+            this(stage, creditedSeconds, nextStageSeconds, 0);
+        }
+    }
 
     /**
      * 공부 종료 정산 결과 (api.md 22의 relation). pointsBefore = 이 세션 시작 때 점수.

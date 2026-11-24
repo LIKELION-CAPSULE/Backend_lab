@@ -44,6 +44,15 @@ public final class IntimacyPolicy {
         return stage >= MAX_STAGE ? null : STAGE_STARTS[stage] - creditedSeconds;
     }
 
+    /** 지금 단계 안에서 얼마나 왔는지 0~100 (5단계면 100). SCR-21 · 37 친밀도 막대 (2026-11-24) */
+    public static int stageProgress(int creditedSeconds) {
+        int stage = stageOf(creditedSeconds);
+        if (stage >= MAX_STAGE) return 100;
+        int from = STAGE_STARTS[stage - 1];
+        int to = STAGE_STARTS[stage];
+        return (int) Math.min(100, Math.max(0, (long) (creditedSeconds - from) * 100 / (to - from)));
+    }
+
     /** 이번 인정 시간: 그날 남은 한도까지, 그날 대화가 없으면 절반 */
     public static int credit(int presentSeconds, int creditedToday, boolean chattedToday) {
         int capped = Math.max(0, Math.min(presentSeconds, DAILY_CAP_SECONDS - creditedToday));

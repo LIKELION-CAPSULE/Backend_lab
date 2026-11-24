@@ -214,10 +214,7 @@ public class SessionService {
 
     private IntimacyView intimacy(long characterId, IntimacySettlement r) {
         MateInfo mate = mates.find(characterId).orElse(null);
-        List<IntimacyView.Unlocked> unlocked = unlocks.between(characterId, r.stageBefore(), r.stageAfter()).stream()
-                .map(u -> new IntimacyView.Unlocked(
-                        u.type(), u.title(), u.unlockStage(), u.expressionName(), u.assetUrl()))
-                .toList();
+        List<IntimacyView.Unlocked> unlocked = unlockedBetween(characterId, r.stageBefore(), r.stageAfter());
         return new IntimacyView(
                 r.stageBefore(),
                 r.stageAfter(),
@@ -225,7 +222,36 @@ public class SessionService {
                 r.stageUp(),
                 r.creditedSeconds(),
                 r.nextStageSeconds(),
+                r.stageProgress(),
                 unlocked);
+    }
+
+    /** 친밀도 마지막 단계 (명세 37 · 22: 5단계) */
+    private static final int MAX_STAGE = 5;
+
+    /** 이 단계 사이에서 열리는 해금 콘텐츠 (22 relation.unlocked · 21 stageUp.unlocked) */
+    private List<IntimacyView.Unlocked> unlockedBetween(long characterId, int after, int upTo) {
+        return unlocks.between(characterId, after, upTo).stream()
+                .map(u -> new IntimacyView.Unlocked(
+                        u.type(), u.title(), u.unlockStage(), u.expressionName(), u.assetUrl()))
+                .toList();
+    }
+
+    /**
+     * 21 stageUp (SCR-56, 2026-11-24): 이 연결의 함께한 시간을 지금 정산한다면 단계가 오르는지 미리 본다.
+     * 알린 단계는 connections.notified_stage에 남겨 단계마다 한 번만. 실제 정산 · 해금 기록은 22에서
+     */
+    private HeartbeatResponse.StageUp stageUp(StudySession s, ConnectionTimes t, Instant now) {
+        if (s.getNotifiedStage() != null && s.getNotifiedStage() >= MAX_STAGE) return null; // 더 오를 단계 없음
+        long mateId = s.characterId();
+        int start = relationQuery.stage(s.getUserId(), mateId);
+        if (start >= MAX_STAGE) return null;
+        int preview = relationQuery.previewStage(s.getUserId(), mateId, now, t.present());
+        if (preview <= start || sessions.raiseNotifiedStage(s.getId(), start, preview) == 0) return null;
+        int before = s.getNotifiedStage() == null ? start : Math.max(start, s.getNotifiedStage());
+        MateInfo mate = mates.find(mateId).orElse(null);
+        return new HeartbeatResponse.StageUp(
+                preview, stageName(mate, preview), unlockedBetween(mateId, before, preview));
     }
 
     @Transactional
@@ -296,7 +322,7 @@ public class SessionService {
             return Optional.empty();
         }
         s.heartbeat(now, t.get());
-        return Optional.of(new HeartbeatResponse(minorRemaining(user(userId), s), now));
+        return Optional.of(new HeartbeatResponse(minorRemaining(user(userId), s), now, stageUp(s, t.get(), now)));
     }
 
     public static ApiException invalidConnectionTime() {
@@ -439,6 +465,7 @@ public class SessionService {
                 s.getConnectedSeconds(),
                 s.getPresentSeconds(),
                 s.getAwaySeconds(),
+                s.getCameraOnSeconds(),
                 s.getMessageCount(),
                 s.getReturnCount(),
                 new ReportResponse.MateRef(
