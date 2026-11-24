@@ -108,6 +108,9 @@
 --   - character_backgrounds 추가 (메이트마다 배경 여러 장, 기본 하나). 대화 흐름에 따라 결정 모델이 고른다 (ADR 0032)
 --   - connections.background_code 추가 (이 연결의 지금 배경, NULL이면 메이트 기본 배경)
 --
+-- 2026-11-25 변경 (로그인 화면 메이트, api.md 48)
+--   - live2d_models: engine_path · player_path · reactions_path 추가 (Aliving2D 엔진 스크립트 경로)
+--
 -- 2026-11-24 변경 (화면 대조, ADR 0035)
 --   - notifications · beta_waitlist · mate_alerts 추가 (user, api.md 43 ~ 46)
 --   - connections.notified_stage 추가 (연결 중 단계 상승 알림을 한 번만, api.md 21)
@@ -307,7 +310,11 @@ CREATE TABLE live2d_models (
     offset_x        int          NOT NULL DEFAULT 0,      -- 칸 안에서의 위치 보정
     offset_y        int          NOT NULL DEFAULT 0,
     created_at      timestamptz  NOT NULL DEFAULT now(),
-    format          text         NOT NULL DEFAULT 'ALIVING2D_V2' CHECK (format IN ('CUBISM', 'ALIVING2D_V2'))  -- 프론트 렌더러 (api.md 9 · 31). 기본 Aliving2D (2026-11-24)
+    format          text         NOT NULL DEFAULT 'ALIVING2D_V2' CHECK (format IN ('CUBISM', 'ALIVING2D_V2')),  -- 프론트 렌더러 (api.md 9 · 31). 기본 Aliving2D (2026-11-24)
+    -- Aliving2D 런타임 (2026-11-25, api.md 9 · 16 · 31 · 48): 버킷 루트 기준 경로. 여러 모델이 같은 엔진을 쓴다. CUBISM이면 NULL
+    engine_path     text,                                 -- 예: aliving2d/v4/engine.js
+    player_path     text,
+    reactions_path  text
 );
 
 CREATE TABLE live2d_motions (
