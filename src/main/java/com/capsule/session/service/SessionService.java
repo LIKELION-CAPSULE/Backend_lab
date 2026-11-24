@@ -588,7 +588,10 @@ public class SessionService {
                 c.model().modelJsonUrl(),
                 c.model().scale(),
                 c.model().offsetX(),
-                c.model().offsetY());
+                c.model().offsetY(),
+                c.model().engineUrl(),
+                c.model().playerUrl(),
+                c.model().reactionsUrl());
     }
 
     private static Figure figure(AvatarInfo a) {
@@ -600,7 +603,10 @@ public class SessionService {
                 a.model().modelJsonUrl(),
                 a.model().scale(),
                 a.model().offsetX(),
-                a.model().offsetY());
+                a.model().offsetY(),
+                a.model().engineUrl(),
+                a.model().playerUrl(),
+                a.model().reactionsUrl());
     }
 
     private static Me me(UserProfile user, AvatarInfo avatar) {

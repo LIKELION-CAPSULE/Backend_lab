@@ -1,16 +1,21 @@
 package com.capsule.content.controller;
 
 import com.capsule.common.response.ApiResponse;
+import com.capsule.content.dto.ContentAdminRequests.AvatarSaved;
+import com.capsule.content.dto.ContentAdminRequests.CreateAvatar;
 import com.capsule.content.dto.ContentAdminRequests.CreateMate;
 import com.capsule.content.dto.ContentAdminRequests.MateSaved;
 import com.capsule.content.dto.ContentAdminRequests.ModelRegistered;
 import com.capsule.content.dto.ContentAdminRequests.RegisterModel;
 import com.capsule.content.dto.ContentAdminRequests.SetModel;
+import com.capsule.content.dto.ContentAdminRequests.SetRuntime;
+import com.capsule.content.dto.ContentAdminRequests.UpdateAvatar;
 import com.capsule.content.service.ContentAdminService;
 import io.swagger.v3.oas.annotations.Hidden;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -41,6 +46,25 @@ public class ContentAdminController {
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<MateSaved> createMate(@RequestBody CreateMate body) {
         return ApiResponse.ok(admin.createMate(body));
+    }
+
+    /** 이미 등록된 모델의 Aliving2D 엔진 경로 (2026-11-25). 세 칸을 통째로 바꾼다 (보내지 않은 칸은 비움) */
+    @PutMapping("/internal/content/models/{modelId}/runtime")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void setRuntime(@PathVariable long modelId, @RequestBody SetRuntime body) {
+        admin.setRuntime(modelId, body);
+    }
+
+    /** 아바타 (api.md 9, 2026-11-25) */
+    @PostMapping("/internal/content/avatars")
+    @ResponseStatus(HttpStatus.CREATED)
+    public ApiResponse<AvatarSaved> createAvatar(@RequestBody CreateAvatar body) {
+        return ApiResponse.ok(admin.createAvatar(body));
+    }
+
+    @PatchMapping("/internal/content/avatars/{avatarId}")
+    public ApiResponse<AvatarSaved> updateAvatar(@PathVariable long avatarId, @RequestBody UpdateAvatar body) {
+        return ApiResponse.ok(admin.updateAvatar(avatarId, body));
     }
 
     @PutMapping("/internal/content/mates/{mateId}/model")

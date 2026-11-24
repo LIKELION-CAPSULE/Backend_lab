@@ -2,6 +2,8 @@ package com.capsule.content.service;
 
 import com.capsule.common.error.ApiException;
 import com.capsule.content.domain.ContentErrorCode;
+import com.capsule.content.dto.ContentAdminRequests.AvatarSaved;
+import com.capsule.content.dto.ContentAdminRequests.CreateAvatar;
 import com.capsule.content.dto.ContentAdminRequests.CreateMate;
 import com.capsule.content.dto.ContentAdminRequests.Expression;
 import com.capsule.content.dto.ContentAdminRequests.MateSaved;
@@ -9,6 +11,8 @@ import com.capsule.content.dto.ContentAdminRequests.ModelRegistered;
 import com.capsule.content.dto.ContentAdminRequests.Motion;
 import com.capsule.content.dto.ContentAdminRequests.Reaction;
 import com.capsule.content.dto.ContentAdminRequests.RegisterModel;
+import com.capsule.content.dto.ContentAdminRequests.SetRuntime;
+import com.capsule.content.dto.ContentAdminRequests.UpdateAvatar;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -76,6 +80,7 @@ public class ContentAdminService {
             check(x.expression() == null || exNames.contains(x.expression()), "반응이 가리키는 표정이 없음: " + x.expression());
             check(x.motion() == null || moNames.contains(x.motion()), "반응이 가리키는 모션이 없음: " + x.motion());
         }
+        checkRuntime(format, r.enginePath(), r.playerPath(), r.reactionsPath());
         check(
                 jdbc.sql("SELECT count(*) FROM live2d_models WHERE storage_prefix = ?")
                                 .param(r.storagePrefix())
@@ -85,9 +90,19 @@ public class ContentAdminService {
                 "이미 등록된 경로: " + r.storagePrefix() + " (새 버전 폴더로 올릴 것)");
 
         long modelId = jdbc.sql("""
-                        INSERT INTO live2d_models (storage_prefix, model_json_path, scale, offset_x, offset_y, format)
-                        VALUES (?, ?, ?, ?, ?, ?) RETURNING id""")
-                .params(r.storagePrefix(), json, scale, nz(r.offsetX()), nz(r.offsetY()), format)
+                        INSERT INTO live2d_models (storage_prefix, model_json_path, scale, offset_x, offset_y, format,
+                                                   engine_path, player_path, reactions_path)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id""")
+                .params(
+                        r.storagePrefix(),
+                        json,
+                        scale,
+                        nz(r.offsetX()),
+                        nz(r.offsetY()),
+                        format,
+                        blank(r.enginePath()),
+                        blank(r.playerPath()),
+                        blank(r.reactionsPath()))
                 .query(Long.class)
                 .single();
         Map<String, Long> exIds = new HashMap<>(), moIds = new HashMap<>();
@@ -162,6 +177,78 @@ public class ContentAdminService {
                 .update();
         log.info("콘텐츠 관리: 메이트 {}의 모델 → {}", mateId, modelId);
         return new MateSaved(mateId, modelId, false);
+    }
+
+    /** 이미 등록된 모델의 Aliving2D 런타임 경로를 바꾼다 (운영 채린처럼 엔진 칸 전에 등록된 모델, 2026-11-25) */
+    @Transactional
+    public void setRuntime(long modelId, SetRuntime r) {
+        String format = jdbc.sql("SELECT format FROM live2d_models WHERE id = ?")
+                .param(modelId)
+                .query(String.class)
+                .optional()
+                .orElseThrow(() -> new ApiException(ContentErrorCode.MODEL_NOT_FOUND));
+        checkRuntime(format, r.enginePath(), r.playerPath(), r.reactionsPath());
+        jdbc.sql("UPDATE live2d_models SET engine_path = ?, player_path = ?, reactions_path = ? WHERE id = ?")
+                .params(blank(r.enginePath()), blank(r.playerPath()), blank(r.reactionsPath()), modelId)
+                .update();
+        log.info(
+                "콘텐츠 관리: 모델 {} 런타임 engine={} player={} reactions={}",
+                modelId,
+                r.enginePath(),
+                r.playerPath(),
+                r.reactionsPath());
+    }
+
+    /** 아바타 (api.md 9). 모델은 다른 메이트 · 아바타가 쓰지 않아야 함 */
+    @Transactional
+    public AvatarSaved createAvatar(CreateAvatar a) {
+        check(text(a.name(), 40), "아바타 name은 1~40자");
+        check(a.modelId() != null, "modelId가 필요");
+        check(a.thumbnailPath() != null && FILE.matcher(a.thumbnailPath()).matches(), "thumbnailPath는 버킷 안 상대 경로");
+        usable(a.modelId(), null);
+        int order = a.sortOrder() != null
+                ? a.sortOrder()
+                : jdbc.sql("SELECT coalesce(max(sort_order), 0) + 1 FROM avatars")
+                        .query(Integer.class)
+                        .single();
+        long id = jdbc.sql("""
+                        INSERT INTO avatars (model_id, name, thumbnail_url, sort_order)
+                        VALUES (?, ?, ?, ?) RETURNING id""")
+                .params(a.modelId(), a.name(), a.thumbnailPath(), order)
+                .query(Long.class)
+                .single();
+        log.info("콘텐츠 관리: 아바타 만듦 id={} name={} model={}", id, a.name(), a.modelId());
+        return new AvatarSaved(id, a.modelId(), true, order);
+    }
+
+    /** 아바타 켜고 끄기 · 순서 (고른 사용자가 있으니 지우지 않음) */
+    @Transactional
+    public AvatarSaved updateAvatar(long avatarId, UpdateAvatar u) {
+        int changed = jdbc.sql("""
+                        UPDATE avatars SET is_active = coalesce(?, is_active), sort_order = coalesce(?, sort_order)
+                        WHERE id = ?""").params(u.active(), u.sortOrder(), avatarId).update();
+        if (changed == 0) throw new ApiException(ContentErrorCode.AVATAR_NOT_FOUND);
+        log.info("콘텐츠 관리: 아바타 {} active={} sort={}", avatarId, u.active(), u.sortOrder());
+        return jdbc.sql("SELECT id, model_id, is_active, sort_order FROM avatars WHERE id = ?")
+                .param(avatarId)
+                .query((rs, n) -> new AvatarSaved(rs.getLong(1), rs.getLong(2), rs.getBoolean(3), rs.getInt(4)))
+                .single();
+    }
+
+    /** 런타임 경로: 버킷 안 상대 경로. CUBISM 모델은 런타임 없음. player · reactions는 engine이 있을 때만 */
+    private static void checkRuntime(String format, String engine, String player, String reactions) {
+        for (String p : new String[] {engine, player, reactions}) {
+            if (blank(p) == null) continue;
+            check(!"CUBISM".equals(format), "CUBISM 모델은 엔진 경로를 넣지 않음");
+            check(FILE.matcher(p.strip()).matches(), "엔진 경로는 버킷 안 상대 경로: " + p);
+        }
+        check(
+                (blank(player) == null && blank(reactions) == null) || blank(engine) != null,
+                "playerPath · reactionsPath는 enginePath가 있을 때만");
+    }
+
+    private static String blank(String s) {
+        return s == null || s.isBlank() ? null : s.strip();
     }
 
     /** 있는 모델이고, 다른 메이트 · 아바타가 쓰지 않음 */

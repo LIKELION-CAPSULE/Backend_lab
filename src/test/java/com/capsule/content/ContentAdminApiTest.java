@@ -3,13 +3,17 @@ package com.capsule.content;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.capsule.TestcontainersConfiguration;
 import com.jayway.jsonpath.JsonPath;
+import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -37,7 +41,7 @@ class ContentAdminApiTest {
     JdbcTemplate jdbc;
 
     private ResultActions send(String method, String path, String body, String auth) throws Exception {
-        var req = ("PUT".equals(method) ? put(path) : post(path))
+        var req = ("PUT".equals(method) ? put(path) : "PATCH".equals(method) ? patch(path) : post(path))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body);
         if (auth != null) req.header("Authorization", auth);
@@ -149,5 +153,150 @@ class ContentAdminApiTest {
         // 모델 없이 만들면 준비 중 메이트
         send("POST", "/internal/content/mates", "{\"name\": \"준비\"}", TOKEN)
                 .andExpect(jsonPath("$.data.comingSoon").value(true));
+    }
+
+    // ---- 2026-11-25: Aliving2D 런타임 주소 · 로그인 화면 메이트 48 · 아바타 등록
+
+    private static final String RUNTIME =
+            "\"enginePath\": \"aliving2d/v4/engine.js\", \"playerPath\": \"aliving2d/v4/player.js\","
+                    + " \"reactionsPath\": \"aliving2d/v4/reactions.json\",";
+
+    private static String withFields(String json, String fields) {
+        return "{" + fields + json.strip().substring(1);
+    }
+
+    private long idOf(ResultActions r, String path) throws Exception {
+        return ((Number) JsonPath.read(r.andReturn().getResponse().getContentAsString(), path)).longValue();
+    }
+
+    private long mateWith(Long modelId, String name) throws Exception {
+        String body = modelId == null
+                ? "{\"name\": \"" + name + "\"}"
+                : "{\"name\": \"" + name + "\", \"modelId\": " + modelId + "}";
+        long id = idOf(
+                send("POST", "/internal/content/mates", body, TOKEN).andExpect(status().isCreated()), "$.data.mateId");
+        jdbc.update("UPDATE characters SET sort_order = 9000 + id WHERE id = ?", id); // 시드 메이트보다 뒤에
+        return id;
+    }
+
+    private static String unique(String name) {
+        return name + (System.nanoTime() % 1_000_000) + "/v1/";
+    }
+
+    @Test
+    void loginMatesShareTheExactModelOfMateDetail() throws Exception {
+        long modelId = idOf(
+                send("POST", "/internal/content/models", withFields(model(unique("login")), RUNTIME), TOKEN)
+                        .andExpect(status().isCreated()),
+                "$.data.modelId");
+        long mate = mateWith(modelId, "로그인 메이트");
+
+        String detail = mvc.perform(get("/api/mates/" + mate).with(jwt().jwt(j -> j.subject("1"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.model.engineUrl")
+                        .value(org.hamcrest.Matchers.endsWith("/aliving2d/v4/engine.js")))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        // 로그인 없이, 짧은 캐시, model은 31과 문자 하나까지 같은 값
+        String login = mvc.perform(get("/api/login-mates"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", org.hamcrest.Matchers.containsString("max-age=300")))
+                .andExpect(header().string("Cache-Control", org.hamcrest.Matchers.containsString("public")))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        List<Map<String, Object>> found = JsonPath.read(login, "$.data.mates[?(@.id == " + mate + ")]");
+        assertThat(found).hasSize(1);
+        Map<String, Object> detailModel = JsonPath.read(detail, "$.data.model");
+        assertThat(found.get(0).get("model")).isEqualTo(detailModel);
+        assertThat(found.get(0).get("ageRating")).isEqualTo("ALL");
+
+        // 준비 중 · 성인 · 비활성 메이트는 빠진다
+        long soon = mateWith(null, "준비 로그인");
+        long adult = mateWith(register(unique("adult")), "성인 메이트");
+        long off = mateWith(register(unique("off")), "꺼진 메이트");
+        try {
+            jdbc.update("UPDATE characters SET age_rating = 'ADULT' WHERE id = ?", adult);
+            jdbc.update("UPDATE characters SET is_active = false WHERE id = ?", off);
+            String after = mvc.perform(get("/api/login-mates"))
+                    .andReturn()
+                    .getResponse()
+                    .getContentAsString();
+            List<Object> ids = JsonPath.read(after, "$.data.mates[*].id");
+            assertThat(ids).contains((int) mate).doesNotContain((int) soon, (int) adult, (int) off);
+        } finally {
+            // 다른 테스트의 홈 목록에 안 섞이게
+            jdbc.update("UPDATE characters SET is_active = false WHERE id IN (?, ?, ?, ?)", mate, soon, adult, off);
+        }
+    }
+
+    @Test
+    void runtimePathsOnlyForAliving2dAndCanBeSetLater() throws Exception {
+        String prefix = unique("rt");
+        send("POST", "/internal/content/models", withFields(model(prefix), "\"format\": \"CUBISM\", " + RUNTIME), TOKEN)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_CONTENT"));
+        send(
+                        "POST",
+                        "/internal/content/models",
+                        withFields(model(prefix), "\"playerPath\": \"aliving2d/v4/player.js\","),
+                        TOKEN)
+                .andExpect(status().isBadRequest()); // player만 있고 engine 없음
+        long modelId = register(prefix); // 엔진 없이 등록된 모델 (운영 채린처럼)
+        send(
+                        "PUT",
+                        "/internal/content/models/" + modelId + "/runtime",
+                        "{\"enginePath\": \"aliving2d/v4/engine.js\"}",
+                        TOKEN)
+                .andExpect(status().isNoContent());
+        assertThat(jdbc.queryForObject("SELECT engine_path FROM live2d_models WHERE id = ?", String.class, modelId))
+                .isEqualTo("aliving2d/v4/engine.js");
+        send("PUT", "/internal/content/models/" + modelId + "/runtime", "{\"enginePath\": \"../x.js\"}", TOKEN)
+                .andExpect(status().isBadRequest());
+        send("PUT", "/internal/content/models/999999/runtime", "{}", TOKEN).andExpect(status().isNotFound());
+        send("PUT", "/internal/content/models/" + modelId + "/runtime", "{}", null)
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void avatarsAreRegisteredAndSwitchedOff() throws Exception {
+        String prefix = unique("av");
+        long modelId = register(prefix);
+        long avatar = idOf(
+                send(
+                                "POST",
+                                "/internal/content/avatars",
+                                "{\"name\": \"히요리\", \"modelId\": " + modelId + ", \"thumbnailPath\": \"" + prefix
+                                        + "thumb.png\", \"sortOrder\": 9100}",
+                                TOKEN)
+                        .andExpect(status().isCreated())
+                        .andExpect(jsonPath("$.data.active").value(true)),
+                "$.data.avatarId");
+        mvc.perform(get("/api/avatars").with(jwt().jwt(j -> j.subject("1"))))
+                .andExpect(jsonPath("$.data.avatars[?(@.id == " + avatar + ")].name")
+                        .value(org.hamcrest.Matchers.contains("히요리")));
+        // 같은 모델을 또 쓰면 409, 썸네일 경로가 틀리면 400
+        send(
+                        "POST",
+                        "/internal/content/avatars",
+                        "{\"name\": \"둘째\", \"modelId\": " + modelId + ", \"thumbnailPath\": \"a.png\"}",
+                        TOKEN)
+                .andExpect(status().isConflict());
+        long other = register(unique("av2"));
+        send(
+                        "POST",
+                        "/internal/content/avatars",
+                        "{\"name\": \"셋째\", \"modelId\": " + other + ", \"thumbnailPath\": \"../a.png\"}",
+                        TOKEN)
+                .andExpect(status().isBadRequest());
+        // 끄면 목록에서 빠진다 (고른 사용자가 있어 지우지 않음)
+        send("PATCH", "/internal/content/avatars/" + avatar, "{\"active\": false}", TOKEN)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.active").value(false));
+        mvc.perform(get("/api/avatars").with(jwt().jwt(j -> j.subject("1"))))
+                .andExpect(jsonPath("$.data.avatars[?(@.id == " + avatar + ")]").isEmpty());
+        send("PATCH", "/internal/content/avatars/999999", "{\"active\": false}", TOKEN)
+                .andExpect(status().isNotFound());
     }
 }

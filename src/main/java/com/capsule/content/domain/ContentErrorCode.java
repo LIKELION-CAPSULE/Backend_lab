@@ -10,7 +10,8 @@ public enum ContentErrorCode implements ErrorCode {
     INVALID_CONTENT(HttpStatus.BAD_REQUEST),
     MODEL_NOT_FOUND(HttpStatus.NOT_FOUND),
     /** 다른 메이트나 아바타가 이미 쓰는 모델 (characters.model_id UNIQUE) */
-    MODEL_IN_USE(HttpStatus.CONFLICT);
+    MODEL_IN_USE(HttpStatus.CONFLICT),
+    AVATAR_NOT_FOUND(HttpStatus.NOT_FOUND);
 
     private final HttpStatus status;
 

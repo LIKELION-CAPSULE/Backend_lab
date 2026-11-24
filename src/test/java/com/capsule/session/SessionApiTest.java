@@ -70,8 +70,17 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @Import(TestcontainersConfiguration.class)
 class SessionApiTest {
 
-    static final ModelInfo CHAERIN_MODEL =
-            new ModelInfo("https://cdn.capsule.invalid/live2d/chaerin/v1/chaerin.model3.json", 1.0, 0, 12);
+    /** Aliving2D 메이트: 엔진 주소 3개가 16 · 17의 평평한 mate로 그대로 옮겨지는지 (2026-11-25) */
+    static final ModelInfo CHAERIN_MODEL = new ModelInfo(
+            "ALIVING2D_V2",
+            "https://cdn.capsule.invalid/chaerin/v2/model.json",
+            1.0,
+            0,
+            12,
+            "https://cdn.capsule.invalid/aliving2d/v4/engine.js",
+            "https://cdn.capsule.invalid/aliving2d/v4/player.js",
+            "https://cdn.capsule.invalid/aliving2d/v4/reactions.json");
+
     static final CharacterInfo CHAERIN = new CharacterInfo(
             1,
             0,
@@ -210,8 +219,12 @@ class SessionApiTest {
                                 .andExpect(status().isCreated())
                                 .andExpect(jsonPath("$.data.connectionId").isNumber())
                                 .andExpect(jsonPath("$.data.mate.name").value("채린"))
-                                .andExpect(jsonPath("$.data.mate.format").value("CUBISM"))
+                                .andExpect(jsonPath("$.data.mate.format").value("ALIVING2D_V2"))
                                 .andExpect(jsonPath("$.data.mate.modelJsonUrl").value(CHAERIN_MODEL.modelJsonUrl()))
+                                .andExpect(jsonPath("$.data.mate.engineUrl").value(CHAERIN_MODEL.engineUrl()))
+                                .andExpect(jsonPath("$.data.mate.playerUrl").value(CHAERIN_MODEL.playerUrl()))
+                                .andExpect(jsonPath("$.data.mate.reactionsUrl").value(CHAERIN_MODEL.reactionsUrl()))
+                                .andExpect(jsonPath("$.data.avatar.engineUrl").value(nullValue())) // Cubism 아바타
                                 .andExpect(jsonPath("$.data.avatar.profileImageUrl")
                                         .value(AVATAR.thumbnailUrl()))
                                 .andExpect(jsonPath("$.data.me.nickname").value("승희"))

@@ -13,6 +13,7 @@ public final class ContentAdminRequests {
      * @param format CUBISM · ALIVING2D_V2, 비우면 ALIVING2D_V2
      * @param storagePrefix 예: male/v1/
      * @param modelJsonPath 예: model.json (prefix 기준)
+     * @param enginePath · playerPath · reactionsPath Aliving2D 런타임 (버킷 루트 기준, 예: aliving2d/v4/engine.js). CUBISM이면 비움
      */
     public record RegisterModel(
             String format,
@@ -23,7 +24,26 @@ public final class ContentAdminRequests {
             Integer offsetY,
             List<Expression> expressions,
             List<Motion> motions,
-            List<Reaction> reactions) {}
+            List<Reaction> reactions,
+            String enginePath,
+            String playerPath,
+            String reactionsPath) {}
+
+    /** 이미 등록된 모델의 Aliving2D 런타임 경로 (버킷 루트 기준). null인 칸은 지운다 (2026-11-25) */
+    public record SetRuntime(String enginePath, String playerPath, String reactionsPath) {}
+
+    /**
+     * 아바타 (api.md 9, 2026-11-25). 모델은 먼저 /internal/content/models로 등록
+     *
+     * @param thumbnailPath 선택 카드 이미지 (버킷 안 경로, 예: avatars/hiyori/v1/thumb.png)
+     * @param sortOrder 비우면 맨 뒤
+     */
+    public record CreateAvatar(String name, Long modelId, String thumbnailPath, Integer sortOrder) {}
+
+    /** 아바타 켜고 끄기 · 순서. 고른 사용자가 있으니 지우지 않고 끈다 (null 칸은 그대로) */
+    public record UpdateAvatar(Boolean active, Integer sortOrder) {}
+
+    public record AvatarSaved(long avatarId, long modelId, boolean active, int sortOrder) {}
 
     /** name = 반응 응답 · 감정 이름으로 쓰이는 이름, label = 한국어 표시 이름 */
     public record Expression(String name, String label, String file) {}
