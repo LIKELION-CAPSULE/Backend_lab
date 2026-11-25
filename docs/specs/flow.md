@@ -29,7 +29,7 @@
 22. 로그아웃 → 204
 
 ## 흐름 2: 카카오 신규 가입 (로컬·테스트는 Fake 카카오: 코드 `fake-kakao:{회원번호}:{닉네임}`)
-카카오 로그인(약관 없이) → `isNewUser: true`, 닉네임 = 카카오 닉네임 → 같은 카카오 계정으로 다시 → `isNewUser: false`
+카카오 로그인 → 403 KAKAO_SIGNUP_REQUIRED + `signupToken` → 약관 동의로 가입 완료(49) → `isNewUser: true`, 닉네임 = 카카오 닉네임 → 같은 가입 토큰 다시 → 401 → 같은 카카오 계정으로 다시 로그인 → 200 `isNewUser: false`
 
 ## 흐름 3: 비정상 종료 후 이어하기 (H18)
 공부 시작 → FOCUS → heartbeat → (탭 닫힘) → 이어하기 → `breakSeconds > 0`, 끊긴 구간은 공부 시간에 안 들어감 → 종료
