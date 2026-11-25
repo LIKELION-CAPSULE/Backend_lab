@@ -6,7 +6,6 @@ import com.capsule.content.dto.ContentAdminRequests.CreateAvatar;
 import com.capsule.content.dto.ContentAdminRequests.CreateMate;
 import com.capsule.content.dto.ContentAdminRequests.MateImages;
 import com.capsule.content.dto.ContentAdminRequests.MateSaved;
-import com.capsule.content.dto.ContentAdminRequests.MateState;
 import com.capsule.content.dto.ContentAdminRequests.MateVoice;
 import com.capsule.content.dto.ContentAdminRequests.ModelRegistered;
 import com.capsule.content.dto.ContentAdminRequests.RegisterModel;
@@ -15,7 +14,6 @@ import com.capsule.content.dto.ContentAdminRequests.SetMateVoice;
 import com.capsule.content.dto.ContentAdminRequests.SetModel;
 import com.capsule.content.dto.ContentAdminRequests.SetRuntime;
 import com.capsule.content.dto.ContentAdminRequests.UpdateAvatar;
-import com.capsule.content.dto.ContentAdminRequests.UpdateMate;
 import com.capsule.content.service.ContentAdminService;
 import io.swagger.v3.oas.annotations.Hidden;
 import lombok.RequiredArgsConstructor;
@@ -83,12 +81,6 @@ public class ContentAdminController {
     @PutMapping("/internal/content/mates/{mateId}/voice")
     public ApiResponse<MateVoice> setMateVoice(@PathVariable long mateId, @RequestBody SetMateVoice body) {
         return ApiResponse.ok(admin.setMateVoice(mateId, body));
-    }
-
-    /** 메이트 켜고 끄기 · 순서 (2026-11-26). 지우지 않고 끈다 */
-    @PatchMapping("/internal/content/mates/{mateId}")
-    public ApiResponse<MateState> updateMate(@PathVariable long mateId, @RequestBody UpdateMate body) {
-        return ApiResponse.ok(admin.updateMate(mateId, body));
     }
 
     @PutMapping("/internal/content/mates/{mateId}/model")
