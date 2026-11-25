@@ -572,6 +572,67 @@ class DialogueModeSafetyTest {
                 .noneMatch(t -> t.contains("「파이팅」"));
     }
 
+    // --- 19 반응 대사 음성 (말 걸기 목소리, 2026-11-25 19 '음성') ---
+
+    @Test
+    void idleTalkWithTtsIsVoicedAndChargesTwentyOnce() throws Exception {
+        idleEvent(40);
+        UUID requestId = UUID.randomUUID();
+        react(40, requestId, true)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.characters[0].audioBase64").isNotEmpty())
+                .andExpect(jsonPath("$.data.charged").value(20))
+                .andExpect(jsonPath("$.data.credits.todayRemaining").value(1480)); // 출석 1,500 − 20
+        assertThat(jdbc.queryForObject(
+                        "SELECT title FROM credit_ledger WHERE user_id = ? AND request_id = ?",
+                        String.class,
+                        userId,
+                        requestId))
+                .isEqualTo("보이스 대화 · 채린");
+        // 같은 requestId를 다시 보내도 한 번만 깎는다
+        react(40, requestId, true)
+                .andExpect(jsonPath("$.data.credits.todayRemaining").value(1480));
+        assertThat(usedCount()).isEqualTo(1);
+    }
+
+    @Test
+    void reactionWithoutTtsOrVoiceIsTextOnly() throws Exception {
+        idleEvent(41);
+        // tts를 안 보내면(기본 false) 음성 · 크레딧 칸이 비어 있다
+        react(41, UUID.randomUUID(), false)
+                .andExpect(jsonPath("$.data.characters[0].content").isNotEmpty())
+                .andExpect(jsonPath("$.data.characters[0].audioBase64").value(nullValue()))
+                .andExpect(jsonPath("$.data.charged").value(0))
+                .andExpect(jsonPath("$.data.credits").value(nullValue()));
+        // 설정에서 음성을 끔: 글만, 크레딧은 보여 줌
+        jdbc.update("UPDATE users SET settings = '{\"voiceEnabled\":false}'::jsonb WHERE id = ?", userId);
+        react(41, UUID.randomUUID(), true)
+                .andExpect(jsonPath("$.data.characters[0].audioBase64").value(nullValue()))
+                .andExpect(jsonPath("$.data.charged").value(0))
+                .andExpect(jsonPath("$.data.credits.todayRemaining").value(1500));
+        // 크레딧이 20보다 적음: 글만 (에러 아님)
+        jdbc.update("UPDATE users SET settings = '{}'::jsonb WHERE id = ?", userId);
+        jdbc.update("UPDATE credit_grants SET remaining = 19 WHERE user_id = ?", userId);
+        react(41, UUID.randomUUID(), true)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.characters[0].audioBase64").value(nullValue()))
+                .andExpect(jsonPath("$.data.charged").value(0));
+        assertThat(usedCount()).isZero();
+    }
+
+    private void idleEvent(long eventId) {
+        when(sessionQuery.findEvent(sessionId, eventId))
+                .thenReturn(Optional.of(new com.capsule.session.api.SessionTypes.SessionEventInfo(
+                        eventId, sessionId, "IDLE_TALK", Instant.now(), false, false)));
+    }
+
+    private ResultActions react(long eventId, UUID requestId, boolean tts) throws Exception {
+        return mvc.perform(post("/api/connections/{id}/events/{eventId}/reaction", sessionId, eventId)
+                .with(jwt().jwt(j -> j.subject(String.valueOf(userId))))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"requestId\":\"" + requestId + "\"" + (tts ? ",\"tts\":true" : "") + "}"));
+    }
+
     // --- 도우미 ---
 
     private void clearInvocations() {

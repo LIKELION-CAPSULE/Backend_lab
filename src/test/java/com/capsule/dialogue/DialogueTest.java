@@ -187,7 +187,9 @@ class DialogueTest {
                 .andExpect(jsonPath("$.data.characters[0].expression.file").value("exp/smile.exp3.json"))
                 .andExpect(jsonPath("$.data.characters[0].affinity").doesNotExist())
                 .andExpect(jsonPath("$.data.characters[0].fallback").value(false))
-                .andExpect(jsonPath("$.data.characters[0].audioBase64").value(nullValue()));
+                // tts: true → 대사 음성 (2026-11-25 19 '음성', 가짜 공급자는 무음 mp3) + 보이스 20
+                .andExpect(jsonPath("$.data.characters[0].audioBase64").isNotEmpty())
+                .andExpect(jsonPath("$.data.charged").value(20));
         verify(reactionQuery).pick(CHARACTER_ID, "HAPPY", null); // 명세 19: trigger가 아니라 감정으로 고름
         verifyNoInteractions(relationCommands); // 호감도는 18이 맡는다 (여기선 단계만 읽음)
     }
