@@ -9,6 +9,7 @@ import com.capsule.user.dto.ExpiresResponse;
 import com.capsule.user.dto.Issued;
 import com.capsule.user.dto.KakaoRequest;
 import com.capsule.user.dto.KakaoResponse;
+import com.capsule.user.dto.KakaoSignupRequest;
 import com.capsule.user.dto.Login;
 import com.capsule.user.dto.LoginRequest;
 import com.capsule.user.dto.LoginResponse;
@@ -87,10 +88,23 @@ public class AuthController {
         return loggedIn(HttpStatus.OK, auth.login(req.email(), req.password()));
     }
 
-    @Operation(summary = "6. 카카오 로그인 · 가입", description = "카카오 인가 코드로 로그인, 처음이면 가입까지 (소셜은 카카오만) (명세: api.md 6)")
+    @Operation(
+            summary = "6. 카카오 로그인 · 가입",
+            description = "카카오 인가 코드로 로그인. 처음이면 403 KAKAO_SIGNUP_REQUIRED + 가입 토큰 → 49 (명세: api.md 6)")
     @PostMapping("/api/auth/social/KAKAO")
     public ResponseEntity<ApiResponse<KakaoResponse>> kakao(@RequestBody KakaoRequest req) {
         Login login = auth.kakao(req);
+        Issued issued = tokens.issue(login.userId());
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, issued.cookie())
+                .body(ApiResponse.ok(new KakaoResponse(
+                        issued.accessToken(), login.userId(), login.newUser(), login.onboardingRequired())));
+    }
+
+    @Operation(summary = "49. 카카오 가입 완료", description = "6이 준 가입 토큰 + 약관 동의로 카카오 가입 (2026-11-26) (명세: api.md 49)")
+    @PostMapping("/api/auth/social/KAKAO/signup")
+    public ResponseEntity<ApiResponse<KakaoResponse>> kakaoSignup(@RequestBody KakaoSignupRequest req) {
+        Login login = auth.kakaoSignup(req);
         Issued issued = tokens.issue(login.userId());
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, issued.cookie())

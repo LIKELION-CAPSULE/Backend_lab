@@ -274,7 +274,10 @@ class FlowE2ETest {
         String code = "fake-kakao:e2e-" + UUID.randomUUID() + ":카카오닉";
         String kakao = "{\"code\":\"" + code + "\",\"redirectUri\":\"http://localhost/oauth\",\"deviceHash\":\"e2e\"}";
 
-        MvcResult first = call(post("/api/auth/social/KAKAO"), null, kakao, 200);
+        // 새 사용자: 6 → 가입 토큰(403) → 약관 동의 → 49 (2026-11-26)
+        MvcResult step = call(post("/api/auth/social/KAKAO"), null, kakao, 403);
+        assertThat((String) JsonPath.read(body(step), "$.code")).isEqualTo("KAKAO_SIGNUP_REQUIRED");
+        MvcResult first = kakaoSignup(JsonPath.read(body(step), "$.detail.signupToken"));
         assertThat((Boolean) JsonPath.read(body(first), "$.data.isNewUser")).isTrue();
         String token = JsonPath.read(body(first), "$.data.accessToken");
         MvcResult me = call(get("/api/me"), token, null, 200);
@@ -290,11 +293,12 @@ class FlowE2ETest {
     @Test
     void 흐름3_비정상_종료_후_이어하기() throws Exception {
         String code = "fake-kakao:e2e-" + UUID.randomUUID() + ":이어하기";
-        MvcResult login = call(
+        MvcResult step = call(
                 post("/api/auth/social/KAKAO"),
                 null,
                 "{\"code\":\"" + code + "\",\"redirectUri\":\"http://localhost/oauth\",\"deviceHash\":\"e2e\"}",
-                200);
+                403);
+        MvcResult login = kakaoSignup(JsonPath.read(body(step), "$.detail.signupToken"));
         String token = JsonPath.read(body(login), "$.data.accessToken");
         // 카카오 가입은 생년월일을 온보딩에서 받는다 (명세 10). 없으면 공부 시작이 막힌다
         call(patch("/api/me"), token, "{\"nickname\":\"이어하기\",\"birthDate\":\"2001-04-10\"}", 200);
@@ -340,6 +344,17 @@ class FlowE2ETest {
     private static String reactionBody(Integer intensity) {
         return "{\"requestId\":\"" + UUID.randomUUID() + "\"" + (intensity == null ? "" : ",\"intensity\":" + intensity)
                 + "}";
+    }
+
+    /** 49 카카오 가입 완료: 1번 약관 조회의 필수 약관 전부에 동의 */
+    private MvcResult kakaoSignup(String signupToken) throws Exception {
+        MvcResult terms = call(get("/api/terms"), null, null, 200);
+        java.util.List<Integer> ids = JsonPath.read(body(terms), "$.data.terms[?(@.required == true)].termVersionId");
+        return call(
+                post("/api/auth/social/KAKAO/signup"),
+                null,
+                "{\"signupToken\":\"" + signupToken + "\",\"agreedTermVersionIds\":" + ids + ",\"deviceHash\":\"e2e\"}",
+                200);
     }
 
     private MvcResult call(MockHttpServletRequestBuilder request, String token, String json, int expectedStatus)

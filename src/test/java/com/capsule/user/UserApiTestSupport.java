@@ -1,6 +1,7 @@
 package com.capsule.user;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.capsule.TestcontainersConfiguration;
@@ -83,6 +84,29 @@ abstract class UserApiTestSupport {
         return """
                 {"code":"%s","redirectUri":"http://localhost/oauth/kakao","deviceHash":"%s"}
                 """.formatted(code, deviceHash());
+    }
+
+    /** 6이 새 사용자에게 준 가입 토큰 (403 KAKAO_SIGNUP_REQUIRED, 2026-11-26) */
+    String kakaoSignupToken(String code) throws Exception {
+        MvcResult r = postJson("/api/auth/social/KAKAO", kakaoBody(code))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("KAKAO_SIGNUP_REQUIRED"))
+                .andReturn();
+        return read(r, "$.detail.signupToken");
+    }
+
+    ResultActions kakaoSignup(String signupToken, String termIds) throws Exception {
+        return postJson("/api/auth/social/KAKAO/signup", """
+                {"signupToken":"%s","agreedTermVersionIds":%s,"deviceHash":"%s"}
+                """.formatted(signupToken, termIds, deviceHash()));
+    }
+
+    /** 카카오로 새로 가입까지 (6 → 49, 약관 3 · 4 동의) */
+    MvcResult kakaoSignedUp(String code) throws Exception {
+        return kakaoSignup(kakaoSignupToken(code), "[3,4]")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.isNewUser").value(true))
+                .andReturn();
     }
 
     /** 가입까지 마친 사용자의 응답 (accessToken, userId) */
