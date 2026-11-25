@@ -46,6 +46,48 @@ class ExpressionPickerTest {
     }
 
     @Test
+    void lockedUnlockExpressionsAreLeftOutOfTheChoices() {
+        // 해금 표정 (api.md 19 emotion, 2026-11-26): 수줍음은 3단계 해금(아직 안 열림), 행복은 2단계 해금(열림)
+        com.capsule.content.api.UnlockQuery unlocks = mock(com.capsule.content.api.UnlockQuery.class);
+        com.capsule.relation.api.RelationQuery relations = mock(com.capsule.relation.api.RelationQuery.class);
+        long id = SceneChatPipelineTest.MALFOY.characterId();
+        when(unlocks.between(id, 0, Integer.MAX_VALUE))
+                .thenReturn(List.of(
+                        new com.capsule.content.api.ContentTypes.UnlockInfo(9, "EXPRESSION", "수줍은 웃음", 3, "수줍음", null),
+                        new com.capsule.content.api.ContentTypes.UnlockInfo(8, "EXPRESSION", "함박웃음", 2, "행복", null),
+                        new com.capsule.content.api.ContentTypes.UnlockInfo(7, "VOICE_LINE", "보이스", 2, null, "a.mp3")));
+        when(relations.unlockedContentIds(1)).thenReturn(java.util.Set.of(8L));
+        ExpressionPicker limited = new ExpressionPicker(
+                decider, RuntimeSettings.fixed(YmlDefaults.DIALOGUE), new LockedExpressions(unlocks, relations));
+        when(decider.decide(anyString(), any(), any()))
+                .thenReturn(Map.of(ExpressionPicker.QUESTION, new Decision("행복", 0.8)));
+
+        assertThat(limited.pick(SceneChatPipelineTest.MALFOY, "고마워", "별거 아니야.", ctx))
+                .isEqualTo("행복");
+        verify(decider)
+                .decide(
+                        anyString(),
+                        argThat(q -> {
+                            Map<String, String> criteria =
+                                    q.get(ExpressionPicker.QUESTION).criteria();
+                            return !criteria.containsKey("수줍음")
+                                    && criteria.containsKey("행복")
+                                    && criteria.containsKey("삐짐");
+                        }),
+                        any());
+
+        // 실험실 · 평가(사용자 없음)는 제한하지 않는다
+        LlmContext lab = new LlmContext(LlmContext.LAB, null, null, null, List.of(), null, null, null, null, null);
+        org.mockito.Mockito.clearInvocations(decider);
+        limited.pick(SceneChatPipelineTest.MALFOY, "고마워", "별거 아니야.", lab);
+        verify(decider)
+                .decide(
+                        anyString(),
+                        argThat(q -> q.get(ExpressionPicker.QUESTION).criteria().containsKey("수줍음")),
+                        any());
+    }
+
+    @Test
     void failureOrNoReplyMeansNoExpression() {
         assertThat(picker.pick(SceneChatPipelineTest.MALFOY, "안녕", " ", ctx)).isNull();
         verify(decider, never()).decide(anyString(), any(), any());

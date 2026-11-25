@@ -6,12 +6,12 @@ import com.capsule.dialogue.client.Decider.Decision;
 import com.capsule.dialogue.config.DialogueProperties;
 import com.capsule.dialogue.dto.CharacterContent;
 import com.capsule.dialogue.dto.LlmContext;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -21,7 +21,6 @@ import org.springframework.stereotype.Component;
  * 보기가 그 목록뿐이라 목록 밖 이름은 나오지 않는다 (Decider가 모르는 보기는 버린다).
  */
 @Component
-@RequiredArgsConstructor
 public class ExpressionPicker {
 
     private static final Logger log = LoggerFactory.getLogger(ExpressionPicker.class);
@@ -30,6 +29,19 @@ public class ExpressionPicker {
 
     private final Decider decider;
     private final RuntimeSettings<DialogueProperties> props;
+    private final LockedExpressions locked;
+
+    /** 해금 제한 없이 (단위 테스트 · 사용자가 없는 곳) */
+    public ExpressionPicker(Decider decider, RuntimeSettings<DialogueProperties> props) {
+        this(decider, props, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public ExpressionPicker(Decider decider, RuntimeSettings<DialogueProperties> props, LockedExpressions locked) {
+        this.decider = decider;
+        this.props = props;
+        this.locked = locked;
+    }
 
     /**
      * 이 대사의 표정. 목록이 없거나, 늦거나(fact-pick-wait, 사실 고르기와 같은 한도), 실패하면 null (표정을 바꾸지 않음).
@@ -39,11 +51,21 @@ public class ExpressionPicker {
      */
     public String pick(CharacterContent c, String said, String reply, LlmContext ctx) {
         if (c.expressions().isEmpty() || reply == null || reply.isBlank()) return null;
+        // 아직 안 열린 해금 표정은 보기에서 뺀다 (api.md 19 emotion, 2026-11-26)
+        Map<String, String> choices = new LinkedHashMap<>(c.expressionChoices());
+        try {
+            if (locked != null) choices.keySet().removeAll(locked.of(ctx.userId(), c.characterId()));
+        } catch (RuntimeException e) {
+            // 해금을 못 읽으면 표정을 고르지 않는다 (안 열린 표정이 나가지 않게)
+            log.warn("해금 표정을 못 읽어 표정 고르기 생략: {}", e.toString());
+            return null;
+        }
+        if (choices.isEmpty()) return null;
         String state = (said == null || said.isBlank() ? "" : "사용자: " + said + "\n") + c.speaker() + ": " + reply;
         Decider.Question q = new Decider.Question(
                 c.speaker() + "가 이 대사를 말하는 순간의 얼굴 표정을 하나 고른다. 말투가 아니라 이 대사에서 드러나는 감정"
                         + "(칭찬받음 · 챙김 · 놀람 · 졸림 · 진지함 · 서운함 · 화)을 본다",
-                c.expressionChoices());
+                choices);
         CompletableFuture<Decision> f = CompletableFuture.supplyAsync(
                 () -> decider.decide(state, Map.of(QUESTION, q), ctx.withDeadline(null))
                         .get(QUESTION),
