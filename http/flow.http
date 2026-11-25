@@ -7,13 +7,25 @@
 ### 1. 약관 조회 (H01)
 GET {{host}}/api/terms
 
-### 2. 카카오(Fake) 가입·로그인. 코드 형식: fake-kakao:{회원번호}:{닉네임}
+### 2. 카카오(Fake) 로그인. 코드 형식: fake-kakao:{회원번호}:{닉네임}
+### 이미 가입했으면 200, 처음이면 403 KAKAO_SIGNUP_REQUIRED + detail.signupToken → 2-1로 (명세 6)
 POST {{host}}/api/auth/social/KAKAO
 Content-Type: application/json
 
 { "code": "fake-kakao:local-1:승희", "redirectUri": "http://localhost:5173/oauth/kakao", "deviceHash": "local-device" }
 
-> {% client.global.set("token", response.body.accessToken); %}
+> {%
+  if (response.status === 403) client.global.set("signupToken", response.body.detail.signupToken);
+  else client.global.set("token", response.body.data.accessToken);
+%}
+
+### 2-1. 카카오 가입 완료 (2가 403일 때만). 약관 id는 1의 termVersionId (명세 49)
+POST {{host}}/api/auth/social/KAKAO/signup
+Content-Type: application/json
+
+{ "signupToken": "{{signupToken}}", "agreedTermVersionIds": [3, 4], "deviceHash": "local-device" }
+
+> {% client.global.set("token", response.body.data.accessToken); %}
 
 ### 3. 아바타 목록 (H02)
 GET {{host}}/api/avatars

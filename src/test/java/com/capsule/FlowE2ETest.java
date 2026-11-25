@@ -274,8 +274,14 @@ class FlowE2ETest {
         String code = "fake-kakao:e2e-" + UUID.randomUUID() + ":카카오닉";
         String kakao = "{\"code\":\"" + code + "\",\"redirectUri\":\"http://localhost/oauth\",\"deviceHash\":\"e2e\"}";
 
-        MvcResult first = call(post("/api/auth/social/KAKAO"), null, kakao, 200);
+        // 새 사용자: 가입 토큰 → 약관 동의로 가입 완료 (명세 6 · 49)
+        MvcResult required = call(post("/api/auth/social/KAKAO"), null, kakao, 403);
+        assertThat((String) JsonPath.read(body(required), "$.code")).isEqualTo("KAKAO_SIGNUP_REQUIRED");
+        String signup = "{\"signupToken\":\"" + JsonPath.read(body(required), "$.detail.signupToken")
+                + "\",\"agreedTermVersionIds\":[3,4],\"deviceHash\":\"e2e\"}";
+        MvcResult first = call(post("/api/auth/social/KAKAO/signup"), null, signup, 200);
         assertThat((Boolean) JsonPath.read(body(first), "$.data.isNewUser")).isTrue();
+        call(post("/api/auth/social/KAKAO/signup"), null, signup, 401);
         String token = JsonPath.read(body(first), "$.data.accessToken");
         MvcResult me = call(get("/api/me"), token, null, 200);
         assertThat((String) JsonPath.read(body(me), "$.data.nickname")).isEqualTo("카카오닉");
@@ -290,10 +296,16 @@ class FlowE2ETest {
     @Test
     void 흐름3_비정상_종료_후_이어하기() throws Exception {
         String code = "fake-kakao:e2e-" + UUID.randomUUID() + ":이어하기";
-        MvcResult login = call(
+        MvcResult required = call(
                 post("/api/auth/social/KAKAO"),
                 null,
                 "{\"code\":\"" + code + "\",\"redirectUri\":\"http://localhost/oauth\",\"deviceHash\":\"e2e\"}",
+                403);
+        MvcResult login = call(
+                post("/api/auth/social/KAKAO/signup"),
+                null,
+                "{\"signupToken\":\"" + JsonPath.read(body(required), "$.detail.signupToken")
+                        + "\",\"agreedTermVersionIds\":[3,4],\"deviceHash\":\"e2e\"}",
                 200);
         String token = JsonPath.read(body(login), "$.data.accessToken");
         // 카카오 가입은 생년월일을 온보딩에서 받는다 (명세 10). 없으면 공부 시작이 막힌다

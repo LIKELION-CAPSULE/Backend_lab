@@ -10,6 +10,7 @@ import com.capsule.user.domain.User;
 import com.capsule.user.domain.UserErrorCode;
 import com.capsule.user.dto.KakaoProfile;
 import com.capsule.user.dto.KakaoRequest;
+import com.capsule.user.dto.KakaoSignupRequest;
 import com.capsule.user.dto.Login;
 import com.capsule.user.dto.SignupRequest;
 import com.capsule.user.dto.TermVersion;
@@ -36,7 +37,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/** 약관, 이메일 인증, 가입, 로그인, 카카오 (api.md 1~6). 토큰 발급은 {@link TokenService}. */
+/** 약관, 이메일 인증, 가입, 로그인, 카카오 (api.md 1~6, 49). 토큰 발급은 {@link TokenService}. */
 @Service
 @RequiredArgsConstructor
 public class AuthService {
@@ -44,6 +45,7 @@ public class AuthService {
     private static final Pattern EMAIL = Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
     private static final Duration CODE_TTL = Duration.ofMinutes(5);
     private static final Duration VERIFICATION_TTL = Duration.ofMinutes(10);
+    private static final Duration KAKAO_SIGNUP_TTL = Duration.ofMinutes(10); // 카카오 가입 토큰 (api.md 6 · 49)
     private static final Duration LOGIN_LOCK = Duration.ofMinutes(10); // 2026-11-23 5 → 10분 (피그마 SCR-51 AU-1 초안)
     private static final int MAX_FAILURES = 5;
     private static final int PASSWORD_MIN = 8;
@@ -180,29 +182,60 @@ public class AuthService {
     }
 
     /**
-     * 처음이면 정원 확인 뒤 users + user_social_accounts + user_terms + signup_devices를 한 트랜잭션으로 (api.md 6 '서버가 하는 일').
-     * 약관 체크는 받지 않는다. 카카오로 가입하면 가입 시점의 최신 필수 약관 버전에 동의한 것으로 기록한다.
+     * 이미 가입한 사람만 로그인시킨다. 새 사용자는 계정을 만들지 않고, 정원을 확인한 뒤 카카오 회원번호 · 닉네임을
+     * 가입 토큰(10분)에 묶어 403 KAKAO_SIGNUP_REQUIRED로 돌려준다. 가입은 약관 동의와 함께 {@link #kakaoSignup} (api.md 6 · 49).
      * 카카오 호출(네트워크 왕복 2번)은 트랜잭션 밖에서 한다. 카카오가 느려도 DB 커넥션을 붙잡지 않게
      */
     public Login kakao(KakaoRequest req) {
         // 인가 코드는 한 번만 쓸 수 있어서, 요청 모양 검사를 카카오 호출보다 먼저 한다
-        String deviceHash = SignupPolicy.validDeviceHash(req.deviceHash());
+        SignupPolicy.validDeviceHash(req.deviceHash());
         KakaoProfile profile = kakaoClient
                 .fetchProfile(req.code(), req.redirectUri())
                 .orElseThrow(() -> new ApiException(UserErrorCode.SOCIAL_AUTH_FAILED));
-        return tx.execute(status -> loginOrSignUp(profile, deviceHash));
+        Optional<Login> existing = tx.execute(status -> logInSocialUser(profile.providerUserId()));
+        if (existing.isPresent()) {
+            return existing.get();
+        }
+        // 정원이 찼으면 동의 화면을 보여 주기 전에 알린다. 49에서 한 번 더 본다
+        signupPolicy.requireSeat();
+        String token = "kt_" + TokenService.randomToken();
+        redis.opsForValue().set(kakaoSignupKey(token), encode(profile), KAKAO_SIGNUP_TTL);
+        throw new ApiException(
+                UserErrorCode.KAKAO_SIGNUP_REQUIRED,
+                Map.of("signupToken", token, "expiresInSeconds", KAKAO_SIGNUP_TTL.toSeconds()));
     }
 
-    private Login loginOrSignUp(KakaoProfile profile, String deviceHash) {
-        Instant now = Instant.now(clock);
-        Optional<Long> existingId = users.findUserIdBySocialAccount(KAKAO, profile.providerUserId());
-        if (existingId.isPresent()) {
-            User user = users.findById(existingId.get())
-                    .filter(User::isActive)
-                    .orElseThrow(() -> new ApiException(UserErrorCode.SOCIAL_AUTH_FAILED));
-            user.loggedIn(now);
-            return new Login(user.getId(), user.onboardingRequired(), false);
+    /**
+     * 6번의 가입 토큰 + 약관 동의로 users + user_social_accounts + user_terms + signup_devices를 한 트랜잭션으로 (api.md 49).
+     * 요청 검사(기기 값 · 약관)를 토큰을 쓰기 전에 해서, 400이면 같은 토큰으로 다시 보낼 수 있다
+     */
+    public Login kakaoSignup(KakaoSignupRequest req) {
+        String deviceHash = SignupPolicy.validDeviceHash(req.deviceHash());
+        List<Long> agreed = agreedLatestTerms(req.agreedTermVersionIds(), Instant.now(clock));
+        // 꺼내면서 지운다(GETDEL): 연타 · 재사용은 여기서 하나만 지나간다
+        String saved = req.signupToken() == null || req.signupToken().isBlank()
+                ? null
+                : redis.opsForValue().getAndDelete(kakaoSignupKey(req.signupToken()));
+        KakaoProfile profile = decode(saved).orElseThrow(() -> new ApiException(UserErrorCode.SIGNUP_TOKEN_INVALID));
+        return tx.execute(status -> logInSocialUser(profile.providerUserId())
+                // 토큰을 두 번 받아 다른 쪽으로 이미 가입을 마쳤으면 그 사용자로 로그인
+                .orElseGet(() -> signUpSocialUser(profile, deviceHash, agreed)));
+    }
+
+    private Optional<Login> logInSocialUser(String providerUserId) {
+        Optional<Long> existingId = users.findUserIdBySocialAccount(KAKAO, providerUserId);
+        if (existingId.isEmpty()) {
+            return Optional.empty();
         }
+        User user = users.findById(existingId.get())
+                .filter(User::isActive)
+                .orElseThrow(() -> new ApiException(UserErrorCode.SOCIAL_AUTH_FAILED));
+        user.loggedIn(Instant.now(clock));
+        return Optional.of(new Login(user.getId(), user.onboardingRequired(), false));
+    }
+
+    private Login signUpSocialUser(KakaoProfile profile, String deviceHash, List<Long> agreedTermVersionIds) {
+        Instant now = Instant.now(clock);
         String nickname = User.fitNickname(profile.nickname());
         if (nickname.isEmpty()) {
             // 닉네임 동의는 필수 항목(api.md 6)이지만 비어 올 수 있어 NOT NULL을 지키려고 둔 기본값. 프로필 설정에서 바꿀 수 있다
@@ -212,13 +245,21 @@ public class AuthService {
         User user = users.save(User.socialUser(nickname, signupPolicy.newReferralCode(), now));
         users.insertSocialAccount(KAKAO, profile.providerUserId(), user.getId());
         users.insertSignupDevice(deviceHash, user.getId());
-        terms.recordAgreements(
-                user.getId(),
-                terms.latestVersions(now).stream()
-                        .filter(TermVersion::required)
-                        .map(TermVersion::termVersionId)
-                        .toList());
+        terms.recordAgreements(user.getId(), agreedTermVersionIds);
         return new Login(user.getId(), true, true);
+    }
+
+    /** 가입 토큰에 묶어 둘 값: "회원번호\n닉네임" (회원번호에는 줄바꿈이 없다) */
+    private static String encode(KakaoProfile profile) {
+        return profile.providerUserId() + "\n" + (profile.nickname() == null ? "" : profile.nickname());
+    }
+
+    private static Optional<KakaoProfile> decode(String saved) {
+        if (saved == null) {
+            return Optional.empty();
+        }
+        String[] parts = saved.split("\n", 2);
+        return Optional.of(new KakaoProfile(parts[0], parts.length > 1 ? parts[1] : ""));
     }
 
     /** 필수 약관마다 최신 시행 버전에 동의했는지 본다. 기록할 id = 보낸 것 중 지금 최신 버전인 것 */
@@ -268,5 +309,9 @@ public class AuthService {
 
     private static String verifiedKey(String token) {
         return "auth:verified:" + token;
+    }
+
+    private static String kakaoSignupKey(String token) {
+        return "auth:kakao-signup:" + token;
     }
 }

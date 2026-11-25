@@ -221,9 +221,16 @@ async function login(member) {
   S.token = null; // 만료된 토큰을 공개 API에 붙이지 않게
   const terms = await call('GET', '/api/terms');
   const agreed = terms.terms.filter(t => t.required).map(t => t.termVersionId);
-  const r = await call('POST', '/api/auth/social/KAKAO',
-    {code: `fake-kakao:${S.member}:${nick}`, redirectUri: 'http://localhost/flow', agreedTermVersionIds: agreed,
-     deviceHash: 'flow-lab'}, {retry: false});
+  let r;
+  try {
+    r = await call('POST', '/api/auth/social/KAKAO',
+      {code: `fake-kakao:${S.member}:${nick}`, redirectUri: 'http://localhost/flow', deviceHash: 'flow-lab'}, {retry: false});
+  } catch (e) {
+    // 새 사용자: 가입 토큰 → 필수 약관 동의로 가입 완료 (명세 6 · 49)
+    if (e.data?.code !== 'KAKAO_SIGNUP_REQUIRED') throw e;
+    r = await call('POST', '/api/auth/social/KAKAO/signup',
+      {signupToken: e.data.detail.signupToken, agreedTermVersionIds: agreed, deviceHash: 'flow-lab'}, {retry: false});
+  }
   S.token = r.accessToken;
   S.userId = r.userId;
   // 카카오 가입은 생년월일을 온보딩에서 받는다 (명세 10). 실험실은 성인으로

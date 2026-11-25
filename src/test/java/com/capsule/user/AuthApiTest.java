@@ -166,8 +166,18 @@ class AuthApiTest extends UserApiTestSupport {
         String kakaoId = UUID.randomUUID().toString();
         String code = "fake-kakao:%s:카카오닉네임".formatted(kakaoId);
 
-        // 약관 체크 없이 가입되고, 최신 필수 약관(3·4)이 동의로 기록된다 (api.md 6)
-        MvcResult created = postJson("/api/auth/social/KAKAO", kakaoBody(code))
+        // 새 사용자는 6에서 계정을 만들지 않고 가입 토큰만 받는다 (api.md 6)
+        long usersBefore = jdbc.queryForObject("SELECT count(*) FROM users", Long.class);
+        String signupToken = kakaoSignupToken(code);
+        assertThat(signupToken).startsWith("kt_");
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM users", Long.class))
+                .isEqualTo(usersBefore);
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM user_social_accounts WHERE provider_user_id = ?", Long.class, kakaoId))
+                .isZero();
+
+        // 약관 동의와 함께 49에서 가입하면 보낸 약관(3·4)이 동의로 기록된다
+        MvcResult created = kakaoSignup(signupToken, "[3,4]")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.isNewUser").value(true))
                 .andExpect(jsonPath("$.data.onboardingRequired").value(true))
@@ -182,6 +192,11 @@ class AuthApiTest extends UserApiTestSupport {
         mvc.perform(get("/api/me").header(HttpHeaders.AUTHORIZATION, bearer(created)))
                 .andExpect(jsonPath("$.data.nickname").value("카카오닉네임"))
                 .andExpect(jsonPath("$.data.email").value(nullValue()));
+
+        // 가입 토큰은 한 번만
+        kakaoSignup(signupToken, "[3,4]")
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("SIGNUP_TOKEN_INVALID"));
 
         postJson("/api/auth/social/KAKAO", kakaoBody(code))
                 .andExpect(status().isOk())
@@ -203,13 +218,62 @@ class AuthApiTest extends UserApiTestSupport {
 
     @Test
     void kakaoIgnoresLegacyTermsField() throws Exception {
+        // 예전 프론트처럼 6에 약관을 보내도 가입되지 않고 가입 토큰을 받는다
         String code = "fake-kakao:%s:옛프론트".formatted(UUID.randomUUID());
         postJson("/api/auth/social/KAKAO", """
                         {"code":"%s","redirectUri":"http://localhost/oauth/kakao","agreedTermVersionIds":[3,4],
                          "deviceHash":"%s"}
                         """.formatted(code, deviceHash()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("KAKAO_SIGNUP_REQUIRED"));
+    }
+
+    @Test
+    void kakaoSignupRejectsBadRequestsWithoutSpendingToken() throws Exception {
+        String signupToken = kakaoSignupToken("fake-kakao:%s:약관".formatted(UUID.randomUUID()));
+
+        // 필수 약관이 빠졌거나 최신 버전이 아님 → 400. 토큰은 남아 다시 보낼 수 있다
+        kakaoSignup(signupToken, "[3]")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("TERMS_REQUIRED"));
+        kakaoSignup(signupToken, "[]")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("TERMS_REQUIRED"));
+        kakaoSignup(signupToken, "[3,999]")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("TERMS_REQUIRED"));
+        postJson("/api/auth/social/KAKAO/signup", """
+                        {"signupToken":"%s","agreedTermVersionIds":[3,4]}
+                        """.formatted(signupToken))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+
+        kakaoSignup(signupToken, "[3,4]").andExpect(status().isOk());
+    }
+
+    @Test
+    void kakaoSignupRejectsUnknownToken() throws Exception {
+        kakaoSignup("kt_forged", "[3,4]")
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("SIGNUP_TOKEN_INVALID"));
+        postJson("/api/auth/social/KAKAO/signup", "{\"agreedTermVersionIds\":[3,4],\"deviceHash\":\"d\"}")
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("SIGNUP_TOKEN_INVALID"));
+    }
+
+    @Test
+    void secondSignupTokenOfSameKakaoAccountLogsIn() throws Exception {
+        // 동의 화면을 두 번 띄워 토큰을 두 개 받은 경우: 늦은 쪽은 가입하지 않고 로그인
+        String code = "fake-kakao:%s:두번".formatted(UUID.randomUUID());
+        String first = kakaoSignupToken(code);
+        String second = kakaoSignupToken(code);
+        MvcResult created = kakaoSignup(first, "[3,4]")
+                .andExpect(jsonPath("$.data.isNewUser").value(true))
+                .andReturn();
+        kakaoSignup(second, "[3,4]")
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.isNewUser").value(true));
+                .andExpect(jsonPath("$.data.isNewUser").value(false))
+                .andExpect(jsonPath("$.data.userId").value((int) read(created, "$.data.userId")));
     }
 
     private static String wrong(String code) {

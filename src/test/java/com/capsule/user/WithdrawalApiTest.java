@@ -122,16 +122,12 @@ class WithdrawalApiTest extends UserApiTestSupport {
     @Test
     void kakaoAccountCanSignUpAgainAsNewUser() throws Exception {
         String code = "fake-kakao:%s:카카오닉네임".formatted(UUID.randomUUID());
-        MvcResult first = postJson("/api/auth/social/KAKAO", kakaoBody(code))
-                .andExpect(jsonPath("$.data.isNewUser").value(true))
-                .andReturn();
+        MvcResult first = kakaoSignedUp(code);
 
         mvc.perform(delete("/api/me").header("Authorization", bearer(first))).andExpect(status().isNoContent());
 
-        MvcResult second = postJson("/api/auth/social/KAKAO", kakaoBody(code))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.isNewUser").value(true))
-                .andReturn();
+        // 탈퇴하면 같은 카카오 계정은 새 사용자 (6에서 다시 가입 토큰, 49에서 새 계정)
+        MvcResult second = kakaoSignedUp(code);
         assertThat(((Number) read(second, "$.data.userId")).longValue())
                 .isNotEqualTo(((Number) read(first, "$.data.userId")).longValue());
     }

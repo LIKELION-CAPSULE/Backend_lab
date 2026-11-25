@@ -9,6 +9,7 @@ import com.capsule.user.dto.ExpiresResponse;
 import com.capsule.user.dto.Issued;
 import com.capsule.user.dto.KakaoRequest;
 import com.capsule.user.dto.KakaoResponse;
+import com.capsule.user.dto.KakaoSignupRequest;
 import com.capsule.user.dto.Login;
 import com.capsule.user.dto.LoginRequest;
 import com.capsule.user.dto.LoginResponse;
@@ -32,7 +33,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-/** api.md 1~7, 24~26 */
+/** api.md 1~7, 24~26, 49 */
 @RestController
 @Tag(name = ApiTags.AUTH)
 @RequiredArgsConstructor
@@ -87,10 +88,22 @@ public class AuthController {
         return loggedIn(HttpStatus.OK, auth.login(req.email(), req.password()));
     }
 
-    @Operation(summary = "6. 카카오 로그인 · 가입", description = "카카오 인가 코드로 로그인, 처음이면 가입까지 (소셜은 카카오만) (명세: api.md 6)")
+    @Operation(
+            summary = "6. 카카오 로그인",
+            description =
+                    "카카오 인가 코드로 로그인. 처음이면 403 KAKAO_SIGNUP_REQUIRED + detail.signupToken → 약관 동의 뒤 49 (명세: api.md 6)")
     @PostMapping("/api/auth/social/KAKAO")
     public ResponseEntity<ApiResponse<KakaoResponse>> kakao(@RequestBody KakaoRequest req) {
-        Login login = auth.kakao(req);
+        return kakaoLoggedIn(auth.kakao(req));
+    }
+
+    @Operation(summary = "49. 카카오 가입 완료", description = "6번의 가입 토큰 + 약관 동의로 가입하고 로그인 (명세: api.md 49)")
+    @PostMapping("/api/auth/social/KAKAO/signup")
+    public ResponseEntity<ApiResponse<KakaoResponse>> kakaoSignup(@RequestBody KakaoSignupRequest req) {
+        return kakaoLoggedIn(auth.kakaoSignup(req));
+    }
+
+    private ResponseEntity<ApiResponse<KakaoResponse>> kakaoLoggedIn(Login login) {
         Issued issued = tokens.issue(login.userId());
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, issued.cookie())

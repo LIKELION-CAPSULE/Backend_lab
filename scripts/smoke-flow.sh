@@ -85,7 +85,14 @@ message() { # message <단계 이름> <내용> [requestId]
 
 echo "▶ $HOST (응답 JSON: $OUT)"
 call health GET /actuator/health
-call login POST /api/auth/social/KAKAO "{\"code\":\"fake-kakao:smoke-$(uuid | cut -c1-8):민수\",\"redirectUri\":\"http://localhost:5173/oauth/kakao\",\"deviceHash\":\"smoke\"}"
+call terms GET /api/terms
+TERM_IDS=$(field "$RES" '[t["termVersionId"] for t in d["terms"]]')
+# 새 카카오 사용자는 403 KAKAO_SIGNUP_REQUIRED + 가입 토큰 → 약관 동의로 가입 완료 (명세 6 · 49). 403은 실패로 세지 않는다
+BEFORE=$FAILED
+call login POST /api/auth/social/KAKAO "{\"code\":\"fake-kakao:smoke-$(uuid | cut -c1-8):민수\",\"redirectUri\":\"http://localhost:5173/oauth/kakao\",\"deviceHash\":\"smoke\"}" 2>/dev/null
+[ "$CODE" = 403 ] && FAILED=$BEFORE
+SIGNUP_TOKEN=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1],encoding="utf-8"))["detail"]["signupToken"])' "$RES")
+call signup POST /api/auth/social/KAKAO/signup "{\"signupToken\":\"$SIGNUP_TOKEN\",\"agreedTermVersionIds\":$TERM_IDS,\"deviceHash\":\"smoke\"}"
 TOKEN=$(field "$RES" 'd["accessToken"]')
 call profile PATCH /api/me '{"avatarId":1,"birthDate":"2001-04-10"}'
 call session POST /api/connections '{"mateId":1}'

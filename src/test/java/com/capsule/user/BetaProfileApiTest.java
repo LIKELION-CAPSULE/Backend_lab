@@ -87,9 +87,7 @@ class BetaProfileApiTest extends UserApiTestSupport {
                         """.formatted(code))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
-        MvcResult kakao = postJson("/api/auth/social/KAKAO", kakaoBody(code))
-                .andExpect(status().isOk())
-                .andReturn();
+        MvcResult kakao = kakaoSignedUp(code);
         String auth = bearer(kakao);
 
         // 아바타만 고르면 아직 온보딩 (생년월일 없음)
