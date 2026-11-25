@@ -56,6 +56,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -255,6 +256,7 @@ public class DialogueService {
         // 감정 후보는 캐릭터 표정 목록(character_profiles.expressions, 결정 모델이 고름, ADR 0028).
         // 설정이 없는 캐릭터만 공통 후보(capsule.dialogue.emotions)
         Reaction reaction = emotionReaction(characterId, line.emotion());
+        ReactionVoice voice = reactionVoice(userId, characterId, requestId, line.content(), tts);
         // 뼈대는 세션당 캐릭터 1명
         return new ReactionResponse(
                 requestId,
@@ -265,7 +267,37 @@ public class DialogueService {
                         reaction.motion(),
                         reaction.expression(),
                         fallback,
-                        audio(tts))));
+                        voice.audio())),
+                voice.charged(),
+                voice.credits());
+    }
+
+    private record ReactionVoice(String audio, int charged, Credits credits) {}
+
+    /**
+     * 19 '음성' (2026-11-25, 말 걸기 목소리): tts + 설정 voiceEnabled + 크레딧 20이면 대사 전체를 mp3 하나로.
+     * 음성을 만들었을 때만 깎는다(보이스 20, 같은 requestId는 한 번). 아니면 글만 (에러 아님, 28과 같은 규칙)
+     */
+    private ReactionVoice reactionVoice(long userId, long characterId, UUID requestId, String content, Boolean tts) {
+        if (!Boolean.TRUE.equals(tts)) return new ReactionVoice(null, 0, null);
+        Credits now = creditQuery.current(userId);
+        if (!voices.enabled(userId) || now.todayRemaining() < VOICE_COST) return new ReactionVoice(null, 0, now);
+        byte[] mp3;
+        try {
+            mp3 = voices.speakOnce(userId, characterId, content).orElse(null);
+        } catch (RuntimeException e) {
+            log.warn("반응 음성 만들기 실패 (사용자 {}, 캐릭터 {}): {}", userId, characterId, e.toString());
+            mp3 = null;
+        }
+        if (mp3 == null) return new ReactionVoice(null, 0, now);
+        SpendResult spent = creditCommands.spend(
+                userId,
+                VOICE_COST,
+                spendTitle(false, true, character(characterId).name()),
+                requestId);
+        // 음성을 만든 사이 잔액이 모자라짐: 깎지 않고 음성도 주지 않는다
+        if (!spent.spent()) return new ReactionVoice(null, 0, spent.credits());
+        return new ReactionVoice(Base64.getEncoder().encodeToString(mp3), VOICE_COST, spent.credits());
     }
 
     // --- 20 메시지 ---
@@ -907,8 +939,8 @@ public class DialogueService {
     }
 
     /**
-     * 19 · 20 응답의 audioBase64는 늘 null: 답장 음성은 28 스트리밍의 audio 이벤트로만 (명세 28 '음성', ADR 0034).
-     * 상태 반응(19) 음성은 아직 없음
+     * 20 응답의 audioBase64는 늘 null: 답장 음성은 28 스트리밍의 audio 이벤트로만 (명세 28 '음성', ADR 0034).
+     * 상태 반응(19) 음성은 {@link #reactionVoice}
      */
     private static String audio(Boolean tts) {
         return null;
