@@ -8,6 +8,7 @@ import com.capsule.content.dto.ContentAdminRequests.CreateMate;
 import com.capsule.content.dto.ContentAdminRequests.Expression;
 import com.capsule.content.dto.ContentAdminRequests.MateImages;
 import com.capsule.content.dto.ContentAdminRequests.MateSaved;
+import com.capsule.content.dto.ContentAdminRequests.MateState;
 import com.capsule.content.dto.ContentAdminRequests.MateVoice;
 import com.capsule.content.dto.ContentAdminRequests.ModelRegistered;
 import com.capsule.content.dto.ContentAdminRequests.Motion;
@@ -17,6 +18,7 @@ import com.capsule.content.dto.ContentAdminRequests.SetMateImages;
 import com.capsule.content.dto.ContentAdminRequests.SetMateVoice;
 import com.capsule.content.dto.ContentAdminRequests.SetRuntime;
 import com.capsule.content.dto.ContentAdminRequests.UpdateAvatar;
+import com.capsule.content.dto.ContentAdminRequests.UpdateMate;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -290,6 +292,20 @@ public class ContentAdminService {
                 .single();
         log.info("콘텐츠 관리: 아바타 만듦 id={} name={} model={}", id, a.name(), a.modelId());
         return new AvatarSaved(id, a.modelId(), true, order);
+    }
+
+    /** 메이트 켜고 끄기 · 순서 (대화 · 친밀도 기록이 있으니 지우지 않음, 2026-11-26) */
+    @Transactional
+    public MateState updateMate(long mateId, UpdateMate u) {
+        int changed = jdbc.sql("""
+                        UPDATE characters SET is_active = coalesce(?, is_active), sort_order = coalesce(?, sort_order)
+                        WHERE id = ?""").params(u.active(), u.sortOrder(), mateId).update();
+        if (changed == 0) throw new ApiException(ContentErrorCode.MATE_NOT_FOUND);
+        log.info("콘텐츠 관리: 메이트 {} active={} sort={}", mateId, u.active(), u.sortOrder());
+        return jdbc.sql("SELECT id, is_active, sort_order FROM characters WHERE id = ?")
+                .param(mateId)
+                .query((rs, n) -> new MateState(rs.getLong(1), rs.getBoolean(2), rs.getInt(3)))
+                .single();
     }
 
     /** 아바타 켜고 끄기 · 순서 (고른 사용자가 있으니 지우지 않음) */
