@@ -18,6 +18,12 @@ public enum UserErrorCode implements ErrorCode {
     UNDER_14(HttpStatus.BAD_REQUEST),
     INVALID_BIRTH_DATE(HttpStatus.BAD_REQUEST),
     BETA_FULL(HttpStatus.FORBIDDEN),
+    /** 6: 새 카카오 사용자. detail.signupToken으로 49 (2026-11-26) */
+    KAKAO_SIGNUP_REQUIRED(HttpStatus.FORBIDDEN),
+    /** 49: 가입 토큰이 만료됐거나 이미 썼거나 없음 */
+    SIGNUP_TOKEN_EXPIRED(HttpStatus.UNAUTHORIZED),
+    /** 49: 가입 토큰 모양이 아님 */
+    SIGNUP_TOKEN_INVALID(HttpStatus.UNAUTHORIZED),
     // 로그인 · 토큰
     INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED),
     LOGIN_LOCKED(HttpStatus.TOO_MANY_REQUESTS),

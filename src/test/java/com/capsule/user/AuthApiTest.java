@@ -166,8 +166,12 @@ class AuthApiTest extends UserApiTestSupport {
         String kakaoId = UUID.randomUUID().toString();
         String code = "fake-kakao:%s:카카오닉네임".formatted(kakaoId);
 
-        // 약관 체크 없이 가입되고, 최신 필수 약관(3·4)이 동의로 기록된다 (api.md 6)
-        MvcResult created = postJson("/api/auth/social/KAKAO", kakaoBody(code))
+        // 새 사용자: 6은 계정을 만들지 않고 가입 토큰 (2026-11-26) → 49에서 약관 동의와 함께 가입 (api.md 6 · 49)
+        String signupToken = kakaoSignupToken(code);
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM user_social_accounts WHERE provider_user_id = ?", Integer.class, kakaoId))
+                .isZero();
+        MvcResult created = kakaoSignup(signupToken, "[3,4]")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.isNewUser").value(true))
                 .andExpect(jsonPath("$.data.onboardingRequired").value(true))
@@ -191,6 +195,49 @@ class AuthApiTest extends UserApiTestSupport {
         postJson("/api/auth/social/KAKAO", kakaoBody("expired-code"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("SOCIAL_AUTH_FAILED"));
+
+        // 가입 토큰은 1회용
+        kakaoSignup(signupToken, "[3,4]")
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("SIGNUP_TOKEN_EXPIRED"));
+    }
+
+    @Test
+    void kakaoSignupChecksTermsBeforeUsingTheToken() throws Exception {
+        String kakaoId = UUID.randomUUID().toString();
+        String token = kakaoSignupToken("fake-kakao:%s:약관".formatted(kakaoId));
+        // 6 응답: 10분짜리 토큰
+        postJson("/api/auth/social/KAKAO", kakaoBody("fake-kakao:%s:약관".formatted(kakaoId)))
+                .andExpect(jsonPath("$.detail.expiresInSeconds").value(600));
+
+        // 필수 약관이 빠지면 400, 토큰은 그대로라 고쳐서 다시 보낼 수 있다
+        kakaoSignup(token, "[3]")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("TERMS_REQUIRED"));
+        kakaoSignup(token, "[3,4]").andExpect(status().isOk());
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM user_social_accounts WHERE provider_user_id = ?", Integer.class, kakaoId))
+                .isEqualTo(1);
+
+        // 모양이 아닌 토큰 · 없는 토큰
+        kakaoSignup("forged", "[3,4]")
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("SIGNUP_TOKEN_INVALID"));
+        kakaoSignup("kst_nope", "[3,4]")
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("SIGNUP_TOKEN_EXPIRED"));
+    }
+
+    @Test
+    void twoSignupTokensForOneKakaoUserMakeOneAccount() throws Exception {
+        // 다른 탭에서 6을 두 번 불러 토큰이 두 개여도 계정은 하나 (늦은 쪽은 로그인)
+        String code = "fake-kakao:%s:두탭".formatted(UUID.randomUUID());
+        String a = kakaoSignupToken(code), b = kakaoSignupToken(code);
+        MvcResult first = kakaoSignup(a, "[3,4]").andExpect(status().isOk()).andReturn();
+        kakaoSignup(b, "[3,4]")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.isNewUser").value(false))
+                .andExpect(jsonPath("$.data.userId").value((Integer) read(first, "$.data.userId")));
     }
 
     @Test
@@ -202,14 +249,15 @@ class AuthApiTest extends UserApiTestSupport {
     }
 
     @Test
-    void kakaoIgnoresLegacyTermsField() throws Exception {
+    void kakaoNewUserNeverSignsUpInStepSix() throws Exception {
+        // 옛 프론트처럼 6에 약관을 같이 보내도 가입하지 않는다 (약관은 49에서만)
         String code = "fake-kakao:%s:옛프론트".formatted(UUID.randomUUID());
         postJson("/api/auth/social/KAKAO", """
                         {"code":"%s","redirectUri":"http://localhost/oauth/kakao","agreedTermVersionIds":[3,4],
                          "deviceHash":"%s"}
                         """.formatted(code, deviceHash()))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.isNewUser").value(true));
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("KAKAO_SIGNUP_REQUIRED"));
     }
 
     private static String wrong(String code) {
