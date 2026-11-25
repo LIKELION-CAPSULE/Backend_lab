@@ -234,6 +234,18 @@ class DialogueTest {
     }
 
     @Test
+    void idleTalkGetsAnIdleLine() throws Exception {
+        // 말 걸기 (18 IDLE_TALK → 19 IDLE, J-20): 이 테스트는 LLM 반응을 RETURN만 켜서 미리 쓴 IDLE 대사가 나온다
+        event(30, "IDLE_TALK", false, false);
+        react(30, "{\"requestId\":\"" + UUID.randomUUID() + "\"}")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.characters[0].content")
+                        .value(in(List.of("조용하네. 뭐 하고 있어?", "나 심심해. 얘기 좀 하자."))))
+                .andExpect(jsonPath("$.data.characters[0].emotion").value("HAPPY"))
+                .andExpect(jsonPath("$.data.characters[0].fallback").value(false));
+    }
+
+    @Test
     void fixedLineFollowsRelationLevel() throws Exception {
         event(15, "AWAY", false, false);
         when(relationQuery.view(userId, CHARACTER_ID)).thenReturn(view(3, 80));
