@@ -874,12 +874,21 @@ H02에서 아바타를 저장하면 `onboardingRequired`가 false가 되고 H03 
 | `PRESENT` | 얼굴 감지 시작 (처음 · 카메라를 다시 켬) | 없음 (`reaction` null) |
 | `AWAY` | 자리 비움 (10초 이상 안 보임, `occurredAt` = 안 보이기 시작한 시각) | `AWAY`, `intensity` = 이 연결에서 몇 번째 자리 비움인지 (1~3, 3 이상은 3) |
 | `RETURN` | 자리 비움 뒤 다시 보임 | `RETURN` |
-| `IDLE_TALK` | 말 걸기 빈도 타이머 (조용히면 안 보냄) | `IDLE` |
+| `IDLE_TALK` | 말 걸기 빈도 타이머 (조용히면 안 보냄, 아래 '말 걸기') | `IDLE` |
 
 - 요청 `{type, occurredAt}`. 모르는 type은 400 INVALID_EVENT. 같은 (`type`, `occurredAt`) 재전송은 200 + 기존 응답
 - 응답 `eventId`(Long), `reaction`(Object, 없으면 null): `trigger` · `intensity` · `line`(지금은 null, 대사는 19) · `expression`(반응표의 표정 이름, 없으면 null) · `audio`(null)
 - `occurredAt`이 연결 시작보다 이르면 시작 시각으로 맞춤
 - 카메라 반응 범위(눈 맞춤 · 하품 등 동작 이벤트)는 확정 필요 (그때 type 추가)
+
+#### 말 걸기 (2026-11-25, J-20 임시값)
+
+메이트가 먼저 말을 거는 흐름. 타이머는 프론트, 대사는 서버(19)가 만든다.
+
+1. 프론트 타이머: 설정(29 · 16 `settings`) `talkFrequency`가 `QUIET`면 안 함, `SOMETIMES`면 10분, `OFTEN`이면 5분
+2. 마지막 대화(사용자가 보낸 말 · 받은 답장 · 반응 대사) 뒤로 그 시간 동안 대화가 없고 얼굴이 보이는 상태(`PRESENT` · `RETURN` 뒤)일 때 `IDLE_TALK`를 보낸다. 자리 비움 중에는 멈추고, 돌아오면 처음부터 센다. 보낸 뒤에도 처음부터 센다
+3. 응답 `eventId`로 19를 불러 대사를 받아 말풍선으로 보여 준다 (`IDLE` 대사는 LLM이 최근 대화를 보고 만든다. 7초 넘거나 실패하면 미리 쓴 대사)
+- 간격 · 조건 · 말투는 확정 필요 (J-20)
 
 ```json
 { "eventId": 12344, "reaction": { "trigger": "AWAY", "intensity": 2, "line": null, "expression": "삐짐", "audio": null } }
@@ -1104,8 +1113,8 @@ H02에서 아바타를 저장하면 `onboardingRequired`가 false가 되고 H03 
 
 #### 서버가 하는 일
 
-1. 이벤트 타입 + 직전 상태 이벤트로 trigger 결정 (응답에는 넣지 않음): 첫 FOCUS = `GREETING`, 휴식 뒤 FOCUS = `BREAK_END`, `AWAY` · `RETURN` · `BREAK`, 동작은 type 그대로(`DROWSY` · `YAWN` · `WAVE` · `HEAD_TURN`)
-2. 상태 변화(`GREETING` · `AWAY` · `RETURN` · `BREAK` · `BREAK_END`): LLM이 대사를 만들고, 결정 모델(Jev)이 그 대사를 보고 표정 목록(`character_profiles.expressions`) 중 하나를 고른다. 넣는 것: 캐릭터 페르소나(바이블 · 규칙) + 지금 관계 단계의 관계 설명 한 줄 + 이 상황 · 이 단계의 미리 쓴 대사 두 줄(말투 예시, 그대로 쓰지 않음), 캐릭터 오늘 근황(`character_lines` TODAY, 요일별, 인사 `GREETING`만), 지난 세션 흐름, 이번 세션 최근 대화, 일어난 일(trigger를 "방금 일어난 일" 한 줄로. 예: AWAY = 아직 안 돌아옴) (ADR 0022 결정 19). 답장(20)의 말투 샘플은 넣지 않는다. 7초 넘거나 실패하면 미리 쓴 대사(`fallback: true`). 순간 동작(`DROWSY` · `YAWN` · `WAVE` · `HEAD_TURN`): 미리 쓴 대사와 그 칸의 표정을 순서대로 (AI 안 씀)
+1. 이벤트 타입 + 직전 상태 이벤트로 trigger 결정 (응답에는 넣지 않음): 첫 FOCUS = `GREETING`, 휴식 뒤 FOCUS = `BREAK_END`, `AWAY` · `RETURN` · `BREAK`, 말 걸기 `IDLE_TALK` = `IDLE` (2026-11-25), 동작은 type 그대로(`DROWSY` · `YAWN` · `WAVE` · `HEAD_TURN`)
+2. 상태 변화(`GREETING` · `AWAY` · `RETURN` · `BREAK` · `BREAK_END` · `IDLE`): LLM이 대사를 만들고, 결정 모델(Jev)이 그 대사를 보고 표정 목록(`character_profiles.expressions`) 중 하나를 고른다. 넣는 것: 캐릭터 페르소나(바이블 · 규칙) + 지금 관계 단계의 관계 설명 한 줄 + 이 상황 · 이 단계의 미리 쓴 대사 두 줄(말투 예시, 그대로 쓰지 않음), 캐릭터 오늘 근황(`character_lines` TODAY, 요일별, 인사 `GREETING`만), 지난 세션 흐름, 이번 세션 최근 대화, 일어난 일(trigger를 "방금 일어난 일" 한 줄로. 예: AWAY = 아직 안 돌아옴) (ADR 0022 결정 19). 답장(20)의 말투 샘플은 넣지 않는다. 7초 넘거나 실패하면 미리 쓴 대사(`fallback: true`). 순간 동작(`DROWSY` · `YAWN` · `WAVE` · `HEAD_TURN`): 미리 쓴 대사와 그 칸의 표정을 순서대로 (AI 안 씀)
 3. 감정에 맞는 모션 · 표정을 `live2d_reaction_maps`에서 하나 고름 (같은 감정의 행이 여러 개면 같은 확률)
 4. `tts: true`면 음성 생성
 - 호감도는 바꾸지 않음 (18번에서 끝남). 같은 `eventId`로 intensity를 올려 다시 불러도 마찬가지
