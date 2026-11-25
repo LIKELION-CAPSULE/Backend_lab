@@ -359,31 +359,6 @@ class ContentAdminApiTest {
     }
 
     @Test
-    void aDuplicateMateIsSwitchedOffNotDeleted() throws Exception {
-        long mate = mateWith(register(unique("dup")), "중복 메이트");
-        mvc.perform(get("/api/login-mates"))
-                .andExpect(jsonPath("$.data.mates[?(@.id == " + mate + ")]").isNotEmpty());
-        send("PATCH", "/internal/content/mates/" + mate, "{\"active\": false}", TOKEN)
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.active").value(false));
-        // 홈 · 로그인 목록에서 빠지고 상세는 404. 행은 남는다
-        mvc.perform(get("/api/login-mates"))
-                .andExpect(jsonPath("$.data.mates[?(@.id == " + mate + ")]").isEmpty());
-        mvc.perform(get("/api/mates/" + mate).with(jwt().jwt(j -> j.subject("1"))))
-                .andExpect(status().isNotFound());
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM characters WHERE id = ?", Integer.class, mate))
-                .isEqualTo(1);
-        // 순서만 바꾸면 켜짐 상태는 그대로
-        send("PATCH", "/internal/content/mates/" + mate, "{\"sortOrder\": 9500}", TOKEN)
-                .andExpect(jsonPath("$.data.active").value(false))
-                .andExpect(jsonPath("$.data.sortOrder").value(9500));
-        send("PATCH", "/internal/content/mates/999999", "{\"active\": false}", TOKEN)
-                .andExpect(status().isNotFound());
-        send("PATCH", "/internal/content/mates/" + mate, "{\"active\": true}", null)
-                .andExpect(status().isUnauthorized());
-    }
-
-    @Test
     void avatarsAreRegisteredAndSwitchedOff() throws Exception {
         String prefix = unique("av");
         long modelId = register(prefix);

@@ -64,15 +64,6 @@ public final class ContentAdminRequests {
 
     public record MateSaved(long mateId, Long modelId, boolean comingSoon) {}
 
-    /**
-     * 메이트 켜고 끄기 · 순서 (2026-11-26, 중복 메이트 정리 등). 대화 · 친밀도 기록이 있으니 지우지 않고 끈다. null 칸은 그대로
-     *
-     * @param active false면 홈(11) · 로그인 화면(48) 목록에서 빠지고 메이트 상세(31)는 404
-     */
-    public record UpdateMate(Boolean active, Integer sortOrder) {}
-
-    public record MateState(long mateId, boolean active, int sortOrder) {}
-
     public record SetModel(Long modelId) {}
 
     /**
