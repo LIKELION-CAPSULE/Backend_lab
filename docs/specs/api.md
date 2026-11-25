@@ -1084,7 +1084,7 @@ H02에서 아바타를 저장하면 `onboardingRequired`가 false가 되고 H03 
 | characters | Array | 이번에 말하는 캐릭터만 (1:1 룸이면 1개) |
 | characters[].characterId | Long | 캐릭터 id |
 | characters[].content | String | 말풍선 대사 (한두 문장) |
-| characters[].emotion | String | 대사의 표정 이름. **목록은 캐릭터 설정(`character_profiles.expressions`)이 정한다** (말포이: `삐짐` · `행복`(함박웃음) · `경멸` · `하품` · `화남` · `웃음` · `수줍음` · `집중`, 승희 확정 2026-11-05). LLM은 대사만 쓰고, 대사가 다 만들어진 뒤 결정 모델(Jev)이 대사를 보고 이 목록 중 하나를 고른다(보기마다 언제 쓰는지는 `character_profiles.expression_guide`). 그래서 목록 밖 값은 나오지 않는다. 결정이 늦거나(1.5초) 실패하면 null(표정을 바꾸지 않음) (2026-11-06). 말포이 동작(모션)은 숨쉬기 같은 기본 동작뿐이라 `motion`은 보통 null. 설정이 없는 캐릭터는 공통 후보(`HAPPY` · `SHY` · `ANGRY` · `SAD` · `SURPRISED` · `NEUTRAL`). ⚠️ 고정 대사(`fallback: true`)일 때 값은 확정 필요 (지금 구현은 null) |
+| characters[].emotion | String | 대사의 표정 이름. **목록은 캐릭터 설정(`character_profiles.expressions`)이 정한다** (말포이: `삐짐` · `행복`(함박웃음) · `경멸` · `하품` · `화남` · `웃음` · `수줍음` · `집중`, 승희 확정 2026-11-05). LLM은 대사만 쓰고, 대사가 다 만들어진 뒤 결정 모델(Jev)이 대사를 보고 이 목록 중 하나를 고른다(보기마다 언제 쓰는지는 `character_profiles.expression_guide`). 그래서 목록 밖 값은 나오지 않는다. **해금 표정**(`character_contents`의 `EXPRESSION`, 이름은 `expression_name` = 이 목록의 이름)은 그 사용자에게 열린 뒤(`user_unlocked_contents`, 22 정산)에만 보기에 들어간다. 해금 목록에 없는 표정은 늘 들어감 (2026-11-26, 20 · 28도 같음). 결정이 늦거나(1.5초) 실패하면 null(표정을 바꾸지 않음) (2026-11-06). 말포이 동작(모션)은 숨쉬기 같은 기본 동작뿐이라 `motion`은 보통 null. 설정이 없는 캐릭터는 공통 후보(`HAPPY` · `SHY` · `ANGRY` · `SAD` · `SURPRISED` · `NEUTRAL`). ⚠️ 고정 대사(`fallback: true`)일 때 값은 확정 필요 (지금 구현은 null) |
 | characters[].motion | Object | `group`, `file` — 감정에 맞는 모션 (없으면 null → 18 동작 유지) |
 | characters[].expression | Object | `name`, `file` — 감정에 맞는 표정 (없으면 null) |
 | characters[].fallback | Boolean | LLM 7초 초과로 고정 대사를 썼는지 |
@@ -1444,7 +1444,7 @@ H02에서 아바타를 저장하면 `onboardingRequired`가 false가 되고 H03 
 - 인정 시간 = min(이번 `presentSeconds`, 오늘(오전 5시 기준) 남은 인정 한도). 하루 한도 2시간(7200초)
 - 그날(연결이 끝난 날, 오전 5시 기준) 이 메이트와 대화가 한 턴도 없으면(`relation_daily.chat_turns` = 0) 이번 인정 시간은 절반
 - 단계 = 누적 인정 시간 기준 1 (0) · 2 (1시간) · 3 (5시간) · 4 (15시간) · 5 (40시간). 내려가지 않고, 결제 · 확률로 오르지 않음
-- 단계가 오르면 그 사이 단계의 해금 콘텐츠(`character_contents`의 `unlock_stage`)가 열림 (`user_unlocked_contents`)
+- 단계가 오르면 그 사이 단계의 해금 콘텐츠(`character_contents`의 `unlock_stage`)가 열림 (`user_unlocked_contents`). 해금 표정은 열린 뒤부터 대화 표정(19 · 20 · 28 `emotion`)에 나옴 (2026-11-26)
 - 단계 이름은 메이트의 `characters.stage_names` (없으면 null). 채린 해금 콘텐츠(표정 4 · 보이스 대사 8)는 확정 필요
 - 하루 한도 · 단계 기준은 확정 필요 (베타 데이터로 조정)
 
