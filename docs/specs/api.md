@@ -331,7 +331,9 @@
 
 #### 설명
 
-카카오 인가 코드로 로그인합니다. 처음 온 사용자면 같은 요청에서 가입까지 끝내고, 가입 직후엔 H02(아바타)로 보냅니다. 닉네임은 카카오 닉네임을 쓰고 H14 프로필에서 바꿀 수 있습니다. 소셜 로그인은 카카오만 지원합니다.
+카카오 인가 코드로 로그인합니다. 이미 가입한 사용자면 바로 로그인합니다. 처음 온 사용자면 **계정을 만들지 않고** 1회용 가입 토큰을 돌려주고(403 KAKAO_SIGNUP_REQUIRED), 프론트가 약관 동의 화면을 보여 준 뒤 49번(카카오 가입 완료)으로 가입을 끝냅니다. 가입 직후엔 H02(아바타)로 보냅니다. 닉네임은 카카오 닉네임을 쓰고 H14 프로필에서 바꿀 수 있습니다. 소셜 로그인은 카카오만 지원합니다.
+
+> 2026-11-26: 카카오 가입도 약관 동의를 받음. 인가 코드는 한 번만 쓸 수 있어서 두 단계로 나눔: 6이 새 사용자면 가입 토큰(10분, 1회용) → 49로 약관 동의와 함께 가입. 지금까지의 '카카오로 가입하면 최신 필수 약관에 자동 동의로 기록'은 없앰
 
 #### 와이어프레임 대조
 
@@ -339,10 +341,9 @@
 | --- | --- |
 | H01 '카카오로 계속하기' | 카카오 로그인 화면으로 이동 → 돌아온 인가 코드로 이 API 호출 |
 | 로그인 후 분기 | `onboardingRequired`면 H02, 아니면 H03 |
+| 새 사용자 (403 KAKAO_SIGNUP_REQUIRED) | 약관 동의 화면 → 49 카카오 가입 완료 |
 
-> ⚠️ 카카오 가입은 약관 화면 · 체크 · 안내 문구가 없음. 카카오로 가입하면 최신 필수 약관에 동의한 것으로 보고 서버가 기록함. 정식 출시 전에는 약관 고지 방식(안내 문구 등)을 다시 정해야 함 (확정 필요)
-
-> 2026-11-05: 카카오 로그인 요청에서 약관 동의(`agreedTermVersionIds`, 400 TERMS_REQUIRED) 제거. 가입하면 최신 필수 약관 동의로 기록
+> 2026-11-05: 카카오 로그인 요청에서 약관 동의(`agreedTermVersionIds`, 400 TERMS_REQUIRED) 제거. 가입하면 최신 필수 약관 동의로 기록 → 2026-11-26에 49로 다시 받음
 
 - 테이블: `users`(이메일 · 비밀번호 NULL), `user_social_accounts`(provider · provider_user_id), `user_terms` · 인증: 불필요
 
@@ -354,7 +355,7 @@
 | --- | --- | --- | --- |
 | code | String | O | 카카오가 리다이렉트로 준 인가 코드 |
 | redirectUri | String | O | 카카오 앱에 등록한 리다이렉트 주소 |
-| deviceHash | String | O | 프론트가 만든 기기 값 (1~64자). 새로 가입할 때만 `signup_devices`에 저장 |
+| deviceHash | String | O | 프론트가 만든 기기 값 (1~64자). 저장은 49에서 가입할 때 |
 
 ```json
 { "code": "Kx8...", "redirectUri": "https://capsule.app/oauth/kakao", "deviceHash": "d1f0..." }
@@ -368,8 +369,69 @@
 | --- | --- | --- |
 | accessToken | String | 액세스 토큰 (30분). 리프레시 토큰은 HttpOnly 쿠키 |
 | userId | Long | 사용자 id |
-| isNewUser | Boolean | 이번에 가입했는지 |
+| isNewUser | Boolean | 이번에 가입했는지. 6은 늘 false (가입은 49) |
 | onboardingRequired | Boolean | 아바타 **또는** 생년월일이 없으면 true → H02 |
+
+```json
+{ "accessToken": "eyJ...", "userId": 8, "isNewUser": false, "onboardingRequired": false }
+```
+
+> ✅ **200 OK** (이미 가입한 사용자)
+
+> ❌ **400** INVALID_REQUEST (`deviceHash` 없음) · **401** SOCIAL_AUTH_FAILED (인가 코드 만료 · 오류) · **403** KAKAO_SIGNUP_REQUIRED (새 사용자, 아래) · **403** BETA_FULL (새 사용자인데 정원이 참. 이미 가입한 사람은 로그인됨)
+
+새 사용자 (2026-11-26):
+
+```json
+{ "success": false, "code": "KAKAO_SIGNUP_REQUIRED", "message": "...", "detail": { "signupToken": "kst_...", "expiresInSeconds": 600 } }
+```
+
+- `signupToken`: 카카오 회원번호 · 닉네임을 서버에 맡겨 둔 1회용 토큰 (10분). 이 값으로 49를 부름. 토큰에 카카오 정보가 들어 있지 않음 (서버에만 있음)
+- 이때 계정은 아직 없음. 동의 화면에서 나가면 아무것도 남지 않음
+
+#### 서버가 하는 일
+
+1. 인가 코드를 카카오에 보내 카카오 회원번호와 닉네임을 받음
+2. `user_social_accounts`에서 (KAKAO, 회원번호) 조회
+3. 있으면 그 사용자로 로그인
+4. 없으면 정원을 확인(꽉 찼으면 403 BETA_FULL)하고, 카카오 회원번호 · 닉네임을 10분짜리 1회용 가입 토큰에 맡긴 뒤 403 KAKAO_SIGNUP_REQUIRED. 계정은 만들지 않음 (가입은 49)
+5. 이메일이 같아도 이메일 가입 계정과 자동으로 합치지 않음 (다른 계정으로 취급)
+
+#### 프론트 참고
+
+- 새 사용자면 약관 동의 화면(이메일 가입과 같은 약관, 1번 약관 조회)을 보여 주고 49로 가입을 끝냄. 토큰이 만료되면(401 SIGNUP_TOKEN_EXPIRED) 카카오 로그인부터 다시
+- **시연은 공용 기기**라, 로그아웃할 때 카카오 계정 로그아웃까지 같이 해야 다음 체험자가 이전 사람 계정으로 자동 로그인되지 않음
+- 카카오 디벨로퍼스에 시연 도메인의 리다이렉트 URI를 미리 등록해야 함
+- 카카오 디벨로퍼스 동의 항목에서 '닉네임'(profile_nickname)을 **필수 동의**로 설정해야 함 (가입 닉네임으로 씀)
+
+## 49. POST /api/auth/social/KAKAO/signup — 카카오 가입 완료
+- 분류: 인증
+- 설명: 6이 준 가입 토큰 + 약관 동의로 카카오 가입을 끝냄 (2026-11-26)
+- 와이어프레임: 카카오 새 사용자 약관 동의 화면
+
+#### 설명
+
+6에서 새 사용자로 판정되면(403 KAKAO_SIGNUP_REQUIRED) 프론트가 약관 동의를 받은 뒤 이 API로 가입합니다. 계정 생성과 약관 동의 기록을 한 번에 저장하고, 6의 로그인 응답과 같은 응답(`isNewUser: true`)을 줍니다. 생년월일 · 아바타는 지금처럼 온보딩(10)에서 받습니다.
+
+- 테이블: `users`, `user_social_accounts`, `user_terms`, `signup_devices` · 인증: 불필요
+
+#### [POST] /api/auth/social/KAKAO/signup
+
+#### 🛫 Request
+
+| 이름 | 타입 | 필수 | 설명 |
+| --- | --- | --- | --- |
+| signupToken | String | O | 6의 `detail.signupToken` |
+| agreedTermVersionIds | Array | O | 동의한 약관 버전 id (1번 응답의 `termVersionId`). 필수 약관은 모두, 최신 버전으로 (4번과 같은 규칙) |
+| deviceHash | String | O | 프론트가 만든 기기 값 (1~64자). `signup_devices`에 저장 |
+
+```json
+{ "signupToken": "kst_...", "agreedTermVersionIds": [3, 4], "deviceHash": "d1f0..." }
+```
+
+#### 🛬 Response
+
+6과 같음 (`isNewUser: true`, `onboardingRequired: true`). 리프레시 토큰은 HttpOnly 쿠키
 
 ```json
 { "accessToken": "eyJ...", "userId": 8, "isNewUser": true, "onboardingRequired": true }
@@ -377,21 +439,15 @@
 
 > ✅ **200 OK**
 
-> ❌ **400** INVALID_REQUEST (`deviceHash` 없음) · **401** SOCIAL_AUTH_FAILED (인가 코드 만료 · 오류) · **403** BETA_FULL (새 가입일 때만. 이미 가입한 사람은 로그인됨)
+> ❌ **400** INVALID_REQUEST (`deviceHash` 없음) · TERMS_REQUIRED (필수 약관이 빠졌거나 최신 버전이 아님, 4번과 같음) · **401** SIGNUP_TOKEN_EXPIRED (만료됐거나 이미 썼거나 없는 토큰) · SIGNUP_TOKEN_INVALID (토큰 모양이 아님) · **403** BETA_FULL (가입하는 순간 다시 확인)
 
 #### 서버가 하는 일
 
-1. 인가 코드를 카카오에 보내 카카오 회원번호와 닉네임을 받음
-2. `user_social_accounts`에서 (KAKAO, 회원번호) 조회
-3. 있으면 그 사용자로 로그인, 없으면 정원을 확인하고 `users`(+ 초대 코드) + `user_social_accounts` + `user_terms` + `signup_devices`를 한 트랜잭션으로 생성. `user_terms`에는 가입 시점의 최신 필수 약관 버전을 동의로 기록. 닉네임은 카카오 프로필 닉네임으로 저장 (DB `users.nickname` NOT NULL, 프로필 설정에서 변경 가능). 카카오 닉네임이 비어 있으면 '카카오 사용자', 20자를 넘으면 앞 20자만 저장 (가입을 막지 않음)
-4. 이메일이 같아도 이메일 가입 계정과 자동으로 합치지 않음 (다른 계정으로 취급)
-
-#### 프론트 참고
-
-- 카카오 로그인 전후로 약관 관련 화면 · 문구를 두지 않음 (약관 체크는 이메일 회원가입에만)
-- **시연은 공용 기기**라, 로그아웃할 때 카카오 계정 로그아웃까지 같이 해야 다음 체험자가 이전 사람 계정으로 자동 로그인되지 않음
-- 카카오 디벨로퍼스에 시연 도메인의 리다이렉트 URI를 미리 등록해야 함
-- 카카오 디벨로퍼스 동의 항목에서 '닉네임'(profile_nickname)을 **필수 동의**로 설정해야 함 (가입 닉네임으로 씀)
+1. 약관 동의와 정원을 먼저 확인 (틀리면 토큰을 쓰지 않음 → 고쳐서 다시 보낼 수 있음)
+2. 가입 토큰을 꺼내면서 지움 (1회용. 동시에 두 번 와도 한 번만 성공)
+3. 그 카카오 회원번호로 이미 가입돼 있으면(다른 탭에서 먼저 가입 등) 그 계정으로 로그인 (`isNewUser: false`)
+4. `users`(+ 초대 코드, 닉네임은 6에서 받은 카카오 닉네임) + `user_social_accounts` + `user_terms`(동의한 최신 버전) + `signup_devices`를 한 트랜잭션으로 (정원은 여기서 한 번 더 확인). 닉네임 규칙은 6과 같음 (비면 '카카오 사용자', 20자까지)
+5. 4에서 실패하면(그 사이 정원이 참 등) 토큰은 이미 썼으므로 6부터 다시
 
 ## 7. POST /api/auth/refresh — 토큰 갱신
 - 분류: 인증
