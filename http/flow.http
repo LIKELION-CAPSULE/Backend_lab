@@ -1,129 +1,132 @@
 ### 캡슐 전체 플로우 (docs/specs/flow.md 흐름 1을 손으로 따라가기)
 # 1) scripts/run-local.sh 로 서버를 띄우고, 출력된 포트로 아래 host를 바꾼다
-# 2) IntelliJ에서 위에서부터 차례로 실행. 토큰·id는 응답에서 자동 저장된다
-# 이메일 인증번호는 Fake가 메모리에만 갖고 있어서, 손으로는 Fake 카카오 로그인으로 시작한다 (이메일 가입은 FlowE2ETest가 확인)
+# 2) IntelliJ에서 위에서부터 차례로 실행. 토큰·id는 응답에서 자동 저장된다 (성공 응답은 {success, data}, ADR 0030)
+# 이메일 인증번호는 Fake가 메모리에만 갖고 있어서, 손으로는 Fake 카카오 가입으로 시작한다 (이메일 가입은 FlowE2ETest가 확인)
 @host = http://localhost:8080
 
-### 1. 약관 조회 (H01)
+### 1. 약관 조회. 응답의 termVersionId를 3번 agreedTermVersionIds에 넣는다
 GET {{host}}/api/terms
 
-### 2. 카카오(Fake) 가입·로그인. 코드 형식: fake-kakao:{회원번호}:{닉네임}
+### 2. 카카오(Fake) 로그인. 코드 형식: fake-kakao:{회원번호}:{닉네임}. 새 사용자면 403 KAKAO_SIGNUP_REQUIRED + 가입 토큰
 POST {{host}}/api/auth/social/KAKAO
 Content-Type: application/json
 
 { "code": "fake-kakao:local-1:승희", "redirectUri": "http://localhost:5173/oauth/kakao", "deviceHash": "local-device" }
 
-> {% client.global.set("token", response.body.accessToken); %}
+> {% client.global.set("signupToken", response.body.detail ? response.body.detail.signupToken : ""); if (response.body.data) client.global.set("token", response.body.data.accessToken); %}
 
-### 3. 아바타 목록 (H02)
+### 3. 카카오 가입 완료 (49, 새 사용자만. 이미 가입했으면 건너뛴다)
+POST {{host}}/api/auth/social/KAKAO/signup
+Content-Type: application/json
+
+{ "signupToken": "{{signupToken}}", "agreedTermVersionIds": [3, 4], "deviceHash": "local-device" }
+
+> {% if (response.body.data) client.global.set("token", response.body.data.accessToken); %}
+
+### 4. 아바타 목록 (아바타 선택)
 GET {{host}}/api/avatars
 Authorization: Bearer {{token}}
 
-### 4. 프로필 설정 (H02 이 모습으로 시작하기). 카카오 가입은 생년월일도 여기서 (명세 10)
+### 5. 프로필 설정 (이 모습으로 시작하기). 카카오 가입은 생년월일도 여기서 (명세 10)
 PATCH {{host}}/api/me
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
 { "avatarId": 1, "birthDate": "2001-04-10" }
 
-### 5. 홈 (H03)
+### 6. 홈
 GET {{host}}/api/home
 Authorization: Bearer {{token}}
 
-### 6. 메이트 상세 (SCR-13)
+### 7. 메이트 상세
 GET {{host}}/api/mates/1
 Authorization: Bearer {{token}}
 
-### 8. 연결 시작 (SCR-13 연결하기)
+### 8. 연결 시작 (연결하기). 인사는 응답의 greeting
 POST {{host}}/api/connections
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
 { "mateId": 1 }
 
-> {% client.global.set("sessionId", response.body.data.connectionId); %}
+> {% client.global.set("connectionId", response.body.data.connectionId); %}
 
-### 9. PRESENT (얼굴 보임, 연결 시작 직후)
-POST {{host}}/api/connections/{{sessionId}}/events
+### 9. PRESENT (얼굴 보임, 연결 시작 직후). 반응은 없다
+POST {{host}}/api/connections/{{connectionId}}/events
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
 { "type": "PRESENT", "occurredAt": "{{$isoTimestamp}}" }
 
-> {% client.global.set("eventId", response.body.eventId); %}
-
-### 10. 인사 반응 (GREETING)
-POST {{host}}/api/connections/{{sessionId}}/events/{{eventId}}/reaction
-Authorization: Bearer {{token}}
-Content-Type: application/json
-
-{ "requestId": "{{$uuid}}" }
-
-### 11. heartbeat (1분마다)
-POST {{host}}/api/connections/{{sessionId}}/heartbeat
+### 10. heartbeat (1분마다)
+POST {{host}}/api/connections/{{connectionId}}/heartbeat
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
 { "connectedSeconds": 0, "presentSeconds": 0, "cameraOnSeconds": 0, "pipSeconds": 0 }
 
-### 12. 자리 비움 (H09)
-POST {{host}}/api/connections/{{sessionId}}/events
+### 11. 자리 비움
+POST {{host}}/api/connections/{{connectionId}}/events
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
 { "type": "AWAY", "occurredAt": "{{$isoTimestamp}}" }
 
-> {% client.global.set("eventId", response.body.eventId); %}
+> {% client.global.set("eventId", response.body.data.eventId); %}
 
-### 13. 자리 비움 반응 (1분 지나면 intensity 2, 5분이면 3)
-POST {{host}}/api/connections/{{sessionId}}/events/{{eventId}}/reaction
+### 12. 자리 비움 반응 (1분 지나면 intensity 2, 5분이면 3)
+POST {{host}}/api/connections/{{connectionId}}/events/{{eventId}}/reaction
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
 { "requestId": "{{$uuid}}", "intensity": 1 }
 
-### 14. 복귀
-POST {{host}}/api/connections/{{sessionId}}/events
+### 13. 복귀
+POST {{host}}/api/connections/{{connectionId}}/events
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
 { "type": "RETURN", "occurredAt": "{{$isoTimestamp}}" }
 
-> {% client.global.set("eventId", response.body.eventId); %}
+> {% client.global.set("eventId", response.body.data.eventId); %}
 
-### 15. 복귀 반응
-POST {{host}}/api/connections/{{sessionId}}/events/{{eventId}}/reaction
+### 14. 복귀 반응
+POST {{host}}/api/connections/{{connectionId}}/events/{{eventId}}/reaction
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
 { "requestId": "{{$uuid}}" }
 
-### 16. 채팅 (H20)
-POST {{host}}/api/connections/{{sessionId}}/messages
+### 15. 채팅
+POST {{host}}/api/connections/{{connectionId}}/messages
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
-{ "requestId": "{{$uuid}}", "characterId": 1, "content": "이거 너무 어려워", "inputType": "QUICK", "tts": false }
+{ "requestId": "{{$uuid}}", "characterId": 1, "content": "오늘 마감 있어서 좀 바빠", "inputType": "QUICK", "tts": false }
 
-### 17. 내 정보 (새로고침 → activeConnection 있으면 이어하기 팝업)
+### 16. 내 정보 (새로고침 → activeConnection 있으면 이어하기 팝업)
 GET {{host}}/api/me
 Authorization: Bearer {{token}}
 
-### 18. 연결 끊기. connectedSeconds는 실제 경과 시간 이하
-POST {{host}}/api/connections/{{sessionId}}/end
+### 17. 연결 끊기. connectedSeconds는 실제 경과 시간 이하
+POST {{host}}/api/connections/{{connectionId}}/end
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
 { "connectedSeconds": 60, "presentSeconds": 50, "cameraOnSeconds": 55, "pipSeconds": 0, "endType": "NORMAL" }
 
-### 19. 연결 기록
-GET {{host}}/api/connections/{{sessionId}}
+### 18. 연결 기록
+GET {{host}}/api/connections/{{connectionId}}
+Authorization: Bearer {{token}}
+
+### 19. 대화방 기록
+GET {{host}}/api/mates/1/messages
 Authorization: Bearer {{token}}
 
 ### 20. 토큰 갱신 (리프레시 쿠키 사용)
 POST {{host}}/api/auth/refresh
 
-> {% client.global.set("token", response.body.accessToken); %}
+> {% client.global.set("token", response.body.data.accessToken); %}
 
 ### 21. 로그아웃
 POST {{host}}/api/auth/logout

@@ -1,32 +1,41 @@
 # 캡슐 백엔드 구조
 
-AI 캐릭터와 함께 공부하는 웹서비스의 백엔드를 한 장으로 정리한다. 기준은 develop 코드(2026-11-05, #119까지)다.
+AI 메이트와 1:1로 '연결'해 노트북 앞의 시간을 함께 보내는 웹서비스(12/1 웹 베타, PRD `docs/product/prd-beta.md`)의 백엔드를 한 장으로 정리한다. 마지막 검증: develop `77ee6a3` (#241까지).
 설계 이유는 `docs/decisions/`(ADR), API·DB 명세는 `docs/specs/api.md`·`schema.sql`, 하네스는 `docs/HARNESS.md`에 있다.
 여기 적힌 클래스·설정 이름은 코드에 실제로 있는 것만 썼다. 코드가 바뀌면 이 문서도 같이 고친다.
+2026-11-23 스터디룸 → 메이트 전환 때 클래스 이름 일부는 옛 이름 그대로다(예: `StudySession` → 테이블 `connections`). 이 문서는 클래스는 코드 이름, 개념은 베타 용어(메이트 · 연결 · 친밀도)로 쓴다.
 
 ---
 
 ## 1. 한눈에
 
-Spring Boot 모듈러 모놀리스다. 앱은 하나지만 `com.capsule` 아래 다섯 개 업무 모듈(user, content, session, relation, dialogue)과 공용 `common`으로 나뉜다.
+Spring Boot 모듈러 모놀리스다. 앱은 하나지만 `com.capsule` 아래 여섯 개 업무 모듈(user, content, session, relation, dialogue, credit)과 공용 `common`으로 나뉜다.
 모듈끼리는 상대 모듈의 `api` 패키지(인터페이스 + DTO)만 부른다. 경계는 Spring Modulith가 `ModularityTests`로 검사한다.
-의존이 순환할 자리는 인터페이스를 거꾸로 둔다(session이 `SessionClosingHandler`를 두고 dialogue가 구현, user가 `ActiveSessionLookup`을 두고 session이 구현).
-이벤트는 지금 하나뿐이다: 회원 탈퇴 `UserWithdrawnEvent`(동기, 같은 트랜잭션). LLM은 dialogue 모듈 안의 `LlmGateway` 하나로만 부른다.
+의존이 순환할 자리는 인터페이스를 거꾸로 둔다.
+- session이 `SessionClosingHandler`를 두고 dialogue가 구현한다.
+- user가 `ActiveSessionLookup` · `ConnectionOwnerLookup`을 두고 session이 구현한다.
+- content가 `ConversationLookup`을 두고 dialogue가 구현한다.
+
+이벤트는 둘이고 모두 동기, 같은 트랜잭션이다: 회원 탈퇴 `UserWithdrawnEvent`(user → dialogue `WithdrawalCleaner`), 출석 크레딧 지급 `AttendanceGrantedEvent`(credit → user `NotificationService`, ADR 0035). LLM은 dialogue 모듈 안의 `LlmGateway` 하나로만 부른다.
 
 | 항목 | 내용 | 근거 |
 |---|---|---|
 | 언어·프레임워크 | Java 21, Spring Boot 4.1.2 (webmvc, data-jpa, validation, actuator) | build.gradle |
 | 모듈 구조 | Spring Modulith 2.1.1, 모듈 안 레이어 패키지 | ADR 0001, 0012 |
+| 코드 스타일 | public 기본 + Lombok | ADR 0029 |
 | DB | PostgreSQL + Flyway(타임스탬프 버전, out-of-order), `ddl-auto: validate` | ADR 0002 |
 | 캐시·토큰 | Redis (리프레시 토큰, 인증번호, 요청 횟수 제한) | ADR 0009 |
 | 인증 | Spring Security + JWT(oauth2 resource server), 리프레시는 Redis | ADR 0011 |
+| 응답 모양 | 성공 `{success, data}`(`ApiResponse`), 에러 `{success:false, code, message, detail}`, 에러 코드는 모듈별 enum | ADR 0030 |
 | 테스트 | JUnit + Testcontainers(Postgres·Redis), H2 안 씀 | ADR 0003 |
 | 포맷 | Spotless + palantir-java-format | build.gradle |
-| API 문서 | springdoc(Swagger), local 프로필에서만 | ADR 0019 |
+| API 문서 | springdoc(Swagger), local 프로필에서만(개발 서버 프로필도 local을 포함해 켜짐) | ADR 0019 |
 | 배포 | Railway(Dockerfile) 개발 서버, 운영 DB·에셋은 Supabase, 메일은 Brevo HTTPS | ADR 0016~0020, 0024 |
 | LLM | SDK 없이 RestClient·JDK HttpClient로 Anthropic·OpenAI·Jev 호출, 프롬프트는 DB 버전 | ADR 0022 |
+| 음성 | TTS는 OpenAI 음성 API(기본은 가짜 무음), 28 스트리밍에 문장 단위 `audio` 이벤트 | ADR 0034, 0036 |
 | 스트리밍 | Spring MVC `SseEmitter` (명세 28) | ADR 0025 |
 | 운영 설정 | yml 값 위에 실험실 '운영 설정'에서 바꾼 칸만 DB에서 덮어씀 (`RuntimeSettings`) | ADR 0026 |
+| 콘텐츠 등록 | 모델 · 메이트 · 목소리는 관리용 API로(마이그레이션으로 넣지 않음) | ADR 0033 |
 
 ### 프로필
 
@@ -41,19 +50,25 @@ Spring Boot 모듈러 모놀리스다. 앱은 하나지만 `com.capsule` 아래 
 
 ```mermaid
 flowchart LR
-  dialogue -->|SessionQuery| session
-  dialogue -->|CharacterQuery, ReactionQuery| content
+  dialogue -->|SessionQuery, ConnectionBackgrounds, ConnectionMessageCounter| session
+  dialogue -->|CharacterQuery, MateQuery, ReactionQuery, BackgroundQuery, VoiceQuery| content
   dialogue -->|RelationQuery, RelationCommands| relation
-  dialogue -->|UserQuery, MemoryQuery| user
-  session -->|RoomQuery, CharacterQuery, ReactionQuery| content
+  dialogue -->|UserQuery, MemoryQuery, UserSettingsQuery, ActiveSessionLookup| user
+  dialogue -->|CreditQuery, CreditCommands| credit
+  session -->|MateQuery, CharacterQuery, AvatarQuery, ReactionQuery, BackgroundQuery, UnlockQuery| content
   session -->|RelationCommands, RelationQuery| relation
-  session -->|UserQuery| user
+  session -->|UserQuery, UserSettingsQuery, NotificationCommands, ReferralRewards, BetaFeedbackQuery| user
+  session -->|CreditQuery| credit
+  user -->|AvatarQuery, MateQuery| content
+  user -->|CreditQuery, CreditCommands| credit
   session -.->|SessionClosingHandler 구현| dialogue
-  user -.->|ActiveSessionLookup 구현| session
+  user -.->|ActiveSessionLookup, ConnectionOwnerLookup 구현| session
+  content -.->|ConversationLookup 구현| dialogue
   user -. UserWithdrawnEvent .-> dialogue
+  credit -. AttendanceGrantedEvent .-> user
 ```
 
-실선은 "상대 api를 부른다", 점선은 "인터페이스는 앞 모듈에 있고 구현은 뒤 모듈"이라는 뜻이다. dialogue는 `api` 패키지가 없다(아무도 dialogue를 직접 부르지 않는다).
+실선은 "상대 api를 부른다", 점선 화살표(구현)는 "인터페이스는 앞 모듈에 있고 구현은 뒤 모듈"이라는 뜻이다. dialogue는 `api` 패키지가 없다(아무도 dialogue를 직접 부르지 않는다). content · relation · credit은 다른 모듈의 api를 부르지 않는다.
 
 ---
 
@@ -63,18 +78,19 @@ flowchart LR
 
 | 경로 | 내용 |
 |---|---|
-| `src/main/java/com/capsule/` | 앱 코드. `CapsuleApplication` + 모듈 6개 |
+| `src/main/java/com/capsule/` | 앱 코드. `CapsuleApplication` + 업무 모듈 6개 + `common` |
 | `src/main/resources/application*.yml` | 설정 (위 프로필 표) |
 | `src/main/resources/db/migration/` | Flyway 마이그레이션 `V<타임스탬프>__<모듈>_<설명>.sql`. `scripts/new-migration.sh`로만 만든다 |
-| `src/main/resources/db/seed/` | 예시 데이터 `R__demo_content.sql`, `R__demo_terms.sql` (local·test·공용 개발 DB만, 운영 제외) |
+| `src/main/resources/db/seed/` | 예시 데이터 `R__demo_content.sql`(메이트 1 · 2, 모델, 아바타), `R__demo_terms.sql` (local·test·공용 개발 DB만, 운영 제외) |
 | `src/main/resources/prompts/` | 공통 프롬프트 시드 (`PromptSeeder`가 DB `prompt_versions`에 넣음) |
-| `src/main/resources/characters/malfoy/profile.yml` | 말포이 캐릭터 설정 시드 (`CharacterContentSeeder`가 DB에 넣음) |
+| `src/main/resources/characters/malfoy/profile.yml` | 메이트 1의 대화 설정 시드 (`CharacterContentSeeder`가 DB에 넣음). 시드의 메이트 1은 아직 말포이다(채린 설정을 받으면 바꿈, 확정 필요) |
 | `src/main/resources/llm-lab/` | 실험실 화면 `index.html`, 흐름 테스트 `flow.html` |
 | `src/test/java/com/capsule/` | 모듈별 테스트, `ModularityTests`, `FlowE2ETest`, `SwaggerTest` |
 | `http/` | IntelliJ HTTP 요청 예시: `flow.http`(전체 흐름), `llm-lab.http`, `eval-malfoy.http`(평가 대본) |
 | `scripts/` | `verify.sh`, `new-migration.sh`, `run-local.sh`, `setup.sh`, `smoke-flow.sh` |
-| `docs/specs/` | 명세 원본 `api.md`, `schema.sql`, `flow.md`, `judgment-backlog.md`(TODO(judgment) 목록), `skeleton-plan.md` |
-| `docs/decisions/` | ADR 0001~0028 |
+| `docs/product/` | 12/1 베타 PRD `prd-beta.md`, PRD 대비 진행표 `progress-beta.md` |
+| `docs/specs/` | 명세 원본 `api.md`, `schema.sql`, `flow.md`, `judgment-backlog.md`(TODO(judgment) 목록), `skeleton-plan.md`(뼈대 때 기록) |
+| `docs/decisions/` | ADR 0001~0036 |
 | `.harness/` | `phase`(지금 `domain`), `zones.conf`(구역·담당표), `zones.py` |
 | `.claude/` | `skills/`, `agents/reviewer.md`, `hooks/`, `settings.json` |
 | `.github/` | PR 템플릿, 이슈 템플릿, `workflows/dev-db-migrate.yml`(공용 개발 DB 마이그레이션) |
@@ -83,67 +99,82 @@ flowchart LR
 ### 모듈 레이아웃 규칙
 
 모든 모듈은 같은 모양이다(ADR 0012, `.claude/skills/skeleton/references/module-layout.md`).
-`api`(다른 모듈이 쓰는 유일한 입구) · `adapter`(api 구현) · `controller` · `service` · `dto` · `repository` · `domain`(JPA 엔티티) · `client`(외부 호출) · `config`.
+`api`(다른 모듈이 쓰는 유일한 입구) · `adapter`(api 구현) · `controller` · `service` · `dto` · `repository` · `domain`(JPA 엔티티, 에러 코드 enum `<모듈>ErrorCode`) · `client`(외부 호출) · `config`.
 
 ### common (공용, 담당 없음 = shared 구역)
 
 | 패키지 | 클래스 | 하는 일 |
 |---|---|---|
 | config | `ApiTags`, `OpenApiConfig` | Swagger 묶음 이름과 순서 |
-| error | `ApiException`, `ErrorResponse`, `GlobalExceptionHandler` | 명세 에러 코드 그대로 내보내기 `{code, message, detail}` |
+| response | `ApiResponse` | 성공 응답 `{success: true, data}`. 컨트롤러가 `ApiResponse.ok(dto)`를 반환. 204 · 202 '본문 없음'과 SSE 이벤트는 감싸지 않음 (ADR 0030) |
+| error | `ApiException`, `ErrorCode`, `CommonErrorCode`, `ErrorResponse`, `GlobalExceptionHandler` | 에러 응답 `{success: false, code, message, detail}`. 모듈 코드는 `<모듈>/domain/<모듈>ErrorCode` enum, 공통은 `CommonErrorCode` |
 | ratelimit | `RateLimiter` | Redis 고정 창 횟수 제한 (INCR + EXPIRE) |
-| security | `SecurityConfig`, `AuthProperties`, `LoginUser`, `LoginUserArgumentResolver` | JWT 검증, `@LoginUser long userId` |
+| security | `SecurityConfig`, `AuthProperties`, `LoginUser`, `LoginUserArgumentResolver` | JWT 검증, `@LoginUser long userId`, 로그인 없이 여는 경로 목록 |
 | settings | `RuntimeSettings` | 운영 설정 한 묶음: yml 값 + DB에 저장한 칸(허용 목록만). 읽기는 메모리 사본(요청 스레드는 DB를 안 읽음), 30초가 지나면 가상 스레드가 따로 다시 읽음 (ADR 0026) |
-| time | `ClockConfig` | 현재 시각은 `Clock`으로만, 날짜는 한국(KST) 기준 |
+| time | `ClockConfig` | 현재 시각은 `Clock`으로만, 날짜는 한국(KST) 기준. 베타의 '하루'는 오전 5시에 바뀐다(각 모듈이 계산) |
 
-### user (담당 성욱) — 가입·로그인·내 정보·일정·탈퇴 (api 1~8, 10, 13, 14, 24~27)
+### user (담당 성욱) — 가입·로그인·내 정보·설정·초대·알림·피드백·탈퇴 (api 1~8, 10, 24~27, 29, 30, 35, 36, 39, 42~46, 49)
 
 | 패키지 | 주요 클래스 |
 |---|---|
-| api | `UserQuery`(프로필), `MemoryQuery`(대화에 넣을 일정), `ActiveSessionLookup`(session이 구현), `UserWithdrawnEvent`, `UserTypes` |
-| controller | `AuthController`(인증·약관·비밀번호), `MeController`(`/api/me`, 일정) |
-| service | `AuthService`, `TokenService`(JWT 30분 + Redis 리프레시), `ProfileService`, `MemoryService`(일정), `PasswordResetService`, `WithdrawalService` |
+| api | `UserQuery`(프로필), `UserSettingsQuery`(설정 29의 값), `MemoryQuery`(대화에 넣을 옛 일정), `NotificationCommands`(단계 상승 알림), `ReferralRewards`(첫 연결 뒤 초대 보상), `BetaFeedbackQuery`(오늘 피드백을 받을 수 있는지), `ActiveSessionLookup` · `ConnectionOwnerLookup`(session이 구현), `UserWithdrawnEvent`, `UserTypes` |
+| controller | `AuthController`(약관 · 이메일 · 카카오 6 + 가입 완료 49 · 토큰 · 비밀번호), `MeController`(`/api/me` 8 · 10 · 27, `/api/me/settings` 29 · 30), `ReferralController`(35 · 36 · 39), `NotificationController`(43 · 44), `FeedbackController`(42), `AlertRequestController`(45 출시 알림 · 46 메이트 공개 알림) |
+| service | `AuthService`, `TokenService`(JWT 30분 + Redis 리프레시), `SignupPolicy`(베타 정원 · 가입 기기 · 내 초대 코드), `ProfileService`, `SettingsService`, `ReferralService`, `NotificationService`, `FeedbackService`, `AlertRequestService`, `MemoryService`, `PasswordResetService`, `WithdrawalService` |
 | client | `KakaoClient`(`HttpKakaoClient` / `FakeKakaoClient`), `EmailSender`(`BrevoEmailSender` / `FakeEmailSender`) |
-| adapter | `UserQueryAdapter`, `MemoryQueryAdapter` |
-| domain | `User`, `UserMemory`(`user_memories`: 사용자가 적은 시험·목표·약속) |
+| adapter | `UserQueryAdapter`, `UserSettingsQueryAdapter`, `MemoryQueryAdapter`, `NotificationCommandsAdapter`, `ReferralRewardsAdapter`, `BetaFeedbackQueryAdapter` |
+| domain | `User`(`users`: 생년월일 · 호칭 · 나에 대해 · 설정 jsonb · 초대 코드), `Age`(가입 14세 이상, 19세 미만 = 청소년), `Referral`(`referrals`), `Notification`(`notifications`: `STAGE_UP` · `ATTENDANCE` · `REFERRAL_REWARD`, 90일 보관), `BetaFeedback`(`beta_feedback`), `UserMemory`(`user_memories`) |
 
-`user_memories`(사용자 일정)와 dialogue의 `character_memories`(캐릭터가 대화에서 알게 된 사실)는 다른 것이다.
+- 그 밖의 테이블: `user_social_accounts`(카카오 계정), `terms` · `term_versions` · `user_terms`(약관 · 동의), 엔티티 없이 JDBC로 쓰는 `signup_devices`(가입 기기, 초대 악용 막기) · `beta_waitlist`(45) · `mate_alerts`(46).
+- 설정 7개(`UserSettings`: `talkFrequency` · `voiceEnabled` · `voiceVolume` · `voiceSpeed` · `pipBubble` · `defaultMode` · `pipSize`)는 `users.settings`에 바꾼 키만 저장하고 기본값은 `SettingsService`에 둔다.
+- 일정 저장 · 조회(13 · 14)는 2026-11-24에 지웠다. `user_memories`는 남아 있고 이미 저장된 일정은 대화 프롬프트가 계속 읽는다(`MemoryQuery`). dialogue의 `character_memories`(메이트가 대화에서 알게 된 사실)와는 다른 것이다.
+- 호칭 · 나에 대해(10)는 저장하고 16 연결 시작 `me.honorific`로 내주지만, 대화 프롬프트는 아직 읽지 않는다.
 
-### content (담당 성욱) — 룸·캐릭터·아바타·Live2D·반응 매핑 (api 9)
+### content (담당 성욱) — 메이트·Live2D 모델·아바타·배경·해금 콘텐츠·목소리·반응 매핑 (api 9, 31, 48, 관리용 `/internal/content/**`)
 
 | 패키지 | 주요 클래스 |
 |---|---|
-| api | `CharacterQuery`, `RoomQuery`, `AvatarQuery`, `ReactionQuery`(trigger·감정 → 모션·표정), `ContentTypes` |
-| adapter | `CharacterQueryAdapter`, `RoomQueryAdapter`, `AvatarQueryAdapter`, `ReactionQueryAdapter`, `ContentMapper`(CDN 주소 붙이기) |
-| controller | `AvatarController` (`GET /api/avatars`), `MateController`(31), `ContentAdminController`(`/internal/content/**` 모델 · 메이트 등록, 토큰 `CAPSULE_CONTENT_ADMIN_TOKEN`이 있을 때만, ADR 0033) |
-| service | `ContentAdminService`(관리용 API 쓰기: 값 검사 → 한 트랜잭션으로 `live2d_*` · `characters` 행) |
+| api | `MateQuery`(메이트 화면 칸), `CharacterQuery`(대화용 이름 · 모델), `AvatarQuery`, `BackgroundQuery`(메이트별 배경 목록), `UnlockQuery`(단계 사이에 열리는 해금 콘텐츠), `VoiceQuery`(메이트 목소리), `ReactionQuery`(trigger·감정 → 모션·표정), `ConversationLookup`(dialogue가 구현, 31 `hasConversation`), `ContentTypes` |
+| adapter | `MateQueryAdapter`, `CharacterQueryAdapter`, `AvatarQueryAdapter`, `BackgroundQueryAdapter`, `UnlockQueryAdapter`, `VoiceQueryAdapter`, `ReactionQueryAdapter`, `ContentMapper`(CDN 주소 붙이기) |
+| controller | `AvatarController`(9), `MateController`(31), `LoginMatesController`(48, 로그인 없이), `ContentAdminController`(`/internal/content/**`: 모델 · 메이트 등록, 모델 엔진 주소 · 아바타 · 메이트 이미지 · 목소리 · 모델 바꾸기. 토큰 `CAPSULE_CONTENT_ADMIN_TOKEN`이 있을 때만 생기고 Swagger에서 숨김, ADR 0033) |
+| service | `ContentAdminService`(관리용 API 쓰기: 값 검사 → 한 트랜잭션으로 SQL) |
 | config | `ContentAdminSecurityConfig`(`/internal/content/**` 전용 보안 체인, `Authorization: Bearer <토큰>`) |
-| domain | `CharacterEntity`(`characters`), `StudyRoom`, `RoomBackground`, `Avatar`, `Live2dModel`, `Live2dMotion`, `Live2dExpression`, `ReactionMap`(`live2d_reaction_maps`) |
+| domain | `CharacterEntity`(`characters` = 메이트: 한 줄 소개 · 해시태그 · 연령 등급 · 세계관 · 내 역할 · 인트로 · 단계 이름 · 준비 중 · 이미지 · 목소리), `CharacterBackground`(`character_backgrounds`, ADR 0032), `UnlockContent`(`character_contents`: 해금 표정 `EXPRESSION` · 보이스 대사 `VOICE_LINE`, 단계 2~5), `Avatar`, `Live2dModel`(`format` 기본 `ALIVING2D_V2`, 엔진 주소), `Live2dMotion`, `Live2dExpression`, `ReactionMap`(`live2d_reaction_maps`) |
 
-`characters`에는 화면용 정보(이름·이미지·모델)만 있다. 말투·대사·점수표는 dialogue의 `character_profiles` 등에 있다.
+`characters`에는 화면용 정보만 있다. 말투·대사·점수표는 dialogue의 `character_profiles` 등에 있다. 스터디룸(`study_rooms` · `room_backgrounds`)은 2026-11-23에 지웠다. 해금 콘텐츠 행은 아직 없다(등록 API도 없음).
 
-### session (담당 성욱) — 홈·룸 상세·공부 시작/이어하기/이벤트/heartbeat/종료/리포트 (api 11, 12, 16~18, 21~23)
+### session (담당 성욱) — 홈·연결 시작/이어하기/이벤트/heartbeat/끊기/연결 기록·내 메이트·내 기록 (api 11, 16~18, 21~23, 37, 38)
 
 | 패키지 | 주요 클래스 |
 |---|---|
-| api | `SessionQuery`(dialogue가 세션·이벤트·쉬는 중 여부를 읽음), `SessionClosingHandler`(dialogue가 구현), `SessionTypes` |
-| controller | `SessionController` (`/api/home`, `/api/rooms/{id}`, `/api/sessions/...`) |
-| service | `SessionService`(모든 흐름 + `@Scheduled autoCloseStale` 6시간 자동 종료), `StudyTime`(이벤트로 시간 계산) |
-| adapter | `SessionQueryAdapter`, `ActiveSessionLookupAdapter` |
-| domain | `StudySession`(`study_sessions`, `closing_line` 포함), `SessionEvent`(`session_events`) |
+| api | `SessionQuery`(dialogue가 연결 · 이벤트를 읽음), `ConnectionBackgrounds`(지금 배경 읽기 · 바꾸기), `ConnectionMessageCounter`(답장 때 대화 수 +1), `SessionClosingHandler`(dialogue가 구현), `SessionTypes` |
+| controller | `SessionController`(`/api/home`, `/api/connections`, `/api/connections/{connectionId}/resume · events · heartbeat · end`, `GET /api/connections/{connectionId}`), `RecordController`(`/api/mates/me` 37, `/api/records` 38) |
+| service | `SessionService`(연결 흐름 전부 + `@Scheduled autoCloseStale` 6시간 자동 마감), `RecordService`(37 · 38, 끝난 연결만 모음), `ConnectionDay`(오전 5시 기준 하루: 홈 오늘 시간 · 청소년 3시간 · 내 기록), `StudyTime`(이벤트로 자리 비움 계산) |
+| adapter | `SessionQueryAdapter`, `ConnectionBackgroundsAdapter`, `ConnectionMessageCounterAdapter`, `ActiveSessionLookupAdapter`, `ConnectionOwnerLookupAdapter` |
+| domain | `StudySession`(클래스 이름은 옛 이름, 테이블은 `connections`: 시간 칸 4개 · 대화 수 · 배경 · `closing_line`), `SessionEvent`(테이블 `connection_events`), `ConnectionTimes`(프론트가 보내는 시간 4개) |
 | config | `SessionProperties`, `SessionConfig` |
 
-### relation (담당 승희) — 호감도·관계 단계·레벨·정산
+### relation (담당 승희) — 친밀도·해금 기록 (+ 아직 도는 호감도)
 
 | 패키지 | 주요 클래스 |
 |---|---|
-| api | `RelationQuery`(조회), `RelationCommands`(`meet`, `applySessionEvent`, `applyChatScore`, `settleStudy`), `RelationTypes`(`SignalType`, `ChatScore`, `AffinityChange`, `StudySettlement` …) |
-| service | `RelationService`(규칙 적용·기록), `AffinityPolicy`(공식: 단계·레벨·대화 변화량), `RelationLab`(실험실 흐름 테스트용) |
+| api | `RelationQuery`(`stage` 친밀도 단계, `intimacyOf` · `intimacyNow` · `previewStage` · `unlockedContentIds`, 옛 `view`), `RelationCommands`(`meet`, `settleIntimacy`, `recordUnlocks`, `applyChatScore`, 옛 `applySessionEvent` · `settleStudy`(`@Deprecated`)), `RelationTypes` |
+| service | `RelationService`(규칙 적용·기록), `IntimacyPolicy`(친밀도 숫자, 상수), `AffinityPolicy`(호감도 공식), `RelationLab`(실험실 흐름 테스트용) |
 | controller | `RelationLabController` (`/internal/llm-lab/api/relations`, 실험실 전용) |
-| domain | `Relation`(`user_character_relations`), `RelationLog`(`relation_logs`), `RelationSettlement`(`relation_settlements`) |
-| config | `RelationProperties` (`capsule.relation.*`), `RelationSettingsConfig` (운영 설정 `relation` 묶음, 테이블 `relation_settings`) |
+| domain | `Relation`(`user_character_relations`: 친밀도 단계 · 누적 인정 시간 + 호감도 점수), `RelationLog`(`relation_logs`, 호감도 변화), `RelationSettlement`(`relation_settlements`, 연결당 정산 한 행) |
+| config | `RelationProperties` (`capsule.relation.*`, 호감도), `RelationSettingsConfig` (운영 설정 `relation` 묶음, 테이블 `relation_settings`) |
 
-### dialogue (담당 승희) — 상태 반응(19), 메시지(20), 스트리밍(28), 종료 마무리(22), LLM 전부
+테이블(엔티티 없이 JDBC): `relation_daily`(관계 × 하루: 인정 시간 · 대화 턴 수), `user_unlocked_contents`(열린 해금 콘텐츠).
+
+### credit (담당 성욱) — 크레딧 (api 33, 34, ADR 0031)
+
+| 패키지 | 주요 클래스 |
+|---|---|
+| api | `CreditQuery`(`current`: 오늘 남은 크레딧), `CreditCommands`(`spend` 차감, `grantInvite` 초대 지급), `AttendanceGrantedEvent`, `CreditTypes`(`Credits`, `SpendResult`) |
+| controller | `CreditController` (`GET /api/credits` 33, `/api/credits/transactions` 34) |
+| service | `CreditService`(사용자마다 advisory lock으로 한 줄: ① 지난 출석분 소멸 ② 그날 출석분 1,500 지급 ③ 조회 · 차감 · 지급. 배치 없음), `CreditHistoryService`(34 내역) |
+| domain | `CreditGrant`(`credit_grants`: 지급 건, 출석분은 다음 날 오전 5시 소멸), `CreditLedgerEntry`(`credit_ledger`: 지급 · 사용 내역) |
+
+### dialogue (담당 승희) — 상태 반응(19), 메시지(20 · 28), 대화방(32 · 47), 평가 · 신고(40 · 41), 끊기 마무리(22), 음성, 안전, LLM 전부
 
 가장 큰 모듈이다. 서비스 흐름과 LLM 호출, 실험실이 같이 있다.
 
@@ -151,7 +182,9 @@ flowchart LR
 
 | 클래스 | 하는 일 |
 |---|---|
-| `DialogueController` | `POST /api/sessions/{id}/events/{eventId}/reaction`(19), `/messages`(20), `/messages/stream`(28, SSE) |
+| `DialogueController` | `POST /api/connections/{connectionId}/events/{eventId}/reaction`(19), `/messages`(20), `/messages/stream`(28, SSE) |
+| `ChatRoomController` | `GET /api/mates/{mateId}/messages`(32 대화방 기록), `POST /api/mates/{mateId}/conversation/reset`(47 대화 초기화) |
+| `MessageFeedbackController` | `PUT /api/messages/{requestId}/rating`(40), `POST /api/messages/{requestId}/report`(41) |
 | `LlmLabController` | `/internal/llm-lab/**` 실험실: 프롬프트 버전, 실험 대화방, 플레이그라운드, 평가, 사용량, 캐릭터 설정 편집·reseed. `capsule.llm.lab.enabled`일 때만 생김 |
 | `SettingsController` | `/internal/llm-lab/api/settings` 운영 설정: 모든 `RuntimeSettings` 묶음(relation · dialogue · llm) 보기 · 저장. 실험실과 같은 보안, 공용 개발 DB에 인증 없이 붙은 노트북은 저장 403, 저장 로그에 바꾼 관리자 (ADR 0026) |
 | `LabLoginController` | `POST /internal/llm-lab/api/login` 관리자 로그인 → 서명한 토큰. 접속 주소마다 1분 10번 · 전체 1분 30번 (ADR 0027) |
@@ -160,18 +193,24 @@ flowchart LR
 
 | 클래스 | 하는 일 |
 |---|---|
-| `DialogueService` | 19·20·28·22의 API 규칙: 검증, 재전송, 사용자 말 저장, 속도 제한, 마감(7초) 대체 대사, 저장 트랜잭션, 종료 초안·저장 |
+| `DialogueService` | 19·20·28·22의 API 규칙: 검증, 재전송, 정지 · 고급 모드 잔액 확인, 사용자 말 저장, 속도 제한, 마감(7초) 대체 대사, 저장 트랜잭션(대화 수 · 호감도 · 크레딧 차감), 끊기 초안·저장 |
+| `ChatRoomService` | 대화방 = 사용자 × 메이트 하나. 32 기록(커서), 31 `hasConversation`, 47 초기화 |
+| `MessageFeedbackService` | 40 답장 평가 · 41 신고(신고한 답장은 가림) |
+| `SafetyGuard` | 안전: 판정(`SafetyChecker`) · 위반 기록(`safety_strikes`) · 대화 정지(24시간 안 3번 → 24시간, J-17 임시) · 거절 대사 |
+| `SafetyChecker` / `PassingSafetyChecker` | 사용자 말 안전 판정 자리. 기본 구현은 아무것도 잡지 않는다 (J-17, 탐지 기준 확정 전) |
 | `ChatPipeline` | 답장 만드는 방법 인터페이스. 구현은 `SceneChatPipeline`(기본), `SimpleChatPipeline` |
 | `SceneChatPipeline` | DB 캐릭터 설정으로 시스템 블록 2개(캐시되는 페르소나 블록 + 매번 바뀌는 상황 카드)를 만들어 LLM 한 번 |
 | `SimpleChatPipeline` | 캐릭터 설정이 없을 때: `chat.system`(캐시) + `chat.context`로 LLM 한 번 |
 | `ChatReplier` | 파이프라인 답장 + 사용자 말의 종류(SignalType) 판정을 묶음. 매 턴 결정 모델을 답장과 동시에 부름 |
-| `ChatScorer` | 결정 모델이 고른 종류에 점수표·세션 반복 규칙으로 점수(`score`) |
+| `ChatScorer` | 결정 모델이 고른 종류에 점수표·연결 안 반복 규칙으로 호감도 점수(`score`) |
 | `FactPicker` | 아는 사실 중 이번 말에 꺼낼 것 하나를 결정 모델로 고름 (1.5초 안) |
 | `MemoryKeeper` | 매 턴 뒤 기억 정리: 무시·추가·고치기·지우기 결정 + 한 줄 쓰기, 20개 넘으면 하나 버림 |
 | `ReplyStream` | 스트리밍 중 지금까지의 대사 (`partial`). 대사 글 그대로, 옛 형식 JSON이면 `"reply"` 값 |
 | `ExpressionPicker` | 대사를 다 쓴 뒤 결정 모델(Jev)이 캐릭터 표정 목록에서 표정 하나를 고름 (ADR 0028, 1.5초 안, 실패하면 null) |
+| `BackgroundPicker` | 답장을 다 쓴 뒤 결정 모델이 "그대로" 또는 메이트 배경 중 하나를 고름, 바뀌면 연결의 배경을 바꿈 (ADR 0032) |
+| `VoiceStreams` · `VoiceStream` · `TtsSegmenter` · `SpeechText` | 음성: 설정 `voiceEnabled` · 말 빠르기 · 메이트 목소리를 모아 스트림을 열고, 흘러오는 글을 문장(첫 조각은 쉼표) 단위로 잘라 읽기용으로 다듬어 TTS에 넘기고 순서대로 `audio` 이벤트로 보냄 (ADR 0034) |
 | `ReactionWriter` | 상태 반응 대사를 LLM으로 (`usesLlm`, `generate`) |
-| `ClosingWriter` | 종료 때 세션 흐름 카드(`recap`)와 완료 대사(`closingLine`) |
+| `ClosingWriter` | 끊기 때 연결 흐름 카드(`recap`)와 마무리 한마디(`closingLine`) |
 | `FixedLines` | `fixed.lines.yml`의 공통 고정 대사·상황 설명·대체 대사 |
 | `CharacterContents` | DB 캐릭터 설정 읽기(30초 캐시), 상황 대사를 순서대로 돌려 쓰기(`next`) |
 | `PromptService` | 프롬프트 레지스트리: 실험 고정 버전 → 캐릭터 전용 ACTIVE → 공통 ACTIVE, `{{변수}}` 채우기 |
@@ -185,7 +224,7 @@ flowchart LR
 | `LabService` | 서비스와 같은 파이프라인을 실험 조건(`LabConfig`: 공급자·모델·프롬프트 버전 고정)으로 부름. 실제 사용자 데이터는 안 건드림 |
 | `EvalService` | 골든 대본을 여러 번 돌리고 LLM 심사관(`EVAL_JUDGE`) + 사람 점수로 비교 |
 
-**client — LLM 호출**
+**client — LLM · 음성 호출**
 
 | 클래스 | 하는 일 |
 |---|---|
@@ -194,6 +233,7 @@ flowchart LR
 | `Decider` | 결정 입구: 상태 글 + 보기가 정해진 질문 → 보기 하나 + 확신도. `DECIDE` 용도로 보냄 |
 | `Llm` | 공통 타입 `SystemBlock(text, cache)`, `ChatTurn`, `Result`, `Usage`, `Price`, `DEFAULT_PRICES`(Claude 가격) |
 | `LlmHttp`, `LlmJson`, `LlmCallException` | HTTP·SSE 읽기, JSON, 재시도 가능 여부 |
+| `TtsClient` | 글 → 음성. 구현: `FakeTtsClient`(기본, 글자 수만큼 무음 mp3, 비용 없음), `OpenAiTtsClient`(`/audio/speech`, 받는 대로 넘김, 키는 `OPENAI_API_KEY`) |
 
 **config**
 
@@ -201,22 +241,25 @@ flowchart LR
 |---|---|
 | `DialogueProperties` | `capsule.dialogue.*` |
 | `LlmProperties` | `capsule.llm.*` (routes, models, prices, thinking) |
+| `TtsProperties`, `TtsConfig` | `capsule.tts.*`(yml에 없고 기본값은 코드: `provider` fake · `model` gpt-4o-mini-tts · `voice` coral · `wait-after-done` 30s). 켜려면 환경변수 `CAPSULE_TTS_PROVIDER=openai`. 시작할 때 정해진다(운영 설정 아님) |
 | `PromptSeeder` | 시작할 때 `prompts/` 파일 본문이 DB에 없으면 새 ACTIVE 버전으로 |
 | `CharacterContentSeeder` | 시작할 때 `characters/<code>/profile.yml`의 `version`이 DB보다 높으면 다시 불러옴. 실험실에서 고친 설정(`lab_edited_at`)은 덮지 않고 실험실에 "파일에 새 버전"을 띄운다 |
 | `LabSecurityConfig` | 실험실 보안: `X-Lab-Token`에 관리자 로그인 토큰 또는 고정 토큰. 둘 다 설정이 없을 때만 이 컴퓨터(loopback)에서. 프록시 뒤에서 둘 다 없이 켜면 시작 실패 |
 | `AdminProperties`, `LabAdmins` | 관리자 계정(`capsule.admin.users`, 환경변수 `CAPSULE_ADMIN_USERS_<아이디>`, `{bcrypt}`/`{noop}`)과 로그인 토큰 발급 · 확인. 비밀번호를 바꾸면 그 전 토큰은 무효 (ADR 0027) |
 | `DialogueSettingsConfig` | 운영 설정 `dialogue` · `llm` 묶음(테이블 `dialogue_settings`): 바꿀 수 있는 칸 목록과 범위 검사. API 키 · 주소 · `log-content` · `lab`은 열지 않음 |
 
-**adapter**: `SessionClosingAdapter` — session의 `SessionClosingHandler`를 `DialogueService.draft/close`로 연결한다.
+**adapter**: `SessionClosingAdapter`(session의 `SessionClosingHandler`를 `DialogueService.draft/close`로), `ConversationLookupAdapter`(content의 `ConversationLookup`을 `ChatRoomService.hasConversation`으로).
 
 **domain / repository (테이블)**
 
 | 테이블 | 엔티티·리포지토리 | 내용 |
 |---|---|---|
-| `conversations` | `Conversation` | 사용자 × 캐릭터 대화방 하나 |
-| `chat_messages` | `ChatMessage` | 이번 세션 대화 원문. `request_id` UNIQUE, 사용자 말에 `signal` 기록. 종료 때 카드로 합치고 지움 |
-| `conversation_recaps` | `ConversationRecap` | 지난 세션 흐름 카드 (최근 2장) |
-| `character_memories` | `CharacterMemory` | 캐릭터가 아는 사실 (최대 20개, 1~80자) |
+| `conversations` | `Conversation` | 사용자 × 메이트 대화방 하나 |
+| `chat_messages` | `ChatMessage` | 대화방 원문. 연결이 끝나도 남는다(32). `request_id` UNIQUE, 사용자 말에 `signal` · `input_type`(TEXT · QUICK · VOICE), 답장에 `mode`(BASIC · ADVANCED) · `rating` · `voice_charged`. 카드에 넣으면 `recapped_at`, 신고 · 초기화로 가리면 `hidden_at` |
+| `conversation_recaps` | `ConversationRecap` | 지난 연결 흐름 카드 (최근 2장) |
+| `character_memories` | `CharacterMemory` | 메이트가 아는 사실 (최대 20개, 1~80자) |
+| `chat_reports` | `ChatReport` | 답장 신고 (41) |
+| `safety_strikes` | `SafetyStrike` | 안전 위반 기록 (사용자 · 연결 · 요청 · 종류) |
 | `character_profiles`, `character_lines`, `character_scores`, `character_habits` | `CharacterContentRepository` (JDBC, 문서 하나처럼 읽고 씀) → `CharacterContent` DTO | 캐릭터 설정: 페르소나·규칙·표정·관계 단계별 말투·샘플·로어북(`lore` jsonb) / 상황별 미리 쓴 대사 / 점수표 / 피할 말버릇 |
 | `prompt_versions` | `PromptVersion`, `PromptKey` | 프롬프트 본문 버전 (DRAFT·ACTIVE·ARCHIVED) |
 | `dialogue_settings` | `RuntimeSettings` (JDBC) | 운영 설정 `dialogue` · `llm`에서 바꾼 칸 (ADR 0026) |
@@ -230,14 +273,14 @@ flowchart LR
 | `prompts/scene.system.md` | `SCENE_SYSTEM` | 답장(SCENE)의 고정 블록 틀. 캐시됨 |
 | `prompts/scene.reaction.md` | `SCENE_REACTION` | 상태 반응(SCENE)의 고정 블록 틀(바이블 · 규칙만). 캐시됨 |
 | `prompts/chat.system.md`, `chat.context.md` | `CHAT_SYSTEM`, `CHAT_CONTEXT` | SIMPLE 답장 (캐릭터 설정이 없을 때) |
-| `prompts/reaction.system.md` | `REACTION_SYSTEM` | 캐릭터 설정이 없는 캐릭터의 상태 반응 |
-| `prompts/summary.system.md` | `SUMMARY_SYSTEM` | 종료 때 세션 흐름 카드 |
-| `prompts/closing.system.md` | `CLOSING_SYSTEM` | 완료 대사 (캐릭터 설정에 완료 대사가 없을 때만) |
+| `prompts/reaction.system.md` | `REACTION_SYSTEM` | 캐릭터 설정이 없는 메이트의 상태 반응 |
+| `prompts/summary.system.md` | `SUMMARY_SYSTEM` | 끊기 때 연결 흐름 카드 |
+| `prompts/closing.system.md` | `CLOSING_SYSTEM` | 마무리 한마디 (캐릭터 설정에 완료 대사가 없을 때만) |
 | `prompts/eval.judge.md` | `EVAL_JUDGE` | 실험실 평가 심사관 |
 | `prompts/fixed.lines.yml` | `FIXED_LINES` | 공통 고정 대사(`reactions`), 대체 대사(`fallbacks.reply`, `fallbacks.closing`) |
 
-`characters/malfoy/profile.yml`(약 390줄)의 키: `version`, `characterName`, `speaker`, `safety`, `expressions`, `expressionGuide`(표정마다 언제 쓰는지, 결정 모델 보기 설명), `bible`, `rules`, `stageTones`, `samples`, `studyStyle`, `breakStyle`, `scores`, `habits`, `lore`, `lines`.
-문구를 git에서 고치면 `version`을 올려야 공용 DB·개발 서버에 들어간다. 실험실 저장은 버전을 바꾸지 않는다.
+`characters/malfoy/profile.yml`(시드 메이트 1의 대화 설정, v9)의 키: `version`, `characterName`, `speaker`, `safety`, `expressions`, `expressionGuide`(표정마다 언제 쓰는지, 결정 모델 보기 설명), `bible`, `rules`, `stageTones`, `samples`, `studyStyle`, `breakStyle`, `habits`, `lore`, `lines`.
+문구를 git에서 고치면 `version`을 올려야 공용 DB·개발 서버에 들어간다. 실험실 저장은 버전을 바꾸지 않는다. 쉬는 시간이 없어져(`SessionQuery.onBreak`가 늘 false) `breakStyle`은 쓰이지 않는다.
 
 ---
 
@@ -247,12 +290,12 @@ flowchart LR
 
 | 용도 (`LlmPurpose`) | 등급 | Anthropic | OpenAI | max-tokens | 부르는 곳 |
 |---|---|---|---|---|---|
-| CHAT | smart | claude-sonnet-5-5 | gpt-5 | 800 | `SceneChatPipeline`, `SimpleChatPipeline` |
+| CHAT | smart | claude-sonnet-5-5 | gpt-5 | 800 | `SceneChatPipeline`, `SimpleChatPipeline`. 고급 모드는 `capsule.llm.advanced-model`(비면 같은 모델, J-16) |
 | REACTION | fast | claude-haiku-5-5 | gpt-5-mini | 400 | `ReactionWriter` |
 | SUMMARY | fast | 〃 | 〃 | 600 | `ClosingWriter.recap` |
 | CLOSING | fast | 〃 | 〃 | 400 | `ClosingWriter.closingLine` |
 | MEMORY | fast | 〃 | 〃 | 300 | `MemoryKeeper` 한 줄 쓰기 |
-| DECIDE | fast (또는 Jev `jev-1.13.0`) | 〃 | 〃 | 200 | `Decider` ← `FactPicker`, `ExpressionPicker`, `ChatReplier`, `MemoryKeeper` |
+| DECIDE | fast (또는 Jev `jev-1.13.0`) | 〃 | 〃 | 200 | `Decider` ← `FactPicker`, `ExpressionPicker`, `BackgroundPicker`, `ChatReplier`, `MemoryKeeper` |
 | EVAL_JUDGE | judge | claude-opus-5-5 | gpt-5 | 600 | `EvalService` |
 
 `LlmGateway.complete` 순서:
@@ -272,59 +315,75 @@ sequenceDiagram
   participant R as ChatReplier
   participant P as SceneChatPipeline
   participant G as LlmGateway
+  participant Ses as session.api
   participant Rel as relation.api
+  participant Cr as credit.api
   C->>S: send = accept + reply
-  S->>S: accept: 세션 검증, 재전송 확인, 사용자 말 저장, 속도 제한
+  S->>S: accept: 연결 검증, 재전송 확인, 정지 · 고급 모드 잔액, 사용자 말 저장, 속도 제한
+  S->>S: SafetyGuard.violation (위반이면 LLM 없이 거절 대사)
   S->>R: reply (7초 안, 가상 스레드)
   R->>P: reply
   P->>G: DECIDE (FactPicker, 1.5초 안)
   P->>G: CHAT [고정 블록 + 상황 카드] + 최근 15줄 + 이번 말 → 대사만
   P->>G: DECIDE (ExpressionPicker: 대사 → 표정 목록 중 하나, 1.5초 안)
   R-->>S: ChatOutcome (대사, 표정, signal)
+  S->>G: DECIDE (BackgroundPicker: 그대로 또는 배경 하나)
   S->>S: ChatScorer.score
-  S->>Rel: applyChatScore (트랜잭션, relation 행 잠금)
-  S->>S: 답장 저장, 감정 → 모션·표정
+  S->>Ses: countReply (트랜잭션, 연결 행 잠금)
+  S->>Rel: applyChatScore (relation 행 잠금, 그날 대화 턴 +1)
+  S->>S: 답장 저장, 위반 기록, 배경 저장, 감정 → 모션·표정
+  S->>Cr: spend (고급 30 · 보이스 20 · 둘 다 50, LLM 답장일 때만)
   S-->>C: MessageResponse
   S-)S: MemoryKeeper.afterTurn (따로, 마감 없음)
 ```
 
 **① 받기 — `DialogueService.accept`**
-1. 세션 확인: 남의 세션·없으면 404 `SESSION_NOT_FOUND`, 끝났으면 409 `SESSION_ENDED`, 캐릭터가 다르면 400 `CHARACTER_NOT_IN_SESSION`.
+1. 연결 확인: 남의 연결·없으면 404 `CONNECTION_NOT_FOUND`, 끝났으면 409 `CONNECTION_ENDED`, 메이트가 다르면 400 `CHARACTER_NOT_IN_SESSION`.
 2. 대화방(`conversations`)이 없으면 만든다(`insertIfAbsent`).
-3. 재전송 확인(한도 검사보다 먼저): 같은 `requestId`의 캐릭터 답장이 있으면 그대로 돌려준다. 사용자 말만 있으면 "처리 중".
-4. 사용자 말을 `chat_messages`에 바로 저장(`saveAndFlush`). 같은 `requestId`가 동시에 오면 늦은 쪽은 UNIQUE에 걸려 "처리 중"이 된다.
-5. 속도 제한: `RateLimiter.tryAcquire("rate:chat:{userId}", 30, 1m)`. 넘으면 방금 저장한 사용자 말을 지우고 429 `TOO_MANY_REQUESTS`. 재전송은 세지 않는다.
+3. 재전송 확인(한도 검사보다 먼저): 같은 `requestId`의 답장이 있으면 그대로 돌려준다. 사용자 말만 있으면 "처리 중".
+4. 안전 정지 중이면 403 `CHAT_SUSPENDED`(`detail.until`).
+5. 고급 모드(`mode: ADVANCED`)면 LLM 전에 잔액을 본다. 30 미만이면 아무것도 저장하지 않고 409 `CREDIT_INSUFFICIENT`.
+6. 사용자 말을 `chat_messages`에 바로 저장(`saveAndFlush`, `input_type` 포함). 같은 `requestId`가 동시에 오면 늦은 쪽은 UNIQUE에 걸려 "처리 중"이 된다.
+7. 속도 제한: `RateLimiter.tryAcquire("rate:chat:{userId}", 30, 1m)`. 넘으면 방금 저장한 사용자 말을 지우고 429 `TOO_MANY_REQUESTS`. 재전송은 세지 않는다.
 
 **② 답하기 — `DialogueService.reply` → `answer`**
-1. 입력(`ChatInput`) 모으기: 캐릭터, 닉네임, 관계 단계, 지난 세션 카드(최근 2장, 오래된 것부터), 아는 사실(`MemoryKeeper.facts`), 사용자 일정(`MemoryQuery`), 이번 세션 대화, 이번 말, 쉬는 중인지(`SessionQuery.onBreak`), 수다가 길어졌는지(최근 10분 사용자 말 8번 이상), 공부한 분.
-2. `ChatReplier.reply`를 `llm-budget`(7초) 안에서 부른다. 이때 DB 트랜잭션은 열지 않는다.
+1. 입력(`ChatInput`) 모으기: 메이트, 닉네임, 관계 단계, 지난 연결 카드(최근 2장, 오래된 것부터), 아는 사실(`MemoryKeeper.facts`), 사용자 옛 일정(`MemoryQuery`), 이번 대화, 이번 말, 수다가 길어졌는지(최근 10분 사용자 말 8번 이상).
+   - 말투를 고르는 관계 단계는 아직 호감도 단계(`RelationQuery.view().stage()`, 1~4)다. 친밀도 단계(1~5)가 아니다.
+   - 쉬는 중(`SessionQuery.onBreak`)은 늘 false다.
+2. 안전: `SafetyGuard.violation(content)`. 위반이면 LLM을 부르지 않고 거절 대사(`capsule.dialogue.safety.refusal-line`)로 답하고, 저장 때 `safety_strikes`에 남긴다. 기본 판정(`PassingSafetyChecker`)은 아무것도 잡지 않는다(J-17).
+3. `ChatReplier.reply`를 `llm-budget`(7초) 안에서 부른다. 이때 DB 트랜잭션은 열지 않는다. 고급 모드면 `withChatModel(advanced-model)`.
    - 말 종류: 결정 모델이 답장과 동시에 `SignalType` 보기 중 하나를 고른다(`ChatReplier`, 2026-11-07 말 패턴 폐기). 확신도 0.6 미만 · 실패 · 답장이 끝났을 때 마감이 지났으면 `NEUTRAL`(0점), `HATE_OR_SEXUAL`은 0.8 미만이면 `RUDE`.
-3. `SceneChatPipeline.reply` (캐릭터 설정이 없으면 `SimpleChatPipeline`):
+4. `SceneChatPipeline.reply` (캐릭터 설정이 없으면 `SimpleChatPipeline`):
    - 프롬프트 `SCENE_SYSTEM`을 `PromptService.resolve`로 고른다.
    - `FactPicker.pick`: 아는 사실이 있으면 결정 모델에게 [NONE + 사실 f1..fN] 중 하나를 고르게 한다. `fact-pick-wait`(1.5초) 넘거나 확신도 0.6 미만이면 안 넣는다.
    - 시스템 블록 1 (캐시 O): `scene.system`에 `systemVars` — 페르소나(`bible`, 원작 말투 산문), 규칙, 지금 단계의 관계 설명, 단계별 말투 샘플. 상태 변화 예시는 넣지 않는다(상태 반응 카드에만).
-   - 시스템 블록 2 (캐시 X, `card`): 닉네임·시각·공부한 분 / 첫 대화면 캐릭터의 오늘 근황(TODAY 대사, 요일로) / 고른 사실 하나 / 로어북 카드(이번 말에 키워드가 걸린 것 최대 2장) / 지난 세션 흐름 / 첫 대화면 사용자 일정 / 피할 말버릇 / 공부 중 수다가 길면 공부로 돌려보내기 지시 / 공부 중·쉬는 시간 말하는 법.
-   - 메시지: 이번 세션 최근 `history-lines`(15)줄 + 이번 말. `LlmPurpose.CHAT`.
-   - 결과 해석(`spoken`): LLM은 대사만 쓴다(말포이 v3, 3~6문장). 그 글이 대사다. 옛 형식 · 가짜 AI의 JSON이면 `reply`. 토큰 한도로 잘렸거나 JSON 모양인데 깨졌으면 예외 → 대체 대사.
-   - 표정(`ExpressionPicker`): 대사가 끝나면 결정 모델(Jev)에 [사용자 말 + 대사]를 주고 보기 = 캐릭터 표정 목록(`expressions`), 보기 설명 = `expressionGuide`로 하나를 고르게 한다. 보기 밖은 나오지 않는다. 답장 마감과 따로 `fact-pick-wait`(1.5초), 실패하면 null(표정 안 바꿈).
-4. 마감 초과·실패면 대체 대사: 캐릭터 설정의 `REPLY_FALLBACK` 대사(순서대로) → 없으면 `fixed.lines.yml`의 `fallbacks.reply`. 이때 signal은 없고 호감도는 바뀌지 않는다.
-5. 점수: `ChatScorer.score` — 캐릭터 `scores` 표(없으면 `capsule.dialogue.chat-scores`). 세션당 한 번(`once-per-session`), 반복 점수(`repeat-points`), 최근 10턴에 같은 종류가 이미 2번이면 오르는 점수는 0.
-6. 저장 트랜잭션 하나:
-   - `RelationCommands.applyChatScore`부터 부른다(0점이어도). relation 행을 잠가서 공부 종료와 잠금 순서를 맞춘다.
-   - 그사이 세션이 끝났으면 롤백하고 사용자 말을 지운 뒤 409 `SESSION_ENDED`.
-   - 사용자 말에 `signal` 표시, 캐릭터 답장을 `chat_messages`에 저장.
+   - 시스템 블록 2 (캐시 X, `card`): 닉네임·시각 / 첫 대화면 메이트의 오늘 근황(TODAY 대사, 요일로) / 고른 사실 하나 / 로어북 카드(이번 말에 키워드가 걸린 것 최대 2장) / 지난 연결 흐름 / 첫 대화면 사용자 옛 일정 / 피할 말버릇 / 수다가 길면 돌려보내기 지시(J-14, 스터디 시절 규칙이 남음) / `studyStyle` 말하는 법 + 답 길이.
+   - 메시지: 최근 `history-lines`(15)줄 + 이번 말. `LlmPurpose.CHAT`.
+   - 결과 해석(`spoken`): LLM은 대사만 쓴다(3~6문장). 그 글이 대사다. 옛 형식 · 가짜 AI의 JSON이면 `reply`. 토큰 한도로 잘렸거나 JSON 모양인데 깨졌으면 예외 → 대체 대사.
+   - 표정(`ExpressionPicker`): 대사가 끝나면 결정 모델(Jev)에 [사용자 말 + 대사]를 주고 보기 = 캐릭터 표정 목록(`expressions`), 보기 설명 = `expressionGuide`로 하나를 고르게 한다. 답장 마감과 따로 `fact-pick-wait`(1.5초), 실패하면 null(표정 안 바꿈).
+5. 마감 초과·실패면 대체 대사: 캐릭터 설정의 `REPLY_FALLBACK` 대사(순서대로) → 없으면 `fixed.lines.yml`의 `fallbacks.reply`. 이때 signal은 없고 호감도 · 배경 · 크레딧은 바뀌지 않는다.
+6. 배경(`BackgroundPicker`, ADR 0032): LLM 답장일 때만 결정 모델이 "그대로" 또는 메이트 배경(`character_backgrounds`, 보기 설명 = `guide`) 중 하나를 고른다. 트랜잭션 밖.
+7. 점수: `ChatScorer.score` — 캐릭터 `scores` 표(없으면 `capsule.dialogue.chat-scores`). 연결당 한 번(`once-per-session`), 반복 점수(`repeat-points`), 최근 10턴에 같은 종류가 이미 2번이면 오르는 점수는 0.
+8. 저장 트랜잭션 하나 (잠금 순서 연결 → relation → 대화 → credit, 끊기와 같음):
+   - `ConnectionMessageCounter.countReply`부터: 진행 중이면 연결의 대화 수 +1(연결 행 잠금). 그사이 연결이 끝났으면 롤백하고 409 `CONNECTION_ENDED`.
+   - `RelationCommands.applyChatScore`(0점이어도): 그날 대화 턴 +1(`relation_daily.chat_turns`, 친밀도 절반 규칙), 호감도 반영.
+   - 사용자 말에 `signal` 표시, 답장을 `chat_messages`에 저장(`mode`), 위반이면 `safety_strikes`, 배경이 바뀌었으면 `connections.background_code`.
+   - 크레딧(`CreditCommands.spend`): LLM 답장일 때만 고급 30 · 보이스 20 · 둘 다 50을 한 줄로. 둘 다인데 모자라면 고급 몫만, 고급인데 모자라졌으면 409로 되돌림, 보이스만 모자라면 깎지 않는다.
    - 감정 → 모션·표정: `ReactionQuery.pick(characterId, 감정)`(`live2d_reaction_maps`). 행이 없으면 동작 없음.
-7. 응답 뒤 기억 정리(`MemoryKeeper.afterTurn`)를 별도 가상 스레드에서 돈다(`memory-async`, `memory-enabled`).
+9. 응답 뒤 기억 정리(`MemoryKeeper.afterTurn`)를 별도 가상 스레드에서 돈다(`memory-async`, `memory-enabled`).
 
 같은 `requestId`가 처리 중이면(`awaitAnswer`): 먼저 온 요청이 사용자 말을 저장한 시각부터 `in-flight-wait`(10초)까지 `in-flight-poll`(200ms)마다 답장이 저장됐는지 본다. 지나도 없으면 이 요청이 이어서 답한다. 둘 다 답하면 먼저 저장된 답장 하나만 남는다(UNIQUE). 재전송 응답에는 감정·모션·delta를 다시 싣지 않는다.
 
-### 28 스트리밍 (SSE)
+### 28 스트리밍 (SSE)과 음성
 
 `DialogueController.stream`:
-1. `DialogueService.accept`를 스트림을 열기 전에 부른다. 여기서 나는 오류(404·409·400·429)는 보통 JSON 에러 응답이다.
-2. `SseEmitter`(50초 한도)를 열고 가상 스레드에서 `DialogueService.reply(accepted, onReply)`를 돈다.
-3. 이벤트: `reply` `{content}`(지금까지의 대사 전체, 조각이 아님) 여러 번 → `done`(20과 같은 `MessageResponse`) → 끝. 스트림 도중 오류는 `error`(`ErrorResponse`).
-4. 사용자가 연결을 끊어도 답장은 끝까지 만들어 저장한다. 같은 `requestId`로 다시 보내면 받는다.
+1. `DialogueService.accept`를 스트림을 열기 전에 부른다. 여기서 나는 오류(404·409·403·400·429)는 보통 JSON 에러 응답이다.
+2. `DialogueService.withVoice`: 요청 `tts` + 설정 `voiceEnabled` + 크레딧(보이스 20, 고급이면 50)이 되면 이번 턴 음성을 켠다.
+3. `SseEmitter`(90초 한도: 답장 + 남은 음성)를 열고 가상 스레드에서 `DialogueService.reply(accepted, onReply)`를 돈다.
+4. 이벤트: `reply` `{content}`(지금까지의 대사 전체, 조각이 아님) 여러 번 → `done`(20과 같은 `MessageResponse`) → 음성을 켰으면 그사이 `audio` 조각(문장 단위 mp3, `seq` 순서 = 재생 순서) → `audio_end` → 끝. 스트림 도중 오류는 `error`(`ErrorResponse`).
+5. 사용자가 연결을 끊어도 답장은 끝까지 만들어 저장한다. 같은 `requestId`로 다시 보내면 받는다.
+
+음성(ADR 0034 · 0036): `VoiceStreams`가 설정(빠르기)과 메이트 목소리(`VoiceQuery`: `tts_voice` · `tts_model` · `tts_instructions`, 비면 `capsule.tts.*` 기본값)로 `VoiceStream`을 연다. `TtsSegmenter`가 흘러오는 글을 문장 끝(. ! ? … ~ 줄바꿈)에서 자르고 첫 조각만 쉼표에서도 자른다. `SpeechText`가 지문 · 이모지 · 자모만 있는 말을 뺀다. 조각은 한 줄로 TTS에 넘긴다. `done` 뒤 `wait-after-done`(30초)까지 남은 음성을 기다린다. 19 상태 반응도 `tts`면 대사 전체를 mp3 하나로(`speakOnce`, 20 크레딧).
 
 `DialogueService.streamed`의 상태 규칙 (`state`: 0 = 첫 대사 전, 1 = 흘려 보내는 중, 2 = 대체 대사로 넘어감):
 - 공급자가 스트리밍으로 원문을 넘길 때마다 `ReplyStream.partial`로 지금까지의 대사를 꺼낸다(대사 글 그대로, 옛 형식 JSON이면 `"reply"` 값). 표정은 `done`에서(대사가 끝난 뒤 결정 모델). 비었거나 직전과 같으면 보내지 않는다.
@@ -335,68 +394,117 @@ sequenceDiagram
 - 재전송·처리 중 대기는 `onReply`를 부르지 않는다: `reply` 이벤트 없이 `done`만 간다.
 - 알려진 경계: 원래 요청의 스트림이 10초(`in-flight-wait`)를 넘기면 그사이 온 재전송이 LLM을 한 번 더 부른다. 데이터는 하나만 남고 비용만 한 번 더 든다(실측 전체 1.8~2.5초라 드묾).
 
-### 18·19 상태 이벤트와 반응
+### 16 연결 시작 · 18 상태 이벤트 · 19 반응 · 21 heartbeat
+
+**16 연결 시작 (`SessionService.start`)** — LLM 없음
+- 메이트가 없거나 꺼졌으면 404 `MATE_NOT_FOUND`, 준비 중 · 모델 없음이면 409 `MATE_COMING_SOON`, 온보딩 전이면 403 `ONBOARDING_REQUIRED`, 진행 중 연결이 있으면 409 `CONNECTION_ALREADY_IN_PROGRESS`.
+- 만 19세 미만이면 그날(오전 5시 기준) 남은 3시간을 계산해 0이면 403 `MINOR_DAILY_LIMIT`.
+- `RelationCommands.meet`(관계 행이 없으면 만듦) 뒤 응답: 메이트 · 내 모습 · 설정(`UserSettingsQuery`) · `firstMeet` · 인사 반응(`GREETING`의 표정) · 청소년 남은 시간 · 친밀도 단계 · 크레딧 · 배경 목록과 지금 배경.
 
 **18 상태 이벤트 (`SessionService.recordEvent`)** — LLM 없음
-- 타입: 상태 `FOCUS`·`AWAY`·`RETURN`·`BREAK`, 동작 `DROWSY`·`YAWN`·`WAVE`·`HEAD_TURN`.
-- 같은 타입·같은 시각이면 재전송: 저장·반영 없이 처음 변화를 돌려준다.
-- 쉬는 중(`BREAK`)에 온 `AWAY`·`RETURN`·동작은 무시(eventId null).
-- 동작 이벤트는 같은 타입이 `motion-cooldown`(1분) 안에 다시 오면 무시.
-- 호감도: `RelationCommands.applySessionEvent` (세션 첫 FOCUS → 연속 출석, AWAY를 끝낸 상태 이벤트 → 오래 비웠으면 감점).
-- 응답의 '알아채는' 동작: trigger(첫 FOCUS = `GREETING`, 그 밖의 FOCUS = `BREAK_END`, 나머지는 타입 그대로)로 `ReactionQuery.pick`.
+- 타입: `PRESENT` · `AWAY` · `RETURN` · `IDLE_TALK`(말 걸기 타이머, J-20). 다른 값은 400 `INVALID_EVENT`. 카메라 판정은 프론트가 한다(서버는 상태만 받음).
+- 같은 타입·같은 시각이면 재전송: 저장 없이 처음 반응을 돌려준다. 연결 시작보다 앞선 시각은 시작 시각으로 맞춘다.
+- 응답의 반응: `PRESENT`는 없음, `AWAY`는 몇 번째 자리 비움인지가 강도, `RETURN`은 그대로, `IDLE_TALK`는 trigger `IDLE`. `ReactionQuery.pick`으로 표정.
+- 이벤트는 호감도를 바꾸지 않는다(옛 `applySessionEvent`는 부르지 않음).
 
 **19 상태 반응 (`DialogueService.react`)**
-- trigger 규칙은 18과 같다. `intensity`는 `AWAY`에만(없으면 1, 1~`away-intensity-max` 3, 넘으면 400). 강도 2·3은 상황 칸 `AWAY_2`·`AWAY_3`.
-- 관계 단계만 읽어 말투를 고른다. 호감도는 18이 이미 반영했다.
-- AI 대사: `reaction-llm-triggers` = `GREETING`, `AWAY`, `RETURN`, `BREAK`, `BREAK_END`. `ReactionWriter.generate`를 마감(7초) 안에(`LlmPurpose.REACTION`).
-  - 캐릭터 설정이 있으면 반응 고정 블록(`scene.reaction`: 바이블 + 규칙만, 캐시) + 반응 카드(`ReactionWriter.card`: 닉네임, 그 단계 관계 설명 한 줄, GREETING이면 오늘 근황, 지난 세션 흐름, 이 상황 · 단계의 미리 쓴 대사 두 줄(말투 예시), 피할 말버릇, "한두 문장, 다그치지 않기"). 메시지는 이번 세션 최근 `reaction-context-lines`(6)줄 + `(방금 일어난 일: …)`. LLM은 대사만 쓰고 표정은 답장과 같이 `ExpressionPicker`가.
+- trigger: `IDLE_TALK` → `IDLE`, 나머지(`PRESENT` · `AWAY` · `RETURN`)는 그대로. 옛 `FOCUS` 기록은 첫 FOCUS면 `GREETING`, 아니면 `BREAK_END`. `intensity`는 `AWAY`에만(없으면 1, 1~`away-intensity-max` 3, 넘으면 400). 강도 2·3은 상황 칸 `AWAY_2`·`AWAY_3`.
+- 관계 단계(호감도 단계)만 읽어 말투를 고른다.
+- AI 대사: `reaction-llm-triggers` = `GREETING`, `AWAY`, `RETURN`, `BREAK`, `BREAK_END`, `IDLE`. `ReactionWriter.generate`를 마감(7초) 안에(`LlmPurpose.REACTION`).
+  - 캐릭터 설정이 있으면 반응 고정 블록(`scene.reaction`: 바이블 + 규칙만, 캐시) + 반응 카드(`ReactionWriter.card`: 닉네임, 그 단계 관계 설명 한 줄, GREETING이면 오늘 근황, 지난 연결 흐름, 이 상황 · 단계의 미리 쓴 대사 두 줄(말투 예시), 피할 말버릇, "한두 문장, 다그치지 않기"). 메시지는 최근 `reaction-context-lines`(6)줄 + `(방금 일어난 일: …)`. LLM은 대사만 쓰고 표정은 답장과 같이 `ExpressionPicker`가.
   - 설정이 없으면 `reaction.system` 공통 프롬프트, 감정 후보는 `capsule.dialogue.emotions`.
-- 미리 쓴 대사: 동작 이벤트(`DROWSY`·`YAWN`·`WAVE`·`HEAD_TURN`)와 LLM이 마감을 넘기거나 실패한 경우. `CharacterContents.next`(그 상황·단계 대사를 세션 단위로 순서대로) → 없으면 `FixedLines.reaction`(공통 `fixed.lines.yml`).
-- LLM이 실패해서 미리 쓴 대사로 간 경우 감정은 비우고(`fallback: true`) 동작도 없다(TODO J-12). 처음부터 미리 쓴 대사인 동작 이벤트는 그 대사 칸의 감정을 쓴다.
+- 미리 쓴 대사: LLM이 마감을 넘기거나 실패한 경우. `CharacterContents.next`(그 상황·단계 대사를 연결 단위로 순서대로) → 없으면 `FixedLines.reaction`(공통 `fixed.lines.yml`). 이때 감정은 비우고(`fallback: true`) 동작도 없다(TODO J-12).
+- 음성: 요청 `tts` + 설정 `voiceEnabled` + 20 크레딧이면 대사 mp3를 같이 준다(ADR 0034, 2026-11-25).
 - 감정 → 모션·표정은 20과 같은 `emotionReaction`.
 
-### 22 공부 종료
+**21 heartbeat (`SessionService.heartbeat`)**: 프론트의 시간 4개(`ConnectionTimes`: 연결 · 함께한(카메라 켬 + 얼굴) · 카메라 켠 · PIP, 0 ≤ present ≤ cameraOn ≤ connected, pip ≤ connected)를 저장한다. 값이 틀려도 생존 시각은 갱신하고 400을 준다. 응답: 청소년 남은 시간, 서버 시각, `stageUp`(지금 정산하면 단계가 오르는지 `RelationQuery.previewStage`로 미리 봄, 열릴 해금 콘텐츠).
+
+### 22 연결 끊기
 
 ```mermaid
 sequenceDiagram
   participant SS as SessionService.end
   participant D as DialogueService (SessionClosingAdapter)
   participant Rel as RelationCommands
-  SS->>SS: tx1 짧게: 세션 읽기, 공부 시간 검증 (잠금 없음)
+  participant U as user.api
+  SS->>SS: tx1 짧게: 연결 읽기, 시간 4개 검증 (잠금 없음)
   SS->>D: draft (트랜잭션 밖, DB 쓰기 없음)
-  D->>D: recap (SUMMARY, 7초) ∥ 완료 대사 (미리 쓴 대사 또는 CLOSING, 7초)
-  SS->>SS: tx2: 세션 잠금, 다시 검증, close
-  SS->>Rel: settleStudy (자리 지킴 누적, 레벨)
-  SS->>D: close(draft): 카드 저장, 오래된 카드 정리, 메시지 삭제
-  D-->>SS: 완료 대사 → study_sessions.closing_line
+  D->>D: recap (SUMMARY, 7초) ∥ 마무리 한마디 (미리 쓴 대사 또는 CLOSING, 7초)
+  SS->>SS: tx2: 연결 잠금, 다시 검증, close (자리 비움 · 복귀 수)
+  SS->>Rel: settleIntimacy (그날 인정 시간 · 단계)
+  SS->>Rel: recordUnlocks (단계가 올랐으면)
+  SS->>U: NotificationCommands.stageUp (단계가 올랐으면)
+  SS->>D: close(draft): 카드 저장, 오래된 카드 정리, 메시지에 recapped_at
+  D-->>SS: 마무리 한마디 → connections.closing_line
+  SS->>U: ReferralRewards.qualify (첫 연결이면 초대 보상)
 ```
 
-1. `SessionService.end`: 짧은 트랜잭션으로 세션을 읽고 공부 시간(0 ≤ present ≤ study ≤ 지난 시간)을 검증한다. 틀린 요청에는 LLM을 부르지 않는다.
+1. `SessionService.end`: `endType`은 `NORMAL`(기본) · `AUTO_AWAY`(10분 자리 비움, 판단은 프론트) · `MINOR_LIMIT`(청소년 3시간)만 받는다. 짧은 트랜잭션으로 연결을 읽고 시간 4개를 검증한다. 틀린 요청에는 LLM을 부르지 않는다.
 2. `SessionClosingHandler.draft` → `DialogueService.draft` (트랜잭션 밖, 개발 서버 DB 풀 2개를 잡지 않으려고):
-   - 이 대화방에 남은 메시지 전부(앞선 종료에서 카드 쓰기에 실패한 것 포함)를 `ClosingWriter.recap`으로 카드 한 장으로. 머리말은 코드가 붙인다(`11/03 52분, …`), 본문 150자로 자름. 아는 사실은 되풀이하지 않게 같이 넣는다.
-   - 완료 대사: 캐릭터 설정에 `CLOSING` 대사가 있으면 그것(사용자 단위로 순서대로). 직접 끝냈는데 목표 시간의 `give-up-ratio`(0.5) 미만이면 `GIVE_UP` 대사. 설정이 없으면 `ClosingWriter.closingLine`(LLM).
-   - 둘 다 마감(7초) 안. 실패하면 카드는 없음, 완료 대사는 `fallbacks.closing`.
-3. 두 번째 트랜잭션 `endLocked`: 세션을 잠그고, 이미 끝났으면 그 리포트를 돌려준다. 아니면 `StudySession.close` → `RelationCommands.settleStudy` → `SessionClosingHandler.close`.
-4. `DialogueService.close`: 카드가 있으면 `conversation_recaps`에 저장, `recap-max`(2)장 넘는 오래된 카드 삭제, 카드에 넣은 `chat_messages` 삭제. 카드가 없으면 메시지를 남겨 다음 종료 때 같이 넣는다.
-5. 자동 종료(`autoCloseStale`, 10분마다, heartbeat가 6시간 없으면)도 같은 두 단계로 `AUTO_CLOSED` 처리한다.
+   - 아직 카드에 안 들어간 메시지 전부(`recapped_at` 없음, 앞선 끊기에서 카드 쓰기에 실패한 것 포함)를 `ClosingWriter.recap`으로 카드 한 장으로. 머리말은 코드가 붙인다(`11/03 52분, …`), 본문 150자로 자름. 아는 사실은 되풀이하지 않게 같이 넣는다.
+   - 마무리 한마디: 캐릭터 설정에 `CLOSING` 대사가 있으면 그것(사용자 단위로 순서대로). 설정이 없으면 `ClosingWriter.closingLine`(LLM). 목표 시간이 없어져 공부 포기(`GIVE_UP`) 판정은 꺼져 있다(`targetMinutes`가 늘 null).
+   - 둘 다 마감(7초) 안. 실패하면 카드는 없음, 마무리 한마디는 `fallbacks.closing`.
+3. 두 번째 트랜잭션 `endLocked`: 연결을 잠그고, 이미 끝났으면 그 연결 기록을 돌려준다. 아니면 `close`:
+   - 자리 비움은 이벤트로 센다(`StudyTime.awaySeconds`: AWAY부터 다음 PRESENT · RETURN까지, 카메라 켠 시간 − 함께한 시간을 넘지 않게).
+   - `RelationCommands.settleIntimacy`(아래 친밀도 표). 단계가 오르면 `UnlockQuery.between`으로 열린 콘텐츠를 `recordUnlocks`, `NotificationCommands.stageUp`으로 알림(같은 트랜잭션).
+   - `SessionClosingHandler.close` → 마무리 한마디를 `connections.closing_line`에.
+   - `ReferralRewards.qualify`: 초대 코드를 입력한 뒤 처음 끝나는 연결이면 초대한 사람 · 받은 사람에게 1,000(크레딧 잠금이라 맨 끝).
+4. `DialogueService.close`: 카드가 있으면 `conversation_recaps`에 저장, `recap-max`(2)장 넘는 오래된 카드 삭제, 카드에 넣은 메시지에 `recapped_at`(지우지 않음, 32 대화방 기록). 카드가 없으면 표시하지 않아 다음 끊기 때 같이 넣는다.
+5. 연결 기록(`ReportResponse`, 22 · 23): 시간들(연결 · 함께한 · 자리 비움 · 카메라 켠), 대화 수, 복귀 수, 메이트, 친밀도(전후 단계 · 인정 시간 · 다음 단계까지 · `stageProgress` · 이번에 열린 것), 마무리 한마디, 초대 보상, 베타 피드백 가능 여부.
+6. 자동 마감(`autoCloseStale`, 10분마다, heartbeat가 6시간 없으면)도 같은 두 단계로 `AUTO_CLOSED` 처리한다. 마지막 heartbeat 값으로 정산한다.
 
-답장과 종료가 겹칠 때: 답장 저장 트랜잭션이 relation 행을 먼저 잠그고, 종료도 정산 때 같은 행을 잠근다. 늦은 쪽이 기다렸다가 세션 상태를 보고 판단한다(잠금 순서 세션 → relation → 대화).
+답장과 끊기가 겹칠 때: 답장 저장은 연결 행(`countReply`)을 먼저 잠그고, 끊기도 연결 행을 먼저 잠근다. 늦은 쪽이 기다렸다가 연결 상태를 보고 판단한다(잠금 순서 연결 → relation → 대화 → credit).
 
-### 호감도 (relation 모듈)
+### 친밀도 (relation, PRD 8장 추천값, 확정 필요)
 
 | 규칙 | 값 | 코드 |
 |---|---|---|
-| 범위·시작 | 0~100, 처음 만나면 50 (`meet`, 공부 시작 때) | `RelationTypes.START_POINTS`, DB CHECK |
-| 대화 점수 | 기본 표 `chat-scores`(캐릭터 `scores`가 있으면 그 표, 말포이는 없음): 애정 · 고민(세션 1번) +3, 칭찬 · 고마움 +2, 근황 · 관심 +1, 단답 반복 −1, 불평 −1, 놀림 −2, 무례 −4(반복 −6), 혐오·성적 −10 또는 지금 값의 30%(올림, 큰 쪽) | `ChatScorer.score`, `AffinityPolicy.chatDelta` |
+| 하루 | 오전 5시(KST)에 바뀜 | `IntimacyPolicy.dayOf` |
+| 인정 시간 | 이번 연결의 함께한 시간(카메라 켬 + 얼굴), 그날 남은 한도까지 | `IntimacyPolicy.credit` |
+| 하루 한도 | 2시간(7200초, DB CHECK `relation_daily.credited_seconds`와 같음) | `DAILY_CAP_SECONDS` |
+| 대화 없는 날 | 그날 대화 턴이 0이면 인정 절반 | `relation_daily.chat_turns`, `applyChatScore`가 셈 |
+| 단계 | 누적 인정 0 / 1h / 5h / 15h / 40h → 1~5단계. 내려가지 않음. 단계 이름은 메이트 `stage_names` | `IntimacyPolicy.stageOf`, `STAGE_STARTS` |
+| 진행률 | 지금 단계 안에서 0~100 (5단계면 100) | `IntimacyPolicy.stageProgress` |
+| 해금 | 단계가 오르면 그 사이 `unlock_stage`의 콘텐츠(표정 · 보이스 대사)를 `user_unlocked_contents`에 | `recordUnlocks`, `UnlockQuery.between` |
+| 정산 | 연결당 한 번(`relation_settlements`), 함께한 · 연결 시간 누적도 같이 | `RelationService.settleIntimacy` |
+
+숫자는 운영 설정이 아니라 상수다(`IntimacyPolicy`). PRD의 '그날의 분위기'는 `connections.mood` 칸만 있고 코드는 없다.
+
+### 호감도 (relation, 베타 화면에는 없음)
+
+베타 화면은 친밀도만 쓰지만 호감도는 대화 때 계속 계산된다. 20 · 28 응답 `affinity`, `relation_logs`, 대화 말투의 관계 단계(위 ② 1)에 남아 있다.
+
+| 규칙 | 값 | 코드 |
+|---|---|---|
+| 범위·시작 | 0~100, 처음 만나면 50 (`meet`, 연결 시작 때) | `RelationTypes.START_POINTS`, DB CHECK |
+| 대화 점수 | 기본 표 `chat-scores`(캐릭터 `scores`가 있으면 그 표): 애정 · 고민(연결 1번) +3, 칭찬 · 고마움 +2, 근황 · 관심 +1, 단답 반복 −1, 불평 −1, 놀림 −2, 무례 −4(반복 −6), 혐오·성적 −10 또는 지금 값의 30%(올림, 큰 쪽) | `ChatScorer.score`, `AffinityPolicy.chatDelta` |
 | 대화 한 번 최대 오름 | +5 (상수, DB CHECK와 같음) | `AffinityPolicy.CHAT_MAX_GAIN` |
 | 대화 하루 오름 상한 | +25 (내려가는 쪽은 상한 없음) | `chat-daily-gain-cap` |
 | 심한 말 뒤 | 그날 오름 0 (`last_severe_at`) | `RelationService.applyChatScore` |
-| 자리 비움 | 60초 넘게 비우면 −1, 하루 최대 −3 | `away-*` |
-| 연속 출석 | 그날 첫 공부 시작이 출석, 2일째부터 하루 +1, 끊기면 1일째(감점 없음) | `streak-points` |
-| 관계 단계 | 호감도 구간 0 / 30 / 70 / 90 → 1~4단계. 내려가면 단계도 내려감 | `capsule.relation.stages`, `AffinityPolicy.stageOf` |
-| 레벨 | 1 + 누적 자리 지킴 초 / 3600. 호감도와 별개, 종료 정산 때만 바뀜 | `AffinityPolicy.levelOf`, `settleStudy` |
+| 관계 단계(말투용) | 호감도 구간 0 / 30 / 70 / 90 → 1~4단계 | `capsule.relation.stages`, `AffinityPolicy.stageOf` |
 
-모든 변화는 `relation_logs`에 남고 "기록의 합 + 50 = 지금 점수"가 맞게 0~100 밖으로 나간 만큼은 잘라서 기록한다. 같은 이벤트·`requestId`는 한 번만 반영한다. 세션 정산은 `relation_settlements`에 세션당 한 행.
+자리 비움 감점 · 연속 출석(`away-*`, `streak-points`)은 설정에 남아 있지만 베타 이벤트가 `applySessionEvent`를 부르지 않아 쓰이지 않는다. 모든 변화는 `relation_logs`에 남고 같은 `requestId`는 한 번만 반영한다.
+
+### 크레딧 (credit, ADR 0031)
+
+| 규칙 | 값 | 코드 |
+|---|---|---|
+| 출석 | 그날 처음 크레딧을 볼 때 1,500 지급, 다음 날 오전 5시에 남은 출석분 소멸. 지급하면 `AttendanceGrantedEvent` → 알림 | `CreditService.ATTENDANCE_AMOUNT`, `nextDayStart` |
+| 초대 | 초대한 사람 · 받은 사람 1,000(쌓임). 받은 사람의 첫 연결이 끝날 때, 초대한 사람 몫은 최대 10명, 코드 입력은 가입 7일 안 | `ReferralService.REWARD` · `MAX_INVITER_REWARDS` · `INPUT_WINDOW`, `CreditCommands.grantInvite` |
+| 차감 | 기본 0 / 보이스 20 / 고급 30 / 둘 다 50. 출석분 먼저, 그다음 초대분. 같은 `requestId`는 한 번 | `DialogueService.VOICE_COST` · `ADVANCED_COST`, `CreditCommands.spend` |
+| 부족 · 소진 | `low`(100 미만), `exhausted`(0). 0이면 보이스 · 고급만 멈추고 기본 채팅 · 연결은 계속 | `CreditService.LOW_BELOW`, `Credits` |
+| 처리 순서 | 사용자마다 advisory lock → 지난 출석분 소멸 → 그날 출석분 지급 → 조회 · 차감 · 지급 (배치 없음) | `CreditService` |
+
+### 안전 (dialogue, J-17)
+
+| 규칙 | 값 | 코드 |
+|---|---|---|
+| 판정 | 사용자 말만, LLM 전에. 기본 판정은 아무것도 잡지 않음(탐지 기준 확정 전). 답변 쪽 검사는 없음 | `SafetyChecker`, `PassingSafetyChecker` |
+| 위반 턴 | LLM 없이 거절 대사, `safety` 경고 표시, 크레딧 안 깎음 | `SafetyGuard.refusalLine`, `MessageResponse.SAFETY_WARNING` |
+| 정지 | `window`(24시간) 안에 `strike-limit`(3)번이면 마지막 위반부터 `suspension`(24시간) 동안 20 · 28이 403 `CHAT_SUSPENDED` (임시값) | `SafetyGuard.suspendedUntil`, `safety_strikes` |
+| 초기화 | 47은 사용자 버튼으로만 있다. 제재 단계로 쓸지는 J-19 | `ChatRoomService.reset` |
+
+47 대화 초기화는 메시지를 가리고(지우지 않음) 지난 카드와 아는 사실을 지운다. 친밀도 · 호감도 · 해금 · 크레딧 · 안전 정지는 그대로다(PRD는 친밀도 · 해금까지 지운다고 적음, 확정 필요). 그 메이트와 연결 중이면 409 `CONNECTION_IN_PROGRESS`.
 
 ### 기억 (dialogue)
 
@@ -405,8 +513,8 @@ sequenceDiagram
 | 겹 | 저장 | 크기 | 답장에 넣는 법 |
 |---|---|---|---|
 | ① 아는 사실 | `character_memories` | 최대 `memory-max` 20개, 한 줄 1~80자 | `FactPicker`가 이번 말에 맞는 하나만 (없으면 안 넣음) |
-| ② 지난 세션 흐름 | `conversation_recaps` | 최근 `recap-max` 2장 | 상황 카드에 다 넣음 |
-| ③ 이번 세션 원문 | `chat_messages` | 최근 `history-lines` 15줄 | LLM 메시지로 |
+| ② 지난 연결 흐름 | `conversation_recaps` | 최근 `recap-max` 2장 | 상황 카드에 다 넣음 |
+| ③ 대화 원문 | `chat_messages` | 최근 `history-lines` 15줄 | LLM 메시지로 |
 
 `MemoryKeeper.afterTurn` (답장 저장 뒤, 기본 비동기, 마감 없음, 실패하면 이번 턴은 기억 안 함):
 1. 빈 말이나 전화번호·주민번호·계좌처럼 긴 숫자가 있으면 건너뛴다.
@@ -419,55 +527,62 @@ sequenceDiagram
 
 ### 비용 (2026-11-05 로컬 실측, OpenAI)
 
+공급자를 Anthropic(Sonnet · Haiku)으로 바꾼 뒤와 음성(TTS)은 다시 재지 않았다. `llm_usages`로 다시 셀 수 있다.
+
 | 호출 | 1회 |
 |---|---|
 | 채팅 답장 (gpt-5, 캐시 적중) | 약 $0.0016, 대화방 첫 턴은 $0.0045 |
 | 상태 반응 (gpt-5-mini) | 약 $0.0002 |
-| 세션 카드 (gpt-5-mini) | 약 $0.0003 |
+| 연결 카드 (gpt-5-mini) | 약 $0.0003 |
 | 결정 (Jev) | 가격 설정 없음 (`llm_usages`에 $0) |
 
-세션 하나(채팅 20번)에 약 $0.037. 채팅 답장이 비용의 90% 이상이다. `llm_usages`로 다시 셀 수 있다.
+연결 하나(채팅 20번)에 약 $0.037. 채팅 답장이 비용의 90% 이상이었다.
 
 ---
 
 ## 4. 설정값 표 (`application.yml`)
 
 아래는 yml 기본값이다. `capsule.relation.*` · `capsule.dialogue.*` · `capsule.llm.*`의 대부분은 실험실 '운영 설정' 탭에서 배포 없이 바꿀 수 있고, 바꾼 칸이 이긴다(ADR 0026).
-못 바꾸는 칸: API 키 · 공급자 주소 · 버전 헤더, `http-timeout` · `connect-timeout`, `log-content`, `lab.*`, `content-cache-ttl` · `content-max-cursors`, `away-intensity-max`(명세 19 요청 검사).
+못 바꾸는 칸: API 키 · 공급자 주소 · 버전 헤더, `http-timeout` · `connect-timeout`, `log-content`, `lab.*`, `content-cache-ttl` · `content-max-cursors`, `away-intensity-max`(명세 19 요청 검사). yml에 없는 `capsule.tts.*` · `capsule.llm.advanced-model` · `capsule.dialogue.safety.*`도 운영 설정이 아니다(환경변수 · 시작할 때).
 
 | 키 | 값 | 뜻 |
 |---|---|---|
 | `capsule.llm.provider` | `${CAPSULE_LLM_PROVIDER:fake}` | 기본 공급자: fake · anthropic · openai |
 | `capsule.llm.fallback-provider` | 비움 | 기본 공급자 실패 때 한 번 더 |
 | `capsule.llm.routes.DECIDE.provider` | `${CAPSULE_LLM_DECIDE_PROVIDER:}` | `jev`면 결정만 Jev, 실패하면 기본 공급자 |
+| `capsule.llm.advanced-model` | (yml에 없음, 비움) | 고급 모드 채팅 모델. 비우면 기본 모델 (J-16) |
 | `capsule.llm.http-timeout` / `connect-timeout` | 30s / 5s | 공급자 HTTP 한 번의 한도 |
 | `capsule.llm.max-retries` / `retry-backoff` | 1 / 300ms | 429·5xx·연결 오류만 재시도 |
 | `capsule.llm.log-content` | false (local true) | 서비스 호출 원문을 `llm_usages`에 남길지 |
 | `capsule.llm.anthropic.thinking` | haiku: disabled, sonnet: between_tools (effort low) | Claude 5.5가 숨은 생각 토큰으로 빈 답을 내지 않게 (#92) |
 | `capsule.llm.openai.reasoning-effort` | minimal | 추론 토큰 최소 |
 | `capsule.llm.lab.enabled` | false (local true) | 실험실 `/internal/llm-lab` |
+| `capsule.tts.provider` | (yml에 없음) fake, 환경변수 `CAPSULE_TTS_PROVIDER` | 음성 공급자 fake · openai |
+| `capsule.tts.model` / `voice` / `wait-after-done` | gpt-4o-mini-tts / coral / 30s | 메이트 목소리가 비었을 때 기본값, `done` 뒤 남은 음성 기다림 |
 | `capsule.dialogue.chat-pipeline` | SCENE | 답장 파이프라인 |
-| `capsule.dialogue.reaction-llm-triggers` | GREETING, AWAY, RETURN, BREAK, BREAK_END | 19에서 LLM으로 만들 trigger |
+| `capsule.dialogue.reaction-llm-triggers` | GREETING, AWAY, RETURN, BREAK, BREAK_END, IDLE | 19에서 LLM으로 만들 trigger |
 | `signal-min-confidence` / `severe-min-confidence` | 0.6 / 0.8 | 결정 확신도 기준 |
 | `chat-scores` | 위 호감도 표 | 캐릭터 `scores`가 없을 때 쓰는 기본 점수표 |
 | `chat-repeat-window` / `chat-repeat-limit` | 10 / 2 | 칭찬 연타 방지 |
 | `memory-max` / `recap-max` | 20 / 2 | 기억 크기 |
 | `memory-async` / `memory-enabled` | true / true | 기억 정리를 따로 / 아예 끄기 |
-| `reply-min-sentences` / `reply-max-sentences` | 3 / 6 | 명세 20: 채팅 답장 길이 'N~M문장 안팎' (공부 중 · 쉬는 시간 같음) |
+| `reply-min-sentences` / `reply-max-sentences` | 3 / 6 | 명세 20: 채팅 답장 길이 'N~M문장 안팎' |
 | `llm-budget` | 7s | 명세 19·20·22: 이 안에 못 만들면 대체 대사 (28은 첫 대사 기준) |
 | `in-flight-wait` / `in-flight-poll` | 10s / 200ms | 같은 requestId 처리 중일 때 기다림 |
 | `message-limit` / `message-limit-window` | 30 / 1m | 사용자당 메시지 한도(20 · 28 합침), 넘으면 429 |
-| `chatty-messages` / `chatty-window` | 8 / 10m | 수다가 길어졌다 기준 (J-14 임시) |
-| `give-up-ratio` | 0.5 | 공부 포기 대사 기준 (J-15 임시) |
+| `chatty-messages` / `chatty-window` | 8 / 10m | 수다가 길어졌다 기준 (J-14 임시, 스터디 시절 규칙) |
+| `give-up-ratio` | 0.5 | 공부 포기 대사 기준 (J-15). 목표 시간이 없어져 쓰이지 않음 |
 | `away-intensity-max` | 3 | 19 AWAY 강도 상한 |
 | `history-lines` / `signal-context-lines` / `reaction-context-lines` | 15 / 4 / 6 | LLM에 넣는 대화 줄 수 |
 | `fact-pick-wait` | 1500ms | 사실 고르기 대기 한도 |
 | `content-cache-ttl` | 30s | DB 캐릭터 설정 메모리 캐시 |
-| `capsule.relation.*` | 위 호감도 표 | 하루 상한, 자리 비움, 출석, 레벨, 단계 |
-| `capsule.session.auto-close-after` / `auto-close-interval` | 6h / PT10M | 자동 종료 |
-| `capsule.session.motion-cooldown` | 1m | 같은 동작 이벤트 무시 구간 (18) |
+| `capsule.dialogue.safety.strike-limit` / `window` / `suspension` / `refusal-line` | (yml에 없음) 3 / PT24H / PT24H / "그런 얘기는 하지 않을래. 우리 다른 얘기 하자." | 안전 정지 · 거절 대사 (J-17 임시) |
+| `capsule.relation.*` | 위 호감도 표 | 호감도 하루 상한, 자리 비움, 출석, 레벨, 단계 (친밀도 숫자는 상수 `IntimacyPolicy`) |
+| `capsule.session.auto-close-after` / `auto-close-interval` | 6h / PT10M | 자동 마감 |
+| `capsule.session.motion-cooldown` | 1m | 옛 동작 이벤트 무시 구간. 베타 이벤트에 동작이 없어 쓰이지 않음 |
+| `capsule.beta.max-users` | `${CAPSULE_BETA_MAX_USERS:100}` | 베타 정원: 탈퇴하지 않은 가입자가 이 수 이상이면 가입 403 `BETA_FULL` |
 
-`DialogueController.STREAM_TIMEOUT`(50초)은 설정이 아니라 상수다.
+`DialogueController.STREAM_TIMEOUT`(90초)은 설정이 아니라 상수다. 크레딧 금액(`CreditService` · `DialogueService` · `ReferralService`)과 청소년 3시간(`SessionService.MINOR_DAILY_SECONDS`)도 상수다.
 
 ---
 
@@ -475,29 +590,37 @@ sequenceDiagram
 
 | 바꾸고 싶은 것 | 파일 |
 |---|---|
-| 말포이 말투·페르소나·관계 단계별 설명·말투 샘플 | `characters/malfoy/profile.yml` (`bible`, `rules`, `stageTones`, `samples`) → `version` 올리기. 로컬에서 바로 보려면 실험실 캐릭터 설정. 실험실에서 고친 적이 있는 DB에는 실험실 [파일 값으로 바꾸기]를 눌러야 들어감 |
-| 상황별 미리 쓴 대사(인사, 동작, 대체, 완료, 포기, 오늘 근황) | `profile.yml`의 `lines` |
+| 메이트 말투·페르소나·관계 단계별 설명·말투 샘플 | `characters/<code>/profile.yml` (`bible`, `rules`, `stageTones`, `samples`) → `version` 올리기. 지금 시드는 `characters/malfoy`뿐. 로컬에서 바로 보려면 실험실 캐릭터 설정. 실험실에서 고친 적이 있는 DB에는 실험실 [파일 값으로 바꾸기]를 눌러야 들어감 |
+| 상황별 미리 쓴 대사(인사, 자리 비움, 말 걸기, 대체, 완료, 오늘 근황) | `profile.yml`의 `lines` |
 | 원작 키워드 카드(로어북) | `profile.yml`의 `lore` (카드 수 상한은 `SceneChatPipeline.LORE_CARDS`) |
-| 캐릭터별 점수표 | `profile.yml`의 `scores` (없으면 `capsule.dialogue.chat-scores`) |
+| 메이트별 호감도 점수표 | `profile.yml`의 `scores` (없으면 `capsule.dialogue.chat-scores`) |
 | 피할 말버릇 | `profile.yml`의 `habits` |
 | 표정 이름 · 표정 고르는 기준 | `profile.yml`의 `expressions`, `expressionGuide` (결정 모델 질문 문구는 `ExpressionPicker`) |
 | 표정 → Live2D 모션 매핑 | `live2d_reaction_maps` (content, 예시 데이터는 `db/seed/R__demo_content.sql`) |
-| 답장 · 반응 틀 | `prompts/scene.system.md` · `prompts/scene.reaction.md` (설정 없는 캐릭터는 `chat.system.md`·`chat.context.md`·`reaction.system.md`) |
-| 세션 카드·완료 대사 프롬프트 | `prompts/summary.system.md`, `prompts/closing.system.md` |
+| 메이트 화면 칸 · 모델 · 이미지 · 목소리 | 관리용 API `/internal/content/**` (ADR 0033 · 0036). 세계관 · 내 역할 · 연령 등급 · 단계 이름은 등록 API에 없어 DB에 직접 |
+| 메이트 배경 목록 · 언제 바꿀지 | `character_backgrounds`(`guide`가 결정 모델 보기 설명), 고르는 질문은 `BackgroundPicker` |
+| 답장 · 반응 틀 | `prompts/scene.system.md` · `prompts/scene.reaction.md` (설정 없는 메이트는 `chat.system.md`·`chat.context.md`·`reaction.system.md`) |
+| 연결 카드·마무리 한마디 프롬프트 | `prompts/summary.system.md`, `prompts/closing.system.md` |
 | 공통 고정 대사·대체 대사 | `prompts/fixed.lines.yml` |
 | 상황 카드에 넣는 내용 | `SceneChatPipeline.card`, 반응은 `ReactionWriter.card` |
 | 말의 종류 보기 설명 (결정 모델이 보는 기준) | `RelationTypes.SignalType.meaning` |
 | 기억할 가치 기준·한 줄 쓰기 지시 | `MemoryKeeper.keepQuestion`, `MemoryKeeper.WRITE_SYSTEM` |
+| 친밀도 숫자(하루 한도 · 단계 시간) | `IntimacyPolicy` 상수 (DB CHECK `relation_daily`와 같이) |
+| 크레딧 금액 | `CreditService.ATTENDANCE_AMOUNT` · `LOW_BELOW`, `DialogueService.VOICE_COST` · `ADVANCED_COST`, `ReferralService.REWARD` · `MAX_INVITER_REWARDS` |
+| 안전 판정 · 정지 · 거절 대사 | `SafetyChecker` 구현(지금 `PassingSafetyChecker`), `capsule.dialogue.safety.*` |
 | 호감도 숫자 | 바로: 실험실 '운영 설정'의 호감도 · 레벨. 기본값: `application.yml` `capsule.relation.*`. 공식은 `AffinityPolicy` |
 | 메시지 속도 제한 | `capsule.dialogue.message-limit`·`message-limit-window` |
 | 채팅 답 길이(문장 수) | 바로: 실험실 '운영 설정'. 기본값: `capsule.dialogue.reply-min-sentences` · `reply-max-sentences` |
 | LLM 마감(7초) | `capsule.dialogue.llm-budget` |
 | 공급자 | 바로: 실험실 '운영 설정'의 AI 공급자 · 모델(provider · fallback-provider · routes, 키가 있는 공급자만). 기본값: 환경변수 `CAPSULE_LLM_PROVIDER`(+ 키), 결정 모델은 `CAPSULE_LLM_DECIDE_PROVIDER` |
+| 고급 모드 모델 | `capsule.llm.advanced-model` (환경변수, J-16) |
+| 음성 공급자 · 기본 목소리 | 환경변수 `CAPSULE_TTS_PROVIDER`, `TtsProperties` 기본값. 메이트별 목소리는 관리용 API |
 | 용도별 모델 등급·토큰 한도 | `capsule.llm.routes` |
 | 등급 → 실제 모델 이름 | `capsule.llm.anthropic.models`, `capsule.llm.openai.models` (Claude는 `thinking` 표도 같이) |
 | 가격 | OpenAI 등은 `capsule.llm.prices`, Claude는 `Llm.DEFAULT_PRICES` |
 | 새 LLM 용도 | `LlmPurpose` + `capsule.llm.routes` + `llm_usages` CHECK 넓히는 새 마이그레이션 |
 | 스트리밍 대사 추출 | `ReplyStream.partial` |
+| 베타 정원 | `CAPSULE_BETA_MAX_USERS` |
 
 프롬프트 파일을 고쳐 배포하면 `PromptSeeder`가 그 본문을 새 ACTIVE 버전으로 넣는다. 실험실에서 켠 버전은 시드 파일이 그대로인 동안 유지된다.
 
@@ -513,4 +636,4 @@ sequenceDiagram
 - 구역·담당: `.harness/zones.conf`, 확인은 `python3 .harness/zones.py explain <경로>`.
 - 훅(`.claude/hooks/`): `session_start.py`(지금 상황 알림), `zone_guard.py`(Edit/Write 구역 판정), `bash_guard.py`(마이그레이션 삭제·.env 읽기·develop/main push 차단), `stop_verify.sh`(멈추기 전 `verify.sh --quick`).
 - 스킬(`.claude/skills/`): `skeleton`, `verify`, `contract-change`, `spec-sync`, `pr-write`, `review-pr`. 에이전트: `reviewer`(PR 전 셀프 리뷰).
-- 아직 판단이 안 된 자리는 코드의 `TODO(judgment)`와 `docs/specs/judgment-backlog.md`(J-01~J-15)에 모여 있다.
+- 아직 판단이 안 된 자리는 코드의 `TODO(judgment)`와 `docs/specs/judgment-backlog.md`(J-01~J-20)에 모여 있다.
