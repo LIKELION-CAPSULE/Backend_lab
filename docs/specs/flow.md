@@ -11,7 +11,7 @@
 4. 가입 (닉네임 · 생년월일) → `POST /api/auth/email/signup` → 201, `onboardingRequired: true`, 리프레시 쿠키
 5. 아바타 보기 (아바타 선택) → `GET /api/avatars`
 6. 이 모습으로 시작 → `PATCH /api/me` (아바타만, 닉네임은 가입 때 값) → `onboardingRequired: false`
-7. 홈 → `GET /api/home` → 메이트 카드 목록, `activeConnection` · `lastMate` null, 오늘 함께한 시간 0
+7. 홈 → `GET /api/home` → 메이트 카드 목록, `activeConnection` · `lastMate` null, 오늘 연결 시간(`todayConnectedSeconds`) 0
 8. 메이트 상세 → `GET /api/mates/1` → 모델(CUBISM), `hasConversation: false`
 9. 일정 저장(13)은 지워졌다 → `POST /api/me/memories` 404
 10. 연결하기 → `POST /api/connections` → 준비 중 메이트(2)는 409 `MATE_COMING_SOON`, 메이트 1은 201: `connectionId`, 첫 만남 인사(`greeting`, 표정 '웃음'), 오늘 출석 크레딧 1,500
@@ -24,7 +24,7 @@
 17. 연결 끊기 → `POST /api/connections/{id}/end` → 연결 시간 · 함께한 시간, 친밀도(대화가 있어 함께한 1분 그대로 인정, 1단계 그대로 · 다음 단계까지 남은 시간), 완료 대사, 대화 수 1
 18. 끊기 연타 → 같은 결과 (멱등)
 19. 대화방 기록 → `GET /api/mates/1/messages` → 끊어도 메시지가 남음, 커서로 쪽 넘김
-20. 연결 기록 새로고침 → `GET /api/connections/{id}` → 17과 같은 결과. 홈에 오늘 함께한 시간 · `lastMate`
+20. 연결 기록 새로고침 → `GET /api/connections/{id}` → 17과 같은 결과. 홈에 오늘 연결 시간 60초 · `lastMate`
 21. 두 번째 연결의 완료 대사는 다음 줄 (사용자 단위로 돌려 씀)
 22. 토큰 만료 → `POST /api/auth/refresh` → 새 토큰. 옛 리프레시는 401
 23. 로그아웃 → 204 (액세스 토큰이 없어도 리프레시를 폐기)

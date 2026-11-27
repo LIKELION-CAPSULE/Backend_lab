@@ -29,7 +29,7 @@ Spring Boot 모듈러 모놀리스다. 앱은 하나지만 `com.capsule` 아래 
 | 응답 모양 | 성공 `{success, data}`(`ApiResponse`), 에러 `{success:false, code, message, detail}`, 에러 코드는 모듈별 enum | ADR 0030 |
 | 테스트 | JUnit + Testcontainers(Postgres·Redis), H2 안 씀 | ADR 0003 |
 | 포맷 | Spotless + palantir-java-format | build.gradle |
-| API 문서 | springdoc(Swagger), local 프로필에서만 | ADR 0019 |
+| API 문서 | springdoc(Swagger), local 프로필에서만(개발 서버 프로필도 local을 포함해 켜짐) | ADR 0019 |
 | 배포 | Railway(Dockerfile) 개발 서버, 운영 DB·에셋은 Supabase, 메일은 Brevo HTTPS | ADR 0016~0020, 0024 |
 | LLM | SDK 없이 RestClient·JDK HttpClient로 Anthropic·OpenAI·Jev 호출, 프롬프트는 DB 버전 | ADR 0022 |
 | 음성 | TTS는 OpenAI 음성 API(기본은 가짜 무음), 28 스트리밍에 문장 단위 `audio` 이벤트 | ADR 0034, 0036 |
@@ -88,7 +88,7 @@ flowchart LR
 | `src/test/java/com/capsule/` | 모듈별 테스트, `ModularityTests`, `FlowE2ETest`, `SwaggerTest` |
 | `http/` | IntelliJ HTTP 요청 예시: `flow.http`(전체 흐름), `llm-lab.http`, `eval-malfoy.http`(평가 대본) |
 | `scripts/` | `verify.sh`, `new-migration.sh`, `run-local.sh`, `setup.sh`, `smoke-flow.sh` |
-| `docs/product/` | 12/1 베타 PRD `prd-beta.md` |
+| `docs/product/` | 12/1 베타 PRD `prd-beta.md`, PRD 대비 진행표 `progress-beta.md` |
 | `docs/specs/` | 명세 원본 `api.md`, `schema.sql`, `flow.md`, `judgment-backlog.md`(TODO(judgment) 목록), `skeleton-plan.md`(뼈대 때 기록) |
 | `docs/decisions/` | ADR 0001~0036 |
 | `.harness/` | `phase`(지금 `domain`), `zones.conf`(구역·담당표), `zones.py` |
@@ -124,7 +124,7 @@ flowchart LR
 | adapter | `UserQueryAdapter`, `UserSettingsQueryAdapter`, `MemoryQueryAdapter`, `NotificationCommandsAdapter`, `ReferralRewardsAdapter`, `BetaFeedbackQueryAdapter` |
 | domain | `User`(`users`: 생년월일 · 호칭 · 나에 대해 · 설정 jsonb · 초대 코드), `Age`(가입 14세 이상, 19세 미만 = 청소년), `Referral`(`referrals`), `Notification`(`notifications`: `STAGE_UP` · `ATTENDANCE` · `REFERRAL_REWARD`, 90일 보관), `BetaFeedback`(`beta_feedback`), `UserMemory`(`user_memories`) |
 
-- 테이블(엔티티 없이 JDBC): `signup_devices`(가입 기기, 초대 악용 막기), `beta_waitlist`(45), `mate_alerts`(46).
+- 그 밖의 테이블: `user_social_accounts`(카카오 계정), `terms` · `term_versions` · `user_terms`(약관 · 동의), 엔티티 없이 JDBC로 쓰는 `signup_devices`(가입 기기, 초대 악용 막기) · `beta_waitlist`(45) · `mate_alerts`(46).
 - 설정 7개(`UserSettings`: `talkFrequency` · `voiceEnabled` · `voiceVolume` · `voiceSpeed` · `pipBubble` · `defaultMode` · `pipSize`)는 `users.settings`에 바꾼 키만 저장하고 기본값은 `SettingsService`에 둔다.
 - 일정 저장 · 조회(13 · 14)는 2026-11-24에 지웠다. `user_memories`는 남아 있고 이미 저장된 일정은 대화 프롬프트가 계속 읽는다(`MemoryQuery`). dialogue의 `character_memories`(메이트가 대화에서 알게 된 사실)와는 다른 것이다.
 - 호칭 · 나에 대해(10)는 저장하고 16 연결 시작 `me.honorific`로 내주지만, 대화 프롬프트는 아직 읽지 않는다.

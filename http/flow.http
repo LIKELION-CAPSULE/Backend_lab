@@ -21,7 +21,7 @@ Content-Type: application/json
 
 { "signupToken": "{{signupToken}}", "agreedTermVersionIds": [3, 4], "deviceHash": "local-device" }
 
-> {% client.global.set("token", response.body.data.accessToken); %}
+> {% if (response.body.data) client.global.set("token", response.body.data.accessToken); %}
 
 ### 4. 아바타 목록 (아바타 선택)
 GET {{host}}/api/avatars
