@@ -71,7 +71,12 @@
 | 개발 서버는 Railway + Dockerfile, Swagger는 local 프로필만, 메일은 Brevo API | 프론트 연동을 먼저. 운영에 API 목록을 공개하지 않음 | `docs/decisions/0018`, `0019`, `0020` |
 | LLM은 공급자 중립 게이트웨이 + DB 프롬프트 버전 + 실험실 | 공급자를 설정 한 줄로 바꾸고, 프롬프트를 배포 없이 바꾸고 숫자로 비교 | `docs/decisions/0022` |
 | 채팅 답장 스트리밍은 SSE(SseEmitter, 명세 28) | 첫 글자부터 보여 체감 속도를 줄임. MVC · 가상 스레드로 충분 | `docs/decisions/0025` |
+| 성공 응답 `{success, data}`, 에러 코드 enum | 프론트가 모든 응답을 한 모양으로 읽음 | `docs/decisions/0030` |
 | 크레딧은 새 모듈 `credit`, 지급 건 + 내역 | 회원 · 대화 · 초대가 모두 쓰는 값을 한 곳에서. 출석분 소멸을 지급 건으로 계산, 배치 없이 읽을 때 처리 | `docs/decisions/0031` |
+| 메이트 배경은 결정 모델이 고름 | 대화 흐름에 맞춰 배경을 바꾸되 규칙 코드를 늘리지 않음 | `docs/decisions/0032` |
+| 콘텐츠 관리용 API (`/internal/content`) | 메이트 · 모델 · 이미지 · 목소리를 마이그레이션 없이 운영 DB에 등록 | `docs/decisions/0033` |
+| 음성은 OpenAI TTS, 문장 단위 스트리밍 | 첫 문장부터 들리게. 목소리는 메이트 데이터(`tts_voice` 등) | `docs/decisions/0034`, `0036` |
+| 알림은 user 모듈 | 단계 상승 · 출석 · 초대 보상을 내 정보 옆에서 | `docs/decisions/0035` |
 
 ### 이 원칙은 앞으로도 적용됨
 - 프레임워크·라이브러리·구조·파이프라인을 새로 고르거나 바꿀 때는 **코드보다 이유 설명이 먼저**: 무엇을 / 왜 / 버린 대안 → 확인 → `docs/decisions/`에 ADR 추가
@@ -112,17 +117,18 @@
 
 `.harness/phase` 파일 한 줄이 단계를 정함. 단계에 따라 훅의 구역 판정이 달라짐(5장).
 
-### 모듈과 담당 (확정, skeleton-plan.md 1장)
+### 모듈과 담당 (12/1 베타 기준, 원천은 `.harness/zones.conf [modules]`)
 
 | 모듈 | 담당 | 테이블 | API (api.md 순서) |
 |---|---|---|---|
-| user | 성욱 | users, user_social_accounts, terms, term_versions, user_terms, user_memories | 1~8, 10, 13, 14, 24~27 |
-| content | 성욱 | live2d_*, avatars, study_rooms, room_backgrounds, characters, character_contents | 9 |
-| session | 성욱 | study_sessions, session_characters, session_events | 11, 12(룸 상세), 16~18, 21~23 |
-| relation | 승희 | user_character_relations, relation_logs, user_unlocked_contents, user_unlocked_backgrounds, relation_settlements | (18, 22에서 호출됨) |
-| dialogue | 승희 | conversations, conversation_recaps, character_memories, chat_messages, llm_usages, character_profiles, character_lines, character_scores, character_habits, prompt_versions, llm_lab_*, llm_eval_* | 19, 20, 28 |
+| user | 성욱 | users, user_social_accounts, terms, term_versions, user_terms, user_memories(읽기만 남음), signup_devices, referrals, beta_feedback, notifications, beta_waitlist, mate_alerts | 1~8, 10, 24~27, 29, 30, 35, 36, 39, 42~46, 49 |
+| content | 성욱 | live2d_*, avatars, characters(= 메이트), character_contents(해금), character_backgrounds | 9, 31, 48, 관리용 `/internal/content` |
+| session | 성욱 | connections, connection_events (연결) | 11, 16~18, 21~23, 37, 38 |
+| relation | 승희 | user_character_relations, relation_daily(친밀도), relation_logs, relation_settlements, user_unlocked_contents, relation_settings | (16 · 21 · 22에서 호출됨) |
+| dialogue | 승희 | conversations, conversation_recaps, character_memories, chat_messages, chat_reports, safety_strikes, character_profiles, character_lines, character_scores, character_habits, llm_usages, prompt_versions, dialogue_settings, llm_lab_*, llm_eval_* | 19, 20, 28, 32, 40, 41, 47 |
+| credit | 성욱 | credit_grants, credit_ledger | 33, 34 |
 
-나눈 이유: DB 최종본의 섹션 구분을 그대로 따름. 성욱 쪽은 대부분 단순 구현(인증, 콘텐츠 조회, 세션 기록)이고, 승희 쪽은 기획 판단이 몰린 호감도·해금 공식과 LLM 대화. 판단이 몰린 두 모듈을 한 사람이 맡아야 서로 기다리지 않음.
+나눈 이유: 처음엔 DB 최종본의 섹션 구분을 따랐다(skeleton-plan.md 1장). 성욱 쪽은 대부분 단순 구현(인증, 콘텐츠, 연결 기록, 크레딧)이고, 승희 쪽은 기획 판단이 몰린 친밀도와 LLM 대화 · 안전. 2026-11-23 베타 전환 때 룸 · 공부 세션 테이블을 지우고 연결 · 크레딧으로 바꿨다(ADR 0031).
 
 ---
 
@@ -248,6 +254,7 @@ skeleton 스킬이 하는 일:
 - 기본값은 `fake`라 테스트 · 로컬(`.env.local`에 공급자가 없을 때)은 Fake로 돈다 (E2E가 API 비용 없이 돎, 테스트는 환경변수가 있어도 fake). 개발 서버(`dev-server` 프로필)는 `CAPSULE_LLM_PROVIDER`가 필수라 빠지면 시작에 실패한다 (2026-11-05 #112, ADR 0018)
 - API 키는 `.env.local` (Claude는 읽지 못하게 막혀 있음). `scripts/run-local.sh`가 LLM 줄만 읽어 환경변수로 넘긴다: `CAPSULE_LLM_PROVIDER` · `CAPSULE_LLM_FALLBACK_PROVIDER` · `CAPSULE_LLM_DECIDE_PROVIDER` · `ANTHROPIC_API_KEY` · `OPENAI_API_KEY` · `JEV_API_KEY` · `CAPSULE_LLM_LAB_TOKEN`. worktree에 `.env.local`이 없으면 메인 체크아웃의 것을 쓴다(worktree마다 복사하지 않음). 셸에 이미 있는 값이 이긴다
 - 대화 품질 평가: 실험실(`/internal/llm-lab`, 캡슐 운영실) '대화 테스트'에서 같은 말로 답장을 보고 턴마다 별점 1~5를 남긴다. 골든 대본 × 반복 평가(LLM 심사 0~10)는 화면에서 뺐고(2026-11-06 실험실 개편) API(`/internal/llm-lab/api/eval/*`)와 `http/eval-malfoy.http`로 돌린다 (ADR 0022 결정 8). verify에는 들어가지 않는다(실제 LLM 비용). 채팅 답장 스트리밍(28)은 ADR 0025
+- 베타에서 더해진 것: 음성(TTS, 28 audio 조각 · 19, ADR 0034 · 0036), 대화 모드(기본 · 고급, 크레딧 차감), 안전 장치(`SafetyGuard` · `SafetyChecker`, 지금은 통과만 하는 자리, J-17), 배경 고르기(ADR 0032). 남은 판단은 `docs/specs/judgment-backlog.md` 맨 위 '12/1 베타 기준'
 
 ---
 
@@ -351,7 +358,7 @@ skeleton 스킬이 하는 일:
 | `scripts/new-migration.sh` | 타임스탬프 + 모듈 이름 마이그레이션 생성 | DB 변경 시 |
 | `scripts/run-local.sh` | worktree별 DB·포트로 로컬 실행 (`--reset`, `--info`). `--shared`는 공용 개발 DB(Supabase)에 붙고 마이그레이션은 안 함 (ADR 0017) | 로컬 확인 |
 | `scripts/setup.sh` | 1인 1회 세팅 | 클론 직후 |
-| `scripts/smoke-flow.sh` | 떠 있는 서버에 프론트 시나리오를 실제 요청으로 돌리고 단계별 대사 · 표정 · 호감도 표 | 실제 LLM 확인 · 배포 뒤 |
+| `scripts/smoke-flow.sh` | 떠 있는 서버에 프론트 시나리오를 실제 요청으로 돌리고 단계별 대사 · 표정 · 친밀도 표 | 실제 LLM 확인 · 배포 뒤 |
 | `.github/workflows/dev-db-migrate.yml` | develop의 마이그레이션 · 예시 시드를 공용 개발 DB에 넣음. 공용 DB에 넣는 유일한 곳 (ADR 0017) | develop에 `db/**`가 바뀐 push |
 | `.gitattributes` | 텍스트 파일 LF 고정 (Windows에서 받아도 `.sh`·`gradlew`가 CRLF로 깨지지 않게) | checkout 시 |
 | `CLAUDE.md` | 에이전트 상시 컨텍스트 (짧게, 상세는 링크) | 매 요청 |

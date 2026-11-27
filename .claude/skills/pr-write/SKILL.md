@@ -31,7 +31,7 @@ description: 지금 세션의 작업 맥락으로 PR 본문을 쓰고 PR을 연�
 5. 문체: 짧은 한국어 문장. "~하는 것이 중요합니다", "다양한", "효율적인", 습관적인 세 개 나열, 문장마다 볼드를 쓰지 않는다. 근거 없는 "완벽하게/반드시 안전" 같은 단정도 쓰지 않는다.
 6. 제목: 커밋 규칙과 같은 `<type>(<범위>): 한 줄 요약`. squash 머지하면 제목이 그대로 develop 커밋 메시지가 된다. 7에서 모양을 검사한다(ADR 0014)
    - type: `feat` 기능 · `fix` 버그 · `docs` 문서·명세 · `chore` 하네스·설정 · `test` 테스트 · `refactor` · `ci`
-   - 범위: 주 모듈(`session`), 명세는 `specs`, 하네스는 `harness`. 소문자. 예) `feat(session): 공부 시작 API`, `docs(specs): 메시지 전송에 characterId 추가`
+   - 범위: 주 모듈(`session`), 명세는 `specs`, 하네스는 `harness`. 소문자. 예) `feat(session): 연결 시작 API`, `docs(specs): 메시지 전송에 characterId 추가`
 7. PR CI가 하던 검사를 로컬에서 (ADR 0023). 실패하면 고친 뒤 다시:
    ```bash
    printf '%s' "<제목>" | python3 .harness/zones.py check-pr-title

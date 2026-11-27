@@ -3,9 +3,10 @@
 #   scripts/smoke-flow.sh                       # 이 worktree 포트(run-local.sh --info)로
 #   scripts/smoke-flow.sh http://localhost:8080 # 주소 지정
 #   SMOKE_OUT=/tmp/smoke scripts/smoke-flow.sh  # 요청 · 응답 JSON을 남길 폴더 (기본: build/smoke)
-# 흐름: 가입 → 공부 시작 → 집중(인사) → 하품 · 손 흔들기 · 고개 돌림 → 채팅(칭찬 · 단답 · 무례 · 공부 질문)
-#       → 자리 비움 61초 → 복귀 → 쉬는 시간 → 채팅 → 다시 집중 → 같은 requestId 재전송 → 종료 → 리포트
-# 끝에 단계별 표(대사 · 감정 · 표정 · 동작 · 호감도 · 단계 · 레벨 · 걸린 시간)를 찍고, 실패한 요청이 있으면 1로 끝난다.
+# 흐름 (12/1 베타): 카카오 가입(6 → 49) → 연결 → 얼굴 보임(PRESENT) → 채팅(칭찬 · 단답 · 무례 · 질문)
+#       → 자리 비움 61초 → 복귀 → 말 걸기(IDLE_TALK) → 같은 requestId 재전송 → 연결 끊기 → 연결 기록
+# 끝에 단계별 표(대사 · 감정 · 표정 · 동작 · 점수 · 걸린 시간)를 찍고, 실패한 요청이 있으면 1로 끝난다.
+# 점수 칸: 채팅 줄은 옛 호감도(20 affinity, 베타 화면에는 없음), 끊기 · 기록 줄은 친밀도(인정 시간 · 단계)
 # JSON은 python3로 읽는다 (jq 없이)
 set -euo pipefail
 export PYTHONIOENCODING=utf-8 # Windows python 기본 출력(cp949)은 '—' 같은 글자를 못 쓴다
@@ -37,7 +38,7 @@ call() {
     args+=(--data-binary "@${RES%.json}.request.json")
   fi
   read -r CODE SECS < <(curl "${args[@]}")
-  case "$CODE" in 2*) ;; *) FAILED=1; echo "✖ $name $method $path → $CODE $(head -c 300 "$RES")" >&2 ;; esac
+  case "$CODE" in 2* | "${ALLOW:-none}") ;; *) FAILED=1; echo "✖ $name $method $path → $CODE $(head -c 300 "$RES")" >&2 ;; esac
   MS=$(python3 -c 'import sys; print(int(float(sys.argv[1].strip()) * 1000))' "$SECS") # Windows curl은 끝에 \r
 }
 
@@ -85,7 +86,12 @@ message() { # message <단계 이름> <내용> [requestId]
 
 echo "▶ $HOST (응답 JSON: $OUT)"
 call health GET /actuator/health
-call login POST /api/auth/social/KAKAO "{\"code\":\"fake-kakao:smoke-$(uuid | cut -c1-8):민수\",\"redirectUri\":\"http://localhost:5173/oauth/kakao\",\"deviceHash\":\"smoke\"}"
+call terms GET /api/terms
+TERMS=$(field "$RES" 'json.dumps([t["termVersionId"] for t in d["terms"]])')
+# 새 카카오 사용자는 6이 403 + 가입 토큰을 주고 49로 가입한다 (2026-11-26, #241)
+ALLOW=403 call login POST /api/auth/social/KAKAO "{\"code\":\"fake-kakao:smoke-$(uuid | cut -c1-8):민수\",\"redirectUri\":\"http://localhost:5173/oauth/kakao\",\"deviceHash\":\"smoke\"}"
+SIGNUP_TOKEN=$(field "$RES" 'd["detail"]["signupToken"]')
+call signup POST /api/auth/social/KAKAO/signup "{\"signupToken\":\"$SIGNUP_TOKEN\",\"agreedTermVersionIds\":$TERMS,\"deviceHash\":\"smoke\"}"
 TOKEN=$(field "$RES" 'd["accessToken"]')
 call profile PATCH /api/me '{"avatarId":1,"birthDate":"2001-04-10"}'
 call session POST /api/connections '{"mateId":1}'
@@ -112,7 +118,7 @@ call report GET "/api/connections/$SID"
 row "연결 기록 (23)"
 
 echo
-echo "| 단계 | HTTP | 대사 | 감정 | 표정 | 동작 | 호감도 변동 | 호감도 | 단계 | 레벨 | 대체 | ms |"
+echo "| 단계 | HTTP | 대사 | 감정 | 표정 | 동작 | 호감도 변동 | 호감도 · 인정 초 | 단계 | 레벨 | 대체 | ms |"
 echo "|---|---|---|---|---|---|---|---|---|---|---|---|"
 while IFS=$'\t' read -r -a c; do
   printf '| %s |\n' "$(IFS='|'; echo "${c[*]}" | sed 's/|/ | /g')"

@@ -20,7 +20,7 @@
 │   ├── domain/              User, UserMemory (JPA 엔티티)          │
 │   ├── adapter/             UserQueryAdapter, MemoryQueryAdapter (계약 구현)
 │   └── client/              KakaoClient, FakeKakaoClient, EmailSender, FakeEmailSender ┘
-├── content/ ...  session/ ...  relation/ ...
+├── content/ ...  session/ ...  relation/ ...  credit/ ...
 └── dialogue/
     ├── client/LlmGateway.java      (LLM 입구. 공급자는 LlmProvider: Anthropic · OpenAi · Jev · Fake, capsule.llm.provider)
     ├── adapter/SessionClosingAdapter.java (session 계약 구현. dialogue는 api 패키지가 없음)
