@@ -17,8 +17,8 @@
 | 10 | 온보딩 · 홈 | PATCH | `/api/me` | 프로필 설정 |
 | 11 | 온보딩 · 홈 | GET | `/api/home` | 홈 조회 |
 | 12 | 온보딩 · 홈 | GET | ~~`/api/rooms/{roomId}`~~ | ~~스터디룸 상세 조회~~ (삭제, 2026-11-23) |
-| 13 | 온보딩 · 홈 | POST | `/api/me/memories` | 일정 저장 |
-| 14 | 온보딩 · 홈 | GET | `/api/me/memories` | 내 일정 조회 |
+| 13 | 마이페이지 | POST | ~~`/api/me/memories`~~ | ~~일정 저장~~ (삭제, 2026-11-24) |
+| 14 | 마이페이지 | GET | ~~`/api/me/memories`~~ | ~~내 일정 조회~~ (삭제, 2026-11-24) |
 | 16 | 연결 | POST | `/api/connections` | 연결 시작 |
 | 17 | 연결 | POST | `/api/connections/{connectionId}/resume` | 연결 이어하기 |
 | 18 | 연결 | POST | `/api/connections/{connectionId}/events` | 상태 기록 |
@@ -35,8 +35,28 @@
 | 29 | 온보딩 · 홈 | GET | `/api/me/settings` | 설정 조회 |
 | 30 | 온보딩 · 홈 | PATCH | `/api/me/settings` | 설정 변경 |
 | 31 | 온보딩 · 홈 | GET | `/api/mates/{mateId}` | 메이트 상세 조회 |
+| 32 | 연결 | GET | `/api/mates/{mateId}/messages` | 대화방 기록 |
+| 33 | 크레딧 | GET | `/api/credits` | 내 크레딧 |
+| 34 | 크레딧 | GET | `/api/credits/transactions` | 크레딧 내역 |
+| 35 | 크레딧 | GET | `/api/referrals/me` | 초대 현황 |
+| 36 | 크레딧 | POST | `/api/referrals` | 초대 코드 입력 |
+| 37 | 연결 | GET | `/api/mates/me` | 내 메이트 |
+| 38 | 연결 | GET | `/api/records` | 내 기록 |
+| 39 | 크레딧 | GET | `/api/referrals/{code}` | 초대 코드 확인 |
+| 40 | 대화 | PUT | `/api/messages/{requestId}/rating` | 답변 평가 |
+| 41 | 대화 | POST | `/api/messages/{requestId}/report` | 답변 신고 |
+| 42 | 리포트 | POST | `/api/feedback` | 베타 피드백 |
+| 43 | 홈 | GET | `/api/notifications` | 알림 목록 |
+| 44 | 홈 | POST | `/api/notifications/read` | 알림 읽음 |
+| 45 | 온보딩 | POST | `/api/beta/waitlist` | 출시 알림 신청 |
+| 46 | 온보딩 · 홈 | POST | `/api/mates/{mateId}/alert` | 메이트 공개 알림 신청 |
+| 47 | 대화 | POST | `/api/mates/{mateId}/conversation/reset` | 대화 초기화 |
+| 48 | 온보딩 | GET | `/api/login-mates` | 로그인 화면 메이트 |
+| 49 | 인증 | POST | `/api/auth/social/KAKAO/signup` | 카카오 가입 완료 |
 
-순서 15는 노션에 없음 (번호 비어 있음).
+순서 15는 노션에 없음 (번호 비어 있음). 본문의 순서는 대체로 번호순이고, 49는 6 바로 뒤에 있다.
+
+각 API의 `백엔드` · `프론트` 줄은 노션이 원본이던 때의 진행 표시라 지웠다(2026-11-28). 남은 줄의 '삭제'와 날짜는 그 API가 지워지거나 추가된 때다. 진행 상황은 `docs/product/progress-beta.md`(12/1 베타 PRD 대비)에서 본다.
 
 ## 공통 규칙 (모든 API)
 - 노션: https://app.notion.com/p/40cb9a07e5928153a1a9cc534c62d0b7 (상위 페이지의 '공통 규칙' 섹션)
@@ -74,8 +94,6 @@
 - 분류: 인증
 - 설명: 회원가입 화면에 띄울 필수 약관 2종 최신 버전
 - 와이어프레임: H01 회원가입 약관 체크
-- 백엔드: Not started
-- 프론트: Not started
 - 노션: https://app.notion.com/p/abcb9a07e59282988185012651220aa9
 
 #### 설명
@@ -118,8 +136,6 @@
 - 분류: 인증
 - 설명: 가입할 이메일로 6자리 인증번호 발송 (5분 유효)
 - 와이어프레임: H01 회원가입 이메일 (인증 칸 추가 필요)
-- 백엔드: Not started
-- 프론트: Not started
 - 노션: https://app.notion.com/p/9e7b9a07e5928202a0a681439fa8dd19
 
 #### 설명
@@ -162,8 +178,6 @@
 - 분류: 인증
 - 설명: 인증번호 확인 → 가입용 토큰 발급
 - 와이어프레임: H01 회원가입 (인증번호 칸 추가 필요)
-- 백엔드: Not started
-- 프론트: Not started
 - 노션: https://app.notion.com/p/64eb9a07e59283f496a581e09d92a08e
 
 #### 설명
@@ -207,8 +221,6 @@
 - 분류: 인증
 - 설명: 이메일 · 비밀번호 · 닉네임 · 약관 동의로 가입, 바로 로그인 토큰 발급
 - 와이어프레임: H01 회원가입 폼
-- 백엔드: Not started
-- 프론트: Not started
 - 노션: https://app.notion.com/p/2dbb9a07e592820aa64601d3e4aa71aa
 
 #### 설명
@@ -272,8 +284,6 @@
 - 분류: 인증
 - 설명: 이메일 · 비밀번호 로그인
 - 와이어프레임: H01 로그인 폼
-- 백엔드: Not started
-- 프론트: Not started
 - 노션: https://app.notion.com/p/d28b9a07e59282de843a0113489d74c2
 
 #### 설명
@@ -325,8 +335,6 @@
 - 분류: 인증
 - 설명: 카카오 인가 코드로 로그인, 처음이면 가입까지 (소셜은 카카오만)
 - 와이어프레임: H01 카카오로 계속하기
-- 백엔드: Not started
-- 프론트: Not started
 - 노션: https://app.notion.com/p/eafb9a07e59282c19d5d012f95549d8a
 
 #### 설명
@@ -453,8 +461,6 @@
 - 분류: 인증
 - 설명: 액세스 토큰 만료 시 재발급
 - 와이어프레임: 공통
-- 백엔드: Not started
-- 프론트: Not started
 - 노션: https://app.notion.com/p/99db9a07e59283bc909301b2834f24aa
 
 #### 설명
@@ -490,8 +496,6 @@
 - 분류: 온보딩 · 홈
 - 설명: 내 정보 + 온보딩 필요 여부 + 진행 중 세션(H18 판단)
 - 와이어프레임: 로그인 직후 분기 · H03 헤더 · H18
-- 백엔드: Not started
-- 프론트: Not started
 - 노션: https://app.notion.com/p/b63b9a07e5928365a77c8137046b0b34
 
 #### 설명
@@ -576,8 +580,6 @@
 - 분류: 온보딩 · 홈
 - 설명: 완성형 Live2D 아바타 목록 (현재 1개)
 - 와이어프레임: H02 아바타 미리보기
-- 백엔드: Not started
-- 프론트: Not started
 - 노션: https://app.notion.com/p/fecb9a07e592825eacb1010f79c810ff
 
 #### 설명
@@ -631,8 +633,6 @@
 - 분류: 온보딩 · 홈
 - 설명: 아바타 저장 (온보딩 완료) · 닉네임 · 아바타 변경
 - 와이어프레임: H02 이 모습으로 시작하기 · H14 프로필 저장
-- 백엔드: Not started
-- 프론트: Not started
 - 노션: https://app.notion.com/p/d08b9a07e5928331b54881fec20dc4be
 
 #### 설명
@@ -686,8 +686,6 @@ H02에서 아바타를 저장하면 `onboardingRequired`가 false가 되고 H03 
 - 분류: 온보딩 · 홈
 - 설명: 오늘 함께한 시간 · 이어하기 · 마지막 메이트 · 메이트 리스트
 - 와이어프레임: SCR-08 첫 방문 · SCR-09 재방문
-- 백엔드: Not started
-- 프론트: Not started
 - 노션: https://app.notion.com/p/f66b9a07e592825d98d1015154dd556d
 
 > 2026-11-23 (12/1 베타 3단계): 스터디룸 목록(`rooms`) → 메이트 리스트(`mates`) · 마지막 메이트(`lastMate`), `activeSession` → `activeConnection`. 4단계: `todayStudySeconds` → `todayPresentSeconds` · `todayConnectedSeconds` (오전 5시 기준 하루)
@@ -761,8 +759,6 @@ H02에서 아바타를 저장하면 `onboardingRequired`가 false가 되고 H03 
 - 분류: 공부 세션
 - 설명: 메이트 1명과 연결 생성 + 메이트 · 내 아바타 모델
 - 와이어프레임: H06 시작하기 → H07
-- 백엔드: Not started
-- 프론트: Not started
 - 노션: https://app.notion.com/p/515b9a07e59282da86b901b17c7c86fc
 
 > 2026-11-23 (12/1 베타 3단계): 룸 · 캐릭터 · 목표 시간 → 메이트(`mateId`) 하나. 목표 시간 · 룸 · 배경 삭제, `character` → `mate`, 모델에 `format`. 인사 · 첫 만남 · 크레딧 · 설정 · 청소년 남은 시간은 다음 단계
@@ -858,8 +854,6 @@ H02에서 아바타를 저장하면 `onboardingRequired`가 false가 되고 H03 
 - 분류: 공부 세션
 - 설명: 비정상 종료된 세션 이어하기. 끊긴 구간은 자동 휴식 처리
 - 와이어프레임: H18 이어서 시작할게 · H04 진행 중인 공부로
-- 백엔드: Not started
-- 프론트: Not started
 - 노션: https://app.notion.com/p/93ab9a07e59283a19ef981931ec863cf
 
 #### 한 줄 요약
@@ -951,8 +945,6 @@ H02에서 아바타를 저장하면 `onboardingRequired`가 false가 되고 H03 
 ```
 
 #### (옛 내용) 공부 상태 기록
-- 백엔드: Not started
-- 프론트: Not started
 - 노션: https://app.notion.com/p/7d3b9a07e59282318ed48104d03bd4c9
 
 #### 한 줄 요약
@@ -1068,8 +1060,6 @@ H02에서 아바타를 저장하면 `onboardingRequired`가 false가 되고 H03 
 - 분류: 대화
 - 설명: eventId로 캐릭터 대사(LLM) + 감정 + 감정에 맞는 모션 · 표정 받기
 - 와이어프레임: H07 말풍선 · 캐릭터 모션 · 표정
-- 백엔드: Not started
-- 프론트: Not started
 - 노션: https://app.notion.com/p/3d4b9a07e59282279b90814c77fa1129
 
 #### 한 줄 요약
@@ -1200,8 +1190,6 @@ H02에서 아바타를 저장하면 `onboardingRequired`가 false가 되고 H03 
 - 분류: 대화
 - 설명: 대화 → 캐릭터별 답장 + 감정 모션 · 표정 + 바뀐 호감도 (TTS 선택)
 - 와이어프레임: H08 휴식 대화 · H20 공부 중 채팅
-- 백엔드: Not started
-- 프론트: Not started
 - 노션: https://app.notion.com/p/62bb9a07e592830dba5701795f33ec24
 
 #### 한 줄 요약
@@ -1359,8 +1347,6 @@ H02에서 아바타를 저장하면 `onboardingRequired`가 false가 되고 H03 
 - 분류: 공부 세션
 - 설명: 1분마다 생존 신호. 비정상 종료 판단 기준
 - 와이어프레임: H07 · H08 · H19 동안
-- 백엔드: Not started
-- 프론트: Not started
 - 노션: https://app.notion.com/p/e6db9a07e59283b48e8681b64ccebdfb
 
 #### 설명
@@ -1424,8 +1410,6 @@ H02에서 아바타를 저장하면 `onboardingRequired`가 false가 되고 H03 
 - 분류: 리포트
 - 설명: 공부 종료 + 정산 + 관계 갱신 → 공부 시간 · 자리 지킴률 · 달성률 · 호감도 변화
 - 와이어프레임: H17 · H08 오늘은 여기까지 → H09
-- 백엔드: Not started
-- 프론트: Not started
 - 노션: https://app.notion.com/p/b8db9a07e59282549ca381dbe650bd11
 
 ##### 한 줄 요약
@@ -1535,8 +1519,6 @@ json
 - 분류: 리포트
 - 설명: 리포트 · 카드 다시 불러오기 (공부 종료와 같은 응답)
 - 와이어프레임: H09 새로고침 · H10 캡슐 카드
-- 백엔드: Not started
-- 프론트: Not started
 - 노션: https://app.notion.com/p/1c2b9a07e59282c4aa7c8102c2003afb
 
 #### 설명
@@ -1569,8 +1551,6 @@ json
 - 분류: 인증
 - 설명: 리프레시 토큰 폐기. 진행 중 세션은 유지 (재로그인 시 이어하기)
 - 와이어프레임: H03 프로필 메뉴 로그아웃
-- 백엔드: Not started
-- 프론트: Not started
 - 노션: https://app.notion.com/p/d91b9a07e5928331ba210199ebe8c636
 
 #### 설명
@@ -1594,8 +1574,6 @@ json
 - 분류: 인증
 - 설명: 이메일로 비밀번호 재설정 링크 발송. 가입 여부와 상관없이 같은 응답
 - 와이어프레임: H01 로그인 폼 '비밀번호 찾기' (추가 필요)
-- 백엔드: Not started
-- 프론트: Not started
 - 노션: https://app.notion.com/p/40eb9a07e5928130ad08d117dd508bbc
 
 > 2026-11-04: 비밀번호 찾기 추가 (25 · 26). 메일 링크 방식, 가입하지 않은 이메일도 같은 응답, 카카오 전용 계정은 대상 아님, 바꾸면 모든 기기 로그아웃
@@ -1652,8 +1630,6 @@ json
 - 분류: 인증
 - 설명: 메일 링크의 토큰과 새 비밀번호로 변경. 바꾸면 모든 기기에서 로그아웃
 - 와이어프레임: '새 비밀번호' 페이지 (추가 필요)
-- 백엔드: Not started
-- 프론트: Not started
 - 노션: https://app.notion.com/p/40eb9a07e592812492d1d69352fcce68
 
 #### 설명
@@ -1699,8 +1675,6 @@ json
 - 분류: 인증
 - 설명: 소프트 삭제. 개인정보를 비우고 대화 기억 · 일정을 지운 뒤 모든 기기 로그아웃. 진행 중 세션이 있으면 거절
 - 와이어프레임: 마이페이지 '회원 탈퇴' (추가 필요)
-- 백엔드: Not started
-- 프론트: Not started
 - 노션: https://app.notion.com/p/40fb9a07e592813bb828d6221ebd26ca
 
 > 2026-11-05: 회원 탈퇴 추가. DB 최종본의 탈퇴 원칙(소프트 삭제, `users` 행은 남기고 개인정보만 비움)을 API로
@@ -1749,8 +1723,6 @@ json
 - 분류: 대화
 - 설명: 20번과 같은 대화를 답장 글자가 만들어지는 대로 받음 (SSE). 마지막에 20번 응답 전체
 - 와이어프레임: H08 휴식 대화 · H20 공부 중 채팅
-- 백엔드: Not started
-- 프론트: Not started
 - 노션: https://app.notion.com/p/40fb9a07e59281379743f96f0b9eb322
 
 > 2026-11-05: 추가. 20번은 답장이 다 만들어질 때까지(1~3초) 아무것도 안 보여서 느리게 느껴짐. 첫 글자가 보이는 시간을 줄이려고 같은 대화를 흘려 보내는 API를 따로 둠. 20번은 그대로 (프론트가 옮기는 동안 둘 다 씀)
@@ -1853,8 +1825,6 @@ data: {"chunks":2,"complete":true}
 - 분류: 온보딩 · 홈
 - 설명: 계정 설정 모달의 설정 탭. 저장한 적 없는 값은 기본값으로 채움
 - 와이어프레임: SCR-28 설정 탭
-- 백엔드: Not started
-- 프론트: Not started
 
 > 2026-11-23 (12/1 베타): 설정 조회 추가
 
@@ -1888,8 +1858,6 @@ data: {"chunks":2,"complete":true}
 - 분류: 온보딩 · 홈
 - 설명: 보낸 키만 바꾸고 전체 설정을 돌려줌
 - 와이어프레임: SCR-28 설정 탭
-- 백엔드: Not started
-- 프론트: Not started
 
 > 2026-11-23 (12/1 베타): 설정 변경 추가
 
@@ -1917,8 +1885,6 @@ data: {"chunks":2,"complete":true}
 - 분류: 온보딩 · 홈
 - 설명: 메이트 상세 화면. 움직이는 미리보기 · 일러스트 · 세계관 · 내 역할 · 인트로 · 연결하기
 - 와이어프레임: SCR-13 메이트 상세
-- 백엔드: Not started
-- 프론트: Not started
 
 > 2026-11-23 (12/1 베타): 메이트 상세 추가 (12 스터디룸 상세를 대체할 화면). 메이트 = 캐릭터(`characters`), `mateId` = 캐릭터 id
 
@@ -1982,8 +1948,6 @@ data: {"chunks":2,"complete":true}
 - 분류: 연결
 - 설명: 채팅 패널. 이 메이트와 나눈 대화를 이전 연결까지 최신순으로
 - 와이어프레임: SCR-17 채팅 패널
-- 백엔드: Not started
-- 프론트: Not started
 
 > 2026-11-23 (12/1 베타 6단계): 대화방 기록 추가. 연결이 끝나도 메시지를 지우지 않는다 (예전에는 요약 카드에 넣고 지움)
 
@@ -2031,8 +1995,6 @@ data: {"chunks":2,"complete":true}
 - 분류: 크레딧
 - 설명: 크레딧 화면 위쪽 요약 (오늘 남은 · 오늘 쓴 · 초대로 받은)
 - 와이어프레임: SCR-30 크레딧
-- 백엔드: Not started
-- 프론트: Not started
 
 > 2026-11-23 (12/1 베타 7단계): 크레딧 추가 (ADR 0031)
 
@@ -2079,8 +2041,6 @@ data: {"chunks":2,"complete":true}
 - 분류: 크레딧
 - 설명: 크레딧 화면 내역 표. 최신순
 - 와이어프레임: SCR-30 크레딧
-- 백엔드: Not started
-- 프론트: Not started
 
 > 2026-11-23 (12/1 베타 7단계): 크레딧 내역 추가
 
@@ -2129,8 +2089,6 @@ data: {"chunks":2,"complete":true}
 - 분류: 크레딧
 - 설명: 친구 초대 화면. 내 코드 · 링크 · 보상 받은 수 · 초대한 친구 목록 · 내가 코드를 입력할 수 있는지
 - 와이어프레임: SCR-31 친구 초대
-- 백엔드: Not started
-- 프론트: Not started
 
 > 2026-11-23 (12/1 베타 8단계): 친구 초대 추가
 
@@ -2168,8 +2126,6 @@ data: {"chunks":2,"complete":true}
 - 분류: 크레딧
 - 설명: 받은 초대 코드 입력. 가입 마지막 단계(링크로 오면 자동 입력)와 친구 초대 화면
 - 와이어프레임: SCR-64 · SCR-31
-- 백엔드: Not started
-- 프론트: Not started
 
 > 2026-11-23 (12/1 베타 8단계): 초대 코드 입력 추가
 
@@ -2209,8 +2165,6 @@ data: {"chunks":2,"complete":true}
 - 분류: 연결
 - 설명: 한 번이라도 연결한 메이트와 메이트별 친밀도 · 표정 컬렉션 · 최근 기록
 - 와이어프레임: SCR-23 내 메이트
-- 백엔드: Not started
-- 프론트: Not started
 
 > 2026-11-23 (12/1 베타): 추가 (노션 API 명세서 B3, 피그마 M-1~M-3)
 
@@ -2257,8 +2211,6 @@ data: {"chunks":2,"complete":true}
 - 분류: 연결
 - 설명: 기간별 함께한 시간 · 연결 시간, 달력, 메이트별 요약, 최근 연결
 - 와이어프레임: SCR-24 주간 · SCR-25 월간 · SCR-26 메이트별
-- 백엔드: Not started
-- 프론트: Not started
 
 > 2026-11-23 (12/1 베타): 추가 (노션 API 명세서 B4, 피그마 H-1~H-7). 카메라를 끈 사용자도 기록이 보이게 연결 시간을 함께 준다
 
@@ -2305,8 +2257,6 @@ data: {"chunks":2,"complete":true}
 - 분류: 크레딧
 - 설명: 초대 코드를 적용하기 전에 누구 코드인지 확인. 초대 링크 랜딩(로그인 전)과 가입 마지막 단계의 '확인'
 - 와이어프레임: SCR-41 초대 랜딩 · SCR-64 ③
-- 백엔드: Not started
-- 프론트: Not started
 
 > 2026-11-23 (12/1 베타): 추가 (노션 API 명세서 E3)
 
@@ -2326,8 +2276,6 @@ data: {"chunks":2,"complete":true}
 - 분류: 대화
 - 설명: 메이트 답장에 👍 · 👎. 다시 누르면 덮어쓰고 null이면 취소
 - 와이어프레임: SCR-54
-- 백엔드: Not started
-- 프론트: Not started
 
 > 2026-11-23 (12/1 베타): 추가 (노션 API 명세서 F1)
 
@@ -2347,8 +2295,6 @@ data: {"chunks":2,"complete":true}
 - 분류: 대화
 - 설명: 메이트 답장 신고. 신고한 답장은 대화방(32)과 다음 답장의 이전 대화에서 빠진다
 - 와이어프레임: SCR-54
-- 백엔드: Not started
-- 프론트: Not started
 
 > 2026-11-23 (12/1 베타): 추가 (노션 API 명세서 F2)
 
@@ -2379,8 +2325,6 @@ data: {"chunks":2,"complete":true}
 - 분류: 리포트
 - 설명: 연결 기록 위 한 번 누르기 평가(하루 1번)와 설정의 '의견 보내기'
 - 와이어프레임: SCR-55
-- 백엔드: Not started
-- 프론트: Not started
 
 > 2026-11-23 (12/1 베타): 추가 (노션 API 명세서 F3). 스크린샷 첨부는 파일 저장소가 정해지면 (확정 필요)
 
@@ -2414,7 +2358,6 @@ data: {"chunks":2,"complete":true}
 - 설명: GNB 벨의 알림 모아 보기. 최신순
 - 와이어프레임: SCR-63
 - 백엔드: 2026-11-24 (화면 대조)
-- 프론트: Not started
 
 > 2026-11-24 (화면 대조): 추가 (ADR 0035)
 
@@ -2457,7 +2400,6 @@ data: {"chunks":2,"complete":true}
 - 설명: 알림 모아 보기를 열면 읽음 처리
 - 와이어프레임: SCR-63
 - 백엔드: 2026-11-24 (화면 대조)
-- 프론트: Not started
 
 - 테이블: `notifications` · 인증: 필요
 
@@ -2478,7 +2420,6 @@ data: {"chunks":2,"complete":true}
 - 설명: 베타 정원이 찼을 때 이메일을 남겨 출시 알림을 받음
 - 와이어프레임: SCR-46 '출시 알림 받기'
 - 백엔드: 2026-11-24 (화면 대조)
-- 프론트: Not started
 
 - 테이블: `beta_waitlist` · 인증: **불필요**
 
@@ -2499,7 +2440,6 @@ data: {"chunks":2,"complete":true}
 - 설명: 준비 중 메이트의 '알림 받기'
 - 와이어프레임: SCR-53 '12월 중 공개 · 알림 받기'
 - 백엔드: 2026-11-24 (화면 대조)
-- 프론트: Not started
 
 - 테이블: `mate_alerts` · 인증: 필요
 
@@ -2516,7 +2456,6 @@ data: {"chunks":2,"complete":true}
 - 설명: 이 메이트와의 대화를 처음부터. 대화방 기록 · 지난 대화 요약 · 메이트가 기억한 사실을 지움
 - 와이어프레임: SCR-36 '초기화' (경고 → 대화 정지 → 초기화 단계)
 - 백엔드: 2026-11-24 (화면 대조)
-- 프론트: Not started
 
 > 2026-11-24 (화면 대조): 추가. 확정 필요: SCR-36의 '초기화'가 사용자가 누르는 버튼인지, 안전 위반 제재 단계(서버가 하는 것)인지. 지금은 사용자가 누르는 API로 만들고, 제재로 정해지면 같은 동작을 안전 규칙에서 부름
 
@@ -2536,7 +2475,6 @@ data: {"chunks":2,"complete":true}
 - 설명: 로그인 전 화면(SCR-01 '채린 깨우기')에서 움직일 메이트와 모델. 로그인 없이
 - 와이어프레임: SCR-01
 - 백엔드: 2026-11-25
-- 프론트: Not started
 
 > 2026-11-25: 추가 (프론트 요청: 로그인 화면용 메이트 모델 공개 API)
 
