@@ -1,6 +1,6 @@
 # 캡슐 백엔드
 
-노트북 앞의 시간을 함께 보내는 AI 메이트 서비스(캡슐)의 백엔드. 지금 범위는 12/1 웹 베타(메이트와 1:1 '연결', 스터디룸 · 공부 세션 · 호감도는 없어짐): 기획 `docs/product/prd-beta.md`, 진행 `docs/product/progress-beta.md`. Spring Boot + PostgreSQL + Flyway, 모듈러 모놀리스(Spring Modulith).
+노트북 앞의 시간을 함께 보내는 AI 메이트 서비스(캡슐)의 백엔드. 지금 범위는 12/1 웹 베타(메이트와 1:1 '연결'. 스터디룸 · 공부 세션은 없어졌고, 호감도는 화면에서 빠졌지만 코드는 아직 돎): 기획 `docs/product/prd-beta.md`, 진행 `docs/product/progress-beta.md`. Spring Boot + PostgreSQL + Flyway, 모듈러 모놀리스(Spring Modulith).
 2인 개발(승희, 성욱). 각자 Claude Code로 작업하고 PR로 합친다. 하네스 설명 전체: `docs/HARNESS.md`
 
 ## 작업 원칙: 이유 먼저

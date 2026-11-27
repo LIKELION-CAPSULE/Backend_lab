@@ -68,7 +68,7 @@
 | 명세가 바뀌면 코드 반영까지 추적 | 명세만 바뀌고 코드가 남는 일을 막음. 영향 범위는 자동으로 찾고, 반영할 PR · 이슈가 본문에 없으면 pr-write 검사 실패 | `docs/decisions/0015` |
 | PR CI 없음, 검사는 로컬 | Actions 대기열이 멈춰 PR이 계속 돌았음. 같은 `zones.py`를 verify · pr-write가 돌림. `dev-db-migrate`는 배포라 남김 | `docs/decisions/0021`, `0023` |
 | 배포 DB · 에셋은 Supabase, 공용 개발 DB는 develop 머지 때만 마이그레이션 | 2인 팀이 DB 서버를 운영하지 않음. 공용 DB에 넣는 길을 하나로 | `docs/decisions/0016`, `0017`, `0024` |
-| 개발 서버는 Railway + Dockerfile, Swagger는 local 프로필만, 메일은 Brevo API | 프론트 연동을 먼저. 운영에 API 목록을 공개하지 않음 | `docs/decisions/0018`, `0019`, `0020` |
+| 개발 서버는 Railway + Dockerfile, Swagger는 local 프로필만(개발 서버 프로필은 local을 포함), 메일은 Brevo API | 프론트 연동을 먼저. 운영에 API 목록을 공개하지 않음 | `docs/decisions/0018`, `0019`, `0020` |
 | LLM은 공급자 중립 게이트웨이 + DB 프롬프트 버전 + 실험실 | 공급자를 설정 한 줄로 바꾸고, 프롬프트를 배포 없이 바꾸고 숫자로 비교 | `docs/decisions/0022` |
 | 채팅 답장 스트리밍은 SSE(SseEmitter, 명세 28) | 첫 글자부터 보여 체감 속도를 줄임. MVC · 가상 스레드로 충분 | `docs/decisions/0025` |
 | 성공 응답 `{success, data}`, 에러 코드 enum | 프론트가 모든 응답을 한 모양으로 읽음 | `docs/decisions/0030` |
@@ -128,7 +128,7 @@
 | dialogue | 승희 | conversations, conversation_recaps, character_memories, chat_messages, chat_reports, safety_strikes, character_profiles, character_lines, character_scores, character_habits, llm_usages, prompt_versions, dialogue_settings, llm_lab_*, llm_eval_* | 19, 20, 28, 32, 40, 41, 47 |
 | credit | 성욱 | credit_grants, credit_ledger | 33, 34 |
 
-나눈 이유: 처음엔 DB 최종본의 섹션 구분을 따랐다(skeleton-plan.md 1장). 성욱 쪽은 대부분 단순 구현(인증, 콘텐츠, 연결 기록, 크레딧)이고, 승희 쪽은 기획 판단이 몰린 친밀도와 LLM 대화 · 안전. 2026-11-23 베타 전환 때 룸 · 공부 세션 테이블을 지우고 연결 · 크레딧으로 바꿨다(ADR 0031).
+나눈 이유: 처음엔 DB 최종본의 섹션 구분을 따랐다(skeleton-plan.md 1장). 성욱 쪽은 대부분 단순 구현(인증, 콘텐츠, 연결 기록, 크레딧)이고, 승희 쪽은 기획 판단이 몰린 친밀도와 LLM 대화 · 안전. 2026-11-23 베타 전환 때 룸 테이블을 지우고 공부 세션 테이블을 연결(`connections` · `connection_events`)로 이름을 바꿨으며, 크레딧 모듈을 더했다(ADR 0031).
 
 ---
 

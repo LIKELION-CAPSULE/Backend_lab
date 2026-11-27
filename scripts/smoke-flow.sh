@@ -71,6 +71,7 @@ PY
 event() { # event <단계 이름> <type> [intensity]
   call "event-$2" POST "/api/connections/$SID/events" "{\"type\":\"$2\",\"occurredAt\":\"$(now)\"}"
   row "$1 (18)"
+  [ "$2" = PRESENT ] && return # 얼굴 감지 시작은 반응이 없다 (명세 18, flow.md 11)
   local eid; eid=$(field "$RES" 'd["eventId"]')
   local extra=""; [ -n "${3:-}" ] && extra=",\"intensity\":$3"
   call "reaction-$2" POST "/api/connections/$SID/events/$eid/reaction" "{\"requestId\":\"$(uuid)\"$extra}"
@@ -90,6 +91,10 @@ call terms GET /api/terms
 TERMS=$(field "$RES" 'json.dumps([t["termVersionId"] for t in d["terms"]])')
 # 새 카카오 사용자는 6이 403 + 가입 토큰을 주고 49로 가입한다 (2026-11-26, #241)
 ALLOW=403 call login POST /api/auth/social/KAKAO "{\"code\":\"fake-kakao:smoke-$(uuid | cut -c1-8):민수\",\"redirectUri\":\"http://localhost:5173/oauth/kakao\",\"deviceHash\":\"smoke\"}"
+if [ "$(field "$RES" 'd.get("code", "")')" != KAKAO_SIGNUP_REQUIRED ]; then
+  echo "✖ login → $CODE $(head -c 300 "$RES") (새 사용자 가입 토큰이 와야 함)" >&2
+  exit 1
+fi
 SIGNUP_TOKEN=$(field "$RES" 'd["detail"]["signupToken"]')
 call signup POST /api/auth/social/KAKAO/signup "{\"signupToken\":\"$SIGNUP_TOKEN\",\"agreedTermVersionIds\":$TERMS,\"deviceHash\":\"smoke\"}"
 TOKEN=$(field "$RES" 'd["accessToken"]')
