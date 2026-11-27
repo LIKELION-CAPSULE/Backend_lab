@@ -1,5 +1,7 @@
 # 뼈대(Phase A) 계획
 
+> **기록 (2026-11-03 뼈대 단계).** 스터디룸 · 공부 세션 · 호감도 시절 설계다. 지금 범위는 12/1 베타(`docs/product/prd-beta.md`), 지금 구조는 `docs/ARCHITECTURE.md`.
+
 > skeleton 스킬 1단계 산출물. **이 문서를 사람이 확인하기 전에는 코드를 쓰지 않는다.**
 > 입력: `docs/specs/api.md`(23개 API), `docs/specs/schema.sql`(25개 테이블), 2026-11-03 spec-sync 기준.
 > `docs/specs/flow.md`는 없어서 5장에 흐름 초안을 넣었다.
