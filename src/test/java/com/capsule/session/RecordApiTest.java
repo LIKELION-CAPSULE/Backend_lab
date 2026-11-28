@@ -125,6 +125,7 @@ class RecordApiTest {
         }
         jdbc.update("INSERT INTO connections (user_id, character_id, started_at) VALUES (?, 1, now())", userId);
         connectionOf(newUser(), 1, "2026-11-07T10:00:00Z", 9999, 9999); // 남의 연결
+        cancelled(1, "2026-11-08T10:00:00Z"); // 취소한 연결은 어디에도 안 잡힌다 (22 '취소')
 
         myMates()
                 .andExpect(status().isOk())
@@ -165,6 +166,7 @@ class RecordApiTest {
                 .andExpect(jsonPath("$.data.mates[1].unlocks[1].assetUrl").value(NIGHT.assetUrl()))
                 .andExpect(jsonPath("$.data.mates[1].recent", hasSize(2)))
                 .andExpect(jsonPath("$.data.mates[1].recent[0].connectionId").value(latest1))
+                .andExpect(jsonPath("$.data.mates[1].recent[0].startedAt").value("2026-11-05T10:00:00Z"))
                 .andExpect(jsonPath("$.data.mates[1].recent[0].endedAt").value("2026-11-05T11:00:00Z"))
                 .andExpect(jsonPath("$.data.mates[1].recent[0].presentSeconds").value(1000))
                 .andExpect(
@@ -212,6 +214,7 @@ class RecordApiTest {
                 "INSERT INTO connections (user_id, character_id, started_at) VALUES (?, 1, '2026-11-04T10:00:00Z')",
                 userId);
         connectionOf(newUser(), 1, "2026-11-04T10:00:00Z", 9999, 9999); // 남의 연결
+        cancelled(1, "2026-11-05T10:00:00Z"); // 취소한 연결은 연결 수 · 연결한 날 · recent에서 빠짐 (22 '취소')
 
         records("range=WEEK&date=2026-11-04")
                 .andExpect(status().isOk())
@@ -239,6 +242,7 @@ class RecordApiTest {
                 // 최근 끝난 순
                 .andExpect(jsonPath("$.data.recent", hasSize(3)))
                 .andExpect(jsonPath("$.data.recent[0].connectionId").value(sunday))
+                .andExpect(jsonPath("$.data.recent[0].startedAt").value("2026-11-08T19:59:00Z"))
                 .andExpect(jsonPath("$.data.recent[0].mateName").value("채린"))
                 .andExpect(jsonPath("$.data.recent[2].connectionId").value(monday));
         // 주의 아무 날이나 기준으로 줘도 같은 주 (일요일 기준 → 그 주 월요일부터)
@@ -347,6 +351,13 @@ class RecordApiTest {
 
     long newUser() {
         return jdbc.queryForObject("INSERT INTO users (nickname) VALUES ('기록테스트') RETURNING id", Long.class);
+    }
+
+    /** 전화 받기 연출 중 취소한 연결 (0초, end_type CANCELLED) */
+    long cancelled(long mateId, String startedAt) {
+        long id = connection(mateId, startedAt, 0, 0);
+        jdbc.update("UPDATE connections SET end_type = 'CANCELLED', ended_at = started_at WHERE id = ?", id);
+        return id;
     }
 
     /** 끝난 연결 하나. 1시간 뒤에 끝남 */

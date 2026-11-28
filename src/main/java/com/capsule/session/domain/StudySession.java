@@ -22,6 +22,12 @@ public class StudySession {
     public static final String AUTO_CLOSED = "AUTO_CLOSED";
     public static final String AUTO_AWAY = "AUTO_AWAY";
     public static final String MINOR_LIMIT = "MINOR_LIMIT";
+    /** 전화 받기 연출 중 취소 (api.md 22 '취소', 2026-11-28): 정산 · 기록에서 빠짐 */
+    public static final String CANCELLED = "CANCELLED";
+
+    public boolean cancelled() {
+        return CANCELLED.equals(endType);
+    }
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

@@ -29,6 +29,7 @@ public record RecordsResponse(
             long connectionId,
             long mateId,
             String mateName,
+            Instant startedAt, // 2026-11-28: 프론트가 endedAt − connectedSeconds로 추정하지 않게
             Instant endedAt,
             int presentSeconds,
             int connectedSeconds) {}
