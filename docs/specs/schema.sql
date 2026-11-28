@@ -111,6 +111,9 @@
 -- 2026-11-25 변경 (로그인 화면 메이트, api.md 48)
 --   - live2d_models: engine_path · player_path · reactions_path 추가 (Aliving2D 엔진 스크립트 경로)
 --
+-- 2026-11-28 변경 (연결 직후 취소, api.md 22 '취소')
+--   - connections.end_type에 CANCELLED 추가
+--
 -- 2026-11-25 변경 (메이트 목소리, ADR 0036)
 --   - characters: tts_voice · tts_model · tts_instructions 추가 (대화 음성 28과 '목소리 듣기' 샘플이 같은 값으로 만들어짐)
 --
@@ -512,7 +515,7 @@ CREATE TABLE connections (
     character_id      bigint      NOT NULL REFERENCES characters (id),  -- 연결한 메이트
     started_at        timestamptz NOT NULL DEFAULT now(),
     ended_at          timestamptz,                        -- NULL이면 진행 중
-    end_type          text        CHECK (end_type IN ('NORMAL', 'AUTO_CLOSED', 'AUTO_AWAY', 'MINOR_LIMIT')),
+    end_type          text        CHECK (end_type IN ('NORMAL', 'AUTO_CLOSED', 'AUTO_AWAY', 'MINOR_LIMIT', 'CANCELLED')), -- CANCELLED: 연결 직후 취소, 기록에서 빠짐 (api.md 22 '취소')
     last_heartbeat_at timestamptz,                        -- 1분에 한 번 정도만 갱신
     -- 마지막 heartbeat 때 프론트가 보낸 누적값 (API 21). 자동 마감 · 이어하기 · 청소년 남은 시간에 사용
     heartbeat_connected_seconds int,

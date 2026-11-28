@@ -1444,7 +1444,7 @@ H02에서 아바타를 저장하면 `onboardingRequired`가 false가 되고 H03 
 | 이름 | 타입 | 필수 | 설명 |
 | --- | --- | --- | --- |
 | connectedSeconds · presentSeconds · cameraOnSeconds · pipSeconds | Integer | O | 21 heartbeat와 같음 (검사도 같음) |
-| endType | String | X | `NORMAL`(직접 끊기, 기본) · `AUTO_AWAY`(자리 비움 · 입력 없음 10분) · `MINOR_LIMIT`(청소년 3시간) |
+| endType | String | X | `NORMAL`(직접 끊기, 기본) · `AUTO_AWAY`(자리 비움 · 입력 없음 10분) · `MINOR_LIMIT`(청소년 3시간) · `CANCELLED`(전화 받기 연출 중 취소, 통화 화면을 열기 전, 2026-11-28 아래 '취소') |
 
 ```json
 { "connectedSeconds": 1920, "presentSeconds": 1500, "cameraOnSeconds": 1800, "pipSeconds": 900, "endType": "NORMAL" }
@@ -1458,7 +1458,7 @@ H02에서 아바타를 저장하면 `onboardingRequired`가 false가 되고 H03 
 | 이름 | 타입 | 설명 |
 | --- | --- | --- |
 | connectionId | Long | 연결 id |
-| startedAt · endedAt · endType |  | `NORMAL` / `AUTO_CLOSED` / `AUTO_AWAY` / `MINOR_LIMIT` |
+| startedAt · endedAt · endType |  | `NORMAL` / `AUTO_CLOSED` / `AUTO_AWAY` / `MINOR_LIMIT` / `CANCELLED` |
 | connectedSeconds | Integer | 연결 시간 |
 | presentSeconds | Integer | 함께한 시간 |
 | awaySeconds | Integer | 자리 비움 |
@@ -1507,6 +1507,16 @@ json
 5. 완료 대사(`closingLine`)를 만들어 `connections.closing_line`에 저장
 6. LLM이 실패하거나 7초를 넘겨도 종료는 성공 (2026-11-06: 5초 → 7초): 카드를 못 쓰면 표시하지 않고 남김 → 다음 종료 때 그 세션 카드에 같이 들어감. 완료 대사는 고정 문구
 7. **초대 보상** (2026-11-23 8단계, 36 '초대 규칙'): 이 사용자가 초대 코드를 입력했고 아직 보상 전이면, 이 연결로 조건 충족(`referrals.qualified_at` · `qualified_connection_id`) → 받은 사람 1,000 · 초대한 사람 1,000(초대한 사람 보상 10명까지)
+
+##### 취소 (`endType: CANCELLED`, 2026-11-28)
+
+홈에서 연결을 누르면 전화 받기 연출(약 3초) 동안 이미 16으로 연결이 생긴다. 이때 사용자가 「취소」하면 프론트가 바로 22를 `CANCELLED`로 보낸다 (시간 값은 받은 그대로 검증 · 저장, 보통 모두 0).
+
+- 연결은 끝난 것으로 저장(`end_type = CANCELLED`)해서 다른 메이트 연결이 막히지 않게 한다
+- 하지 않는 것: 친밀도 정산(위 3, 단계 · 해금 · 단계 상승 알림 없음), 흐름 카드 · 완료 대사(4 · 5, `closingLine` null), 초대 보상(7)
+- **기록에서 빠짐**: 11 홈 오늘 시간 · 마지막 메이트, 16 첫 만남 판정, 37 내 메이트(연결 수 · 시간 · 처음 만난 날 · 마지막 연결 · `recent`), 38 내 기록(연결 수 · 연결한 날 · 기간 시간 · `recent`)
+- 응답: 23과 같은 모양. `relation`은 지금 단계 · 인정 0초, `closingLine` null. 23으로 다시 조회해도 같음
+- 연결 시작(16)에는 LLM 호출이 없고(인사 `greeting.line`은 null) 크레딧도 깎지 않는다(그날 출석분 지급만). 그래서 취소해도 되돌릴 것이 없다. 취소 전에 보낸 메시지(20 · 28)가 있으면 그 대화 · 크레딧은 그대로 (보통 없음)
 
 ---
 
@@ -2188,7 +2198,7 @@ data: {"chunks":2,"complete":true}
 | totalPresentSeconds · totalConnectedSeconds | Integer | 누적 함께한 시간 · 연결 시간 |
 | relation | Object | `stage` · `stageName` · `nextStageName`(5단계면 null) · `nextStageSeconds`(다음 단계까지 남은 인정 시간, 5단계면 null) · `stageProgress`(0~100, 2026-11-24 (화면 대조)) |
 | unlocks | Array | 이 메이트의 해금 콘텐츠 전부, 열리는 단계 순. `id` · `type`(EXPRESSION · VOICE_LINE) · `title` · `unlockStage` · `unlockStageName` · `expressionName` · `assetUrl` · `unlocked` |
-| recent | Array | 최근 끝난 연결 5개 `connectionId` · `endedAt` · `presentSeconds` · `connectedSeconds` (누르면 23) |
+| recent | Array | 최근 끝난 연결 5개 `connectionId` · `startedAt`(2026-11-28) · `endedAt` · `presentSeconds` · `connectedSeconds` (누르면 23). 취소한 연결(22 `CANCELLED`)은 이 화면의 모든 값에서 빠짐 |
 
 ```json
 {
@@ -2199,7 +2209,7 @@ data: {"chunks":2,"complete":true}
       "totalPresentSeconds": 25200, "totalConnectedSeconds": 30000,
       "relation": { "stage": 3, "stageName": "친구", "nextStageName": "친한 친구", "nextStageSeconds": 10800 },
       "unlocks": [ { "id": 9, "type": "EXPRESSION", "title": "수줍은 웃음", "unlockStage": 3, "unlockStageName": "친구", "expressionName": "shy", "assetUrl": null, "unlocked": true } ],
-      "recent": [ { "connectionId": 812, "endedAt": "2026-12-03T12:32:10Z", "presentSeconds": 1500, "connectedSeconds": 1920 } ]
+      "recent": [ { "connectionId": 812, "startedAt": "2026-12-03T12:00:02Z", "endedAt": "2026-12-03T12:32:10Z", "presentSeconds": 1500, "connectedSeconds": 1920 } ]
     }
   ]
 }
@@ -2235,7 +2245,7 @@ data: {"chunks":2,"complete":true}
 | connectedDays · connectionCount | Integer | 연결한 날 수 · 연결 수 |
 | buckets | Array | WEEK · MONTH는 날짜별, YEAR는 월별(`YYYY-MM`) `key` · `presentSeconds` · `connectedSeconds`. 연결이 없는 칸도 0으로 |
 | mates | Array | 기간 안 메이트별 `mateId` · `name` · `presentSeconds` · `connectedSeconds` · `connectionCount` · `stage`(지금 친밀도) |
-| recent | Array | 기간 안 최근 끝난 연결 5개 `connectionId` · `mateId` · `mateName` · `endedAt` · `presentSeconds` · `connectedSeconds` |
+| recent | Array | 기간 안 최근 끝난 연결 5개 `connectionId` · `mateId` · `mateName` · `startedAt`(2026-11-28) · `endedAt` · `presentSeconds` · `connectedSeconds`. 취소한 연결(22 `CANCELLED`)은 이 화면의 모든 값에서 빠짐 |
 
 - 연결은 시작한 날(오전 5시 기준)에 센다. 끝난 연결만 (진행 중은 빠짐)
 
@@ -2245,7 +2255,7 @@ data: {"chunks":2,"complete":true}
   "connectedDays": 4, "connectionCount": 6,
   "buckets": [ { "key": "2026-11-30", "presentSeconds": 3600, "connectedSeconds": 4200 } ],
   "mates": [ { "mateId": 1, "name": "채린", "presentSeconds": 18000, "connectedSeconds": 21600, "connectionCount": 6, "stage": 3 } ],
-  "recent": [ { "connectionId": 812, "mateId": 1, "mateName": "채린", "endedAt": "2026-12-03T12:32:10Z", "presentSeconds": 1500, "connectedSeconds": 1920 } ]
+  "recent": [ { "connectionId": 812, "mateId": 1, "mateName": "채린", "startedAt": "2026-12-03T12:00:02Z", "endedAt": "2026-12-03T12:32:10Z", "presentSeconds": 1500, "connectedSeconds": 1920 } ]
 }
 ```
 
