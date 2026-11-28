@@ -9,6 +9,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
@@ -587,6 +588,37 @@ class SessionApiTest {
     }
 
     // ---- 11 홈 · ActiveSessionLookup
+
+    @Test
+    void cancelledConnectionEndsButLeavesNoRecord() throws Exception {
+        // 전화 받기 연출 중 취소 (api.md 22 '취소', 2026-11-28)
+        long id = start(userId);
+        backdate(id, 10);
+        org.mockito.Mockito.clearInvocations(relationCommands, closingHandler);
+        // 시간 값이 있어도 기록에서 빠진다 (홈 오늘 시간 0)
+        end(id, 60, 30, 40, 0, "CANCELLED")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.endType").value("CANCELLED"))
+                .andExpect(jsonPath("$.data.closingLine").value(nullValue()))
+                .andExpect(jsonPath("$.data.referralReward").value(nullValue()));
+        // 23으로 다시 조회해도 같은 모양
+        mvc.perform(get("/api/connections/{id}", id).with(login(userId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.endType").value("CANCELLED"))
+                .andExpect(jsonPath("$.data.closingLine").value(nullValue()));
+        // 정산 · 해금 · 완료 대사(LLM) 없음
+        verify(relationCommands, never()).settleIntimacy(anyLong(), anyLong(), anyLong(), any(), anyInt(), anyInt());
+        verify(relationCommands, never()).recordUnlocks(anyLong(), any());
+        verify(closingHandler, never()).draft(any());
+        verify(closingHandler, never()).close(any(), any());
+        // 끝났으니 다른 연결을 시작할 수 있다. 홈 마지막 메이트 · 첫 만남에서 빠진다
+        assertThat(activeSessionLookup.find(userId)).isEmpty();
+        mvc.perform(get("/api/home").with(login(userId)))
+                .andExpect(jsonPath("$.data.lastMate").value(nullValue()))
+                .andExpect(jsonPath("$.data.todayPresentSeconds").value(0))
+                .andExpect(jsonPath("$.data.todayConnectedSeconds").value(0));
+        startRequest(userId, 1).andExpect(jsonPath("$.data.firstMeet").value(true));
+    }
 
     @Test
     void homeShowsMatesLastMateTodayAndActiveConnection() throws Exception {

@@ -39,5 +39,6 @@ public record MyMatesResponse(List<MyMate> mates) {
             boolean unlocked) {}
 
     /** 최근 끝난 연결 (누르면 23) */
-    public record Recent(long connectionId, Instant endedAt, int presentSeconds, int connectedSeconds) {}
+    public record Recent(
+            long connectionId, Instant startedAt, Instant endedAt, int presentSeconds, int connectedSeconds) {}
 }

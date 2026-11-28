@@ -74,11 +74,13 @@ public class RecordService {
                     t.getConnectedSeconds().intValue(),
                     relationOf(mate, relations.intimacyNow(userId, mateId)),
                     unlocksOf(mate, unlocked),
-                    sessions
-                            .findTop5ByUserIdAndCharacterIdAndEndedAtIsNotNullOrderByEndedAtDescIdDesc(userId, mateId)
-                            .stream()
+                    sessions.recentEnded(userId, mateId).stream()
                             .map(s -> new MyMatesResponse.Recent(
-                                    s.getId(), s.getEndedAt(), s.getPresentSeconds(), s.getConnectedSeconds()))
+                                    s.getId(),
+                                    s.getStartedAt(),
+                                    s.getEndedAt(),
+                                    s.getPresentSeconds(),
+                                    s.getConnectedSeconds()))
                             .toList()));
         }
         return new MyMatesResponse(list);
@@ -197,6 +199,7 @@ public class RecordService {
                         s.getId(),
                         s.characterId(),
                         nameOf.apply(s.characterId()),
+                        s.getStartedAt(),
                         s.getEndedAt(),
                         s.getPresentSeconds(),
                         s.getConnectedSeconds()))

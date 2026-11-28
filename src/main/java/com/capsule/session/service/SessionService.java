@@ -83,7 +83,7 @@ public class SessionService {
     private static final int MINOR_DAILY_SECONDS = 3 * 60 * 60;
     /** 프론트가 고를 수 있는 끝 종류. AUTO_CLOSED는 서버 배치만 (api.md 22) */
     private static final Set<String> CLIENT_END_TYPES =
-            Set.of(StudySession.NORMAL, StudySession.AUTO_AWAY, StudySession.MINOR_LIMIT);
+            Set.of(StudySession.NORMAL, StudySession.AUTO_AWAY, StudySession.MINOR_LIMIT, StudySession.CANCELLED);
 
     private final StudySessionRepository sessions;
     private final SessionEventRepository events;
@@ -121,15 +121,15 @@ public class SessionService {
                         m.cardImageUrl(),
                         m.comingSoon()))
                 .toList();
-        HomeResponse.LastMate lastMate = sessions.findFirstByUserIdOrderByStartedAtDescIdDesc(userId)
+        HomeResponse.LastMate lastMate = sessions.lastConnection(userId) // 취소한 연결은 빼고 (22 '취소')
                 .flatMap(s -> mates.find(s.characterId()))
                 .filter(MateInfo::active) // 비활성이 된 메이트로 '다시 연결하기'를 띄우지 않게
                 .map(m -> new HomeResponse.LastMate(m.id(), m.name(), m.illustrationUrl()))
                 .orElse(null);
         Instant[] day = today();
         return new HomeResponse(
-                sessions.presentSecondsEndedBetween(userId, day[0], day[1]),
-                sessions.connectedSecondsEndedBetween(userId, day[0], day[1]),
+                sessions.homePresentSeconds(userId, day[0], day[1]), // 취소한 연결은 빼고 (22 '취소')
+                sessions.homeConnectedSeconds(userId, day[0], day[1]),
                 activeSessions.find(userId).orElse(null),
                 lastMate,
                 list);
@@ -171,7 +171,7 @@ public class SessionService {
         }
         // 동시에 두 번 시작하면 부분 유니크 인덱스(사용자당 진행 중 연결 하나)가 막는다 → 컨트롤러가 409로 바꿈
         StudySession s = sessions.save(new StudySession(userId, character.id(), now()));
-        boolean firstMeet = !sessions.existsByUserIdAndCharacterIdAndIdNot(userId, character.id(), s.getId());
+        boolean firstMeet = !sessions.metBefore(userId, character.id(), s.getId()); // 취소한 연결은 만난 걸로 안 셈
         relationCommands.meet(userId, character.id());
         AvatarInfo avatar = avatar(user);
         return new StartResponse(
@@ -347,7 +347,8 @@ public class SessionService {
             StudySession s = owned(sessions.findById(sessionId), userId);
             if (!s.inProgress()) return null;
             ConnectionTimes t = requireTimes(s, req, now());
-            return closingOf(s, endType, t.connected());
+            // 취소(22 '취소')는 완료 대사 · 흐름 카드를 만들지 않으므로 LLM도 부르지 않는다
+            return StudySession.CANCELLED.equals(endType) ? null : closingOf(s, endType, t.connected());
         });
         SessionClosingHandler.Draft draft = closing == null ? null : closingHandler.draft(closing);
         return tx.execute(status -> endLocked(userId, sessionId, req, endType, draft));
@@ -429,6 +430,10 @@ public class SessionService {
                 (int) list.stream().filter(e -> RETURN.equals(e.getType())).count();
         s.close(endedAt, endType, t, Math.max(0, away), returns);
         long characterId = s.characterId();
+        if (s.cancelled()) {
+            // 전화 받기 연출 중 취소 (api.md 22 '취소'): 끝난 것으로만 저장. 친밀도 정산 · 해금 · 알림 · 완료 대사 · 초대 보상 없음
+            return toReport(s, relationQuery.intimacyOf(s.getUserId(), characterId, s.getId()), Optional.empty());
+        }
         IntimacySettlement settlement = relationCommands.settleIntimacy(
                 s.getUserId(), characterId, s.getId(), endedAt, t.present(), t.connected());
         if (settlement.stageUp()) {

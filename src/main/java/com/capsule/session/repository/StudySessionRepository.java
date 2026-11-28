@@ -42,40 +42,61 @@ public interface StudySessionRepository extends JpaRepository<StudySession, Long
 
     Optional<StudySession> findByUserIdAndEndedAtIsNull(long userId);
 
-    /** 홈의 마지막 메이트 (api.md 11): 가장 최근에 시작한 연결 */
-    Optional<StudySession> findFirstByUserIdOrderByStartedAtDescIdDesc(long userId);
+    /** 홈의 마지막 메이트 (api.md 11): 가장 최근에 시작한 연결. 취소한 연결(22 CANCELLED)은 빼고 */
+    @Query("select s from StudySession s where s.userId = :userId"
+            + " and (s.endType is null or s.endType <> 'CANCELLED') order by s.startedAt desc, s.id desc")
+    List<StudySession> latestConnections(long userId, org.springframework.data.domain.Limit limit);
+
+    default Optional<StudySession> lastConnection(long userId) {
+        return latestConnections(userId, org.springframework.data.domain.Limit.of(1)).stream()
+                .findFirst();
+    }
 
     /** 쓰는 요청끼리(종료 연타, 자동 마감, heartbeat, 이벤트 재전송) 같은 세션을 한 줄로 세운다 */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<StudySession> findWithLockById(long id);
 
-    /** 이 기간에 끝난 연결의 함께한 시간 합 (홈 오늘 시간, api.md 11) */
-    @Query("select coalesce(sum(s.presentSeconds), 0) from StudySession s"
-            + " where s.userId = :userId and s.endedAt >= :from and s.endedAt < :to")
-    int presentSecondsEndedBetween(long userId, Instant from, Instant to);
+    /** 홈 오늘 시간 (api.md 11): 이 기간에 끝난 연결의 함께한 시간 · 연결 시간 합. 취소한 연결(22 CANCELLED)은 빼고 */
+    @Query("select coalesce(sum(s.presentSeconds), 0) from StudySession s where s.userId = :userId"
+            + " and s.endedAt >= :from and s.endedAt < :to and s.endType <> 'CANCELLED'")
+    int homePresentSeconds(long userId, Instant from, Instant to);
 
-    /** 이 기간에 끝난 연결의 연결 시간 합 (홈 오늘 시간 · 청소년 3시간, api.md 11 · 16) */
+    @Query("select coalesce(sum(s.connectedSeconds), 0) from StudySession s where s.userId = :userId"
+            + " and s.endedAt >= :from and s.endedAt < :to and s.endType <> 'CANCELLED'")
+    int homeConnectedSeconds(long userId, Instant from, Instant to);
+
+    /**
+     * 이 기간에 끝난 연결의 연결 시간 합 (청소년 3시간, api.md 16). 취소한 연결도 센다: 취소로 끊어 제한을 피하지 못하게
+     */
     @Query("select coalesce(sum(s.connectedSeconds), 0) from StudySession s"
             + " where s.userId = :userId and s.endedAt >= :from and s.endedAt < :to")
     int connectedSecondsEndedBetween(long userId, Instant from, Instant to);
 
-    /** 이 메이트와 연결한 적이 있는지 (첫 만남, api.md 16). 지금 만든 연결은 빼고 센다 */
-    boolean existsByUserIdAndCharacterIdAndIdNot(long userId, long characterId, long id);
+    /** 이 메이트와 연결한 적이 있는지 (첫 만남, api.md 16). 지금 만든 연결과 취소한 연결(22 CANCELLED)은 빼고 센다 */
+    @Query("select count(s) > 0 from StudySession s where s.userId = :userId and s.characterId = :characterId"
+            + " and s.id <> :id and (s.endType is null or s.endType <> 'CANCELLED')")
+    boolean metBefore(long userId, long characterId, long id);
 
-    /** 내 메이트 (api.md 37): 끝난 연결을 메이트별로 모은 값, 마지막 연결 시작이 최근인 순 */
+    /** 내 메이트 (api.md 37): 끝난 연결을 메이트별로 모은 값, 마지막 연결 시작이 최근인 순. 취소한 연결은 빼고 */
     @Query("select s.characterId as mateId, min(s.startedAt) as firstMetAt, max(s.startedAt) as lastConnectedAt,"
             + " count(s) as connectionCount, coalesce(sum(s.presentSeconds), 0) as presentSeconds,"
             + " coalesce(sum(s.connectedSeconds), 0) as connectedSeconds"
-            + " from StudySession s where s.userId = :userId and s.endedAt is not null"
+            + " from StudySession s where s.userId = :userId and s.endedAt is not null and s.endType <> 'CANCELLED'"
             + " group by s.characterId order by max(s.startedAt) desc, s.characterId")
     List<MateTotals> mateTotals(long userId);
 
-    /** 내 메이트 recent (api.md 37): 이 메이트와 최근 끝난 연결 5개 */
-    List<StudySession> findTop5ByUserIdAndCharacterIdAndEndedAtIsNotNullOrderByEndedAtDescIdDesc(
-            long userId, long characterId);
+    /** 내 메이트 recent (api.md 37): 이 메이트와 최근 끝난 연결 5개. 취소한 연결은 빼고 */
+    List<StudySession> findTop5ByUserIdAndCharacterIdAndEndedAtIsNotNullAndEndTypeNotOrderByEndedAtDescIdDesc(
+            long userId, long characterId, String cancelled);
 
-    /** 내 기록 (api.md 38): 이 기간에 시작한 끝난 연결 */
+    default List<StudySession> recentEnded(long userId, long characterId) {
+        return findTop5ByUserIdAndCharacterIdAndEndedAtIsNotNullAndEndTypeNotOrderByEndedAtDescIdDesc(
+                userId, characterId, StudySession.CANCELLED);
+    }
+
+    /** 내 기록 (api.md 38): 이 기간에 시작한 끝난 연결. 취소한 연결은 빼고 */
     @Query("select s from StudySession s where s.userId = :userId and s.endedAt is not null"
+            + " and s.endType <> 'CANCELLED'"
             + " and s.startedAt >= :from and s.startedAt < :to order by s.startedAt, s.id")
     List<StudySession> endedStartedBetween(long userId, Instant from, Instant to);
 
